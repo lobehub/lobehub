@@ -21,12 +21,14 @@ import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors, topicSelectors } from '@/store/chat/selectors';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
 import Actions from './Actions';
 import Filter from './Filter';
 import List from './List';
 import ToggleGroups from './ToggleGroups';
 import { useTopicActionsDropdownMenu } from './useDropdownMenu';
+import ViewAllAction from './ViewAllAction';
 
 /**
  * Cadence of the candidate-gated stale-run sweep. A run whose terminal frame
@@ -136,9 +138,13 @@ const Topic = memo<TopicProps>(({ expanded, itemKey }) => {
               'accordion-action',
               accordionStyles.action,
               accordionStyles.actionBorderless,
+              // Touch has no hover to reveal these, and the arrow is the only
+              // entry to the full topic page.
+              isMobileSurface() && accordionStyles.actionAlwaysVisible,
             )}
           >
             <Flexbox horizontal align="center" gap={2}>
+              <ViewAllAction />
               <ToggleGroups />
               <Filter />
               <Actions />

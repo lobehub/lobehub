@@ -5,19 +5,24 @@ import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 import { Fragment, isValidElement, memo } from 'react';
 
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
+
 import { useDetailPopoverState } from '../components/useDetailPopoverState';
 import { useScrollSignal } from './ScrollSignalContext';
 
 const styles = stylex.create({
-  groupLabel: { paddingBlockStart: '12px', paddingBlockEnd: '4px', paddingInline: '12px' },
+  groupLabel: { paddingBlockStart: '10px', paddingBlockEnd: '4px', paddingInline: '10px' },
   item: {
     cursor: 'pointer',
     display: 'flex',
-    gap: '12px',
+    gap: '10px',
     alignItems: 'center',
-    paddingBlock: '8px',
-    paddingInline: '12px',
-    borderRadius: '6px',
+    minHeight: sidebarRow.controlHeight,
+    paddingBlock: '4px',
+    paddingInline: '10px',
+    borderRadius: sidebarRow.radius,
+    fontSize: sidebarRow.textFontSize,
     transition: 'background-color 0.2s',
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },
@@ -28,8 +33,8 @@ const styles = stylex.create({
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    width: '24px',
-    height: '24px',
+    width: sidebarRow.iconBox,
+    height: sidebarRow.iconBox,
   },
 });
 
@@ -59,6 +64,7 @@ interface ToolItemData {
 }
 
 interface ToolsListProps {
+  detailPlacement?: 'leftTop' | 'rightTop';
   detailPopoverDisabled?: boolean;
   items: ItemType[];
 }
@@ -68,11 +74,13 @@ const DividerItem = memo<{ index: number }>(({ index }) => (
 ));
 
 const RegularItem = memo<{
+  detailPlacement?: 'leftTop' | 'rightTop';
   detailPopoverDisabled?: boolean;
   index: number;
   item: ToolItemData;
-}>(({ detailPopoverDisabled, item, index }) => {
+}>(({ detailPlacement = 'rightTop', detailPopoverDisabled, item, index }) => {
   const { close, onOpenChange, open } = useDetailPopoverState(detailPopoverDisabled);
+  const { iconSize } = useDensityTokens();
 
   // Close hover popover whenever the surrounding list scrolls — avoids the
   // detail panel hovering in mid-air after its anchor row has moved away.
@@ -82,7 +90,7 @@ const RegularItem = memo<{
     isValidElement(item.icon) ? (
       item.icon
     ) : (
-      <Icon icon={item.icon as any} size={20} />
+      <Icon icon={item.icon as any} size={iconSize} />
     )
   ) : null;
 
@@ -112,7 +120,7 @@ const RegularItem = memo<{
       disabled={detailPopoverDisabled}
       mouseEnterDelay={0.3}
       open={open}
-      placement={'rightTop'}
+      placement={detailPlacement}
       positionerProps={{ sideOffset: 8 }}
       styles={{ content: { padding: 0 }, root: { pointerEvents: 'none' } }}
       onOpenChange={onOpenChange}
@@ -123,16 +131,18 @@ const RegularItem = memo<{
 });
 
 const GroupItem = memo<{
+  detailPlacement?: 'leftTop' | 'rightTop';
   detailPopoverDisabled?: boolean;
   index: number;
   item: ToolItemData;
-}>(({ detailPopoverDisabled, item, index }) => (
+}>(({ detailPlacement, detailPopoverDisabled, item, index }) => (
   <Fragment key={item.key || `group-${index}`}>
     <Text className={stylex.props(styles.groupLabel).className} fontSize={12} type="secondary">
       {item.label}
     </Text>
     {item.children?.map((child, childIndex) => (
       <ToolListItem
+        detailPlacement={detailPlacement}
         detailPopoverDisabled={detailPopoverDisabled}
         index={childIndex}
         item={child}
@@ -143,22 +153,38 @@ const GroupItem = memo<{
 ));
 
 const ToolListItem = memo<{
+  detailPlacement?: 'leftTop' | 'rightTop';
   detailPopoverDisabled?: boolean;
   index: number;
   item: ToolItemData | null;
-}>(({ detailPopoverDisabled, item, index }) => {
+}>(({ detailPlacement, detailPopoverDisabled, item, index }) => {
   if (!item) return null;
   if (item.type === 'divider') return <DividerItem index={index} />;
   if (item.type === 'group')
-    return <GroupItem detailPopoverDisabled={detailPopoverDisabled} index={index} item={item} />;
-  return <RegularItem detailPopoverDisabled={detailPopoverDisabled} index={index} item={item} />;
+    return (
+      <GroupItem
+        detailPlacement={detailPlacement}
+        detailPopoverDisabled={detailPopoverDisabled}
+        index={index}
+        item={item}
+      />
+    );
+  return (
+    <RegularItem
+      detailPlacement={detailPlacement}
+      detailPopoverDisabled={detailPopoverDisabled}
+      index={index}
+      item={item}
+    />
+  );
 });
 
-const ToolsList = memo<ToolsListProps>(({ detailPopoverDisabled, items }) => {
+const ToolsList = memo<ToolsListProps>(({ detailPlacement, detailPopoverDisabled, items }) => {
   return (
     <Flexbox gap={0} padding={4}>
       {items.map((item, index) => (
         <ToolListItem
+          detailPlacement={detailPlacement}
           detailPopoverDisabled={detailPopoverDisabled}
           index={index}
           item={item as ToolItemData | null}

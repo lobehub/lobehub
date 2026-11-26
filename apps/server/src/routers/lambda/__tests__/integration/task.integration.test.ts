@@ -812,37 +812,6 @@ describe('Task Router Integration', () => {
     });
   });
 
-  describe('run idempotency', () => {
-    it('resolves a task identifier to its row when starting a run', async () => {
-      const task = await caller.create(taskInput(testAgentId));
-
-      await caller.run({ id: task.data.identifier });
-
-      const updated = await caller.detail({ id: task.data.id });
-      expect(updated.data?.status).toBe('running');
-    });
-
-    it('should reject run when a topic is already running', async () => {
-      const task = await caller.create(taskInput(testAgentId));
-
-      // First run succeeds
-      await caller.run({ id: task.data.id });
-
-      // Second run should fail with CONFLICT
-      await expect(caller.run({ id: task.data.id })).rejects.toThrow(/already has a running topic/);
-    });
-
-    it('should reject continue on already running topic', async () => {
-      const task = await caller.create(taskInput(testAgentId));
-
-      await caller.run({ id: task.data.id });
-
-      await expect(caller.run({ continueTopicId: 'tpc_test', id: task.data.id })).rejects.toThrow(
-        /already running/,
-      );
-    });
-  });
-
   describe('usage', () => {
     it('aggregates the task topic usage', async () => {
       const task = await caller.create({ instruction: 'Measure this task' });

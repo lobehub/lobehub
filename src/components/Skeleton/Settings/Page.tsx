@@ -14,7 +14,7 @@ import { getSettingsTabSkeleton, type SettingsTabSkeleton } from './tabs';
 
 const GENERIC: SettingsTabSkeleton = { Body: () => <SettingsSectionSkeleton /> };
 
-/** The tab and sub-segment a settings pathname renders; `/settings` opens the profile. */
+/** The tab and sub-segment a settings pathname renders; `/settings` falls back to the profile skeleton. */
 export const resolveSettingsSkeletonTab = (pathname: string): { sub?: string; tab: string } => {
   const [, tab = 'profile', sub] = pathname.match(/\/settings\/([^/]+)(?:\/([^/]+))?/) ?? [];
   return { sub, tab };

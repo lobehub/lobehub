@@ -39,6 +39,23 @@ const hiddenToolsState = () => ({
 });
 
 describe('builtinToolSelectors', () => {
+  it('keeps a bundled skill available to the agent picker after a legacy uninstall', () => {
+    const state = {
+      ...initialState,
+      builtinSkills: [mockBuiltinSkill],
+      uninstalledBuiltinTools: [mockBuiltinSkill.identifier],
+    };
+    expect(builtinToolSelectors.installedBuiltinSkills(state)).toEqual([mockBuiltinSkill]);
+  });
+
+  it('offers the calculator in agent tools even when legacy settings list it as uninstalled', () => {
+    const id = 'lobe-calculator';
+    const state = { ...initialState, uninstalledBuiltinTools: [id] };
+    expect(
+      builtinToolSelectors.metaListIncludingHidden(state).map((item) => item.identifier),
+    ).toContain(id);
+  });
+
   describe('metaList', () => {
     it('should return meta list with builtin tools and skills', () => {
       const state = {
@@ -208,33 +225,27 @@ describe('builtinToolSelectors', () => {
         uninstalledBuiltinTools: ['uninstalled-tool'],
       } as ToolStoreState;
 
-      const autoVisible = builtinToolSelectors.installedProfileConfigurableMetaList({
-        isManualMode: false,
-      })(state);
-      const autoExcluded = builtinToolSelectors.nonProfileConfigurableBuiltinToolIds({
-        isManualMode: false,
-      })(state);
-      const manualVisible = builtinToolSelectors.installedProfileConfigurableMetaList({
-        isManualMode: true,
-      })(state);
-      const manualExcluded = builtinToolSelectors.nonProfileConfigurableBuiltinToolIds({
-        isManualMode: true,
-      })(state);
+      const visible = builtinToolSelectors.installedProfileConfigurableMetaList(state);
+      const excluded = builtinToolSelectors.nonProfileConfigurableBuiltinToolIds(state);
 
-      expect(autoVisible.map((item) => item.identifier)).toEqual([
+      expect(visible.map((item) => item.identifier)).toEqual([
         'lobe-skill-store',
         'lobe-agent-management',
         'profile-tool',
       ]);
-      expect(autoExcluded).toEqual(expect.arrayContaining(['lobe-web-browsing', 'lobe-verify']));
-      expect(manualVisible.map((item) => item.identifier)).toEqual([
-        'lobe-skill-store',
-        'lobe-agent-management',
-        'profile-tool',
-      ]);
-      expect(manualExcluded).toEqual(expect.arrayContaining(['lobe-web-browsing', 'lobe-verify']));
-      expect(manualExcluded).not.toContain('lobe-skill-store');
-      expect(manualExcluded).not.toContain('lobe-agent-management');
+      expect(excluded).toEqual(expect.arrayContaining(['lobe-web-browsing', 'lobe-verify']));
+      expect(excluded).not.toContain('lobe-skill-store');
+      expect(excluded).not.toContain('lobe-agent-management');
+    });
+  });
+
+  describe('needsBuiltinOverride', () => {
+    it.each([
+      ['an on-demand builtin tool', 'lobe-calculator', true],
+      ['a legacy builtin skill', 'lobe-artifacts', true],
+      ['a connector', 'plugin-1', false],
+    ])('classifies %s', (_name, identifier, expected) => {
+      expect(builtinToolSelectors.needsBuiltinOverride(identifier)).toBe(expected);
     });
   });
 });

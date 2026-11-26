@@ -17,6 +17,7 @@ import {
   systemStatusSelectors,
 } from '@/store/global/selectors';
 import { useInterfaceDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 import { isMacOS } from '@/utils/platform';
 
 import { NavPanelDensityContext } from '../density';
@@ -84,12 +85,12 @@ const draggableStyles = createStaticStyles(({ css, cssVar }) => ({
         width 0.2s ${cssVar.motionEaseOut};
     }
     #${BACK_BUTTON_ID} {
-      width: 24px !important;
+      width: ${densityVars.iconBox} !important;
     }
 
     &:hover {
       #${TOGGLE_BUTTON_ID} {
-        width: 32px !important;
+        width: ${densityVars.iconBox} !important;
         opacity: 1;
       }
 

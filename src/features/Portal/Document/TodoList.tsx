@@ -10,6 +10,7 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useNotebookStore } from '@/store/notebook';
 import { notebookSelectors } from '@/store/notebook/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 interface TodoItem {
   completed: boolean;
@@ -33,7 +34,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     user-select: none;
 
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 8px;
 
@@ -105,8 +106,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   root: css`
     flex-shrink: 0;
-    padding-block-end: 12px;
-    padding-inline: 12px;
+    padding-block-end: ${densityVars.contentGap};
+    padding-inline: ${densityVars.contentGap};
   `,
   textChecked: css`
     color: ${cssVar.colorTextQuaternary};

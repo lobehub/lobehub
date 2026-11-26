@@ -18,7 +18,7 @@ import { latestUsageView } from '@/features/DeviceManager/DeviceHealth/viewState
 import { getDeviceIcon, getPlatformLabel } from '@/features/DeviceManager/getDeviceIcon';
 import { useDeviceActivityText } from '@/features/DeviceManager/useDeviceActivityText';
 import { useDensityTokens } from '@/styles/density';
-import { sidebarRow } from '@/styles/density.stylex';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 
 import { SidebarRowSkeleton } from '../DeferredSkeleton';
 import { sectionProps } from './sectionStyles';
@@ -33,7 +33,11 @@ const styles = stylex.create({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  infoGrid: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '12px' },
+  infoGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+    gap: densityTokens['--lobe-density-content-gap'],
+  },
   name: {
     overflow: 'hidden',
     fontSize: sidebarRow.textFontSize,

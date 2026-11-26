@@ -4,18 +4,21 @@ import { Button, Center, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ServerCrash } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { VirtuosoGrid } from 'react-virtuoso';
 
 import { normalizeAsyncError } from '@/libs/swr/normalizeError';
 import { useToolStore } from '@/store/tool';
+import { type DiscoverSkillItem } from '@/types/discover';
 
 import MarketSkillItem from '../Community/MarketSkillItem';
 import Empty from '../Empty';
 import Loading from '../Loading';
-import { virtuosoGridStyles } from '../style';
+import MasonicGrid from '../MasonicGrid';
 import VirtuosoLoading from '../VirtuosoLoading';
 import WantMoreSkills from '../WantMoreSkills';
 import { useMarketSkillList } from './useMarketSkillList';
+
+const getSkillKey = (item: DiscoverSkillItem) => item.identifier;
+const renderSkill = (item: DiscoverSkillItem) => <MarketSkillItem {...item} />;
 
 interface MarketSkillListProps {
   keywords?: string;
@@ -53,7 +56,13 @@ const MarketSkillList = memo<MarketSkillListProps>(({ keywords }) => {
     );
   }
 
-  if (items.length === 0) return <Empty search={Boolean(keywords?.trim())} />;
+  if (items.length === 0)
+    return (
+      <Empty
+        action={null}
+        description={keywords?.trim() ? t('skillStore.emptySearch') : t('skillStore.marketEmpty')}
+      />
+    );
 
   const hasReachedEnd = totalPages !== undefined && page >= totalPages;
 
@@ -73,16 +82,12 @@ const MarketSkillList = memo<MarketSkillListProps>(({ keywords }) => {
   };
 
   return (
-    <VirtuosoGrid
-      components={{ Footer: renderFooter }}
-      data={items}
-      endReached={loadMore}
-      increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
-      itemClassName={virtuosoGridStyles.item}
-      itemContent={(_, item) => <MarketSkillItem {...item} />}
-      listClassName={virtuosoGridStyles.list}
-      overscan={24}
-      style={{ height: '60vh', width: '100%' }}
+    <MasonicGrid
+      footer={renderFooter()}
+      getKey={getSkillKey}
+      items={items}
+      renderItem={renderSkill}
+      onEndReached={loadMore}
     />
   );
 });

@@ -26,7 +26,7 @@ interface DiscordDetailProps {
   appId?: string;
   botUsername?: string;
   name: string;
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 // Discord: a single global user link (Discord uses an env-side bot token, so

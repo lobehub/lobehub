@@ -2,10 +2,11 @@
 
 import type { DeviceExecutionTarget, DeviceListItem } from '@lobechat/types';
 import { createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
-import { BoxIcon, LaptopIcon, MonitorOffIcon, SparklesIcon } from 'lucide-react';
+import { BoxIcon, LaptopIcon, MonitorOffIcon, MonitorSmartphoneIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   dotOffline: css`
@@ -51,10 +52,10 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 24px;
-    height: 24px;
+    width: ${densityVars.iconBox};
+    height: ${densityVars.iconBox};
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
+    border-radius: ${densityVars.radius};
 
     color: ${cssVar.colorText};
 
@@ -63,7 +64,7 @@ const styles = createStaticStyles(({ css }) => ({
   optionName: css`
     overflow: hidden;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
     line-height: 20px;
     color: ${cssVar.colorText};
@@ -71,7 +72,7 @@ const styles = createStaticStyles(({ css }) => ({
     white-space: nowrap;
   `,
   selectItem: css`
-    min-height: 40px;
+    min-height: ${densityVars.listRowHeight};
   `,
   selectPopup: css`
     max-width: calc(100vw - 24px);
@@ -294,7 +295,9 @@ export const ExecutionTargetIcon = memo<ExecutionTargetIconProps>(
   ({ devicePlatform, size = 14, target }) => {
     switch (target) {
       case 'auto': {
-        return <Icon icon={SparklesIcon} size={size} />;
+        // A device family, not sparkles: `auto` picks among the user's
+        // devices, and sparkles read as an AI mode next to the model picker.
+        return <Icon icon={MonitorSmartphoneIcon} size={size} />;
       }
       case 'device': {
         return <>{getDeviceIcon(devicePlatform, size)}</>;

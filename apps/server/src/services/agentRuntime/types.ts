@@ -41,6 +41,8 @@ import { type AgentHook } from './hooks/types';
 export interface OperationToolSet {
   /** Tool IDs that may be restored from historical explicit activations for this run. */
   activatableToolIds?: string[];
+  /** Full manifests of tools this run starts narrowed; see the context-engine `OperationToolSet`. */
+  deferredManifestMap?: Record<string, LobeToolManifest>;
   enabledToolIds?: string[];
   executorMap?: Record<string, ToolExecutor>;
   manifestMap: Record<string, LobeToolManifest>;
@@ -451,6 +453,7 @@ export interface ExecGroupMemberResult {
 }
 
 export interface OperationCreationParams {
+  acceptsArtboardWorks?: boolean;
   /**
    * The client starting this run renders `file` Works (declared via
    * `aiAgent.execAgent`'s `streamFeatures`). Stored on

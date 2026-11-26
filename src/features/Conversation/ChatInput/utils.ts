@@ -1,7 +1,7 @@
 import { getSlicedMessages } from '@lobechat/context-engine';
 import type {
   ConversationContext,
-  FollowUpMode,
+  FollowUpBehavior,
   OpenAIChatMessage,
   UIChatMessage,
 } from '@lobechat/types';
@@ -18,6 +18,7 @@ import {
 } from '@/store/chat/slices/operation/types';
 import type { ChatStore } from '@/store/chat/store';
 import { isLocalOnlyMessage, LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
+import type { FileStore } from '@/store/file/store';
 import type { UploadFileItem } from '@/types/files/upload';
 import { isMachineErrorMessage } from '@/utils/machineErrorMessage';
 
@@ -88,12 +89,12 @@ export const createQueueSendNowGate = (): QueueSendNowGate => {
  */
 export const getQueuedHintKey = ({
   count,
-  mode = 'legacy',
+  mode,
   waitsForRunEnd,
 }: {
   count: number;
-  /** The Follow-up behavior in effect (`legacy` while its lab is off). */
-  mode?: FollowUpMode;
+  /** The user's Follow-up behavior. */
+  mode: FollowUpBehavior;
   waitsForRunEnd: boolean;
 }) => {
   const merged = count > 1;
@@ -102,16 +103,9 @@ export const getQueuedHintKey = ({
   if (mode === 'queue')
     return merged ? 'inputQueue.queuedOneByOneHint' : 'inputQueue.queuedRunEndHint';
   // Steer: joins the running turn, unless this run cannot take one mid-run.
-  if (mode === 'steer') {
-    if (waitsForRunEnd)
-      return merged ? 'inputQueue.steerUnsupportedMergeHint' : 'inputQueue.steerUnsupportedHint';
-    return merged ? 'inputQueue.steerMergeHint' : 'inputQueue.steerHint';
-  }
-
   if (waitsForRunEnd)
-    return merged ? 'inputQueue.queuedRunEndMergeHint' : 'inputQueue.queuedRunEndHint';
-
-  return merged ? 'inputQueue.queuedMergeHint' : 'inputQueue.queuedHint';
+    return merged ? 'inputQueue.steerUnsupportedMergeHint' : 'inputQueue.steerUnsupportedHint';
+  return merged ? 'inputQueue.steerMergeHint' : 'inputQueue.steerHint';
 };
 
 const isSupportedChatInputMessage = (
@@ -210,6 +204,22 @@ export const partitionSendableUploads = <T extends Pick<UploadFileItem, 'status'
     else sendable.push(file);
   }
   return { failed, sendable };
+};
+
+/**
+ * Empty the composer of what a send took: the sent attachments and the context
+ * selections. A failed or cancelled upload was not sent, so it stays to retry or remove.
+ */
+export const clearSentAttachments = (
+  fileStore: Pick<FileStore, 'clearChatContextSelections' | 'clearChatUploadFileList'>,
+  contextKey: string,
+  sentFiles: Pick<UploadFileItem, 'id'>[],
+) => {
+  fileStore.clearChatUploadFileList(
+    contextKey,
+    sentFiles.map((file) => file.id),
+  );
+  fileStore.clearChatContextSelections(contextKey);
 };
 
 export interface ConversationChatInputUiState {

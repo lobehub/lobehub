@@ -1,4 +1,4 @@
-import { getActivePluginIds } from '@lobechat/types';
+import { getOptedInPluginIds } from '@lobechat/types';
 
 import { initModelRuntimeForRequest } from '@/server/modules/AgentRuntime/llmRelay/oneShot';
 
@@ -160,7 +160,7 @@ export async function draftCaseFromTopic(
         agent = {
           model: config.model ?? undefined,
           name: (config as { name?: string | null }).name ?? null,
-          plugins: getActivePluginIds(config.plugins as any),
+          plugins: getOptedInPluginIds(config.plugins as any),
           provider: config.provider ?? undefined,
           systemRole: config.systemRole ?? undefined,
           title: config.title ?? null,

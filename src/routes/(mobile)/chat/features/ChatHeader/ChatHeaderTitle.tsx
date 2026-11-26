@@ -26,7 +26,7 @@ const ChatHeaderTitle = memo(() => {
   // id so the title doesn't degrade to the "new topic" placeholder.
   useFetchActiveTopicDetail();
 
-  const displayTitle = isInbox ? DEFAULT_INBOX_TITLE : title;
+  const displayTitle = isInbox ? title || DEFAULT_INBOX_TITLE : title;
 
   return (
     <ChatHeader.Title

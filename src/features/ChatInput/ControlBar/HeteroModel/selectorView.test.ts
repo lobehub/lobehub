@@ -57,7 +57,6 @@ describe('resolveSelectorShape', () => {
   });
 
   it('gives catalog-only providers the bare picker', () => {
-    expect(resolveSelectorShape({ type: 'antigravity' }, true).kind).toBe('catalog');
     expect(resolveSelectorShape({ type: 'deepseek-harness' }, true).kind).toBe('catalog');
     expect(resolveSelectorShape({ type: 'kimi-code' }, true).kind).toBe('catalog');
     expect(resolveSelectorShape({ type: 'opencode' }, true).kind).toBe('catalog');
@@ -65,6 +64,7 @@ describe('resolveSelectorShape', () => {
   });
 
   it('gives a catalog provider with another dimension the full menu', () => {
+    expect(resolveSelectorShape({ type: 'antigravity' }, true).kind).toBe('menu');
     expect(resolveSelectorShape({ type: 'codebuddy' }, true).kind).toBe('menu');
     expect(resolveSelectorShape({ type: 'codex' }, true).kind).toBe('menu');
     expect(resolveSelectorShape({ type: 'qoder' }, true).kind).toBe('menu');
@@ -77,12 +77,35 @@ describe('resolveSelectorShape', () => {
 });
 
 describe('dimensions per provider', () => {
-  it('shows the Antigravity variant without a second effort dimension', () => {
-    const view = viewOf({ type: 'antigravity', model: 'gemini-4-argon-high' });
-    expect(view.isCatalogModel).toBe(true);
-    expect(view.model).toBe('gemini-4-argon-high');
-    expect(view.dimensions).toEqual([]);
-    expect(view.triggerLabel.secondaryText).toBeUndefined();
+  it('shows the saved Antigravity variant as a base model and a separate effort', () => {
+    const models = [
+      {
+        effortLevels: ['low', 'medium', 'high'] as const,
+        id: 'gemini-4-argon',
+        label: 'Gemini 4 Argon',
+        modelId: 'gemini-4-argon',
+        providerId: 'antigravity',
+      },
+    ];
+    const capability = capabilityOf('antigravity');
+    const view = buildSelectorView({
+      capability,
+      models,
+      provider: { model: 'gemini-4-argon-high', type: 'antigravity' },
+      t,
+    });
+    expect(view.model).toBe('gemini-4-argon');
+    expect(view.dimensions[0].current).toBe('high');
+    expect(view.dimensions[0].options.map(({ value }) => value)).toEqual([
+      'default',
+      'low',
+      'medium',
+      'high',
+    ]);
+    expect(view.triggerLabel.text).toBe('Gemini 4 Argon');
+    expect(
+      resolveModelSwitchSelection({ capability, effort: 'high', models, value: 'orchestrator' }),
+    ).toEqual({ effort: 'default', model: 'orchestrator' });
   });
   it('uses the Codex catalog while preserving reasoning levels through max', () => {
     expect(viewOf({ type: 'codex' }).isCatalogModel).toBe(true);

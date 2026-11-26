@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  checkChannelDelivery: vi.fn(),
   getDetail: vi.fn(),
   refreshTaskDetail: vi.fn(),
   update: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock('@/store/task/slices/detail/reducer', () => ({
 
 vi.mock('@/services/task', () => ({
   taskService: {
+    checkChannelDelivery: mocks.checkChannelDelivery,
     find: vi.fn(async () => ({ data: { id: 'task-1', identifier: 'T-1' } })),
     getDetail: mocks.getDetail,
     update: mocks.update,
@@ -149,5 +151,47 @@ describe('TaskExecutor — setTaskSchedule', () => {
     expect(mocks.getDetail.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.update.mock.invocationCallOrder[0],
     );
+  });
+
+  it('stores the delivery the server resolved {} to, with the schedule', async () => {
+    mocks.checkChannelDelivery.mockResolvedValue({
+      delivery: { channelId: 'chn_1', threadId: 'cht_1' },
+      description: 'results post to Channel chn_1 (Thread cht_1)',
+    });
+
+    const result = await taskExecutor.setTaskSchedule(
+      { channelDelivery: {}, heartbeatInterval: 3600, identifier: 'T-1' },
+      { messageId: 'msg', operationId: 'op_1' },
+    );
+
+    expect(result.success).toBe(true);
+    expect(mocks.checkChannelDelivery).toHaveBeenCalledWith({
+      delivery: {},
+      id: 'task-1',
+      operationId: 'op_1',
+    });
+    expect(mocks.updateConfig).toHaveBeenCalledWith('task-1', {
+      delivery: { channelId: 'chn_1', threadId: 'cht_1' },
+    });
+    expect(mocks.update).toHaveBeenCalled();
+    expect(result.content).toContain('results post to Channel chn_1 (Thread cht_1)');
+  });
+
+  it('writes nothing, the schedule included, when the delivery is refused', async () => {
+    mocks.checkChannelDelivery.mockRejectedValue(
+      new Error('This Agent is not a member of that Channel.'),
+    );
+
+    const result = await taskExecutor.setTaskSchedule({
+      automationMode: 'heartbeat',
+      channelDelivery: { channelId: 'chn_1' },
+      heartbeatInterval: 3600,
+      identifier: 'T-1',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('This Agent is not a member of that Channel.');
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.updateConfig).not.toHaveBeenCalled();
   });
 });

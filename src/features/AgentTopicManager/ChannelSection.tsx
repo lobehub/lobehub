@@ -12,12 +12,13 @@ import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { densityTokens } from '@/styles/density.stylex';
 
-const styles = stylex.create({
+export const channelCardStyles = stylex.create({
   // Same column rules as the topic grid, so Channel cards line up with the topics below them.
   grid: {
     display: 'grid',
-    gap: 12,
+    gap: densityTokens['--lobe-density-content-gap'],
     gridTemplateColumns: {
       default: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))',
       [media.md]: 'repeat(auto-fill, minmax(min(240px, 100%), 1fr))',
@@ -61,7 +62,7 @@ const ChannelCard = memo<{ channel: ChannelListItem }>(({ channel }) => {
 
   return (
     <Block
-      className={stylex.props(styles.card).className}
+      className={stylex.props(channelCardStyles.card).className}
       gap={8}
       role={'link'}
       tabIndex={0}
@@ -72,8 +73,13 @@ const ChannelCard = memo<{ channel: ChannelListItem }>(({ channel }) => {
       }}
     >
       <Flexbox horizontal align={'center'} gap={6}>
-        <Icon className={stylex.props(styles.icon).className} icon={Hash} size={14} />
-        <Text ellipsis className={stylex.props(styles.title).className} fontSize={14} weight={600}>
+        <Icon className={stylex.props(channelCardStyles.icon).className} icon={Hash} size={14} />
+        <Text
+          ellipsis
+          className={stylex.props(channelCardStyles.title).className}
+          fontSize={14}
+          weight={600}
+        >
           {channel.title}
         </Text>
         {channel.status === 'archived' && (
@@ -81,11 +87,15 @@ const ChannelCard = memo<{ channel: ChannelListItem }>(({ channel }) => {
         )}
       </Flexbox>
       {preview && (
-        <Text className={stylex.props(styles.preview).className} fontSize={12} type={'secondary'}>
+        <Text
+          className={stylex.props(channelCardStyles.preview).className}
+          fontSize={12}
+          type={'secondary'}
+        >
           {preview}
         </Text>
       )}
-      <span title={activity.title} {...stylex.props(styles.footer)}>
+      <span title={activity.title} {...stylex.props(channelCardStyles.footer)}>
         {activity.text}
       </span>
     </Block>
@@ -112,7 +122,7 @@ const ChannelSection = memo<{ channels: ChannelListItem[] }>(({ channels }) => {
           {t('management.channels.desc')}
         </Text>
       </Flexbox>
-      <div {...stylex.props(styles.grid)}>
+      <div {...stylex.props(channelCardStyles.grid)}>
         {channels.map((channel) => (
           <ChannelCard channel={channel} key={channel.id} />
         ))}

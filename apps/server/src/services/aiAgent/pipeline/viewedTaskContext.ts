@@ -43,7 +43,7 @@ export const buildViewedTaskContextPrompt = async (
         deps.db,
         deps.userId,
         deps.workspaceId,
-      ).getTaskDetail(viewedTask.id);
+      ).getTaskDetail(viewedTask.id, viewedTask);
       if (task) return buildTaskDetailPrompt({ defaultAssigneeAgentId, task });
     } catch (error) {
       log('failed to load viewed task %s: %O', taskId, error);

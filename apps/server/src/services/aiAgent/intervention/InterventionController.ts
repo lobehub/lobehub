@@ -22,6 +22,7 @@ import type { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { STOPPED_TOOL_CONTENT } from '../helpers/agentFactory';
+import { readHeteroDeviceRoute } from '../pipeline/heteroDispatch/deviceRoute';
 import { releaseHeteroSteers } from '../steerQueue/hetero';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -144,9 +145,19 @@ export class InterventionController {
     // bot/messenger stop). Recover it from the owner-scoped operation row so
     // device cancellation is symmetric across every caller.
     let resolvedTopicId = topicId;
+    let operationRow: Awaited<ReturnType<AgentOperationModel['findById']>> | undefined;
+    // Best-effort: without the row there is just no topic or device route to use.
+    const readOperationRow = async () => {
+      operationRow ??= await this.deps.agentOperationModel
+        .findById(resolvedOperationId!)
+        .catch((error: unknown) => {
+          log('interruptTask: reading operation %s failed: %O', resolvedOperationId, error);
+          return undefined;
+        });
+      return operationRow;
+    };
     if (!resolvedTopicId) {
-      const operation = await this.deps.agentOperationModel.findById(resolvedOperationId);
-      resolvedTopicId = operation?.topicId ?? undefined;
+      resolvedTopicId = (await readOperationRow())?.topicId ?? undefined;
     }
 
     // 2. Cancel a device-hosted hetero process if applicable.
@@ -171,10 +182,14 @@ export class InterventionController {
             }>;
           }
         | undefined;
+      // A background sub-agent outlives its parent's marker entry; its own
+      // operation row keeps the device route.
       const targetOperation =
-        runningOp?.operationId === resolvedOperationId
+        (runningOp?.operationId === resolvedOperationId
           ? runningOp
-          : runningOp?.childOperations?.find((child) => child.operationId === resolvedOperationId);
+          : runningOp?.childOperations?.find(
+              (child) => child.operationId === resolvedOperationId,
+            )) ?? readHeteroDeviceRoute((await readOperationRow())?.metadata);
 
       if (
         targetOperation?.deviceId &&

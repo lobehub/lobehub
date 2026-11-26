@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { selectCurrentTurnTodosFromMessages } from '@/store/chat/slices/message/selectors/dbMessage';
 import { shinyTextStyles } from '@/styles';
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../store';
@@ -35,7 +36,7 @@ const styles = stylex.create({
     userSelect: 'none',
     paddingBlockStart: '8px',
     paddingBlockEnd: '10px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorFillSecondary,

@@ -3,6 +3,7 @@ import { CheckIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import AgentAvatar from '@/components/AgentAvatar';
+import { densityVars } from '@/styles/densityVars';
 
 import { useNavItemMetrics } from '../density';
 import type { SwitcherItem } from './switcherItems';
@@ -18,7 +19,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: none;
 
     padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
+    border-radius: ${densityVars.radius};
 
     &:hover {
       background: ${cssVar.colorFillTertiary};

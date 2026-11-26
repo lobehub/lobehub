@@ -1,18 +1,10 @@
-import type { ScmRepositoryListItem } from '@lobechat/types';
-import {
-  Button,
-  cssVar,
-  Flexbox,
-  Input,
-  ModalFooter,
-  Text,
-  toast,
-  useModalContext,
-} from '@lobehub/ui';
+import { Button, cssVar, Flexbox, Input, ModalFooter, Text, useModalContext } from '@lobehub/ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { GITHUB_RETURN_TO } from '@/features/Integrations/Github/installHref';
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
+import { buildConnectorPagePath } from '@/features/Integrations/connectorPage';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useHomeStore } from '@/store/home';
 import { useProjectStore } from '@/store/project';
@@ -30,11 +22,9 @@ import {
 import MainAgentSection from '../MainAgentSection';
 import { useDefaultMainAgent } from '../useDefaultMainAgent';
 import { parseGithubRepository } from './githubRepository';
-import RepositoryList from './RepositoryList';
+import RepositoryField, { AdvancedRepositories, type PickedRepository } from './RepositoryField';
 
 interface FormState {
-  /** Default branch of the picked repository; unknown for a pasted URL. */
-  defaultBranch?: string;
   /** The field another project already holds, as the last create reported it. */
   duplicate?: 'identifier' | 'name';
   identifier: string;
@@ -44,7 +34,6 @@ interface FormState {
   mainAgentMode: MainAgentMode;
   name: string;
   nameEdited: boolean;
-  url: string;
 }
 
 /**
@@ -65,14 +54,19 @@ const CreateFromGithubContent = () => {
     mainAgentMode: DEFAULT_MAIN_AGENT_MODE,
     name: '',
     nameEdited: false,
-    url: '',
   });
+
+  // The project's environment checks these out; the first one names the project.
+  const [repositories, setRepositories] = useState<PickedRepository[]>([]);
+  const [main, ...extras] = repositories;
 
   // Taken once per open dialog: the dedicated agent's previewed character is seeded by it.
   const [reservedIds] = useState(reserveProjectIds);
 
-  const repository = parseGithubRepository(form.url);
-  const urlInvalid = Boolean(form.url.trim()) && !repository;
+  /** Create failure that no field explains, shown above the footer buttons: the dialog stays open with the user's input. */
+  const [error, setError] = useState<InlineErrorState | null>(null);
+
+  const repository = main && parseGithubRepository(main.url);
   const defaultMainAgentId = useDefaultMainAgent();
   const mainAgentId = form.mainAgentId ?? defaultMainAgentId;
   const identifierInvalid =
@@ -86,30 +80,30 @@ const CreateFromGithubContent = () => {
       })
     : null;
 
-  /** A new repository renames the project unless the person already named it. */
-  const applyUrl = (url: string, defaultBranch?: string) => {
-    const parsed = parseGithubRepository(url);
-    setForm((current) => {
-      const name = current.nameEdited ? current.name : (parsed?.name ?? '');
-      return { ...current, defaultBranch, duplicate: undefined, name, url };
-    });
-  };
-
-  const selectRepository = (repo: ScmRepositoryListItem) => {
-    applyUrl(repo.htmlUrl, repo.defaultBranch);
+  /** A new first repository renames the project unless the person already named it. */
+  const changeRepositories = (next: PickedRepository[]) => {
+    setRepositories(next);
+    const first = next[0] && parseGithubRepository(next[0].url);
+    setForm((current) => ({
+      ...current,
+      duplicate: undefined,
+      name: current.nameEdited ? current.name : (first?.name ?? ''),
+    }));
   };
 
   const updateName = (name: string) => {
     setForm((current) => ({ ...current, duplicate: undefined, name, nameEdited: true }));
+    setError(null);
   };
 
   const connectGithub = () => {
     close();
-    navigate(GITHUB_RETURN_TO);
+    navigate(buildConnectorPagePath('github'));
   };
 
   const handleCreate = async () => {
     if (!createInput || !repository || form.loading) return;
+    setError(null);
     setForm((current) => ({ ...current, loading: true }));
     try {
       const project = await createProject({
@@ -119,10 +113,16 @@ const CreateFromGithubContent = () => {
           mainAgentMode: form.mainAgentMode,
         }),
         repository: {
-          defaultBranch: form.defaultBranch,
+          defaultBranch: main?.defaultBranch,
           name: repository.fullName,
           url: repository.url,
         },
+        ...(extras.length > 0 && {
+          additionalRepositories: extras.map(({ defaultBranch, url }) => ({
+            url,
+            ...(defaultBranch && { defaultBranch }),
+          })),
+        }),
       });
       if (form.mainAgentMode === 'dedicated') {
         // The project created an agent and maybe the Project label; show both.
@@ -131,16 +131,16 @@ const CreateFromGithubContent = () => {
       }
       close();
       navigate(`/project/${project.slug ?? project.id}`);
-    } catch (error) {
+    } catch (err) {
       // A taken slug also comes back as a conflict; this dialog has no slug
       // input, so it reports it on the name the slug is derived from.
-      const field = getProjectConflictField(error);
+      const field = getProjectConflictField(err);
       const duplicate = field === 'slug' ? 'name' : field;
       if (duplicate) {
         setForm((current) => ({ ...current, duplicate }));
       } else {
-        console.error('Failed to create project from GitHub', error);
-        toast.error(t('operationFailed', { ns: 'common' }));
+        console.error('Failed to create project from GitHub', err);
+        setError(toInlineError(t('create.failedRetry'), err));
       }
     } finally {
       setForm((current) => ({ ...current, loading: false }));
@@ -150,31 +150,11 @@ const CreateFromGithubContent = () => {
   return (
     <>
       <Flexbox gap={16} padding={16}>
-        {/* Picking a connected repository is the primary path; the URL field is the fallback. */}
-        <RepositoryList
-          selected={repository?.fullName}
+        <RepositoryField
+          value={repositories}
+          onChange={changeRepositories}
           onConnect={connectGithub}
-          onSelect={selectRepository}
         />
-
-        <Flexbox gap={6}>
-          <Text fontSize={13} weight={500}>
-            {t('createFromGithub.urlLabel')}
-          </Text>
-          <Input
-            aria-invalid={urlInvalid}
-            placeholder={t('createFromGithub.urlPlaceholder')}
-            style={urlInvalid ? { borderColor: cssVar.colorError } : undefined}
-            value={form.url}
-            onChange={(event) => applyUrl(event.target.value)}
-            onPressEnter={handleCreate}
-          />
-          {urlInvalid && (
-            <Text fontSize={12} type={'danger'}>
-              {t('createFromGithub.urlInvalid')}
-            </Text>
-          )}
-        </Flexbox>
 
         {repository && (
           <Flexbox horizontal gap={12}>
@@ -214,15 +194,13 @@ const CreateFromGithubContent = () => {
             </Flexbox>
           </Flexbox>
         )}
-        {repository && (
-          <Text fontSize={12} type={identifierInvalid || form.duplicate ? 'danger' : 'secondary'}>
+        {repository && (identifierInvalid || form.duplicate) && (
+          <Text fontSize={12} type={'danger'}>
             {form.duplicate === 'name'
               ? t('createFromGithub.duplicateName')
               : form.duplicate === 'identifier'
                 ? t('createFromGithub.duplicateIdentifier')
-                : identifierInvalid
-                  ? t('create.identifierInvalid')
-                  : t('createFromGithub.environmentHint')}
+                : t('create.identifierInvalid')}
           </Text>
         )}
         {repository && (
@@ -236,6 +214,13 @@ const CreateFromGithubContent = () => {
             onModeChange={(mainAgentMode) => setForm((current) => ({ ...current, mainAgentMode }))}
           />
         )}
+        <AdvancedRepositories
+          layoutHint={t('createFromGithub.layoutHint')}
+          value={repositories}
+          onChange={changeRepositories}
+          onConnect={connectGithub}
+        />
+        {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

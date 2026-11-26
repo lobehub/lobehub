@@ -75,6 +75,15 @@ describe('lambdaClient large-input query transport', () => {
       'documentIds',
       100,
     ],
+    [
+      'work.listTopicsPullRequests',
+      () =>
+        lambdaClient.work.listTopicsPullRequests.query({
+          topicIds: Array.from({ length: 100 }, (_, i) => `tpc_${String(i).padStart(16, '0')}`),
+        }),
+      'topicIds',
+      100,
+    ],
   ] as const)(
     'sends %s with a large path/id array as a POST request',
     async (path, call, arrayField, expectedLength) => {
@@ -227,6 +236,25 @@ describe('lambdaClient transport lanes', () => {
     expect(settingsUrl).toBeDefined();
     expect(settingsUrl).not.toContain('batch=1');
     expect(settingsUrl).not.toContain('agent.getAgentConfigById');
+  });
+
+  // The chat input's model and Agent-mode controls wait for the member's
+  // preference on a cold load; batched, the wait grew to the slowest sibling.
+  it('sends the workspace preference read as its own unbatched request', async () => {
+    fetchMock.mockImplementation(respondByLane);
+
+    await Promise.all([
+      lambdaClient.workspaceUserSettings.getPreference.query(),
+      lambdaClient.agent.getAgentConfigById.query({ agentId: 'agt_test' }),
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const preferenceUrl = requestedUrls().find((url) =>
+      url.includes('workspaceUserSettings.getPreference'),
+    );
+    expect(preferenceUrl).toBeDefined();
+    expect(preferenceUrl).not.toContain('batch=1');
+    expect(preferenceUrl).not.toContain('agent.getAgentConfigById');
   });
 
   // A project topic asks for the project's topics beside its detail; batched,

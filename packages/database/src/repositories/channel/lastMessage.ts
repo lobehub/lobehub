@@ -1,4 +1,4 @@
-import type { ChannelLastMessage } from '@lobechat/types';
+import type { ChannelLastMessage, ContactCardType } from '@lobechat/types';
 import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
@@ -11,8 +11,12 @@ import {
   users,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
+import { agentAccessCards } from './agentAccess';
 import { isAgentAuthored } from './author';
+import { channelUserNameSql } from './nickname';
+import { isOpeningAck } from './openingAck';
 import { messageStands } from './tombstone';
 
 /** Characters of the latest message a Channel list item carries as its preview. */
@@ -44,11 +48,16 @@ const attachmentsByMessage = async (db: LobeChatDatabase, messageIds: string[]) 
  * they do for the unread count: a reply in a Thread is the conversation's latest activity, and a
  * preview stopped at the main conversation reads as nothing new. Trashed Threads are skipped.
  * A Thread is named by its title, else the first line of the message it branched from. The
- * sender and attachments come along, so a list can read "Me: [Image]".
+ * sender and attachments come along, so a list can read "Me: [Image]". An Agent's pre-run
+ * acknowledgement is marked `opening`, so a client can show it without announcing it. An Agent's
+ * access request card carries its request's current status for the Agent's owner, so their list
+ * can read "Allowed …" once they answered instead of the stored request text.
  */
 export const channelLastMessages = async (
   db: LobeChatDatabase,
   channelIds: string[],
+  /** The person reading the list; only the Agent's owner gets an access request's status. */
+  viewerUserId?: string,
 ): Promise<Map<string, ChannelLastMessage>> => {
   if (!channelIds.length) return new Map();
   const root = alias(channelMessages, 'thread_root');
@@ -57,18 +66,22 @@ export const channelLastMessages = async (
     .selectDistinctOn([channelMessages.channelId], {
       agentId: channelMessages.agentId,
       agentName: agents.name,
-      agentTitle: agents.title,
+      agentTitle: agentTitleSql(),
+      cardName: sql<string | null>`${channelMessages.metadata} -> 'card' ->> 'name'`,
+      cardType: sql<ContactCardType | null>`${channelMessages.metadata} -> 'card' ->> 'type'`,
       channelId: channelMessages.channelId,
       content: sql<string>`left(${channelMessages.content}, ${LIST_PREVIEW_LENGTH})`,
       createdAt: channelMessages.createdAt,
       id: channelMessages.id,
+      metadata: channelMessages.metadata,
+      opening: sql<boolean>`coalesce(${isOpeningAck}, false)`.mapWith(Boolean),
       routingStatus: channelMessages.routingStatus,
       threadId: channelMessages.threadId,
       threadTitle: sql<string | null>`coalesce(
         nullif(${channelThreads.metadata} ->> 'title', ''),
         nullif(left(split_part(btrim(${root.content}), E'\n', 1), ${THREAD_TITLE_LENGTH}), '')
       )`,
-      userFullName: users.fullName,
+      userFullName: channelUserNameSql(channelMessages.channelId, channelMessages.userId),
       userId: channelMessages.userId,
       username: users.username,
     })
@@ -95,10 +108,13 @@ export const channelLastMessages = async (
     )
     .orderBy(channelMessages.channelId, desc(channelMessages.sequence));
 
-  const attachmentsOf = await attachmentsByMessage(
-    db,
-    latest.map(({ id }) => id),
-  );
+  const [attachmentsOf, accessCards] = await Promise.all([
+    attachmentsByMessage(
+      db,
+      latest.map(({ id }) => id),
+    ),
+    agentAccessCards(db, latest, viewerUserId),
+  ]);
 
   return new Map(
     latest.map((row) => {
@@ -106,14 +122,17 @@ export const channelLastMessages = async (
       return [
         row.channelId,
         {
+          agentAccess: accessCards.get(row.id) ?? null,
           attachments: attachmentsOf.get(row.id) ?? null,
           author: {
             id: isAgent ? row.agentId : row.userId,
             name: isAgent ? row.agentName || row.agentTitle : row.userFullName || row.username,
             type: isAgent ? ('agent' as const) : ('user' as const),
           },
+          card: row.cardType ? { name: row.cardName, type: row.cardType } : null,
           content: row.content,
           createdAt: row.createdAt,
+          opening: row.opening,
           thread: row.threadId ? { id: row.threadId, title: row.threadTitle } : null,
         },
       ];

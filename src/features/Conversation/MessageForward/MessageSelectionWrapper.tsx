@@ -8,10 +8,11 @@ import { memo, type MouseEvent, type ReactNode, useCallback } from 'react';
 import { CONVERSATION_MIN_WIDTH } from '@/const/layoutTokens';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { messageStateSelectors, useConversationStore } from '../store';
 import { messageSelectionMarker } from './markers.stylex';
-import { isSelectableRole } from './selectableRoles';
+import { isSelectableRow } from './selectableRoles';
 import SelectCircle from './SelectCircle';
 
 const styles = stylex.create({
@@ -30,7 +31,7 @@ const styles = stylex.create({
   bandSelected: { backgroundColor: cssVar.colorFillQuaternary },
   // Pinned to the band's leading edge; vertical centering is handled by the
   // band's cross-axis alignment.
-  checkbox: { flex: 'none', paddingInlineStart: '16px' },
+  checkbox: { flex: 'none', paddingInlineStart: densityTokens['--lobe-density-card-padding'] },
   content: {
     // Content is non-interactive while selecting — the whole row is the toggle.
     pointerEvents: 'none',
@@ -47,12 +48,14 @@ const styles = stylex.create({
   disabledBand: { cursor: 'not-allowed', inlineSize: '100%', opacity: 0.4 },
   // Centered reading column inside the full-bleed band — the width preference the
   // rest of the conversation follows.
-  lane: { paddingInline: '16px' },
+  lane: { paddingInline: densityTokens['--lobe-density-card-padding'] },
 });
 
 interface MessageSelectionWrapperProps {
   children: ReactNode;
   id: string;
+  /** A compressed history row: shown in selection mode but never selectable. */
+  readOnlyHistory?: boolean;
   role?: string;
 }
 
@@ -62,72 +65,74 @@ interface MessageSelectionWrapperProps {
  * full stream width, while the inner lane keeps the content at the usual
  * reading-column width. Outside selection mode it renders the message untouched.
  */
-const MessageSelectionWrapper = memo<MessageSelectionWrapperProps>(({ children, id, role }) => {
-  const isSelectionMode = useConversationStore(messageStateSelectors.isSelectionMode);
-  const isSelected = useConversationStore(messageStateSelectors.isMessageSelected(id));
-  const toggleMessageSelected = useConversationStore((s) => s.toggleMessageSelected);
-  const selectRange = useConversationStore((s) => s.selectRange);
-  const wideScreen = useGlobalStore(systemStatusSelectors.wideScreen);
+const MessageSelectionWrapper = memo<MessageSelectionWrapperProps>(
+  ({ children, id, readOnlyHistory, role }) => {
+    const isSelectionMode = useConversationStore(messageStateSelectors.isSelectionMode);
+    const isSelected = useConversationStore(messageStateSelectors.isMessageSelected(id));
+    const toggleMessageSelected = useConversationStore((s) => s.toggleMessageSelected);
+    const selectRange = useConversationStore((s) => s.selectRange);
+    const wideScreen = useGlobalStore(systemStatusSelectors.wideScreen);
 
-  const selectable = isSelectableRole(role);
-  const isAssistant = role === 'assistant' || role === 'assistantGroup';
+    const selectable = isSelectableRow({ readOnlyHistory, role });
+    const isAssistant = role === 'assistant' || role === 'assistantGroup';
 
-  const handleToggle = useCallback(
-    (event: MouseEvent) => {
-      if (!selectable) return;
-      // Shift-click extends the selection from the anchor to this message.
-      if (event.shiftKey) selectRange(id);
-      else toggleMessageSelected(id);
-    },
-    [selectable, selectRange, toggleMessageSelected, id],
-  );
+    const handleToggle = useCallback(
+      (event: MouseEvent) => {
+        if (!selectable) return;
+        // Shift-click extends the selection from the anchor to this message.
+        if (event.shiftKey) selectRange(id);
+        else toggleMessageSelected(id);
+      },
+      [selectable, selectRange, toggleMessageSelected, id],
+    );
 
-  if (!isSelectionMode) return <>{children}</>;
+    if (!isSelectionMode) return <>{children}</>;
 
-  // Mirror WideScreenContainer's column width so selection content lines up with
-  // the rest of the conversation.
-  const laneWidth = wideScreen ? '100%' : `min(${CONVERSATION_MIN_WIDTH}px, 100%)`;
+    // Mirror WideScreenContainer's column width so selection content lines up with
+    // the rest of the conversation.
+    const laneWidth = wideScreen ? '100%' : `min(${CONVERSATION_MIN_WIDTH}px, 100%)`;
 
-  const inner = (
-    <>
-      <div {...stylex.props(styles.checkbox)}>
-        {selectable && <SelectCircle checked={isSelected} />}
-      </div>
-      <Flexbox align={'center'} flex={1} style={{ minWidth: 0 }}>
-        <Flexbox {...stylex.props(styles.lane)} width={laneWidth}>
-          <div
-            {...stylex.props(
-              styles.content,
-              isAssistant && styles.contentCollapsed,
-              messageSelectionMarker,
-            )}
-          >
-            {children}
-          </div>
+    const inner = (
+      <>
+        <div {...stylex.props(styles.checkbox)}>
+          {selectable && <SelectCircle checked={isSelected} />}
+        </div>
+        <Flexbox align={'center'} flex={1} style={{ minWidth: 0 }}>
+          <Flexbox {...stylex.props(styles.lane)} width={laneWidth}>
+            <div
+              {...stylex.props(
+                styles.content,
+                isAssistant && styles.contentCollapsed,
+                messageSelectionMarker,
+              )}
+            >
+              {children}
+            </div>
+          </Flexbox>
         </Flexbox>
-      </Flexbox>
-    </>
-  );
+      </>
+    );
 
-  if (!selectable) {
+    if (!selectable) {
+      return (
+        <Flexbox horizontal align={'center'} {...stylex.props(styles.disabledBand)}>
+          {inner}
+        </Flexbox>
+      );
+    }
+
     return (
-      <Flexbox horizontal align={'center'} {...stylex.props(styles.disabledBand)}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        {...stylex.props(styles.band, isSelected && styles.bandSelected)}
+        onClick={handleToggle}
+      >
         {inner}
       </Flexbox>
     );
-  }
-
-  return (
-    <Flexbox
-      horizontal
-      align={'center'}
-      {...stylex.props(styles.band, isSelected && styles.bandSelected)}
-      onClick={handleToggle}
-    >
-      {inner}
-    </Flexbox>
-  );
-});
+  },
+);
 
 MessageSelectionWrapper.displayName = 'MessageSelectionWrapper';
 

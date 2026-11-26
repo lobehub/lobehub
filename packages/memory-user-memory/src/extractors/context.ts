@@ -1,5 +1,3 @@
-import { renderPlaceholderTemplate } from '@lobechat/context-engine';
-
 import { contextPrompt } from '../prompts';
 import type { ContextMemory } from '../schemas';
 import { ContextMemorySchema } from '../schemas';
@@ -35,11 +33,10 @@ export class ContextExtractor extends BaseMemoryExtractor<ContextMemory> {
     };
   }
 
-  buildUserPrompt(options: ExtractorTemplateProps): string {
-    if (!this.promptTemplate) {
-      throw new Error('Prompt template not loaded');
-    }
-
-    return renderPlaceholderTemplate(this.promptTemplate!, this.getTemplateProps(options));
+  buildUserPrompt(): string {
+    return this.buildTaskPrompt(
+      'context',
+      'Return `{ "memories": [] }` when nothing should be extracted.',
+    );
   }
 }

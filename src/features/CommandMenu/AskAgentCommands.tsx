@@ -1,4 +1,4 @@
-import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@lobechat/const';
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { preventDefault } from '@lobehub/ui';
 import { Command } from 'cmdk';
@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import AgentAvatar from '@/components/AgentAvatar';
 import Avatar from '@/components/Avatar';
 import { useAgentStore } from '@/store/agent';
-import { builtinAgentSelectors } from '@/store/agent/selectors/builtinAgentSelectors';
+import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
@@ -20,6 +20,8 @@ const AskAgentCommands = memo(() => {
   const { search, setSearch, setSelectedAgent } = useCommandMenuContext();
 
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const inboxTitle = useAgentStore(agentSelectors.inboxAgentDisplayName);
+  const inboxAvatar = useAgentStore(agentSelectors.inboxAgentAvatar);
   const allAgents = useHomeStore(homeAgentListSelectors.allAgents);
 
   // Check if search starts with "@"
@@ -33,7 +35,10 @@ const AskAgentCommands = memo(() => {
 
   // Filter agents based on the query after "@"
   const filteredAgents = useMemo(() => {
-    const agents = allAgents.filter((item) => item.type === 'agent');
+    // Lobe AI has its own fixed `@` row, so its list item is left out.
+    const agents = allAgents.filter(
+      (item) => item.type === 'agent' && item.slug !== INBOX_SESSION_ID,
+    );
     if (!mentionQuery) {
       return agents.slice(0, 10);
     }
@@ -58,8 +63,7 @@ const AskAgentCommands = memo(() => {
   if (!isAtMention) return null;
 
   // Check if the default assistant matches the query
-  const showLobeAI =
-    !mentionQuery || DEFAULT_INBOX_TITLE.toLowerCase().includes(mentionQuery.toLowerCase());
+  const showLobeAI = !mentionQuery || inboxTitle.toLowerCase().includes(mentionQuery.toLowerCase());
 
   return (
     <Command.Group heading={t('cmdk.mentionAgent')}>
@@ -68,13 +72,11 @@ const AskAgentCommands = memo(() => {
         <Command.Item
           value="@lobe-ai"
           onMouseDown={preventDefault}
-          onSelect={() =>
-            handleAgentSelect(inboxAgentId, DEFAULT_INBOX_TITLE, DEFAULT_INBOX_AVATAR)
-          }
+          onSelect={() => handleAgentSelect(inboxAgentId, inboxTitle, inboxAvatar)}
         >
-          <Avatar emojiScaleWithBackground avatar={DEFAULT_INBOX_AVATAR} shape="square" size={18} />
+          <Avatar emojiScaleWithBackground avatar={inboxAvatar} shape="square" size={18} />
           <div className={styles.itemContent}>
-            <div className={styles.itemLabel}>@{DEFAULT_INBOX_TITLE}</div>
+            <div className={styles.itemLabel}>@{inboxTitle}</div>
           </div>
         </Command.Item>
       )}

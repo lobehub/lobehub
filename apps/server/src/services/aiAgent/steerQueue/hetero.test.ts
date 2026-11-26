@@ -102,6 +102,7 @@ beforeEach(() => {
   mocks.boundOperations.mockResolvedValue({ operationIds: ['op-1'], total: 1 });
   mocks.drain.mockResolvedValue([]);
   mocks.findById.mockResolvedValue(undefined);
+  mocks.isRunAlive.mockResolvedValue(true);
   mocks.queryByIds.mockResolvedValue([]);
   mocks.settle.mockResolvedValue(undefined);
   mocks.renew.mockResolvedValue(true);
@@ -126,20 +127,8 @@ describe('canSteerHeteroRun', () => {
 });
 
 describe('takeHeteroSteer', () => {
-  it('hands out the first follow-up and returns the rest to the queue', async () => {
-    mocks.drain.mockResolvedValue([followUp('a', 1), followUp('b', 2)]);
-
-    await expect(take()).resolves.toEqual({ content: 'prompt a', messageId: 'msg-a' });
-
-    // `b` goes back; `a` stays in the leased batch until Claude Code picks it up.
-    const [, drained, returned] = mocks.settle.mock.calls[0];
-    expect(returned).toEqual(['b']);
-    expect(mocks.deliveries.get('msg-a')).toContain(`"drainId":"${drained}"`);
-  });
-
-  describe('Steer mode', () => {
-    const steer = () =>
-      takeHeteroSteer(ctx, { agentId: 'agt-1', mode: 'steer', operationId: 'op-1', scope });
+  describe('merging', () => {
+    const steer = take;
 
     it('merges every leading follow-up that can join into one message', async () => {
       mocks.drain.mockResolvedValue([
@@ -221,7 +210,6 @@ describe('takeHeteroSteer', () => {
         acceptsImageAttachments: true,
         acceptsImages: true,
         agentId: 'agt-1',
-        mode: 'steer',
         operationId: 'op-1',
         scope,
       });
@@ -283,7 +271,7 @@ describe('takeHeteroSteer', () => {
     const image = { id: 'file_1', url: 'https://bucket.example.com/files/1.png?X-Amz-Signature=s' };
 
     it('hands them over with the text when the session takes images', async () => {
-      mocks.drain.mockResolvedValue([followUp('a', 1, { prompt: pasted }), followUp('b', 2)]);
+      mocks.drain.mockResolvedValue([followUp('a', 1, { prompt: pasted })]);
       mocks.resolveInlineImages.mockResolvedValue([image]);
 
       await expect(
@@ -291,7 +279,6 @@ describe('takeHeteroSteer', () => {
       ).resolves.toEqual({ content: pasted, imageList: [image], messageId: 'msg-a' });
 
       expect(mocks.resolveInlineImages).toHaveBeenCalledWith(ctx, pasted);
-      expect(mocks.settle.mock.calls[0][2]).toEqual(['b']);
       expect(mocks.deliveries.has('msg-a')).toBe(true);
     });
 
@@ -344,6 +331,38 @@ describe('takeHeteroSteer', () => {
 
     expect(mocks.settle).toHaveBeenLastCalledWith(scope, expect.any(String));
     expect(mocks.deliveries.size).toBe(0);
+  });
+  // A poll of a killed producer can outlive it (the host does not cancel the
+  // request), and take what the stop just returned. Nothing renews or returns
+  // that hold, so every later send would queue behind it until its lease lapsed.
+  describe('for a run that ended meanwhile', () => {
+    beforeEach(() => {
+      mocks.isRunAlive.mockResolvedValue(false);
+    });
+
+    it('gives the follow-up back instead of holding it', async () => {
+      mocks.drain.mockResolvedValue([followUp('a', 1)]);
+
+      await expect(take()).resolves.toBeUndefined();
+
+      expect(mocks.isRunAlive).toHaveBeenCalledWith(ctx, 'user-1', 'op-1');
+      const [, drainId] = mocks.settle.mock.calls[0];
+      expect(mocks.settle).toHaveBeenLastCalledWith(scope, drainId, ['a']);
+      expect(mocks.deliveries.size).toBe(0);
+    });
+
+    it('gives back a delivery that lapsed back instead of holding it again', async () => {
+      mocks.deliveries.set(
+        'msg-a',
+        JSON.stringify({ content: 'prompt a', drainId: 'old', entryId: 'a', scope }),
+      );
+      mocks.drain.mockResolvedValue([followUp('a', 1)]);
+
+      await expect(take()).resolves.toBeUndefined();
+
+      expect(mocks.settle).toHaveBeenLastCalledWith(scope, expect.any(String), ['a']);
+      expect(mocks.deliveries.size).toBe(0);
+    });
   });
 });
 

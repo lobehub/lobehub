@@ -5,9 +5,10 @@ import { Button, Tag, Text } from '@lobehub/ui';
 import { ArrowUpRight, Check, Copy } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
 
+import { marketplaceAppPath } from '@/features/Marketplace/paths';
 import { PlatformAvatar, SUPPORTED_MESSENGER_PLATFORMS } from '@/features/Messenger/constants';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import { CLI_INSTALL_COMMAND } from './const';
 import { CliScene, DesktopScene, MobileScene } from './scenes';
@@ -21,7 +22,7 @@ const DESKTOP_FEATURES = ['files', 'tools', 'focus'] as const;
 
 const AppsPage = () => {
   const { t } = useTranslation('setting');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const [copied, setCopied] = useState(false);
 
   const copyInstallCommand = async () => {
@@ -108,9 +109,9 @@ const AppsPage = () => {
                   icon={ArrowUpRight}
                   iconPosition="end"
                   size="small"
-                  onClick={() => navigate('/settings/messenger')}
+                  onClick={() => navigate(marketplaceAppPath(platform.id))}
                 >
-                  {t('apps.messenger.setup')}
+                  {t('apps.messenger.openApp')}
                 </Button>
               </div>
             ))}

@@ -1,4 +1,5 @@
 import { type AgentState } from '@lobechat/agent-runtime';
+import type { SkillIndexSnapshot } from '@lobechat/context-engine';
 import type { AgentDocumentIndexSnapshot } from '@lobechat/context-engine/agent-document';
 import {
   type AgentShareVisitorContext,
@@ -51,6 +52,13 @@ export interface RuntimeExecutorContext {
    * the same index and change notes and keep the prompt-cache prefix.
    */
   bindAgentDocumentIndex?: (snapshot: AgentDocumentIndexSnapshot) => void;
+  /**
+   * Receives the skill-index snapshot a step pinned (the run's first step, or
+   * a mid-run compression). `executeStep` writes it into `binding.skillIndex`
+   * of the state it saves, so later steps render the same `<available_skills>`
+   * block and `<skills_changes>` notes and keep the prompt-cache prefix.
+   */
+  bindSkillIndex?: (snapshot: SkillIndexSnapshot) => void;
   botContext?: unknown;
   /**
    * Callback to stop a running `lobe-agent.callSubAgent` child dispatched by

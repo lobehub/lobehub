@@ -10,8 +10,10 @@ export interface StaleModelState {
    * `redirected`: the model id is retired but mapped to a successor — requests
    * are transparently served by the successor model.
    * `removed`: the model id is unknown entirely — calls to it will fail.
+   * `restricted`: the model is enabled but a business policy hides it from this
+   * user (e.g. above the tier a workspace admin allows) — calls to it are refused.
    */
-  status: 'notEnabled' | 'redirected' | 'removed';
+  status: 'notEnabled' | 'redirected' | 'removed' | 'restricted';
   /** The successor model's metadata; only set for `redirected`. */
   successor?: LobeDefaultAiModelListItem;
   /** The successor model's id; only set for `redirected`. */
@@ -21,6 +23,8 @@ export interface StaleModelState {
 export interface ResolveStaleModelStateContext {
   builtinAiModelList: LobeDefaultAiModelListItem[];
   enabledList: EnabledProviderWithModels[];
+  /** Business policy hiding models from this user; a hidden saved value is `restricted`. */
+  isModelHidden?: (modelId: string, providerId: string) => boolean;
   modelRedirects?: Record<string, string>;
   modelType: 'asr' | 'chat' | 'embedding';
 }
@@ -67,15 +71,31 @@ export const resolveEnableTargetProviderId = (
  */
 export const resolveStaleModelState = (
   value: { model: string; provider?: string } | undefined,
-  { builtinAiModelList, enabledList, modelRedirects, modelType }: ResolveStaleModelStateContext,
+  {
+    builtinAiModelList,
+    enabledList,
+    isModelHidden,
+    modelRedirects,
+    modelType,
+  }: ResolveStaleModelStateContext,
 ): StaleModelState | undefined => {
   if (!value?.model) return;
 
-  const isInEnabledList = enabledList.some(
-    (provider) =>
-      provider.id === value.provider && provider.children.some((model) => model.id === value.model),
-  );
-  if (isInEnabledList) return;
+  const enabledModel = enabledList
+    .find((provider) => provider.id === value.provider)
+    ?.children.find((model) => model.id === value.model);
+  if (enabledModel) {
+    if (!value.provider || !isModelHidden?.(value.model, value.provider)) return;
+
+    // Only the display name is read from `meta` here; the model is enabled, so
+    // there is nothing to enable or redirect.
+    const meta = {
+      displayName: enabledModel.displayName,
+      id: enabledModel.id,
+      providerId: value.provider,
+    } as LobeDefaultAiModelListItem;
+    return { meta, status: 'restricted' };
+  }
 
   const findBuiltin = (id: string, providerId?: string) =>
     builtinAiModelList.find(

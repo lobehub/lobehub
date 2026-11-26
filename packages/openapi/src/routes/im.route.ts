@@ -43,7 +43,7 @@ ImRoutes.post(
   routeDoc({
     data: ImSendResultSchema,
     errors: [404, 409],
-    operationId: 'sendImMessage',
+    operationId: 'im.send',
     summary: 'Send a message to an agent; the reply arrives asynchronously via sync',
     tags: ['im'],
   }),
@@ -62,7 +62,7 @@ ImRoutes.get(
   routeDoc({
     data: ImSyncResultSchema,
     errors: [404],
-    operationId: 'syncImTopic',
+    operationId: 'im.sync',
     summary: 'Long-poll a conversation for whole new messages, typing and read receipts',
     tags: ['im'],
   }),
@@ -80,7 +80,7 @@ ImRoutes.post(
   routeDoc({
     data: ImReadResultSchema,
     errors: [404],
-    operationId: 'markImTopicRead',
+    operationId: 'im.markRead',
     summary: "Mark the agent's messages read up to a message",
     tags: ['im'],
   }),

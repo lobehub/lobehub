@@ -5,6 +5,8 @@ import { CircleCheck, CircleDashed, CircleX, GraduationCap } from 'lucide-react'
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 import GoalDecisionCase from '../../GoalDecision';
 import type { GoalGraphView } from '../goalGraphViewModel';
 import { CELL_VISUAL } from '../Graph/BatchGroups';
@@ -40,7 +42,7 @@ const styles = createStaticStyles(({ css }) => ({
   /* A rule this gate taught, as a card of its own — it outlives the round. */
   learnedCard: css`
     padding-block: 10px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 

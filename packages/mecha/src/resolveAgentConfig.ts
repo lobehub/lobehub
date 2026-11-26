@@ -2,6 +2,7 @@ import { type BuiltinAgentSlug } from '@lobechat/builtin-agents';
 import {
   BUILTIN_AGENT_SLUGS,
   getAgentRuntimeConfig,
+  getReplyLanguageInstruction,
   isCollaborativeBuiltinAgentRow,
 } from '@lobechat/builtin-agents';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
@@ -13,6 +14,7 @@ import {
   type AgentModelOverride,
   type ChatCompletionTool,
   getActivePluginIds,
+  getOptedInPluginIds,
   type LobeAgentChatConfig,
   type LobeAgentConfig,
   type MessageMapScope,
@@ -327,12 +329,13 @@ export const resolveAgentConfig = (
       ? sharedChatConfig
       : { ...sharedChatConfig, enableAgentMode: memberModeOverride };
 
-  // Base plugins from agent config (pinned identifiers only — disabled entries excluded)
-  const savedPlugins = getActivePluginIds(agentConfig?.plugins);
+  // Base plugins from agent config: Agent mode loads on-demand builtins and `auto`
+  // entries through the activator; Chat and Custom modes have no activator by default,
+  // so every opted-in entry (`auto` or legacy `pinned`) joins the base toolset directly.
   const basePlugins =
     resolveToolMode(chatConfig) === 'agent'
-      ? savedPlugins.filter((id) => !isOnDemandBuiltinTool(id))
-      : savedPlugins;
+      ? getActivePluginIds(agentConfig?.plugins).filter((id) => !isOnDemandBuiltinTool(id))
+      : getOptedInPluginIds(agentConfig?.plugins);
 
   // Check if this is a builtin agent
   // Priority: supervisor check (when in group scope) > agent store slug
@@ -390,9 +393,7 @@ export const resolveAgentConfig = (
 
     // Inject response language preference into system role for regular agents
     const { userLocale } = snapshot;
-    const localeInstruction = userLocale
-      ? `Preferred reply language: ${userLocale}. Use this language unless the user explicitly asks to switch.`
-      : '';
+    const localeInstruction = userLocale && getReplyLanguageInstruction(userLocale);
     const systemRoleWithLocale = localeInstruction
       ? agentConfig.systemRole
         ? `${agentConfig.systemRole}\n\n${localeInstruction}`

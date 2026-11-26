@@ -16,6 +16,7 @@ import {
   PlusIcon,
   SearchIcon,
   Settings2Icon,
+  WrenchIcon,
 } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
@@ -62,7 +63,13 @@ import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useHeaderActionSize } from '@/styles/density';
+import {
+  PanelDensityContext,
+  useDensityTokens,
+  useHeaderActionSize,
+  useInterfaceDensity,
+} from '@/styles/density';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { type ComposerTarget, createComposerTarget, resolveThreadComposerTarget } from '../types';
@@ -73,9 +80,9 @@ import {
   BROWSER_TAB_PREFIX,
   type BrowserTabMetadata,
   isBrowserTab,
-  isCanvasTab,
   isDynamicTab,
   isMcpAppTab,
+  isWorkTab,
   type SidebarTabDescriptor,
 } from './dynamicTabs';
 import FilesPane from './Files/FilesPane';
@@ -100,6 +107,7 @@ import WorkspaceTab from './WorkspaceTab';
 import WorksSection from './WorksSection';
 
 const ParamsSection = lazy(() => import('./ParamsSection'));
+const ToolsSection = lazy(() => import('./ToolsSection'));
 
 const styles = stylex.create({
   body: { overflowY: 'auto', flex: '1', minHeight: '0' },
@@ -107,7 +115,7 @@ const styles = stylex.create({
   header: { flexShrink: 0, minWidth: '0' },
   pane: { overflowY: 'auto', flex: '1', minHeight: '0' },
   paneHidden: { display: 'none' },
-  paramsLoading: { width: '100%', padding: '16px' },
+  paramsLoading: { width: '100%', padding: densityTokens['--lobe-density-card-padding'] },
   add: { flexShrink: 0 },
   overviewBody: { overflowY: 'auto', minHeight: '0' },
   overviewPanel: {
@@ -133,7 +141,7 @@ const styles = stylex.create({
     height: '100%',
     paddingBlockStart: {
       'default': null,
-      '@container agent-chat-layout (min-width: 1200px)': '44px',
+      '@container agent-chat-layout (min-width: 1200px)': sidebarRow.headerHeight,
     },
   },
   tabs: {
@@ -167,6 +175,8 @@ interface AgentWorkingSidebarProps {
 }
 
 const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) => {
+  const interfaceDensity = useInterfaceDensity();
+  const { headerHeight } = useDensityTokens();
   const headerActionSize = useHeaderActionSize(true);
   const { t } = useTranslation(['chat', 'setting']);
   // Keep the panel frame + tabs on the navigation commit; the pane contents
@@ -293,7 +303,6 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   // WorkingDirectorySection: a persisted-worktree topic has no matching
   // `workingDirs` entry, and committing the worktree path as sourcePath would
   // rewrite the topic's repo source (see that component's comment).
-  const topicDeviceId = useChatStore((s) => topicSelectors.currentTopicMetadata(s)?.boundDeviceId);
   const deviceDirs = useDeviceStore(deviceSelectors.getDeviceWorkingDirs(targetDeviceId));
   const sourceWorkingDirectory = useMemo(() => {
     if (!workingDirectory) return undefined;
@@ -358,14 +367,6 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   });
   const filesAvailable = !isChatMode && filesDirectory !== undefined;
   const reviewAvailable = (isLocalExecution || isDeviceMode) && !!workingDirectory && !!repoType;
-  const snapshotConfig =
-    (topicDeviceId ? topicDeviceId === targetDeviceId : isLocalExecution) &&
-    getWorkingDirEffectivePath(topicWorkingDirectoryConfig) === workingDirectory
-      ? topicWorkingDirectoryConfig
-      : deviceDirs.find((entry) => getWorkingDirEffectivePath(entry) === workingDirectory);
-  const isGithub =
-    repoType === 'github' || (!repoType && !!snapshotConfig?.git?.github?.pullRequest);
-  const gitPath = filesystemEnvironmentAvailable && isGithub ? workingDirectory : undefined;
   const {
     dismissPullRequest,
     linkPullRequest,
@@ -378,13 +379,11 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   } = useSidebarPullRequests({
     available: filesystemEnvironmentAvailable && !!workingDirectory,
     deviceId: remoteDeviceId,
-    gitPath,
-    isGithub,
-    snapshot: snapshotConfig?.git,
     topicId,
     workingDirectory: sourceWorkingDirectory ?? workingDirectory,
   });
   const paramsAvailable = !isHetero;
+  const toolsAvailable = !isHetero && !isChatMode;
   // The in-app browser pages are renderer-retained Electron webviews — desktop only.
   const browserAvailable = isDesktop;
   const terminalAvailable = isDesktop;
@@ -418,6 +417,9 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const tabDescriptors = useMemo<SidebarTabDescriptor[]>(
     () => [
       { icon: SkillsIcon, key: 'skills', label: t('workingPanel.resources.filter.skills') },
+      ...(toolsAvailable
+        ? [{ icon: WrenchIcon, key: 'tools', label: t('tools.picker.title', { ns: 'setting' }) }]
+        : []),
       // Documents / web resources are agent-document features — heterogeneous
       // agents only carry filesystem skills, so hide both tabs there.
       ...(isHetero
@@ -477,6 +479,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       reviewAvailable,
       searchAvailable,
       t,
+      toolsAvailable,
     ],
   );
   const { enabled: mcpAppsEnabled } = useMcpAppSidebar(composerTarget);
@@ -489,7 +492,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     (tab: string) =>
       availableTabs.has(tab) ||
       (browserAvailable && isBrowserTab(tab)) ||
-      isCanvasTab(tab) ||
+      isWorkTab(tab) ||
       (mcpAppsEnabled && isMcpAppTab(tab)),
     [availableTabs, browserAvailable, mcpAppsEnabled],
   );
@@ -803,7 +806,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const reviewTwoPane = activeTab === 'review' && reviewAvailable && showReviewTree;
   const preferredMinWidth = reviewTwoPane
     ? TWO_PANE_MIN_WIDTH
-    : isCanvasTab(activeTab)
+    : isWorkTab(activeTab)
       ? CANVAS_MIN_WIDTH
       : 0;
   const displayWidth = Math.max(storedWidth, preferredMinWidth);
@@ -839,6 +842,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     scope: composerTarget.writable ? composerTarget.contextKey : undefined,
     terminalAvailable,
     toggleTerminalPanel,
+    topicId: topicId ?? undefined,
   });
 
   // The floating card keeps a 16px margin on each side.
@@ -895,7 +899,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   );
 
   return (
-    <>
+    <PanelDensityContext value={interfaceDensity}>
       {overviewPanel}
       <TopicPullRequestProbes
         deviceId={remoteDeviceId}
@@ -924,7 +928,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
             align={'center'}
             className={stylex.props(styles.header).className}
             gap={4}
-            height={44}
+            height={headerHeight}
             justify={'space-between'}
             paddingInline={6}
           >
@@ -1027,6 +1031,23 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                     </Suspense>
                   </Flexbox>
                 )}
+                {toolsAvailable && activeTab === 'tools' && (
+                  <Flexbox
+                    className={stylex.props(styles.pane).className}
+                    style={{ overflow: 'hidden' }}
+                  >
+                    <Suspense
+                      fallback={
+                        <Skeleton.Text
+                          className={stylex.props(styles.paramsLoading).className}
+                          rows={6}
+                        />
+                      }
+                    >
+                      <ToolsSection />
+                    </Suspense>
+                  </Flexbox>
+                )}
                 {/* Switching tabs unmounts Review to release its diff DOM (#18984).
                     Collapsing the panel hides it for REVIEW_RETAIN_MS first: remounting
                     all diffs and the tree on a quick reopen stalls the open animation
@@ -1066,6 +1087,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                   browserSessionId={browserSessionId}
                   composerTarget={composerTarget}
                   openedTabs={openedTabs}
+                  topicId={topicId ?? undefined}
                   visible={!!showRightPanel}
                   onCloseTab={closeTab}
                   onBrowserMetadataChange={(tab, metadata) => {
@@ -1118,7 +1140,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
           </Flexbox>
         </Flexbox>
       </RightPanel>
-    </>
+    </PanelDensityContext>
   );
 });
 

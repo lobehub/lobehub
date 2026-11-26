@@ -1,4 +1,6 @@
 // Built-in control commands register themselves when the steer loop loads.
+import './heteroCollaborationMode';
+import './heteroPermissionMode';
 import './heteroStopTask';
 
 import type {
@@ -7,6 +9,7 @@ import type {
   ClaudeCodeControlRequest,
   ClaudeCodeControlRequestHandle,
 } from '@lobechat/heterogeneous-agents/spawn';
+import type { CodexCollaborationMode } from '@lobechat/types';
 
 import {
   dispatchHeteroControl,
@@ -89,6 +92,7 @@ interface SteerableHandle {
     request: ClaudeCodeControlRequest,
   ) => ClaudeCodeControlRequestHandle | undefined;
   sendUserMessage?: (prompt: AgentPromptInput, options?: { uuid?: string }) => Promise<boolean>;
+  setCollaborationMode?: (mode: CodexCollaborationMode) => Promise<void>;
   supportsSteerImageAttachments?: true;
 }
 
@@ -112,14 +116,15 @@ const isMainStreamStart = (event: { data?: any; type: string }) =>
   event.type === 'stream_start' && !event.data?.subagent;
 
 /**
- * Stream a Claude Code or native Codex run's events while typing the
+ * Stream a Claude Code, native Codex or Antigravity run's events while typing the
  * follow-ups the user queues behind it into the live session (steer), instead
  * of leaving them for the next turn.
  *
  * Polls `aiAgent.waitHeteroSteer` for as long as the run streams and its
  * session takes input; a message the session refuses goes back with
  * `aiAgent.returnHeteroSteer`. The agent reports every message it picks up
- * (Claude Code replays it, Codex echoes its client id):
+ * (Claude Code replays it, Codex echoes its client id, Antigravity ends the
+ * prompt it interrupts):
  * the replay of a delivery is forwarded for the server to write the message
  * into the conversation; any other replay (the run's own prompt) is dropped.
  * Once the server answered, the next main `stream_start` carries `liveSteer`
@@ -145,6 +150,7 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
 
   const { operationId } = context;
   const sendControlRequest = handle.sendControlRequest;
+  const setCollaborationMode = handle.setCollaborationMode;
   const delivered = new Set<string>();
   const abort = new AbortController();
   const handling = new Set<Promise<void>>();
@@ -185,7 +191,9 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
       log.debug('Control %s: %s', control.id, control.command);
       const outcome = await dispatchHeteroControl(control, {
         operationId,
-        sendControlRequest: sendControlRequest!,
+        // A native Codex run has no stream-json input: its handlers say so.
+        sendControlRequest: sendControlRequest ?? (() => undefined),
+        setCollaborationMode,
         signal: abort.signal,
       });
       await report(client, control, outcome);
@@ -198,7 +206,9 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
   const poll = async () => {
     const client = await context.getTrpcClient();
     // Control messages need a way into the session and back to the server.
-    const acceptsControl = !!sendControlRequest && !!client.aiAgent.reportHeteroControlResult;
+    const acceptsControl =
+      (!!sendControlRequest || !!setCollaborationMode) &&
+      !!client.aiAgent.reportHeteroControlResult;
     while (!abort.signal.aborted) {
       let message: HeteroSteerMessage | null;
       try {

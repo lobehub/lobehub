@@ -30,6 +30,7 @@ import type { ExpertiseDomainItem } from '@/services/expertise';
 import { expertiseService } from '@/services/expertise';
 import { useAgentStore } from '@/store/agent';
 import { expertiseActions, useExpertiseStore } from '@/store/expertise';
+import { useHeaderActionSize } from '@/styles/density';
 
 import { countTiers, habitTier } from './helpers';
 import { useExpertiseOverview, useHistoryCount } from './hooks';
@@ -60,6 +61,7 @@ const styles = createStaticStyles(({ css }) => ({
  */
 const SelfLearning = memo(() => {
   const { t } = useTranslation('selfLearning');
+  const headerActionSize = useHeaderActionSize(true);
   const navigate = useWorkspaceAwareNavigate();
   const { domainId } = useParams();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
@@ -274,6 +276,7 @@ const SelfLearning = memo(() => {
                   <ActionIcon
                     icon={MoreHorizontalIcon}
                     loading={warmup.starting}
+                    size={headerActionSize}
                     title={t('domain.more')}
                   />
                 </DropdownMenu>

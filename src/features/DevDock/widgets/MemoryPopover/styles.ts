@@ -1,5 +1,7 @@
 import { createStaticStyles, cssVar } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 export const styles = createStaticStyles(({ css }) => ({
   bar: css`
     height: 4px;
@@ -13,7 +15,7 @@ export const styles = createStaticStyles(({ css }) => ({
   `,
   caption: css`
     padding-block: 6px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     font-size: 10px;
     color: ${cssVar.colorTextQuaternary};
   `,
@@ -33,7 +35,7 @@ export const styles = createStaticStyles(({ css }) => ({
     flex-shrink: 0;
 
     padding-block: 8px 12px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     font-size: 10px;
@@ -60,7 +62,7 @@ export const styles = createStaticStyles(({ css }) => ({
     gap: 8px 12px;
 
     padding-block: 10px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   row: css`
@@ -70,7 +72,7 @@ export const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     padding-block: 4px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   rowClickable: css`
@@ -92,7 +94,7 @@ export const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     font-size: 11px;

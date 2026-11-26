@@ -39,7 +39,7 @@ const SendButton = memo(() => {
   const canSend = canCreate && !viewOnly;
 
   // Only a pending send spins, inside Send itself. A running turn shows a static
-  // Stop; the run is indicated once, by RunningIndicator beside the model selector.
+  // Stop; the run is indicated once, by the host's status or RunningIndicator.
   // Send sits beside Stop for the follow-up the user typed (Enter sends too).
   const renderSend = (pending: boolean) =>
     pending ? (

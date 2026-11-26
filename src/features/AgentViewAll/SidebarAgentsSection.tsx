@@ -15,12 +15,13 @@ import {
   Text,
 } from '@lobehub/ui';
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
-import { memo, useCallback, useRef, useState } from 'react';
+import { memo, type ReactNode, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import { AGENT_GRID_MIN_COLUMN } from './AgentCard';
 import ItemActions from './ItemActions';
@@ -29,7 +30,7 @@ import SidebarItemAvatar from './SidebarItemAvatar';
 // "In sidebar" overview: a collapsible card grid pinned above the main list
 // so the user can see at a glance which agents currently show in the sidebar
 // (mirrors the enabled-providers block on the provider settings page).
-const styles = createStaticStyles(({ css, cssVar }) => ({
+export const agentSectionStyles = createStaticStyles(({ css, cssVar }) => ({
   /* The headless ItemActions still renders an empty span; keeping it out of
      the flex flow stops it from claiming a `gap` and shifting the centering. */
   actions: css`
@@ -50,7 +51,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
        title instead of leaving a hole where the description would be. */
     min-height: 72px;
     padding-block: 10px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     transition:
       transform 0.18s,
@@ -63,7 +64,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   container: css`
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorFillQuaternary};
   `,
@@ -80,7 +81,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     /* Same column width as the badge wall below, so both grids line up. */
     grid-template-columns: repeat(auto-fill, minmax(min(${AGENT_GRID_MIN_COLUMN}px, 100%), 1fr));
-    gap: 12px;
+    gap: ${densityVars.contentGap};
 
     width: 100%;
     min-width: 0;
@@ -97,146 +98,146 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface SidebarMiniCardProps {
+  /** Shown at the end of the title line, e.g. a quick "add to sidebar" button. */
+  extra?: ReactNode;
   item: SidebarAgentItem;
+  /** Whether the item is in the member's sidebar (drives the menu's toggle). */
+  listed?: boolean;
   onToggleSidebar?: (item: SidebarAgentItem) => void;
 }
 
 // Deliberately minimal (avatar + name + description only) — the block answers
 // "what's in my sidebar", so the full card's labels/author/date are noise here.
 // Actions live entirely in the right-click menu (same as rows/cards).
-const SidebarMiniCard = memo<SidebarMiniCardProps>(({ item, onToggleSidebar }) => {
-  const { t } = useTranslation('common');
-  const { description, id, type } = item;
-  // Groups have no personal name, so this resolves to their title.
-  const displayTitle = agentDisplayName(item, t('agentViewAll.untitled'));
-  const roleTag = agentSecondaryDisplayName(item);
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+export const SidebarMiniCard = memo<SidebarMiniCardProps>(
+  ({ extra, item, listed = true, onToggleSidebar }) => {
+    const { t } = useTranslation('common');
+    const { description, id, type } = item;
+    // Groups have no personal name, so this resolves to their title.
+    const displayTitle = agentDisplayName(item, t('agentViewAll.untitled'));
+    const roleTag = agentSecondaryDisplayName(item);
+    const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
-  const [menuActivated, setMenuActivated] = useState(false);
-  const activateMenu = useCallback(() => setMenuActivated(true), []);
-  const menuItemsRef = useRef<(() => DropdownItem[]) | null>(null);
-  const handleMenuReady = useCallback((getItems: () => DropdownItem[]) => {
-    menuItemsRef.current = getItems;
-  }, []);
-  const getContextMenuItems = useCallback(() => menuItemsRef.current?.() ?? [], []);
+    const [menuActivated, setMenuActivated] = useState(false);
+    const activateMenu = useCallback(() => setMenuActivated(true), []);
+    const menuItemsRef = useRef<(() => DropdownItem[]) | null>(null);
+    const handleMenuReady = useCallback((getItems: () => DropdownItem[]) => {
+      menuItemsRef.current = getItems;
+    }, []);
+    const getContextMenuItems = useCallback(() => menuItemsRef.current?.() ?? [], []);
 
-  return (
-    <ContextMenuTrigger items={getContextMenuItems}>
-      {/* Single child: the trigger wraps exactly one element, and the grid
+    return (
+      <ContextMenuTrigger items={getContextMenuItems}>
+        {/* Single child: the trigger wraps exactly one element, and the grid
           treats it as one cell. The headless ItemActions lives INSIDE it —
           rendering it as a sibling would add a phantom grid item. */}
-      <WorkspaceLink
-        aria-label={displayTitle}
-        className={styles.link}
-        ref={setAnchor}
-        to={type === 'group' ? GROUP_CHAT_URL(id) : AGENT_CHAT_URL(id, false)}
-        onPointerEnter={activateMenu}
-      >
-        <Block clickable className={styles.card} height={'100%'} variant={'outlined'}>
-          <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-            <SidebarItemAvatar item={item} size={24} />
-            <Text ellipsis style={{ minWidth: 0 }} weight={600}>
-              {displayTitle}
-            </Text>
-            {roleTag ? (
-              <Tag size={'small'} style={{ flex: 'none' }}>
-                {roleTag}
-              </Tag>
+        <WorkspaceLink
+          aria-label={displayTitle}
+          className={agentSectionStyles.link}
+          ref={setAnchor}
+          to={type === 'group' ? GROUP_CHAT_URL(id) : AGENT_CHAT_URL(id, false)}
+          onPointerEnter={activateMenu}
+        >
+          <Block clickable className={agentSectionStyles.card} height={'100%'} variant={'outlined'}>
+            <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+              <SidebarItemAvatar item={item} size={24} />
+              <Text ellipsis style={{ minWidth: 0 }} weight={600}>
+                {displayTitle}
+              </Text>
+              {roleTag ? (
+                <Tag size={'small'} style={{ flex: 'none' }}>
+                  {roleTag}
+                </Tag>
+              ) : null}
+              {extra ? (
+                <span style={{ flex: 'none', marginInlineStart: 'auto' }}>{extra}</span>
+              ) : null}
+            </Flexbox>
+            {description ? (
+              <Text className={agentSectionStyles.description} fontSize={12} type={'secondary'}>
+                {description}
+              </Text>
             ) : null}
-          </Flexbox>
-          {description ? (
-            <Text className={styles.description} fontSize={12} type={'secondary'}>
-              {description}
-            </Text>
-          ) : null}
-          <span className={styles.actions}>
-            <ItemActions
-              hideTrigger
-              includeSidebarToggle
-              anchor={anchor}
-              forceActivated={menuActivated}
-              item={item}
-              sidebarHidden={false}
-              onMenuReady={handleMenuReady}
-              onToggleSidebar={onToggleSidebar}
-            />
-          </span>
-        </Block>
-      </WorkspaceLink>
-    </ContextMenuTrigger>
-  );
-});
+            <span className={agentSectionStyles.actions}>
+              <ItemActions
+                hideTrigger
+                includeSidebarToggle
+                anchor={anchor}
+                forceActivated={menuActivated}
+                item={item}
+                sidebarHidden={!listed}
+                onMenuReady={handleMenuReady}
+                onToggleSidebar={onToggleSidebar}
+              />
+            </span>
+          </Block>
+        </WorkspaceLink>
+      </ContextMenuTrigger>
+    );
+  },
+);
 
 SidebarMiniCard.displayName = 'SidebarMiniCard';
 
 interface SidebarAgentsSectionProps {
-  /** Rows pinned for the team: fixed in the sidebar, so no remove toggle. */
-  fixedIds?: ReadonlySet<string>;
   items: SidebarAgentItem[];
   onToggleSidebar?: (item: SidebarAgentItem) => void;
 }
 
-const SidebarAgentsSection = memo<SidebarAgentsSectionProps>(
-  ({ fixedIds, items, onToggleSidebar }) => {
-    const { t } = useTranslation('common');
-    const collapsed = useGlobalStore(systemStatusSelectors.agentListSidebarSectionCollapsed);
-    const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
-    const toggle = useCallback(
-      () =>
-        updateSystemStatus(
-          { agentListSidebarSectionCollapsed: !collapsed },
-          'toggleAgentListSidebarSection',
-        ),
-      [collapsed, updateSystemStatus],
-    );
+const SidebarAgentsSection = memo<SidebarAgentsSectionProps>(({ items, onToggleSidebar }) => {
+  const { t } = useTranslation('common');
+  const collapsed = useGlobalStore(systemStatusSelectors.agentListSidebarSectionCollapsed);
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
+  const toggle = useCallback(
+    () =>
+      updateSystemStatus(
+        { agentListSidebarSectionExpanded: collapsed },
+        'toggleAgentListSidebarSection',
+      ),
+    [collapsed, updateSystemStatus],
+  );
 
-    return (
-      <Flexbox className={styles.container} gap={12}>
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={styles.header}
-          gap={8}
-          justify={'space-between'}
-          onClick={toggle}
-        >
-          <Flexbox horizontal align={'center'} gap={8}>
-            <Text fontSize={13} weight={500}>
-              {t('agentViewAll.sidebarSection.title')}
-            </Text>
-            <Text fontSize={12} type={'secondary'}>
-              {items.length}
-            </Text>
-          </Flexbox>
-          <Flexbox horizontal align={'center'} gap={4}>
-            <Text fontSize={12} type={'secondary'}>
-              {collapsed
-                ? t('agentViewAll.sidebarSection.expand')
-                : t('agentViewAll.sidebarSection.collapse')}
-            </Text>
-            <Icon
-              color={cssVar.colorTextSecondary}
-              icon={collapsed ? ChevronDownIcon : ChevronUpIcon}
-              size={14}
-            />
-          </Flexbox>
+  return (
+    <Flexbox className={agentSectionStyles.container} gap={12}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={agentSectionStyles.header}
+        gap={8}
+        justify={'space-between'}
+        onClick={toggle}
+      >
+        <Flexbox horizontal align={'center'} gap={8}>
+          <Text fontSize={13} weight={500}>
+            {t('agentViewAll.sidebarSection.title')}
+          </Text>
+          <Text fontSize={12} type={'secondary'}>
+            {items.length}
+          </Text>
         </Flexbox>
-        {!collapsed && (
-          <div className={styles.grid}>
-            {items.map((item) => (
-              <SidebarMiniCard
-                item={item}
-                key={item.id}
-                // Team pins are fixed for every member: nothing to remove.
-                onToggleSidebar={fixedIds?.has(item.id) ? undefined : onToggleSidebar}
-              />
-            ))}
-          </div>
-        )}
+        <Flexbox horizontal align={'center'} gap={4}>
+          <Text fontSize={12} type={'secondary'}>
+            {collapsed
+              ? t('agentViewAll.sidebarSection.expand')
+              : t('agentViewAll.sidebarSection.collapse')}
+          </Text>
+          <Icon
+            color={cssVar.colorTextSecondary}
+            icon={collapsed ? ChevronDownIcon : ChevronUpIcon}
+            size={14}
+          />
+        </Flexbox>
       </Flexbox>
-    );
-  },
-);
+      {!collapsed && (
+        <div className={agentSectionStyles.grid}>
+          {items.map((item) => (
+            <SidebarMiniCard item={item} key={item.id} onToggleSidebar={onToggleSidebar} />
+          ))}
+        </div>
+      )}
+    </Flexbox>
+  );
+});
 
 SidebarAgentsSection.displayName = 'SidebarAgentsSection';
 

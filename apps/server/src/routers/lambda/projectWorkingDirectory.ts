@@ -10,6 +10,7 @@ import { ProjectModel } from '@/database/models/project';
 import { ProjectWorkingDirectoryModel } from '@/database/models/projectWorkingDirectory';
 import { TopicModel } from '@/database/models/topic';
 import { ProjectDirectoryRepository } from '@/database/repositories/projectDirectory';
+import { ProjectEnvironmentRepository } from '@/database/repositories/projectEnvironment';
 import { agents } from '@/database/schemas';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { router } from '@/libs/trpc/lambda';
@@ -28,6 +29,7 @@ import {
 } from './_helpers/conversationResourceGuard';
 import { getResourceConfigAccess } from './_helpers/resourceConfigGuard';
 import { assertCreatorTopicTargets } from './_helpers/shareVisitorTargetGuard';
+import { configurationSchema } from './_schema/environment';
 
 const procedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { serverDB, userId, workspaceId } = opts.ctx;
@@ -36,6 +38,7 @@ const procedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
       directoryModel: new ProjectWorkingDirectoryModel(serverDB, userId, workspaceId ?? undefined),
       directoryRepo: new ProjectDirectoryRepository(serverDB, userId, workspaceId ?? undefined),
       environmentModel: new EnvironmentModel(serverDB, userId, workspaceId ?? undefined),
+      environmentRepo: new ProjectEnvironmentRepository(serverDB, userId, workspaceId ?? undefined),
       projectModel: new ProjectModel(serverDB, userId, workspaceId ?? undefined),
       topicModel: new TopicModel(serverDB, userId, workspaceId ?? undefined),
       // Topics written here exist before any run does, so they have to pin their
@@ -54,6 +57,13 @@ const procedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   });
 });
 const write = procedure.use(withScopedPermission('agent:update'));
+
+/** A project the caller cannot reach answers as not found, not as a server error. */
+const notFound = (error: unknown): never => {
+  if (error instanceof Error && /not found or access denied/i.test(error.message))
+    throw new TRPCError({ code: 'NOT_FOUND', message: error.message });
+  throw error;
+};
 
 /** Per-agent permission lookups each hit the database; a large project must not fan out unbounded. */
 const CONFIG_ACCESS_LOOKUP_CONCURRENCY = 5;
@@ -134,9 +144,14 @@ export const projectWorkingDirectoryRouter = router({
       z.object({
         projectId: z.string(),
         agentId: z.string(),
-        /** The project repository the conversation works in; the first one when left out. */
+        /** Ignored: a project has one environment. Kept for older clients. */
         environmentId: z.string().optional(),
         title: z.string().trim().min(1).max(255),
+        /**
+         * Start in an empty working directory instead of one the project's
+         * environment initializes — the composer's "No environment".
+         */
+        withoutEnvironment: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -152,14 +167,15 @@ export const projectWorkingDirectoryRouter = router({
         resolvePrecreatedTopicSnapshot(ctx.precreatedTopicDeps, input.agentId),
         // A project with a repository works in it from the first message: the
         // topic is written before any run, so no later pick would reach it.
-        resolveProjectTopicSandbox({
-          agentId: input.agentId,
-          db: ctx.serverDB,
-          environmentId: input.environmentId,
-          projectId: input.projectId,
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId ?? undefined,
-        }),
+        input.withoutEnvironment
+          ? {}
+          : resolveProjectTopicSandbox({
+              agentId: input.agentId,
+              db: ctx.serverDB,
+              projectId: input.projectId,
+              userId: ctx.userId,
+              workspaceId: ctx.workspaceId ?? undefined,
+            }),
       ]);
       return {
         data: await ctx.topicModel.create({
@@ -182,23 +198,44 @@ export const projectWorkingDirectoryRouter = router({
       );
       return { data: await redactAgentDevicePins(ctx, data), success: true };
     }),
-  attachEnvironment: write
-    .input(z.object({ projectId: z.string(), environmentId: z.string().uuid() }))
-    .mutation(async ({ ctx, input }) => ({
-      data: await ctx.projectModel.attachEnvironment(input.projectId, input.environmentId),
-      success: true,
-    })),
-  /** Unlink an environment from the project; the environment itself is kept. */
-  detachEnvironment: write
-    .input(z.object({ projectId: z.string(), environmentId: z.string().uuid() }))
-    .mutation(async ({ ctx, input }) => ({
-      data: await ctx.projectModel.detachEnvironment(input.projectId, input.environmentId),
+  /**
+   * The project's environment — every project has exactly one. A project from
+   * before that rule is brought to it on this first read (see
+   * `ProjectEnvironmentRepository.ensure`), silently.
+   */
+  getEnvironment: procedure
+    .input(z.object({ projectId: z.string() }))
+    .query(async ({ ctx, input }) => ({
+      data: await ctx.environmentRepo.get(input.projectId).catch(notFound),
       success: true,
     })),
   /**
-   * Link a GitHub repository to the project: the caller's environment for it,
-   * made when they have none, attached in the same request — the project
-   * composer's "add a repository" needs nothing else to start on the code.
+   * Edits the project's environment: its repositories (any number, or none),
+   * setup and variables. A folder already built keeps the definition it was
+   * built from; the next one takes this.
+   */
+  updateEnvironment: write
+    .input(
+      z.object({
+        configuration: configurationSchema.optional(),
+        description: z.string().max(2000).nullable().optional(),
+        projectId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input: { projectId, ...patch } }) => ({
+      data: await ctx.environmentRepo.update(projectId, patch).catch(notFound),
+      success: true,
+    })),
+  /**
+   * Compatibility for clients built before a project had exactly one
+   * environment (a tab left open across the deploy, a released desktop app).
+   * Each maps onto the single environment rather than failing as an unknown
+   * procedure; remove once no supported client calls them.
+   *
+   * - `attachRepository` adds the repository to the project's environment.
+   * - `attachEnvironment` adds the repositories of an environment the caller
+   *   can read to it; nothing is linked.
+   * - `detachEnvironment` has nothing to undo and returns the environment.
    */
   attachRepository: write
     .input(
@@ -209,28 +246,53 @@ export const projectWorkingDirectoryRouter = router({
           name: z.string().trim().min(1).max(255),
           url: z.string().min(1).max(2048),
         }),
-        /** `public` for a workspace-public agent, which applies published environments only. */
         visibility: z.enum(['private', 'public']).optional(),
       }),
     )
-    .mutation(async ({ ctx, input: { projectId, repository, visibility } }) => {
-      // Checked before the environment is made, so a refusal leaves nothing behind.
-      if (!(await ctx.projectModel.findManageableById(projectId)))
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found or access denied' });
-      const environment = await ctx.environmentModel.ensureForRepository({
-        defaultBranch: repository.defaultBranch,
-        name: repository.name,
-        repositoryUrl: repository.url,
-        visibility,
+    .mutation(async ({ ctx, input: { projectId, repository } }) => {
+      const parsed = configurationSchema.safeParse({
+        sources: [
+          {
+            kind: 'git',
+            url: repository.url,
+            ...(repository.defaultBranch && { ref: repository.defaultBranch }),
+          },
+        ],
       });
-      await ctx.projectModel.attachEnvironment(projectId, environment.id);
-      return { data: environment, success: true };
+      if (!parsed.success)
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Unsupported repository URL' });
+      return {
+        data: await ctx.environmentRepo.addRepositories(projectId, [parsed.data]).catch(notFound),
+        success: true,
+      };
     }),
+  attachEnvironment: write
+    .input(z.object({ environmentId: z.string().uuid(), projectId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const source = await ctx.environmentModel.findById(input.environmentId);
+      if (!source) throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
+      return {
+        data: await ctx.environmentRepo
+          .addRepositories(input.projectId, [source.configuration])
+          .catch(notFound),
+        success: true,
+      };
+    }),
+  detachEnvironment: write
+    .input(z.object({ environmentId: z.string().uuid(), projectId: z.string() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.environmentRepo.get(input.projectId).catch(notFound),
+      success: true,
+    })),
+  /**
+   * The project's environment as a one-row list, the shape the directory and
+   * location pickers read; without a project, the caller's standalone ones.
+   */
   listEnvironments: procedure
     .input(z.object({ projectId: z.string().optional() }))
     .query(async ({ ctx, input }) => ({
       data: input.projectId
-        ? await ctx.projectModel.listEnvironments(input.projectId)
+        ? [await ctx.environmentRepo.get(input.projectId).catch(notFound)]
         : await ctx.environmentModel.list(),
       success: true,
     })),
@@ -282,6 +344,25 @@ export const projectWorkingDirectoryRouter = router({
           message: 'Working directory does not exist on this device',
         });
       return { data: await ctx.directoryRepo.bind(input), success: true };
+    }),
+  /** The cloud sandbox's place among the project's execution environments. */
+  executionOrder: procedure
+    .input(z.object({ projectId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => ({
+      data: await ctx.directoryRepo.executionOrder(input.projectId),
+      success: true,
+    })),
+  /** Reorder the project's execution environments: folder ids and `'sandbox'`. */
+  reorderExecutionEnvironments: write
+    .input(
+      z.object({
+        order: z.array(z.string().min(1)).min(1).max(200),
+        projectId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.directoryRepo.reorderExecutionEnvironments(input.projectId, input.order);
+      return { success: true };
     }),
   list: procedure
     .input(z.object({ projectId: z.string().optional() }))

@@ -45,7 +45,8 @@ const MEDIA_TYPE_BY_EXT: Record<string, string> = {
   '.webp': 'image/webp',
 };
 
-const sha256Hex = (input: string): string => createHash('sha256').update(input).digest('hex');
+const sha256Hex = (input: string | Buffer): string =>
+  createHash('sha256').update(input).digest('hex');
 
 const normalizeMediaType = (raw: string | undefined | null): string => {
   if (!raw) return '';
@@ -226,9 +227,7 @@ export const materializeImageToPath = async (
     throw new Error(`Unsupported image media type for path materialization: ${image.mediaType}`);
   }
 
-  const key = sha256Hex(
-    `${image.mediaType}:${image.buffer.length}:${image.buffer.subarray(0, 64).toString('hex')}`,
-  );
+  const key = sha256Hex(image.buffer);
   const filePath = path.join(cacheDir, `${key}${ext}`);
 
   try {

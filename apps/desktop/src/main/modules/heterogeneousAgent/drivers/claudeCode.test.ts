@@ -28,6 +28,27 @@ describe('claudeCodeDriver', () => {
     expect(plan.liveInput).toBe(true);
   });
 
+  it('allows every action without a mode, as before the lab', async () => {
+    const { args } = await claudeCodeDriver.buildSpawnPlan(buildParams());
+    expect(args[args.indexOf('--permission-mode') + 1]).toBe('bypassPermissions');
+    expect(args).not.toContain('--permission-prompt-tool');
+  });
+
+  it('starts in the picked mode and lets the host answer prompts over stdio', async () => {
+    const { args } = await claudeCodeDriver.buildSpawnPlan(buildParams({ permissionMode: 'plan' }));
+    expect(args[args.indexOf('--permission-mode') + 1]).toBe('plan');
+    expect(args[args.indexOf('--permission-prompt-tool') + 1]).toBe('stdio');
+    expect(args).toContain('--allow-dangerously-skip-permissions');
+  });
+
+  it('keeps a picked mode and fails closed when the card bridge is not up', async () => {
+    const { args } = await claudeCodeDriver.buildSpawnPlan(
+      buildParams({ permissionMode: 'default', permissionPrompts: false }),
+    );
+    expect(args[args.indexOf('--permission-mode') + 1]).toBe('default');
+    expect(args).not.toContain('--permission-prompt-tool');
+  });
+
   it('prepares the namespaced server-default model without persisting the operation token', async () => {
     const plan = await claudeCodeDriver.prepareServerDefaultBinding!({
       args: [],
@@ -94,14 +115,14 @@ describe('claudeCodeDriver', () => {
 
   it('still pins shared --disallowedTools alongside --mcp-config', async () => {
     // Even with our local MCP replacement available, CC's built-in stays
-    // disabled. Monitor/ScheduleWakeup stay disabled through the same shared
-    // base args because they can hit the stuck wakeup path in desktop mode.
+    // disabled. The other built-ins in CLAUDE_CODE_DISALLOWED_TOOLS stay
+    // disabled through the same shared base args.
     const { args } = await claudeCodeDriver.buildSpawnPlan(
       buildParams({ mcpConfigPath: '/tmp/x.json' }),
     );
     const disallowedIdx = args.indexOf('--disallowedTools');
     expect(disallowedIdx).toBeGreaterThan(-1);
-    expect(args[disallowedIdx + 1]).toBe('AskUserQuestion,Monitor,ScheduleWakeup');
+    expect(args[disallowedIdx + 1]).toBe('AskUserQuestion,Monitor,ScheduleWakeup,CronCreate');
   });
 
   it('--mcp-config goes before --resume so user --args can still override the resume id', async () => {

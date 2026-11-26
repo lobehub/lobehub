@@ -73,12 +73,19 @@ const TIERS: { key: ServiceModelTier; modelKind: ModelKind; rows: RowKey[] }[] =
 /** Speech-to-text follows no tier; it is its own row after the tiers. */
 const ASR_ROW = 'asr' satisfies RowKey;
 
-/** A settings card: one per tier, plus voice. */
-type Section = ServiceModelTier | 'channelRouting' | 'voice';
+/**
+ * File and knowledge-base embedding follows no tier either: a tier change must
+ * not move indexing to a model the files already embedded were not built with.
+ */
+const FILE_EMBEDDING_ROW = 'fileEmbedding' satisfies RowKey;
+
+/** A settings card: one per tier, plus file embedding and voice. */
+type Section = ServiceModelTier | 'channelRouting' | typeof FILE_EMBEDDING_ROW | 'voice';
 
 const sectionOf = (row: RowKey | UserServiceModelConfigKey): Section => {
   if (row === DEFAULT_AGENT_ROW) return 'main';
   if (row === ASR_ROW) return 'voice';
+  if (row === FILE_EMBEDDING_ROW) return FILE_EMBEDDING_ROW;
   if (row === 'channelRouting') return 'channelRouting';
   return tierOfSlot(row) ?? 'main';
 };
@@ -93,14 +100,10 @@ const PERSONAL_SLOTS = new Set<UserServiceModelConfigKey>(PERSONAL_SYSTEM_AGENT_
 const NO_SLOTS = new Set<UserServiceModelConfigKey>();
 
 interface ServiceModelFormProps {
-  /**
-   * Drop the personal chat-assist rows (follow-up, input completion). The
-   * workspace surface edits them on its own Chat Preferences tab instead.
-   */
-  hidePersonalPreferences?: boolean;
+  scope?: 'personal' | 'workspace';
 }
 
-const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) => {
+const ServiceModelForm = ({ scope = 'personal' }: ServiceModelFormProps) => {
   const { t } = useTranslation('setting');
   const enableChannels = useServerConfigStore(serverConfigSelectors.enableChannels);
   const { allowed: canManage, reason } = usePermission('manage_settings');
@@ -144,11 +147,15 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
     return <ServiceModelFormSkeleton />;
   }
 
-  const skipSlots = hidePersonalPreferences ? PERSONAL_SLOTS : NO_SLOTS;
+  const isWorkspaceSettings = scope === 'workspace';
+  // Personal tiers still pin the chat-assist slots that follow them; a
+  // workspace's tiers never write the member's personal slots.
+  const skipSlots = isWorkspaceSettings ? PERSONAL_SLOTS : NO_SLOTS;
+  // Chat-assist rows are edited on the Conversation page in both scopes.
   const tiers = TIERS.map((tier) => ({
     ...tier,
     rows: tier.rows.filter(
-      (row) => row === DEFAULT_AGENT_ROW || !skipSlots.has(row as UserServiceModelConfigKey),
+      (row) => row === DEFAULT_AGENT_ROW || !PERSONAL_SLOTS.has(row as UserServiceModelConfigKey),
     ),
   }));
 
@@ -393,7 +400,9 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
 
   // One settings group per model kind, like 生图 below: each tier is its own
   // card with its picker on top and the tasks that follow it in a lighter
-  // 「高级」 under it. Voice follows no tier, so it is a card of its own.
+  // 「高级」 under it. File embedding and voice follow no tier, so each is a
+  // card of its own.
+  const fileEmbeddingState = rowState(FILE_EMBEDDING_ROW);
   const groups: FormGroupItem[] = [
     ...tiers.map(({ key, modelKind, rows }, index): FormGroupItem => {
       const title = t(`serviceModel.tier.${key}.title`);
@@ -429,6 +438,56 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
         ),
       };
     }),
+    {
+      children: (
+        <>
+          {/* Same picker as a tier: it names the deployment default it falls back to. */}
+          <Form.Field label={t('serviceModel.tierPicker')}>
+            <TierRow
+              disabled={isWorkspaceSettings || !canManage}
+              modelKind={'embedding'}
+              recommended={followModelOf(FILE_EMBEDDING_ROW)!}
+              title={t(`systemAgent.${FILE_EMBEDDING_ROW}.title`)}
+              value={
+                !isWorkspaceSettings && fileEmbeddingState.kind === 'custom'
+                  ? fileEmbeddingState.value
+                  : undefined
+              }
+              onChange={(value) =>
+                writeSlot(
+                  FILE_EMBEDDING_ROW,
+                  value ? { kind: 'custom', value } : { kind: 'follow' },
+                )
+              }
+            />
+          </Form.Field>
+          <Flexbox gap={4} {...stylex.props(styles.note)}>
+            {isWorkspaceSettings ? (
+              <span {...stylex.props(styles.sectionDesc)}>
+                {t(`systemAgent.${FILE_EMBEDDING_ROW}.workspaceDefault`)}
+              </span>
+            ) : (
+              <>
+                <span {...stylex.props(styles.sectionDesc)}>
+                  {t(`systemAgent.${FILE_EMBEDDING_ROW}.precedence`)}
+                </span>
+                <span {...stylex.props(styles.sectionDesc)}>
+                  {t(`systemAgent.${FILE_EMBEDDING_ROW}.reindexHint`)}
+                </span>
+              </>
+            )}
+          </Flexbox>
+        </>
+      ),
+      collapsible: false,
+      desc: withReason(t(`systemAgent.${FILE_EMBEDDING_ROW}.modelDesc`)),
+      extra: saveHint(FILE_EMBEDDING_ROW),
+      title: (
+        <SettingsSearchAnchor id={`service-model-${FILE_EMBEDDING_ROW}`}>
+          {t(`systemAgent.${FILE_EMBEDDING_ROW}.title`)}
+        </SettingsSearchAnchor>
+      ),
+    },
     {
       children: (
         <Form.Field

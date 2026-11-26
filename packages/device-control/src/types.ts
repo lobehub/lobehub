@@ -6,7 +6,14 @@
  * desktop wiring can pass its own IPC-typed implementations directly.
  */
 
-import type { DeviceClient, DeviceCliRestartParams, DeviceCliUpdateState } from '@lobechat/types';
+import type {
+  CheckAgentCredentialResult,
+  DeviceClient,
+  DeviceCliRestartParams,
+  DeviceCliUpdateState,
+  InstallAgentCredentialResult,
+  RemoveAgentCredentialResult,
+} from '@lobechat/types';
 
 // ─── Workspace scan ───
 
@@ -17,10 +24,6 @@ export interface ProjectSkillItem {
   description?: string;
   /** SKILL.md declares that the model must not invoke this skill automatically. */
   disableModelInvocation?: boolean;
-  /** Total number of regular files under `skillDir` (recursive, including `SKILL.md`). */
-  fileCount: number;
-  /** Relative paths (within `skillDir`) of all regular files, sorted, capped. */
-  files: string[];
   name: string;
   /** Absolute path to the SKILL.md file. */
   path: string;
@@ -356,6 +359,14 @@ export interface TrashLocalFilesResult {
 
 export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps {
   /**
+   * Prove the installed agent credential works without spending model quota.
+   * Optional like the other agent-credential handlers: a host provides them
+   * only when its agent runs apply installed credentials (the desktop app and
+   * `lh connect` both do, from the same store), so any other client refuses
+   * with a stable reason instead of storing a credential nothing would use.
+   */
+  checkAgentCredential?: (params: unknown) => Promise<CheckAgentCredentialResult>;
+  /**
    * Start an app update check on this client; an available update downloads
    * automatically. Returns right away with the updated state — callers poll
    * {@link DeviceControlDeps.getAppUpdateState} for progress. Optional: only
@@ -394,6 +405,11 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
   /** Build the project file index. */
   getProjectFileIndex: (params: ProjectFileIndexParams) => Promise<ProjectFileIndexResult>;
   /**
+   * Store a provider credential so heterogeneous agent runs on this device use
+   * it. Takes the raw RPC params: the handler validates them itself.
+   */
+  installAgentCredential?: (params: unknown) => Promise<InstallAgentCredentialResult>;
+  /**
    * Restart into a downloaded update. Resolves before the app quits so the
    * response still reaches the caller; rejects when nothing is downloaded.
    */
@@ -414,6 +430,8 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
     params: ExternalAssetForPublishParams,
   ) => Promise<ExternalAssetForPublishResult>;
   readTerminal?: (params: ReadTerminalParams) => Promise<ReadTerminalResult>;
+  /** Delete an installed agent credential and its managed config. Idempotent. */
+  removeAgentCredential?: (params: unknown) => Promise<RemoveAgentCredentialResult>;
   resizeTerminal?: (params: ResizeTerminalParams) => Promise<void>;
   restartCli?: (params: DeviceCliRestartParams) => Promise<DeviceCliUpdateState>;
   /** Search project files without shipping the whole index to the caller. */
@@ -510,6 +528,7 @@ export type HeterogeneousAgentModelCatalog =
   | {
       error: {
         code:
+          | 'auth_required'
           | 'cli_not_found'
           | 'command_failed'
           | 'device_unavailable'

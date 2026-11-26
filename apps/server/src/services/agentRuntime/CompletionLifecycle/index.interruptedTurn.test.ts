@@ -29,7 +29,7 @@ const marker = { metadata: { interruptedMidStream: true } };
 
 const run = async (latestRunRow: { id: string } | undefined, reason = 'interrupted') => {
   const lifecycle = new CompletionLifecycle({} as any, 'user-1');
-  vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+  vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
   vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
   vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
   const update = vi.fn().mockResolvedValue({ success: true });

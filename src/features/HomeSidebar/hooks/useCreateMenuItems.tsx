@@ -247,7 +247,7 @@ export const useCreateMenuItems = () => {
         info.domEvent?.stopPropagation();
         if (!canCreate) return;
 
-        navigate('/community/agent');
+        navigate('/marketplace/agent');
       },
     }),
     [canCreate, navigate, t],
@@ -418,7 +418,7 @@ export const useCreateMenuItems = () => {
    * Top-level create menu shown by the Agent section and header add buttons.
    *
    * Regression example: the Agent section + menu used to expose only local creation actions,
-   * so users had no visible entry to `/community/agent`.
+   * so users had no visible entry to `/marketplace/agent`.
    */
   const createTopLevelMenuItems = useCallback((): ItemType[] => {
     const connectItem = createConnectAgentMenuItem();

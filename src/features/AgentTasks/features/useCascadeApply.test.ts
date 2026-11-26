@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { useCascadeApply } from './TaskStatusCascadeModal';
 
-const toastError = vi.hoisted(() => vi.fn());
 const modalContext = vi.hoisted(() => ({
   close: vi.fn(),
   setCanDismissByClickOutside: vi.fn(),
@@ -11,7 +10,6 @@ const modalContext = vi.hoisted(() => ({
 
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  toast: { error: toastError },
   useModalContext: () => modalContext,
 }));
 
@@ -20,7 +18,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('useCascadeApply', () => {
-  it('keeps the modal open with an error toast on apply failure, then closes on retry success', async () => {
+  it('keeps the modal open with an inline error on apply failure, then closes on retry success', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const onApply = vi
       .fn()
@@ -32,7 +30,10 @@ describe('useCascadeApply', () => {
     // First attempt fails: the rejection is surfaced instead of discarded,
     // and the modal is not closed so the user can retry or cancel.
     await act(() => result.current.handleApply(true));
-    expect(toastError).toHaveBeenCalledWith('taskDetail.statusCascade.applyFailed');
+    expect(result.current.error).toEqual({
+      detail: 'network error',
+      summary: 'taskDetail.statusCascade.applyFailedRetry',
+    });
     expect(modalContext.close).not.toHaveBeenCalled();
     await waitFor(() => expect(result.current.loadingAction).toBeNull());
 
@@ -40,5 +41,6 @@ describe('useCascadeApply', () => {
     await act(() => result.current.handleApply(true));
     expect(onApply).toHaveBeenCalledTimes(2);
     expect(modalContext.close).toHaveBeenCalledTimes(1);
+    expect(result.current.error).toBeNull();
   });
 });

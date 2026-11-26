@@ -9,7 +9,7 @@ import { ChannelError } from './error';
 import { memberInviterMetadata, requireWorkspaceMember } from './people';
 import { audit } from './transaction';
 import type { ChannelAccess } from './types';
-import { readChannelView } from './view';
+import { readChannelView, viewerJobs } from './view';
 
 /**
  * A workspace project's group Channels are open to everyone who can read the project: they find
@@ -153,11 +153,7 @@ export const readOpenChannel = async (
       channel: { ...channel, canDelete: false },
       joined: false,
       ...view,
-      jobs: view.jobs.map(({ requesterMemberId: _, topicId, topicOwnerId, ...job }) => ({
-        ...job,
-        canStop: false,
-        ...(topicId && topicOwnerId === userId ? { topicId } : {}),
-      })),
+      jobs: viewerJobs(view.jobs, userId, () => false),
     };
   });
 

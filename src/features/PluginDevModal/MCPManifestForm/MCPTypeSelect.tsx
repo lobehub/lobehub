@@ -4,6 +4,7 @@ import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   active: css`
@@ -43,8 +44,8 @@ const styles = createStaticStyles(({ css }) => ({
     position: relative;
 
     width: 100%;
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorder};
     border-radius: ${cssVar.borderRadiusLG};
 

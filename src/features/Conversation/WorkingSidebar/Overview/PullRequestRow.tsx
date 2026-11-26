@@ -18,7 +18,7 @@ import { sectionStyles } from './sectionStyles';
 import { statusTint } from './statusTint';
 
 interface PullRequestRowProps {
-  /** Better Coding Experience: the row's "⋯" menu, after the CI pill. */
+  /** The row's "⋯" menu, after the CI pill. */
   actions?: ReactNode;
   onClick: () => void;
   pullRequest: DeviceGitLinkedPullRequest;

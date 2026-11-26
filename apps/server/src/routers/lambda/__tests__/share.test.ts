@@ -42,6 +42,13 @@ const emptyDeliveryStats = {
   workCount: 0,
 };
 
+const listShareGrantableSkills = vi.hoisted(() => vi.fn());
+vi.mock('@/server/services/agentShare/grantableSkills', () => ({ listShareGrantableSkills }));
+const listShareActivatableExtensionIds = vi.hoisted(() => vi.fn(async () => [] as string[]));
+vi.mock('@/server/services/agentShare/activatableExtensions', () => ({
+  listShareActivatableExtensionIds,
+}));
+
 vi.mock('@/database/models/agentShareProfile', () => ({
   AgentShareProfileModel: class {
     constructor(...args: unknown[]) {
@@ -222,8 +229,7 @@ describe('shareRouter', () => {
       ownerFullName: 'Owner Person',
       ownerUsername: 'owner',
       shareConfig: {
-        maxTopicsPerVisitor: 5,
-        maxTurnsPerTopic: 20,
+        maxMessagesPerVisitor: 100,
         slug: 'shared-agent',
         toolGrants: [{ apis: ['search'], identifier: 'lobe-web-browsing' }],
       },
@@ -253,6 +259,60 @@ describe('shareRouter', () => {
       ]);
       findByIdAndProviderMock.mockResolvedValue(undefined);
       resolveModelSelectionMock.mockResolvedValue({ model: 'gpt-4o', provider: 'openai' });
+    });
+
+    it('advertises no LobeHub tool grants for a Claude Code / Codex Agent', async () => {
+      vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue({
+        ...agentShare,
+        agentAgencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+      } as any);
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
+
+      const result = await caller.getSharedAgent({ slugOrId: 'shared-agent' });
+
+      expect(result.toolGrants).toEqual([]);
+    });
+
+    it('advertises the tools autoGrantAgentTools opens, minus skills and declined ones', async () => {
+      listShareGrantableSkills.mockResolvedValue([
+        { description: '', identifier: 'skill-pinned', name: 'Skill' },
+      ]);
+      vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue({
+        ...agentShare,
+        agentChatConfig: { memory: { enabled: true }, toolMode: 'chat' },
+        agentPlugins: ['mcp-pinned', 'skill-pinned', 'mcp-declined'],
+        shareConfig: {
+          ...agentShare.shareConfig,
+          autoGrantAgentTools: true,
+          declinedGrantIds: ['mcp-declined'],
+        },
+      } as any);
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
+
+      const result = await caller.getSharedAgent({ slugOrId: 'shared-agent' });
+
+      expect(result.toolGrants).toEqual(
+        expect.arrayContaining(['lobe-web-browsing', 'mcp-pinned']),
+      );
+      expect(result.toolGrants).not.toContain('skill-pinned');
+      expect(result.toolGrants).not.toContain('mcp-declined');
+      expect(result.toolGrants).not.toContain('lobe-user-memory');
+    });
+
+    it('advertises a connected connector the Agent has no entry for', async () => {
+      listShareGrantableSkills.mockResolvedValue([]);
+      listShareActivatableExtensionIds.mockResolvedValueOnce(['mcp-connected']);
+      vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue({
+        ...agentShare,
+        agentChatConfig: { toolMode: 'agent' },
+        agentPlugins: [],
+        shareConfig: { ...agentShare.shareConfig, autoGrantAgentTools: true },
+      } as any);
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
+
+      const result = await caller.getSharedAgent({ slugOrId: 'shared-agent' });
+
+      expect(result.toolGrants).toContain('mcp-connected');
     });
 
     it('returns independent demos and selected deliveries in the owner scope', async () => {
@@ -297,16 +357,55 @@ describe('shareRouter', () => {
       expect(result.featuredWorks).toEqual([]);
     });
 
-    it('requires authentication without resolving or counting the share', async () => {
+    it('serves a signed-out visitor the landing data without counting the view', async () => {
+      const caller = shareRouter.createCaller(await createContextInner());
+
+      await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).resolves.toMatchObject({
+        isOwner: false,
+        ownerWorkspaceSlug: null,
+        shareId: 'agent-share-1',
+      });
+      expect(AgentShareModel.assertShareAccess).toHaveBeenCalledWith(
+        expect.objectContaining({ shareId: 'agent-share-1' }),
+        undefined,
+      );
+      expect(AgentShareModel.incrementUserViewCount).not.toHaveBeenCalled();
+      expect(listFeaturedWorks).toHaveBeenCalled();
+    });
+
+    it('hides a private share from a signed-out visitor', async () => {
+      vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue({
+        ...agentShare,
+        visibility: 'private',
+      } as any);
+      vi.mocked(AgentShareModel.assertShareAccess).mockImplementationOnce(() => {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found' });
+      });
       const caller = shareRouter.createCaller(await createContextInner());
 
       await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).rejects.toMatchObject({
-        code: 'UNAUTHORIZED',
+        code: 'NOT_FOUND',
       });
-      expect(AgentShareModel.findBySlugOrId).not.toHaveBeenCalled();
-      expect(AgentShareModel.incrementUserViewCount).not.toHaveBeenCalled();
       expect(listFeaturedWorks).not.toHaveBeenCalled();
-      expect(getDeliveryStats).not.toHaveBeenCalled();
+    });
+
+    it('reads a sandbox operation token as signed out, even for the owner', async () => {
+      const caller = shareRouter.createCaller(
+        await createContextInner({
+          oidcAuth: { purpose: 'hetero-operation', sub: 'owner-user' } as any,
+          userId: 'owner-user',
+        }),
+      );
+
+      await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).resolves.toMatchObject({
+        isOwner: false,
+        ownerWorkspaceSlug: null,
+      });
+      expect(AgentShareModel.assertShareAccess).toHaveBeenCalledWith(
+        expect.objectContaining({ shareId: 'agent-share-1' }),
+        null,
+      );
+      expect(AgentShareModel.incrementUserViewCount).not.toHaveBeenCalled();
     });
 
     it('resolves by slug, returns only visitor-safe metadata, and counts the view', async () => {
@@ -337,8 +436,7 @@ describe('shareRouter', () => {
         terms: {
           allowCreatorViewSessions: false,
           maxFileStorage: 512 * 1024 * 1024,
-          maxTopicsPerVisitor: 5,
-          maxTurnsPerTopic: 20,
+          maxMessagesPerVisitor: 100,
         },
         // Identifier only: the granted API list is owner-facing configuration.
         toolGrants: ['lobe-web-browsing'],

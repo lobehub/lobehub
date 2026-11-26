@@ -10,6 +10,7 @@ import {
   getPinnedPluginIds,
   getPluginMode,
   parsePluginEntry,
+  shouldEnableConnectorOnConnect,
   upsertConnectorEnabled,
   upsertPluginMode,
 } from './pluginConfig';
@@ -190,9 +191,23 @@ describe('library skills', () => {
 });
 
 describe('connectors', () => {
-  it('resolves a connector the agent has no entry for as off', () => {
-    expect(getConnectorMode(undefined, 'gmail')).toBe('disabled');
-    expect(getConnectorMode(['other'], 'gmail')).toBe('disabled');
+  it('only enrolls a newly connected tool for an exact toolset without a saved choice', () => {
+    expect(shouldEnableConnectorOnConnect([], 'notion')).toBe(false);
+    const custom = { toolMode: 'custom' } as const;
+    expect(shouldEnableConnectorOnConnect([], 'notion', custom)).toBe(true);
+    expect(
+      shouldEnableConnectorOnConnect(
+        [{ identifier: 'notion', mode: 'disabled' }],
+        'notion',
+        custom,
+      ),
+    ).toBe(false);
+  });
+
+  it('defaults a connected tool to on demand in Agent mode and preserves custom toolsets', () => {
+    expect(getConnectorMode(undefined, 'gmail')).toBe('auto');
+    expect(getConnectorMode(undefined, 'gmail', { toolMode: 'custom' })).toBe('disabled');
+    expect(getConnectorMode(['other'], 'gmail')).toBe('auto');
   });
 
   it('reads an explicit auto entry as on and a disabled entry as off', () => {

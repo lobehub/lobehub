@@ -1,8 +1,8 @@
 {
   "addToKnowledgeBase.addSuccess": "فایل با موفقیت اضافه شد",
-  "addToKnowledgeBase.alreadyExists": "این فایل قبلاً در کتابخانه وجود دارد",
+  "addToKnowledgeBase.alreadyExists": "این فایل از قبل در کتابخانه وجود دارد",
   "addToKnowledgeBase.confirm": "افزودن",
-  "addToKnowledgeBase.error": "افزودن فایل به کتابخانه با شکست مواجه شد",
+  "addToKnowledgeBase.error": "افزودن فایل به کتابخانه ناموفق بود",
   "addToKnowledgeBase.id.placeholder": "لطفاً یک کتابخانه برای افزودن انتخاب کنید",
   "addToKnowledgeBase.id.required": "لطفاً یک کتابخانه انتخاب کنید",
   "addToKnowledgeBase.id.title": "کتابخانه مقصد",

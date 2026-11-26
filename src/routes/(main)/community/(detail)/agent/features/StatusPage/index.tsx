@@ -16,7 +16,7 @@ const StatusPage = memo<StatusPageProps>(({ status }) => {
   const { t } = useTranslation('discover');
 
   const handleBackToMarket = () => {
-    navigate('/community/agent');
+    navigate('/marketplace/agent');
   };
 
   // Under review status

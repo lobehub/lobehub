@@ -94,7 +94,6 @@ describe('projectWorkingDirectory.createProjectTopic', () => {
     expect(mocks.resolveProjectTopicSandbox).toHaveBeenCalledWith(
       expect.objectContaining({
         agentId: 'coordinator',
-        environmentId: 'env-repo',
         projectId: 'project-1',
         workspaceId: 'ws-1',
       }),
@@ -106,6 +105,20 @@ describe('projectWorkingDirectory.createProjectTopic', () => {
           sandboxWorkingDirectory: 'projects/atlas/repo',
         },
         model: 'gpt',
+      }),
+    );
+  });
+
+  it("starts in an empty working directory when asked to go without the project's environment", async () => {
+    mocks.findById.mockResolvedValue({ id: 'project-1', userId: 'creator' });
+    mocks.resolveProjectTopicSandbox.mockResolvedValue({ sandboxEnvironmentId: 'env-repo' });
+
+    await caller().createProjectTopic({ ...input, withoutEnvironment: true });
+
+    expect(mocks.resolveProjectTopicSandbox).not.toHaveBeenCalled();
+    expect(mocks.createTopic).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        metadata: expect.objectContaining({ sandboxEnvironmentId: expect.anything() }),
       }),
     );
   });

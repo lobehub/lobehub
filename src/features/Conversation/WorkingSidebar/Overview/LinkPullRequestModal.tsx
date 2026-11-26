@@ -63,7 +63,7 @@ const LinkPullRequestContent = memo<LinkPullRequestContentProps>(({ onLink }) =>
 LinkPullRequestContent.displayName = 'LinkPullRequestContent';
 
 /**
- * Better Coding Experience: link a PR the agent's commands never touched by
+ * Link a PR the agent's commands never touched by
  * pasting its GitHub URL.
  */
 export const openLinkPullRequestModal = (onLink: LinkPullRequestContentProps['onLink']) =>

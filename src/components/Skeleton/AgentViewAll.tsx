@@ -8,7 +8,7 @@ import WideScreenContainer from '@/features/WideScreenContainer';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useDensityTokens } from '@/styles/density';
+import { useDensity, useDensityTokens } from '@/styles/density';
 
 import SkeletonBar from './Bar';
 
@@ -76,41 +76,53 @@ export const AgentViewAllSidebarSectionSkeleton = () => {
 
 /**
  * Dense `AgentRow`s of the list view (`agentListViewMode: 'list'`,
- * `groupBy: 'none'`): padding 8/12, 28px square avatar, then the name / role /
- * description columns, then the
+ * `groupBy: 'none'`): padding 8/12 (compact 6/12), 28px (compact 24px) square
+ * avatar, then the name / role / description columns, then the
  * right-aligned 88px update-time column and the 64px eye / "…" action column.
  * Also the page's own loading state while the agent list initialises.
  */
-export const AgentViewAllRowsSkeleton = ({ rows = 8 }: { rows?: number }) => (
-  <Flexbox aria-busy gap={2}>
-    {Array.from({ length: rows }).map((_, index) => (
-      <Flexbox horizontal align={'center'} gap={12} key={index} paddingBlock={8} paddingInline={12}>
-        <Flexbox horizontal align={'center'} flex={1} gap={12} style={{ minWidth: 0 }}>
-          <SkeletonBar height={28} width={28} />
-          <Flexbox flex={'0 1 auto'} style={{ minWidth: 0, width: NAME_COL_WIDTH }}>
-            <SkeletonBar height={14} width={`${50 + (index % 4) * 10}%`} />
+export const AgentViewAllRowsSkeleton = ({ rows = 8 }: { rows?: number }) => {
+  const { compact, tokens } = useDensity();
+  const avatarSize = tokens.headerAvatarSize;
+
+  return (
+    <Flexbox aria-busy gap={2}>
+      {Array.from({ length: rows }).map((_, index) => (
+        <Flexbox
+          horizontal
+          align={'center'}
+          gap={12}
+          key={index}
+          paddingBlock={compact ? 6 : 8}
+          paddingInline={12}
+        >
+          <Flexbox horizontal align={'center'} flex={1} gap={12} style={{ minWidth: 0 }}>
+            <SkeletonBar height={avatarSize} width={avatarSize} />
+            <Flexbox flex={'0 1 auto'} style={{ minWidth: 0, width: NAME_COL_WIDTH }}>
+              <SkeletonBar height={14} width={`${50 + (index % 4) * 10}%`} />
+            </Flexbox>
+            <Flexbox flex={'0 1 auto'} style={{ minWidth: 0, width: ROLE_COL_WIDTH }}>
+              <SkeletonBar height={12} width={`${40 + (index % 3) * 15}%`} />
+            </Flexbox>
+            <Flexbox flex={1} style={{ minWidth: 0 }}>
+              <SkeletonBar height={12} width={`${30 + (index % 5) * 8}%`} />
+            </Flexbox>
           </Flexbox>
-          <Flexbox flex={'0 1 auto'} style={{ minWidth: 0, width: ROLE_COL_WIDTH }}>
-            <SkeletonBar height={12} width={`${40 + (index % 3) * 15}%`} />
+          <Flexbox align={'flex-end'} flex={'none'} style={{ minWidth: 88 }}>
+            <SkeletonBar height={12} width={56} />
           </Flexbox>
-          <Flexbox flex={1} style={{ minWidth: 0 }}>
-            <SkeletonBar height={12} width={`${30 + (index % 5) * 8}%`} />
+          <Flexbox horizontal align={'center'} flex={'none'} gap={4} width={ACTION_COL_WIDTH}>
+            {[0, 1].map((key) => (
+              <Center height={24} key={key} width={24}>
+                <SkeletonBar height={14} width={14} />
+              </Center>
+            ))}
           </Flexbox>
         </Flexbox>
-        <Flexbox align={'flex-end'} flex={'none'} style={{ minWidth: 88 }}>
-          <SkeletonBar height={12} width={56} />
-        </Flexbox>
-        <Flexbox horizontal align={'center'} flex={'none'} gap={4} width={ACTION_COL_WIDTH}>
-          {[0, 1].map((key) => (
-            <Center height={24} key={key} width={24}>
-              <SkeletonBar height={14} width={14} />
-            </Center>
-          ))}
-        </Flexbox>
-      </Flexbox>
-    ))}
-  </Flexbox>
-);
+      ))}
+    </Flexbox>
+  );
+};
 
 /**
  * Route-level skeleton for `/agents` (`features/AgentViewAll/AgentViewAllPage.tsx`):
@@ -119,7 +131,7 @@ export const AgentViewAllRowsSkeleton = ({ rows = 8 }: { rows?: number }) => (
  * create button right) over list-view rows (also the loading state of the card view).
  */
 const AgentViewAllSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => {
-  const { headerActionSmallSize, headerHeight } = useDensityTokens();
+  const { controlHeight, headerActionSmallSize, headerHeight } = useDensityTokens();
 
   return (
     <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
@@ -144,8 +156,8 @@ const AgentViewAllSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => {
       <WideScreenContainer fullWidth gap={16} paddingBlock={16} paddingInline={16}>
         <AgentViewAllSidebarSectionSkeleton />
         <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
-          <SkeletonBar height={32} width={206} />
-          <SkeletonBar height={32} width={64} />
+          <SkeletonBar height={controlHeight} width={206} />
+          <SkeletonBar height={controlHeight} width={64} />
         </Flexbox>
         <AgentViewAllRowsSkeleton />
       </WideScreenContainer>

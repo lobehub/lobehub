@@ -7,8 +7,9 @@ import { openPageFork, PAGE_META_KEY } from '../fork';
 import { PageProjectionRejectedError, persistPageState } from '../persist';
 import { emptyEditorData } from '../seed';
 
-const { redisStore, store } = vi.hoisted(() => ({
+const { redisStore, roomStates, store } = vi.hoisted(() => ({
   redisStore: new Map<string, string>(),
+  roomStates: new Map<string, Uint8Array>(),
   store: {
     calls: [] as string[],
     row: null as any,
@@ -23,6 +24,9 @@ vi.mock('@/server/services/redis', () => ({
       lastProjectedBody: async (id: string) => redisStore.get(id) ?? null,
       rememberProjectedBody: async (id: string, digest: string) => {
         redisStore.set(id, digest);
+      },
+      rememberPersistedRoomState: async (id: string, stateVector: Uint8Array) => {
+        roomStates.set(id, stateVector);
       },
     },
   },
@@ -81,6 +85,7 @@ const persist = (state: Uint8Array) =>
 describe('persistPageState', () => {
   beforeEach(() => {
     redisStore.clear();
+    roomStates.clear();
     store.calls = [];
     store.savedHistories = [];
     store.updates = [];
@@ -92,6 +97,20 @@ describe('persistPageState', () => {
     await persist(await roomOf('two\n'));
 
     expect(store.updates.map((update) => update.saveSource)).toEqual(['autosave', 'autosave']);
+  });
+
+  it('remembers the room state the stored page now shows', async () => {
+    const state = await roomOf('one\n');
+
+    await persist(state);
+
+    expect(roomStates.get('doc_1')).toEqual(Y.encodeStateVectorFromUpdate(state));
+  });
+
+  it('remembers no room state for a projection it refuses', async () => {
+    await expect(persist(await emptyRoom())).rejects.toBeInstanceOf(PageProjectionRejectedError);
+
+    expect(roomStates.has('doc_1')).toBe(false);
   });
 
   it('keeps a body written around the room as its own version before replacing it', async () => {

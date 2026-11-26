@@ -25,6 +25,11 @@ export const homeType = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 500;
     line-height: 22px;
     color: ${cssVar.colorText};
+
+    html[data-density='compact'] & {
+      font-size: 14px;
+      line-height: 20px;
+    }
   `,
   /** An item whose title is a sentence rather than a name (suggestions). */
   itemTitleProse: css`
@@ -32,6 +37,11 @@ export const homeType = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 400;
     line-height: 22px;
     color: ${cssVar.colorText};
+
+    html[data-density='compact'] & {
+      font-size: 14px;
+      line-height: 20px;
+    }
   `,
   /** Timestamps, identifiers, refs — glanced at, never read. */
   meta: css`
@@ -39,6 +49,10 @@ export const homeType = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 400;
     line-height: 18px;
     color: ${cssVar.colorTextTertiary};
+
+    html[data-density='compact'] & {
+      line-height: 16px;
+    }
   `,
   /** Group / card headings. */
   sectionLabel: css`
@@ -47,6 +61,10 @@ export const homeType = createStaticStyles(({ css, cssVar }) => ({
     line-height: 18px;
     color: ${cssVar.colorTextSecondary};
     letter-spacing: 0.04em;
+
+    html[data-density='compact'] & {
+      line-height: 16px;
+    }
   `,
   /** The second line of a row — meant to be read, not just scanned. */
   supporting: css`
@@ -54,5 +72,10 @@ export const homeType = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 400;
     line-height: 20px;
     color: ${cssVar.colorTextTertiary};
+
+    html[data-density='compact'] & {
+      font-size: 12px;
+      line-height: 18px;
+    }
   `,
 }));

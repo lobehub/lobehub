@@ -15,12 +15,14 @@ import {
   toast,
 } from '@lobehub/ui';
 import { $getRoot } from 'lexical';
-import { ChevronDown, ChevronUp, Paperclip, TagIcon } from 'lucide-react';
+import { ChevronDown, ChevronUp, ClockIcon, Paperclip, TagIcon, XIcon } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import GeneratingBorder from '@/components/GeneratingBorder';
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { createGoalModal } from '@/features/AgentGoals/CreateGoalModal';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
@@ -37,9 +39,15 @@ import { useGlobalStore } from '@/store/global';
 import { getTaskStoreState, useTaskStore } from '@/store/task';
 import { taskLabelSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
-import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { userProfileSelectors } from '@/store/user/selectors';
 import { shinyTextStyles } from '@/styles';
 
+import ScheduleChip from '../CreateTaskModal/ScheduleChip';
+import {
+  createDefaultScheduleDraft,
+  type ScheduleDraft,
+  toScheduledCreateParams,
+} from '../CreateTaskModal/scheduleDraft';
 import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
 import AssigneeAvatar from '../features/AssigneeAvatar';
 import AssigneeMemberSelector from '../features/AssigneeMemberSelector';
@@ -126,6 +134,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     useDefaultMemberAssignee();
   const navigate = useWorkspaceAwareNavigate();
   const taskListOriginState = useTaskListOriginState();
+  const [schedule, setSchedule] = useState<ScheduleDraft>();
   const [priority, setPriority] = useState(0);
   const [labels, setLabels] = useState<TaskLabelRef[]>([]);
   const isLabelsInit = useTaskStore(taskLabelSelectors.isLabelsInit);
@@ -144,6 +153,8 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const assigneeUserId = resolveMemberAssignee(memberChoice, defaultMemberAssignee);
   const isMemberPending = memberChoice === undefined && isDefaultMemberPending;
   const [instruction, setInstruction] = useState('');
+  /** Create failure, shown above the footer buttons: the composer keeps the draft so the user can retry. */
+  const [submitError, setSubmitError] = useState<InlineErrorState | null>(null);
   const [hasAttachments, setHasAttachments] = useState(false);
   // Where this task will run, if not simply wherever the assignee agent runs.
   // Undefined = inherit; it is only sent when the user actually pinned
@@ -156,7 +167,6 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   // Reading the draft is what submit does now. It only stops for confirmation
   // when it found something the user alone can settle, so the escape hatch is
   // the dropdown's "create directly" rather than a setting nobody would find.
-  const canCreateGoal = useUserStore(labPreferSelectors.enableGoals);
   const [analysis, setAnalysis] = useState<TaskIntentAnalysis | null>(null);
   const [intentTitle, setIntentTitle] = useState('');
   const [intentAnswers, setIntentAnswers] = useState<ClarificationAnswers>({});
@@ -272,6 +282,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     // hydration only — it must not keep the previous scope's selection).
     editor.cleanDocument?.();
     setPriority(0);
+    setSchedule(undefined);
     // Labels belong to a workspace: one picked in the previous scope would be a
     // foreign id here and fail the create.
     setLabels([]);
@@ -286,6 +297,9 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     if (!draft) return;
     try {
       if (draft.markdown) editor.setDocument?.('markdown', draft.markdown);
+      if (agentId && !parentTaskId && draft.schedule?.pattern && draft.schedule.timezone) {
+        setSchedule(draft.schedule);
+      }
       if (typeof draft.priority === 'number') setPriority(draft.priority);
       if (!lockAssignee && draft.assigneeAgentId) setAssigneeAgentId(draft.assigneeAgentId);
       // Re-validated rather than trusted: the draft is a browser string that a
@@ -328,6 +342,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     editor,
     isMembersLoading,
     lockAssignee,
+    parentTaskId,
     projectId,
     setProjectChoice,
   ]);
@@ -366,6 +381,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         markdown,
         priority,
         projectId: projectChoice,
+        schedule,
         visibility,
       },
       draftHasTextRef.current,
@@ -382,6 +398,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     memberChoice,
     priority,
     projectChoice,
+    schedule,
     visibility,
   ]);
 
@@ -397,6 +414,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     if (!canCreateTask) return;
     const lexicalEditor = editor?.getLexicalEditor?.();
     if (!lexicalEditor) return;
+    setSubmitError(null);
     lexicalEditor.getEditorState().read(() => {
       setInstruction($getRoot().getTextContent());
     });
@@ -409,6 +427,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
 
   const resetComposer = useCallback(() => {
     setPriority(0);
+    setSchedule(undefined);
     setLabels([]);
     // A restore still waiting for the registry belongs to the draft just sent.
     pendingDraftLabelIdsRef.current = undefined;
@@ -471,14 +490,17 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       // `createTask` keeps its rejecting contract (other callers rely on `catch`);
       // handle the composer's own failure here so it isn't silent, keeping the
       // draft intact (the reset only runs on success).
+      setSubmitError(null);
       try {
+        const config = execution ? { execution: toTaskExecutionConfigPatch(execution) } : undefined;
         const result = await createTask({
           assigneeAgentId,
           assigneeUserId,
           // Only present when the user pinned a run location / directory. Left
           // out otherwise so the task inherits the assignee agent entirely,
           // which is what tasks did before they could carry a selection.
-          ...(execution ? { config: { execution: toTaskExecutionConfigPatch(execution) } } : {}),
+          ...(config && { config }),
+          ...(schedule && toScheduledCreateParams(schedule, config)),
           editorData: draft.editorJson,
           instruction: draft.instruction,
           ...pickedLabelIds(labels, pendingDraftLabelIdsRef.current),
@@ -534,7 +556,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
             identifier: result.identifier,
           });
         }
-      } catch {
+      } catch (error) {
         // Nothing was created, so the draft is still the user's work: put it
         // back on disk to match the text the composer is still showing.
         if (draftStorageKey && persistedDraft !== null) {
@@ -544,7 +566,8 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
             /* storage unavailable — persistence is best-effort */
           }
         }
-        toast.error(t('createTask.createFailed'));
+        console.error(error);
+        setSubmitError(toInlineError(t('createTask.createFailedRetry'), error));
       }
     },
     [
@@ -563,6 +586,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       priority,
       taskListOriginState,
       resetComposer,
+      schedule,
       visibility,
     ],
   );
@@ -572,6 +596,10 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     const draft = readDraft();
     if (!draft) return;
 
+    if (schedule) {
+      await submitDraft(draft);
+      return;
+    }
     setIsAnalyzing(true);
     try {
       const result = await taskService.analyzeIntent({
@@ -596,7 +624,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [assigneeMeta?.title, canCreateTask, isMemberPending, readDraft, submitDraft]);
+  }, [assigneeMeta?.title, canCreateTask, isMemberPending, readDraft, schedule, submitDraft]);
 
   /**
    * The escape hatch, one click away in the submit dropdown: create the task
@@ -767,7 +795,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
             onBack={() => setAnalysis(null)}
             onConfirm={handleConfirmIntent}
             onSkip={handleSkipIntent}
-            onSwitchToGoal={canCreateGoal ? handleSwitchToGoal : undefined}
+            onSwitchToGoal={handleSwitchToGoal}
             onTitleChange={setIntentTitle}
           />
         )}
@@ -797,6 +825,11 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
             onContentChange={handleContentChange}
           />
         </Flexbox>
+        {submitError && (
+          <div style={{ padding: '0 16px 8px' }}>
+            <InlineErrorText detail={submitError.detail}>{submitError.summary}</InlineErrorText>
+          </div>
+        )}
         <Flexbox
           horizontal
           align={'center'}
@@ -944,6 +977,26 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
               onChange={setExecution}
             />
 
+            {agentId &&
+              !parentTaskId &&
+              (schedule ? (
+                <Flexbox horizontal align={'center'}>
+                  <ScheduleChip value={schedule} onChange={setSchedule} />
+                  <ActionIcon
+                    icon={XIcon}
+                    size={'small'}
+                    title={t('createTask.removeSchedule')}
+                    onClick={() => setSchedule(undefined)}
+                  />
+                </Flexbox>
+              ) : (
+                <ActionIcon
+                  icon={ClockIcon}
+                  size={'small'}
+                  title={t('taskSchedule.title')}
+                  onClick={() => setSchedule(createDefaultScheduleDraft())}
+                />
+              ))}
             <ActionIcon
               icon={Paperclip}
               size={'small'}
@@ -1000,7 +1053,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
                   // than as the button having gone inert.
                   <span className={shinyTextStyles.shinyText}>{t('taskIntent.analyzing')}</span>
                 ) : (
-                  t('createTask.submit')
+                  t(schedule ? 'createTask.submitScheduled' : 'createTask.submit')
                 )}
               </Button>
               {/* The escape hatch sits on the button it bypasses, so a user who

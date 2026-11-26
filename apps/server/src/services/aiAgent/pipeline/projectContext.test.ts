@@ -17,11 +17,16 @@ vi.mock('@/database/models/project', () => ({
   }),
 }));
 
+const runnersContext = vi.hoisted(() => ({ read: vi.fn() }));
+
+vi.mock('./projectRunners', () => ({ readProjectRunnersContext: runnersContext.read }));
+
 const deps = { db: {} as never, userId: 'user-1' };
 
 describe('buildRunProjectContextPrompt', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    runnersContext.read.mockResolvedValue({});
     mocks.findById.mockResolvedValue({
       coordinatorAgentId: 'agt-coord',
       description: 'Autumn launch',
@@ -31,7 +36,10 @@ describe('buildRunProjectContextPrompt', () => {
     });
     mocks.listAgents.mockResolvedValue([
       { agent: { id: 'agt-coord', title: 'Coordinator' }, binding: { enabled: true } },
-      { agent: { id: 'agt-writer', title: 'Writer' }, binding: { enabled: true, role: 'copy' } },
+      {
+        agent: { id: 'agt-writer', name: 'Justin', title: 'Writer' },
+        binding: { enabled: true, role: 'copy' },
+      },
       { agent: { id: 'agt-off', title: 'Paused' }, binding: { enabled: false, role: 'qa' } },
     ]);
     mocks.listKnowledgeBases.mockResolvedValue([
@@ -49,7 +57,7 @@ describe('buildRunProjectContextPrompt', () => {
     const prompt = await buildRunProjectContextPrompt(deps, 'proj-1', 'agt-coord');
 
     expect(prompt).toContain('Apollo Renamed');
-    expect(prompt).toContain('Writer (agt-writer): copy');
+    expect(prompt).toContain('Justin (Writer) (agt-writer): copy');
     expect(prompt).not.toContain('agt-off');
     expect(prompt).toContain('Style guide (kb-1)');
     expect(prompt).not.toContain('Old notes');
@@ -98,8 +106,44 @@ describe('buildRunProjectContextPrompt', () => {
 
     expect(context?.startsWith('<project_context>\n')).toBe(true);
     expect(context?.endsWith('\n</project_context>')).toBe(true);
-    expect(context).toContain('Writer (agt-writer): copy');
+    expect(context).toContain('Justin (Writer) (agt-writer): copy');
     expect(context).not.toContain('<coordination_rules>');
     await expect(buildHeteroProjectContext(deps, undefined, 'agt-coord')).resolves.toBe(undefined);
+  });
+});
+
+describe('buildRunProjectContextPrompt runners', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.findById.mockResolvedValue({
+      coordinatorAgentId: 'agt-coord',
+      name: 'Apollo',
+      status: 'active',
+    });
+    mocks.listAgents.mockResolvedValue([]);
+    mocks.listKnowledgeBases.mockResolvedValue([]);
+    mocks.listTasks.mockResolvedValue([]);
+  });
+
+  it('tells the agent where the work can run and what each runner prepares', async () => {
+    runnersContext.read.mockResolvedValue({
+      environment: { repositories: [{ url: 'https://github.com/lobehub/lobe-pet' }] },
+      runners: [{ kind: 'sandbox' }],
+    });
+
+    const prompt = await buildRunProjectContextPrompt(deps, 'proj-1', 'agt-coord');
+
+    expect(prompt).toContain('<runners');
+    expect(prompt).toContain('1. Cloud sandbox');
+    expect(prompt).toContain('https://github.com/lobehub/lobe-pet');
+  });
+
+  it('keeps the rest of the context when the runners cannot be read', async () => {
+    runnersContext.read.mockRejectedValue(new Error('gateway down'));
+
+    const prompt = await buildRunProjectContextPrompt(deps, 'proj-1', 'agt-coord');
+
+    expect(prompt).toContain('Apollo');
+    expect(prompt).not.toContain('<runners');
   });
 });

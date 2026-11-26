@@ -68,6 +68,21 @@ describe('personal agents', () => {
     expect(agent.personal).toBe(false);
   });
 
+  it('returns the starter tools on create and keeps an explicit opt-out on subsequent reads', async () => {
+    const agent = await json(await request('/', { body: { title: 'Writer' }, method: 'POST' }));
+    expect(agent.plugins.map((plugin: { identifier: string }) => plugin.identifier)).toEqual([
+      'lobe-image-generation',
+      'lobe-video-generation',
+      'lobe-agent-documents',
+      'lobe-agent',
+    ]);
+
+    const plugins = [{ identifier: 'lobe-image-generation', mode: 'disabled' }];
+    const updated = await request(`/${agent.id}`, { body: { plugins }, method: 'PATCH' });
+    expect(updated.status).toBe(200);
+    expect((await json(await request(`/${agent.id}`))).plugins).toEqual(plugins);
+  });
+
   it('filters the list by personal', async () => {
     await request('/', { body: { personal: true, title: 'toby' }, method: 'POST' });
     await request('/', { body: { title: 'Writer' }, method: 'POST' });

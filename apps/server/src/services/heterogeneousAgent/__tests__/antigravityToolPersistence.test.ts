@@ -8,15 +8,24 @@ const operationId = 'op-antigravity-test';
 const topicId = 'topic-antigravity-test';
 const assistantMessageId = 'assistant-antigravity-test';
 
-const toolUpdate = (index: number, state: 'ACTIVE' | 'DONE', info: Record<string, unknown>) => ({
-  event: 'step_update',
-  step_update: {
-    conversation_id: 'conversation-test',
-    state,
-    step_index: index,
-    step_type: 'tool',
-    tool_info: { name: 'run_command', ...info },
-  },
+/** `agy acp` session updates, shaped as recorded from agy 1.5.15. */
+const toolCall = (toolCallId: string, CommandLine: string) => ({
+  args: { CommandLine },
+  kind: 'execute',
+  name: 'run_command',
+  rawInput: { CommandLine },
+  sessionUpdate: 'tool_call',
+  status: 'in_progress',
+  title: CommandLine,
+  toolCallId,
+});
+
+const toolDone = (toolCallId: string, output: string, status = 'completed') => ({
+  content: [{ content: { text: output, type: 'text' }, type: 'content' }],
+  name: 'run_command',
+  sessionUpdate: 'tool_call_update',
+  status,
+  toolCallId,
 });
 
 const createReplay = async () => {
@@ -31,7 +40,7 @@ const createReplay = async () => {
     });
   };
   const ingestRaw = async (raw: unknown) => ingestEvents(adapter.adapt(raw));
-  await ingestRaw({ conversation_id: 'conversation-test', event: 'init' });
+  await ingestRaw({ sessionId: 'agy-session', type: 'antigravity_session' });
   return {
     ...harness,
     adapter,
@@ -41,98 +50,66 @@ const createReplay = async () => {
   };
 };
 
-describe('Antigravity adapter → coordinator → tool persistence', () => {
+describe('Antigravity ACP adapter → coordinator → tool persistence', () => {
   beforeEach(() => __resetOperationStatesForTesting());
   afterEach(() => __resetOperationStatesForTesting());
 
-  it.each(['ACTIVE', 'DONE'] as const)(
-    'persists parameters first supplied in a later %s update',
-    async (state) => {
-      const replay = await createReplay();
-      await replay.ingestRaw(toolUpdate(1, 'ACTIVE', {}));
-      await replay.ingestRaw(
-        toolUpdate(1, state, { output: 'hello', parameters: { CommandLine: 'echo hello' } }),
-      );
-      if (state === 'ACTIVE') {
-        await replay.ingestRaw(toolUpdate(1, 'DONE', { output: 'hello' }));
-      }
-
-      expect(replay.tools()).toHaveLength(1);
-      const tool = await replay.messageModel.findById(replay.tools()[0].id);
-      expect(tool).toMatchObject({
-        content: 'hello',
-        parentId: assistantMessageId,
-        plugin: { arguments: '{"CommandLine":"echo hello"}' },
-      });
-      expect(replay.messages.get(assistantMessageId)?.tools).toMatchObject([
-        { arguments: '{"CommandLine":"echo hello"}', result_msg_id: tool!.id },
-      ]);
-    },
-  );
-
-  it('does not publish a parameterless pending tool in another tool batch', async () => {
+  it('persists a command with its arguments and output under the assistant', async () => {
     const replay = await createReplay();
-    await replay.ingestRaw(toolUpdate(1, 'ACTIVE', {}));
-    await replay.ingestRaw(
-      toolUpdate(2, 'DONE', { output: 'second', parameters: { CommandLine: 'echo second' } }),
-    );
-    expect(replay.tools().map((message) => message.plugin.arguments)).toEqual([
-      '{"CommandLine":"echo second"}',
-    ]);
+    await replay.ingestRaw(toolCall('call-1', 'echo hello'));
+    await replay.ingestRaw(toolDone('call-1', 'hello'));
 
-    await replay.ingestRaw(
-      toolUpdate(1, 'DONE', { output: 'first', parameters: { CommandLine: 'echo first' } }),
-    );
-    expect(replay.tools()).toHaveLength(2);
-    expect(replay.tools().find((message) => message.content === 'first')?.plugin.arguments).toBe(
-      '{"CommandLine":"echo first"}',
-    );
+    expect(replay.tools()).toHaveLength(1);
+    const tool = await replay.messageModel.findById(replay.tools()[0].id);
+    expect(tool).toMatchObject({
+      content: 'hello',
+      parentId: assistantMessageId,
+      plugin: { apiName: 'run_command', arguments: '{"CommandLine":"echo hello"}' },
+    });
+    expect(replay.messages.get(assistantMessageId)?.tools).toMatchObject([
+      { arguments: '{"CommandLine":"echo hello"}', result_msg_id: tool!.id },
+    ]);
   });
 
-  it.each([undefined, {}])(
-    'persists completed tools with empty parameters (%j)',
-    async (parameters) => {
-      const replay = await createReplay();
-      await replay.ingestRaw(toolUpdate(1, 'DONE', { output: 'done', parameters }));
-      expect(replay.tools()).toHaveLength(1);
-      expect(replay.tools()[0]).toMatchObject({
-        content: 'done',
-        parentId: assistantMessageId,
-        plugin: { arguments: '{}' },
-      });
-    },
-  );
+  it('keeps parallel commands apart when they finish out of order', async () => {
+    const replay = await createReplay();
+    await replay.ingestRaw(toolCall('call-1', 'echo first'));
+    await replay.ingestRaw(toolCall('call-2', 'echo second'));
+    await replay.ingestRaw(toolDone('call-2', 'second'));
+    await replay.ingestRaw(toolDone('call-1', 'first'));
 
-  it.each(['flush', 'ERROR', 'SUCCESS'] as const)(
-    'materializes an unfinished tool before settling it on %s',
-    async (terminal) => {
-      const replay = await createReplay();
-      await replay.ingestRaw(toolUpdate(1, 'ACTIVE', {}));
-      if (terminal === 'flush') {
-        await replay.ingestEvents(replay.adapter.flush());
-      } else {
-        await replay.ingestRaw({
-          event: 'result',
-          result: {
-            conversation_id: 'conversation-test',
-            response: 'Finished.',
-            status: terminal,
-          },
-        });
-      }
-      await replay.ingestEvents(replay.adapter.flush());
+    expect(
+      Object.fromEntries(
+        replay.tools().map((message) => [message.plugin.arguments, message.content]),
+      ),
+    ).toEqual({
+      '{"CommandLine":"echo first"}': 'first',
+      '{"CommandLine":"echo second"}': 'second',
+    });
+  });
 
-      expect(replay.tools()).toHaveLength(1);
-      const tool = replay.tools()[0];
-      expect(tool).toMatchObject({
-        content: 'Antigravity ended before this tool returned a result.',
-        parentId: assistantMessageId,
-        plugin: { arguments: '{}' },
-        pluginError: { message: 'Antigravity ended before this tool returned a result.' },
-      });
-      expect(replay.messages.get(assistantMessageId)?.tools).toMatchObject([
-        { result_msg_id: tool.id },
-      ]);
-    },
-  );
+  it('marks a failed command as an error result', async () => {
+    const replay = await createReplay();
+    await replay.ingestRaw(toolCall('call-1', 'false'));
+    await replay.ingestRaw(toolDone('call-1', 'exit 1', 'failed'));
+
+    expect(replay.tools()).toHaveLength(1);
+    expect(replay.tools()[0]).toMatchObject({ content: 'exit 1', parentId: assistantMessageId });
+  });
+
+  it('settles a command that was still running when the run was stopped', async () => {
+    const replay = await createReplay();
+    await replay.ingestRaw(toolCall('call-1', 'sleep 20'));
+    await replay.ingestRaw({ stopReason: 'cancelled', type: 'antigravity_prompt_completed' });
+    await replay.ingestEvents(replay.adapter.flush());
+
+    expect(replay.tools()).toHaveLength(1);
+    expect(replay.tools()[0]).toMatchObject({
+      parentId: assistantMessageId,
+      plugin: { arguments: '{"CommandLine":"sleep 20"}' },
+    });
+    expect(replay.messages.get(assistantMessageId)?.tools).toMatchObject([
+      { result_msg_id: replay.tools()[0].id },
+    ]);
+  });
 });

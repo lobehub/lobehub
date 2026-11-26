@@ -5,12 +5,11 @@ import { memo, useMemo } from 'react';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import { selectionStyles } from '@/features/Conversation/MessageForward/selectionStyles';
-import { useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { sx } from '@/styles/sx';
 
 import { revealStyles } from '../../../ChatItem/revealStyles';
 import { type MessageActionsConfig } from '../../../types';
+import ActionRowSpacer from '../../components/ActionRowSpacer';
 import {
   MessageActionBar,
   type MessageActionContext,
@@ -71,18 +70,19 @@ const actionBarHolder = (
 
 const Actions = memo<ActionsProps>(({ id, data, disableEditing }) => {
   const { branch } = data;
-  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
   if (!shouldShowUserActions(data)) return null;
 
   return (
     <Flexbox horizontal align={'center'}>
-      {!disableEditing && (
+      {disableEditing ? (
+        <ActionRowSpacer />
+      ) : (
         <Flexbox align={'flex-start'} role="menubar" {...stylex.props(revealStyles.menubar)}>
           {actionBarHolder}
         </Flexbox>
       )}
-      {isDevMode && branch && (
+      {branch && (
         <MessageBranch
           activeBranchIndex={branch.activeBranchIndex}
           count={branch.count}

@@ -28,6 +28,8 @@ const REDIRECT_PATHS = new Set([
 const isEval = (path: string) => path.startsWith('/eval/');
 
 interface Leaf {
+  /** Retired URL that only redirects (`LEGACY_REDIRECT_HANDLE`). */
+  legacyRedirect?: boolean;
   meta?: RouteMeta;
   path: string;
 }
@@ -37,7 +39,9 @@ const collectLeaves = (routes: RouteObject[], prefix = '', inherited?: RouteMeta
     const path = route.index ? prefix : `${prefix}/${route.path ?? ''}`.replaceAll(/\/+/g, '/');
     const meta = getRouteMetaFromHandle(route.handle) ?? inherited;
     if (route.children?.length) return collectLeaves(route.children, path, meta);
-    return [{ meta, path }];
+    const legacyRedirect = (route.handle as { legacyRedirect?: boolean } | undefined)
+      ?.legacyRedirect;
+    return [{ legacyRedirect, meta, path }];
   });
 
 // A page that names a record ("this goal", "this agent's tasks") but registers no
@@ -47,7 +51,9 @@ describe('desktop route DynamicMeta registration', () => {
   const leaves = collectLeaves(mainAreaMetaRoutes)
     // Workspace-scoped mounts repeat the personal tree under `/:workspaceSlug`.
     .map((leaf) => ({ ...leaf, path: leaf.path.replace(/^\/:workspaceSlug(?=\/)/, '') }))
-    .filter(({ path }) => !REDIRECT_PATHS.has(path) && !isEval(path))
+    .filter(
+      ({ legacyRedirect, path }) => !legacyRedirect && !REDIRECT_PATHS.has(path) && !isEval(path),
+    )
     .filter(({ path }) =>
       (path.match(/:\w+\??/g) ?? []).some((param) => !VIEW_PARAMS.has(param.replace('?', ''))),
     );

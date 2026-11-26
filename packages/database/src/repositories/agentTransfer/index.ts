@@ -1,5 +1,5 @@
 import type { LobeAgentAgencyConfig } from '@lobechat/types';
-import { and, asc, count, eq, inArray, isNull, like, notInArray, or } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNull, like, notExists, notInArray, or } from 'drizzle-orm';
 
 import { type AgentModelContext, createAgentModelContext } from '../../models/agent/context';
 import { AGENT_SHARED_TRANSFER_BLOCKED, AgentOwnedByGroupError } from '../../models/agent/errors';
@@ -48,6 +48,43 @@ import type { LobeChatDatabase } from '../../type';
 import { rehomeAgentConnectorsForScopeTransfer } from '../../utils/agentConnectors';
 import { moveAgentDocumentsForScopeTransfer } from '../../utils/agentDocumentsOwnership';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+
+/**
+ * Linked session shells that hold rows this transfer leaves behind: topics or
+ * messages with no `agent_id` (or another agent's) that no moved topic carries.
+ */
+const findSessionsHoldingOtherRows = async (
+  db: Pick<LobeChatDatabase, 'selectDistinct'>,
+  sessionIds: string[],
+  agentIds: string[],
+): Promise<Set<string>> => {
+  if (sessionIds.length === 0) return new Set();
+
+  const topicRows = await db
+    .selectDistinct({ sessionId: topics.sessionId })
+    .from(topics)
+    .where(
+      and(
+        inArray(topics.sessionId, sessionIds),
+        or(isNull(topics.agentId), notInArray(topics.agentId, agentIds)),
+      ),
+    );
+  const messageRows = await db
+    .selectDistinct({ sessionId: messages.sessionId })
+    .from(messages)
+    .leftJoin(topics, eq(messages.topicId, topics.id))
+    .where(
+      and(
+        inArray(messages.sessionId, sessionIds),
+        or(isNull(messages.agentId), notInArray(messages.agentId, agentIds)),
+        or(isNull(topics.agentId), notInArray(topics.agentId, agentIds)),
+      ),
+    );
+
+  return new Set(
+    [...topicRows, ...messageRows].flatMap((row) => (row.sessionId ? [row.sessionId] : [])),
+  );
+};
 
 /**
  * Batch variant of {@link transferAgent}: moves several agents (and their
@@ -227,7 +264,23 @@ const transferAgents = async (
       .from(agentsToSessions)
       .where(inArray(agentsToSessions.agentId, agentIds));
 
-    const sessionIds = [...new Set(links.map((l) => l.sessionId))];
+    const linkedSessionIds = [...new Set(links.map((l) => l.sessionId))];
+
+    // Rows carrying only a legacy `session_id` are outside the cascade and stay
+    // in the source scope. Their shell stays with them and drops its link:
+    // moved, it would let the target scope's session delete cascade into them.
+    const heldSessionIds = await findSessionsHoldingOtherRows(trx, linkedSessionIds, agentIds);
+    const sessionIds = linkedSessionIds.filter((id) => !heldSessionIds.has(id));
+    if (heldSessionIds.size > 0) {
+      await trx
+        .delete(agentsToSessions)
+        .where(
+          and(
+            inArray(agentsToSessions.agentId, agentIds),
+            inArray(agentsToSessions.sessionId, [...heldSessionIds]),
+          ),
+        );
+    }
 
     if (sessionIds.length > 0) {
       // `groupId` is cleared for the same reason as the agent's
@@ -252,11 +305,8 @@ const transferAgents = async (
     // the device bindings stripped above.
     await trx.delete(agentLabelAssignments).where(inArray(agentLabelAssignments.agentId, agentIds));
 
-    // 6. Update topics (linked via sessionId or agentId)
-    const topicCondition =
-      sessionIds.length > 0
-        ? or(inArray(topics.sessionId, sessionIds), inArray(topics.agentId, agentIds))
-        : inArray(topics.agentId, agentIds);
+    // 6. Update topics (linked via agentId)
+    const topicCondition = inArray(topics.agentId, agentIds);
 
     // Create locks the topic before inserting a comment. Lock every topic in
     // the same order before the authoritative transfer authorization check,
@@ -265,22 +315,31 @@ const transferAgents = async (
     await trx
       .select({ id: topics.id })
       .from(topics)
-      .where(topicCondition!)
+      .where(topicCondition)
       .orderBy(asc(topics.id))
       .for('update');
 
     if (
       options.rejectForeignTopicCommentAuthors &&
-      (await hasForeignTopicComments(trx, ctx.userId, topicCondition!))
+      (await hasForeignTopicComments(trx, ctx.userId, topicCondition))
     ) {
       throw new Error(TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS);
     }
     const movedTopics = await trx
       .update(topics)
       .set({ ...ownershipUpdate, updatedAt: topics.updatedAt })
-      .where(topicCondition!)
+      .where(topicCondition)
       .returning({ id: topics.id, updatedAt: topics.updatedAt });
     const movedTopicIds = movedTopics.map((topic) => topic.id);
+    // A shell that stayed behind must not stay the FK parent of what moved:
+    // deleting the source scope would cascade through it into the target.
+    const detachSessionIds = [...heldSessionIds];
+    if (detachSessionIds.length > 0) {
+      await trx
+        .update(topics)
+        .set({ sessionId: null, updatedAt: topics.updatedAt })
+        .where(and(topicCondition, inArray(topics.sessionId, detachSessionIds)));
+    }
 
     // 6a. Topic comments denormalize the topic's workspaceId — move them
     // with the topic (or drop them when leaving workspace scope entirely),
@@ -295,42 +354,56 @@ const transferAgents = async (
     // their source-scope snapshot until the job reaches them.
     //
     // Both paths anchor on the moved topics (plus a topicless residual by
-    // session/agent linkage) rather than the legacy session/agent-only
-    // condition, so topic-only rows (OpenAPI create shape) and the message
-    // child tables move too instead of stranding in the source scope.
-    const messageCondition =
-      sessionIds.length > 0
-        ? or(inArray(messages.sessionId, sessionIds), inArray(messages.agentId, agentIds))
-        : inArray(messages.agentId, agentIds);
+    // agent) rather than an agent-only condition, so topic-only rows (OpenAPI
+    // create shape) and the message child tables move too instead of stranding
+    // in the source scope.
+    const messageCondition = inArray(messages.agentId, agentIds);
     const [{ affectedMessages }] = await trx
       .select({ affectedMessages: count() })
       .from(messages)
       .where(
         movedTopicIds.length > 0
-          ? or(inArray(messages.topicId, movedTopicIds), messageCondition!)
-          : messageCondition!,
+          ? or(inArray(messages.topicId, movedTopicIds), messageCondition)
+          : messageCondition,
       );
 
     const targetScope = { userId: targetUserId, workspaceId: targetWorkspaceId };
     let transferJobId: string | null = null;
     if (affectedMessages <= getAgentTransferSyncMessageThreshold()) {
-      await rewriteMessageScopeForTopics(trx, movedTopicIds, targetScope);
-      await rewriteResidualMessageScope(trx, { agentIds, sessionIds }, targetScope);
+      await rewriteMessageScopeForTopics(trx, movedTopicIds, targetScope, detachSessionIds);
+      await rewriteResidualMessageScope(trx, { agentIds }, targetScope, detachSessionIds);
     } else {
       transferJobId = await AgentTransferJobModel.createJob(trx, {
         agentIds,
-        sessionIds,
+        detachSessionIds,
         source: { userId: ctx.userId, workspaceId: ctx.workspaceId ?? null },
         target: targetScope,
         topics: movedTopics.map((topic) => ({ activityAt: topic.updatedAt, id: topic.id })),
       });
     }
 
-    // 8. Update threads (linked via agentId)
+    // 8. Update threads (linked via agentId). A thread inside a topic that stays
+    // behind stays with it, or neither scope could load the whole conversation.
     await trx
       .update(threads)
       .set({ ...ownershipUpdate, updatedAt: threads.updatedAt })
-      .where(inArray(threads.agentId, agentIds));
+      .where(
+        and(
+          inArray(threads.agentId, agentIds),
+          notExists(
+            trx
+              .select({ id: topics.id })
+              .from(topics)
+              .where(
+                and(
+                  eq(topics.id, threads.topicId),
+                  or(isNull(topics.agentId), notInArray(topics.agentId, agentIds)),
+                  isNull(topics.groupId),
+                ),
+              ),
+          ),
+        ),
+      );
 
     // 9. Update agent files associations
     await trx

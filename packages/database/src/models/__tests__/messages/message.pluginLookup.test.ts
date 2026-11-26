@@ -443,6 +443,55 @@ describe('MessageModel.listMessagePluginsByIds', () => {
   });
 });
 
+describe('MessageModel.getInterventionSnapshot', () => {
+  const snapshot = (ids: string[]) =>
+    messageModel.getInterventionSnapshot({ ids, topicId: 'plugin-topic' });
+
+  it('returns each card status and null for a card outside the topic or owner', async () => {
+    await seedToolMessage({ id: 'snap-pending', intervention: { status: 'pending' } });
+    await seedToolMessage({ id: 'snap-plain' });
+    await seedToolMessage({ id: 'snap-other-topic', topicId: 'plugin-topic-2' });
+    await seedToolMessage({ id: 'snap-theirs', ownerId: otherUserId });
+
+    const { statuses } = await snapshot([
+      'snap-pending',
+      'snap-plain',
+      'snap-other-topic',
+      'snap-theirs',
+      'snap-missing',
+    ]);
+
+    expect(statuses).toEqual({
+      'snap-missing': null,
+      'snap-other-topic': null,
+      'snap-pending': 'pending',
+      'snap-plain': null,
+      'snap-theirs': null,
+    });
+  });
+
+  it('moves the revision when a message is added or a card argument is edited', async () => {
+    await seedToolMessage({
+      arguments: '{"q":1}',
+      id: 'snap-card',
+      intervention: { status: 'pending' },
+    });
+    const initial = (await snapshot(['snap-card'])).revision;
+    expect((await snapshot(['snap-card'])).revision).toBe(initial);
+
+    // Plugin rows do not bump the message updatedAt, so the arguments must count.
+    await serverDB
+      .update(messagePlugins)
+      .set({ arguments: '{"q":2}' })
+      .where(eq(messagePlugins.id, 'snap-card'));
+    const edited = (await snapshot(['snap-card'])).revision;
+    expect(edited).not.toBe(initial);
+
+    await seedAssistantMessage('snap-new-row');
+    expect((await snapshot(['snap-card'])).revision).not.toBe(edited);
+  });
+});
+
 describe('MessageModel.findToolMessageIdByToolCallId', () => {
   it('resolves the message id for a tool call id', async () => {
     await seedToolMessage({ id: 'plug-tc-a', toolCallId: 'call-1', topicId: 'plugin-topic' });

@@ -29,12 +29,12 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useTopicBugReportMenuItem } from '@/business/client/hooks/useTopicBugReportMenuItem';
-import { openRenameModal } from '@/components/RenameModal';
 import { isDesktop } from '@/const/version';
 import { createMoveTopicsModal } from '@/features/AgentTopicManager/MoveTopicsModal';
 import { createTopicForwardModal } from '@/features/Conversation/MessageForward/TopicForwardModal';
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
 import { useFavoriteMenuItem } from '@/features/Favorites';
+import { usePrivateAgentLinkNotice } from '@/features/PrivateAgentLinkNotice';
 import { getProjectTopicPath } from '@/features/Projects/Layout/navigation';
 import { openShareModal } from '@/features/ShareModal';
 import { openTopicDoctorModal } from '@/features/TopicDoctorModal';
@@ -55,11 +55,17 @@ import { isForbiddenError } from '@/utils/forbiddenError';
 
 import { useScopedTopic, useScopedTopics } from '../../useScopedTopics';
 import { buildTopicPrompt } from './buildTopicPrompt';
+import { useRenameTopic } from './useRenameTopic';
 
 export interface TopicItemDropdownMenuProps {
   completionLabel?: string;
   fav?: boolean;
   id?: string;
+  /**
+   * Starts renaming in place. Hosts with a row to edit in (the sidebar row) pass
+   * it; other hosts fall back to the rename modal.
+   */
+  onRename?: () => void;
   status?: ChatTopicStatus | null;
   title: string;
 }
@@ -68,6 +74,7 @@ export const useTopicItemDropdownMenu = ({
   completionLabel,
   fav,
   id,
+  onRename,
   status,
   title,
 }: TopicItemDropdownMenuProps) => {
@@ -82,6 +89,7 @@ export const useTopicItemDropdownMenu = ({
   const routeTopicIdRef = useLatest(routeTopicId);
   const unmountedRef = useUnmountedRef();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
+  const notifyPrivateAgentLink = usePrivateAgentLinkNotice();
   const { allowed: canCreateTopic } = usePermission('create_content');
   const { allowed: canEditTopic } = usePermission('edit_own_content');
 
@@ -119,23 +127,15 @@ export const useTopicItemDropdownMenu = ({
     { showHotkey: false },
   );
 
-  const [
-    autoRenameTopicTitle,
-    duplicateTopic,
-    removeTopic,
-    favoriteTopic,
-    markTopicCompleted,
-    unmarkTopicCompleted,
-    updateTopicTitle,
-  ] = useChatStore((s) => [
-    s.autoRenameTopicTitle,
-    s.duplicateTopic,
-    s.removeTopic,
-    s.favoriteTopic,
-    s.markTopicCompleted,
-    s.unmarkTopicCompleted,
-    s.updateTopicTitle,
-  ]);
+  const [duplicateTopic, removeTopic, favoriteTopic, markTopicCompleted, unmarkTopicCompleted] =
+    useChatStore((s) => [
+      s.duplicateTopic,
+      s.removeTopic,
+      s.favoriteTopic,
+      s.markTopicCompleted,
+      s.unmarkTopicCompleted,
+    ]);
+  const { autoRename, openRename } = useRenameTopic(id, title, activeAgentId);
 
   const isCompleted = status === 'completed';
   const toggleCompleted = useCallback(async () => {
@@ -199,10 +199,7 @@ export const useTopicItemDropdownMenu = ({
         icon: <Icon icon={Wand2} />,
         key: 'autoRename',
         label: t('actions.autoRename'),
-        onClick: async () => {
-          await autoRenameTopicTitle(id, scopedTopic?.agentId ?? undefined);
-          if (scope) await refresh();
-        },
+        onClick: autoRename,
         sfSymbol: 'wand.and.stars',
       },
       {
@@ -210,25 +207,7 @@ export const useTopicItemDropdownMenu = ({
         icon: <Icon icon={PencilLine} />,
         key: 'rename',
         label: t('rename', { ns: 'common' }),
-        onClick: () => {
-          openRenameModal({
-            defaultValue: title,
-            description: t('renameModal.description', { ns: 'topic' }),
-            onSave: async (newTitle) => {
-              try {
-                await updateTopicTitle(id, newTitle);
-                if (scope) await refresh();
-              } catch (error) {
-                toast.error(
-                  isForbiddenError(error)
-                    ? t('manageOnlyCreator', { ns: 'common' })
-                    : t('operationFailed', { ns: 'common' }),
-                );
-              }
-            },
-            title: t('renameModal.title', { ns: 'topic' }),
-          });
-        },
+        onClick: onRename ?? openRename,
         sfSymbol: 'pencil',
       },
       {
@@ -295,7 +274,9 @@ export const useTopicItemDropdownMenu = ({
             activeWorkspaceSlug,
           )}`;
           await copyToClipboard(url);
-          toast.success(t('actions.copyLinkSuccess'));
+          // A private agent's topic link opens for nobody else in the workspace.
+          if (!(await notifyPrivateAgentLink(activeAgentId)))
+            toast.success(t('actions.copyLinkSuccess'));
         },
       },
       {
@@ -407,7 +388,6 @@ export const useTopicItemDropdownMenu = ({
   }, [
     routeTopicId,
     scope,
-    scopedTopic,
     refresh,
     id,
     fav,
@@ -422,17 +402,19 @@ export const useTopicItemDropdownMenu = ({
     appOrigin,
     bugReportItem,
     enableTopicBugReport,
-    autoRenameTopicTitle,
+    autoRename,
     duplicateTopic,
     favoriteMenuItem,
     favoriteTopic,
     toggleCompleted,
     removeTopic,
-    updateTopicTitle,
+    onRename,
+    openRename,
     openTopicInNewWindow,
     openTopicInPortal,
     addTab,
     navigate,
+    notifyPrivateAgentLink,
     t,
     handleOpenShareModal,
   ]);
