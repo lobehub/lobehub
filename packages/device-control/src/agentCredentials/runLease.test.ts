@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   AGENT_CREDENTIAL_RUN_DIR_ENV,
+  beginAgentCredentialReplacement,
   stopAgentCredentialRuns,
   trackAgentCredentialRun,
 } from './runLease';
@@ -63,6 +64,33 @@ describe('trackAgentCredentialRun', () => {
     await new Promise((resolve) => setTimeout(resolve, 40));
     lease.release();
     expect(onStop).not.toHaveBeenCalled();
+  });
+});
+
+describe('beginAgentCredentialReplacement', () => {
+  it('holds back a run until the replacement ends', async () => {
+    const replacement = await beginAgentCredentialReplacement(runDir);
+    const lease = trackAgentCredentialRun({ env: env(), onStop: () => {}, pid: 4242 });
+    let admitted = false;
+    void lease.admitted.then(() => (admitted = true));
+
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(admitted).toBe(false);
+    await replacement.end();
+    await vi.waitFor(() => expect(admitted).toBe(true));
+    lease.release();
+  });
+
+  it('ignores a marker left by an installer that died', async () => {
+    const replacement = await beginAgentCredentialReplacement(runDir);
+    const marker = (await readdir(runDir)).find((name) => name.startsWith('replacing-'))!;
+    const old = new Date(Date.now() - 60_000);
+    await utimes(path.join(runDir, marker), old, old);
+
+    const lease = trackAgentCredentialRun({ env: env(), onStop: () => {}, pid: 4242 });
+    await lease.admitted;
+    lease.release();
+    await replacement.end();
   });
 });
 

@@ -1,8 +1,8 @@
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AGENT_CREDENTIAL_RUN_DIR_ENV, trackAgentCredentialRun } from './runLease';
 import { resolveAgentCredentialSpawnEnv } from './spawnEnv';
@@ -187,16 +187,72 @@ describe('installAgentCredential with Codex runs on the previous login', () => {
     expect(await readFile(authFile(), 'utf8')).toBe(chatgptAuth('user-c'));
   });
 
-  it('refuses the replacement when the leases cannot be read', async () => {
-    await installAgentCredential(codexParams(chatgptAuth('user-a')), options());
-    // A file where the lease directory belongs makes listing it fail.
-    await writeFile(path.join(rootDir, 'codex', 'runs'), '');
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'refuses the replacement when the leases cannot be listed',
+    async () => {
+      await installAgentCredential(codexParams(chatgptAuth('user-a')), options());
+      const runs = path.join(rootDir, 'codex', 'runs');
+      // Searchable but not readable: listing the leases fails.
+      await chmod(runs, 0o300);
+      try {
+        await expect(
+          installAgentCredential(codexParams(chatgptAuth('user-b')), options()),
+        ).rejects.toThrow();
+      } finally {
+        await chmod(runs, 0o700);
+      }
+      expect(await readFile(authFile(), 'utf8')).toBe(chatgptAuth('user-a'));
+    },
+  );
 
-    await expect(
-      installAgentCredential(codexParams(chatgptAuth('user-b')), options()),
-    ).rejects.toThrow();
-    expect(await readFile(authFile(), 'utf8')).toBe(chatgptAuth('user-a'));
+  it('holds back a run that leases while the replacement is in progress', async () => {
+    await installAgentCredential(codexParams(chatgptAuth('user-a')), options());
+    let lateRunReads: string | undefined;
+    const lease = trackAgentCredentialRun({
+      env: await codexRunEnv(),
+      heartbeatMs: 10,
+      onStop: () => {
+        // A new run is dispatched while the old one writes account A back.
+        void (async () => {
+          const late = trackAgentCredentialRun({
+            env: await codexRunEnv(),
+            heartbeatMs: 10,
+            onStop: () => {},
+          });
+          releases.push(late.release);
+          await writeFile(authFile(), chatgptAuth('user-a', 'r2'));
+          lease.release();
+          await late.admitted;
+          lateRunReads = await readFile(authFile(), 'utf8');
+        })();
+      },
+    });
+    releases.push(lease.release);
+
+    await installAgentCredential(codexParams(chatgptAuth('user-b')), options());
+
+    // Admitted only after the installer restored B, so it never starts on A.
+    await vi.waitFor(() => expect(lateRunReads).toBe(chatgptAuth('user-b')));
   });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'refuses the replacement when a lease cannot be inspected',
+    async () => {
+      await installAgentCredential(codexParams(chatgptAuth('user-a')), options());
+      const runs = path.join(rootDir, 'codex', 'runs');
+      await startRun(chatgptAuth('user-a', 'r2'));
+      // Listable but not searchable: the lease is seen yet cannot be stat'ed.
+      await chmod(runs, 0o600);
+      try {
+        await expect(
+          installAgentCredential(codexParams(chatgptAuth('user-b')), options()),
+        ).rejects.toThrow();
+      } finally {
+        await chmod(runs, 0o700);
+      }
+      expect(await readFile(authFile(), 'utf8')).toBe(chatgptAuth('user-a'));
+    },
+  );
 
   it('gives each run the lease directory in its spawn env', async () => {
     await installAgentCredential(codexParams(chatgptAuth('user-a')), options());

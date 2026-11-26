@@ -14,6 +14,7 @@ import {
 
 import {
   agentCredentialRunDir,
+  beginAgentCredentialReplacement,
   stopAgentCredentialRuns,
   type StopAgentCredentialRunsOptions,
 } from './runLease';
@@ -278,6 +279,11 @@ export const installAgentCredential = async (
     const isCurrentInstall = async () =>
       ((await readJson(paths.metadataFile)) as Partial<StoredMetadata> | null)?.installId ===
       installId;
+    // Runs leasing from here on wait until this replacement is done, so none
+    // can start on the previous login after the scan below.
+    const replacement = replacesLogin
+      ? await beginAgentCredentialReplacement(paths.runDir)
+      : undefined;
     try {
       await writePrivateFile(paths.codexAuthFile, secret.authJson);
       const metadata: StoredMetadata = {
@@ -320,6 +326,8 @@ export const installAgentCredential = async (
         ).catch(() => {});
       }
       throw error;
+    } finally {
+      await replacement?.end();
     }
   }
 
