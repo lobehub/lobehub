@@ -18,6 +18,7 @@
   "cohere.description": "Cohere delivers cutting-edge multilingual models, advanced retrieval, and AI workspaces for modern enterprises—all in one secure platform.",
   "cometapi.description": "CometAPI provides access to frontier models from OpenAI, Anthropic, Google, and more, letting users choose the best model and pricing for diverse use cases.",
   "comfyui.description": "A powerful open-source workflow engine for image, video, and audio generation, supporting models like SD, FLUX, Qwen, Hunyuan, and WAN with node-based editing and private deployment.",
+  "daoxe.description": "DaoXE provides access to models from OpenAI, Anthropic, Google, xAI, DeepSeek, and more through a unified OpenAI-compatible API.",
   "deepseek.description": "DeepSeek focuses on AI research and applications. Its latest DeepSeek V4 family ships in Flash and Pro variants with a 1M context window and hybrid thinking — competitive with leading closed frontier models on reasoning and agent benchmarks.",
   "doubaospeech.description": "Doubao Speech (ByteDance Volcengine) synthesizes natural Mandarin and English speech with the Seed-TTS 2.0 model and official voices.",
   "elevenlabs.description": "ElevenLabs is an AI audio company whose text-to-speech models generate lifelike, expressive speech in 90+ languages, with a large voice library and voice cloning.",
