@@ -561,8 +561,12 @@ const processModelCard = (
         ? 'embedding'
         : 'chat');
 
-  // image model can't find parameters
-  if (modelType === 'image' && !model.parameters && !knownModel?.parameters) {
+  // An image model needs a parameter schema to be usable. The fetched card and
+  // the local model bank win; `fallbackParameters` lets a provider keep an
+  // otherwise unknown image model without shadowing a richer local schema.
+  const imageParameters = model.parameters ?? knownModel?.parameters ?? model.fallbackParameters;
+
+  if (modelType === 'image' && !imageParameters) {
     return undefined;
   }
 
@@ -654,9 +658,7 @@ const processModelCard = (
       ((isKeywordListMatch(model.id.toLowerCase(), searchKeywords) && !isExcludedModel) || false),
     type: modelType,
     // current, only image model use the parameters field
-    ...(modelType === 'image' && {
-      parameters: model.parameters ?? knownModel?.parameters,
-    }),
+    ...(modelType === 'image' && { parameters: imageParameters }),
     ...(mergedSettings ? { settings: mergedSettings } : {}),
     video:
       model.video ??
