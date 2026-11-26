@@ -1,3 +1,5 @@
+import { type AgentState } from '@lobechat/agent-runtime';
+import { getGroupMemberAnchorIndex, type GroupMemberAnchorMetadata } from '@lobechat/types';
 import debug from 'debug';
 
 import {
@@ -28,6 +30,7 @@ export type GroupMemberDeps = Pick<
   | 'interruptOperation'
   | 'maybeScheduleAsyncToolVerify'
   | 'messageModel'
+  | 'queryMessagesFromDB'
   | 'queueService'
   | 'resolveLastAssistantContentFromThread'
   | 'resolveLastAssistantMessageFromDB'
@@ -84,6 +87,53 @@ export async function loadGroupMemberBridge(
   };
 }
 
+/** One member anchor under a multi-member group-management tool call. */
+interface GroupMemberAnchorResult {
+  agentId?: string;
+  content: string;
+  index?: number;
+  status?: string;
+}
+
+/**
+ * Read the member anchors under a group-management tool call — child
+ * `role: 'tool'` messages, one per member, holding that member's result.
+ */
+async function loadGroupMemberAnchors(
+  deps: GroupMemberDeps,
+  groupToolMessageId: string,
+): Promise<GroupMemberAnchorResult[]> {
+  const children = await deps.serverDB.query.messages.findMany({
+    where: (m, { and, eq }) => and(eq(m.parentId, groupToolMessageId), eq(m.role, 'tool')),
+  });
+  if (children.length === 0) return [];
+
+  // One read for every anchor's plugin row: this runs on each member's
+  // completion, so a per-anchor query grows quadratically with the fan-out.
+  const plugins = await deps.serverDB.query.messagePlugins.findMany({
+    where: (mp, { inArray }) =>
+      inArray(
+        mp.id,
+        children.map((child) => child.id),
+      ),
+  });
+  const pluginById = new Map(plugins.map((plugin) => [plugin.id, plugin]));
+
+  return children.map((child) => {
+    const plugin = pluginById.get(child.id);
+    const metadata = child.metadata as { groupMemberAnchor?: GroupMemberAnchorMetadata } | null;
+    return {
+      agentId: metadata?.groupMemberAnchor?.agentId,
+      content: child.content ?? '',
+      index: getGroupMemberAnchorIndex(
+        { metadata, role: 'tool', tool_call_id: plugin?.toolCallId },
+        'tool',
+      ),
+      status: (plugin?.state as { status?: string } | null | undefined)?.status,
+    };
+  });
+}
+
 /**
  * Count fulfilled member anchors under a group-management tool call — child
  * `role: 'tool'` messages whose content is non-empty or whose pluginState is
@@ -95,22 +145,90 @@ export async function countFulfilledMemberAnchors(
   deps: GroupMemberDeps,
   groupToolMessageId: string,
 ): Promise<number> {
-  const children = await deps.serverDB.query.messages.findMany({
-    where: (m, { and, eq }) => and(eq(m.parentId, groupToolMessageId), eq(m.role, 'tool')),
+  const anchors = await loadGroupMemberAnchors(deps, groupToolMessageId);
+  return anchors.filter(
+    (anchor) =>
+      anchor.content.length > 0 || anchor.status === 'completed' || anchor.status === 'error',
+  ).length;
+}
+
+/**
+ * The group tool result the supervisor reads once every member is done. The
+ * member anchors are hidden from the conversation the supervisor is resumed
+ * with, and a broadcast's in-bubble council never reaches the model either, so
+ * this content is the only place the supervisor can read what each member
+ * produced. A bare completion count left it to invent the members' work.
+ */
+export async function buildGroupMemberResultsContent(
+  deps: GroupMemberDeps,
+  groupToolMessageId: string,
+  expectedMembers: number,
+): Promise<string> {
+  const anchors = await loadGroupMemberAnchors(deps, groupToolMessageId);
+  anchors.sort(
+    (a, b) => (a.index ?? Number.MAX_SAFE_INTEGER) - (b.index ?? Number.MAX_SAFE_INTEGER),
+  );
+  const failedCount = anchors.filter((anchor) => anchor.status === 'error').length;
+  const summary =
+    failedCount === 0
+      ? `All ${expectedMembers} agent members completed.`
+      : `${expectedMembers - failedCount} of ${expectedMembers} agent members completed; ${failedCount} did not.`;
+  const results = anchors.map((anchor) => {
+    const attributes = [
+      anchor.index !== undefined && `index="${anchor.index + 1}"`,
+      anchor.agentId && `agentId="${anchor.agentId}"`,
+      `status="${anchor.status === 'error' ? 'error' : 'completed'}"`,
+    ]
+      .filter(Boolean)
+      .join(' ');
+    // A member can quote markup back (e.g. from a fetched page); encode any
+    // opening or closing delimiter so it can neither end its own block nor
+    // open one that poses as another member's result.
+    const body = anchor.content.trim().replaceAll(/<(\/?member_result)/gi, '&lt;$1');
+    return `<member_result ${attributes}>\n${body || '(no textual answer)'}\n</member_result>`;
   });
-  let fulfilled = 0;
-  for (const child of children) {
-    if (child.content && child.content.length > 0) {
-      fulfilled += 1;
-      continue;
-    }
-    const plugin = await deps.serverDB.query.messagePlugins.findFirst({
-      where: (mp, { eq }) => eq(mp.id, child.id),
-    });
-    const pluginState = plugin?.state as { status?: string } | null;
-    if (pluginState?.status === 'completed' || pluginState?.status === 'error') fulfilled += 1;
+  return [`${summary} Each member's result follows.`, ...results].join('\n\n');
+}
+
+/**
+ * The final reply an in-group broadcast member wrote into the shared group
+ * conversation: the last assistant text in the subtree under the member run's
+ * own assistant row, authored by that member. The whole group conversation is
+ * shared, so the latest assistant overall may belong to a sibling member or to
+ * the supervisor's next turn.
+ */
+export async function resolveInGroupMemberReply(
+  deps: GroupMemberDeps,
+  state: AgentState,
+): Promise<string | undefined> {
+  const rootId = state.origin?.assistantMessageId;
+  const memberAgentId = state.origin?.agentId;
+  if (!rootId || !memberAgentId) return undefined;
+
+  const messages = await deps.queryMessagesFromDB(state);
+  const childrenByParent = new Map<string, typeof messages>();
+  for (const message of messages) {
+    if (!message.parentId || message.agentId !== memberAgentId) continue;
+    const siblings = childrenByParent.get(message.parentId) ?? [];
+    siblings.push(message);
+    childrenByParent.set(message.parentId, siblings);
   }
-  return fulfilled;
+
+  const root = messages.find((message) => message.id === rootId);
+  if (!root) return undefined;
+  const subtree = [root];
+  for (let i = 0; i < subtree.length; i += 1) {
+    subtree.push(...(childrenByParent.get(subtree[i].id) ?? []));
+  }
+
+  const replies = subtree
+    .filter((message) => message.role === 'assistant')
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  for (let i = replies.length - 1; i >= 0; i -= 1) {
+    const text = extractTextFromMessage(replies[i]);
+    if (text) return text;
+  }
+  return undefined;
 }
 
 /**
@@ -118,13 +236,16 @@ export async function countFulfilledMemberAnchors(
  * (`lobe-group-management`: speak / broadcast / delegate / executeAgentTask(s)).
  * Mirrors {@link completeSubAgentBridge} but enforces a K=N member barrier:
  *
- *   1. Backfill this member's anchor tool message (in_group → a short receipt,
- *      since the member already spoke in the shared group conversation;
- *      isolated → the member's final answer from its hidden thread).
+ *   1. Backfill this member's anchor tool message (single in_group speak → a
+ *      short receipt, since the reply is part of the supervisor's context;
+ *      broadcast member → its reply, which only renders as an in-bubble
+ *      council the model never reads; isolated → the member's final answer
+ *      from its hidden thread).
  *   2. Multi-member actions: hold until every member anchor is fulfilled, then
- *      backfill the supervisor's group tool message so the parked op's
- *      single-tool barrier passes. Single-member actions collapse the anchor
- *      onto the group tool call, so step 1 already satisfies the barrier.
+ *      backfill the supervisor's group tool message with every member's result
+ *      so the parked op's single-tool barrier passes. Single-member actions
+ *      collapse the anchor onto the group tool call, so step 1 already
+ *      satisfies the barrier.
  *   3. Barrier-check + CAS resume/finish the parked supervisor via
  *      `tryResumeParentFromAsyncTool` (finish disposition read from the group
  *      tool message's pluginState).
@@ -217,6 +338,30 @@ export async function completeGroupActionMember(
       );
     }
   }
+  // A broadcast member's reply renders inside the supervisor's council bubble,
+  // which the context engine drops, so carry it on the anchor for the group
+  // tool result. A single speak's reply is an ordinary message the supervisor
+  // already reads, so its receipt stays short.
+  const isCouncilMember = mode === 'in_group' && anchorMessageId !== groupToolMessageId;
+  let councilReply: string | undefined;
+  if (!failed && isCouncilMember && finalState) {
+    try {
+      councilReply = await resolveInGroupMemberReply(deps, finalState);
+    } catch (error) {
+      console.error(
+        '[%s] group-member bridge: failed to resolve in-group reply from DB: %O',
+        operationId,
+        error,
+      );
+    }
+    // The receipt below gives the supervisor nothing to read, so leave a trace.
+    if (!councilReply)
+      console.warn(
+        '[%s] group-member bridge: no in-group reply under %s, writing a receipt',
+        operationId,
+        finalState.origin?.assistantMessageId,
+      );
+  }
   const agentLabel = (finalState?.origin?.agentId as string | undefined) ?? 'member';
   const memberErrorReason = failed ? formatSubAgentErrorReason(finalState?.error) : undefined;
   const anchorContent = failed
@@ -224,7 +369,7 @@ export async function completeGroupActionMember(
       ? `Agent member did not complete (${reason}): ${memberErrorReason}`
       : `Agent member did not complete (${reason}).`
     : mode === 'in_group'
-      ? `Agent ${agentLabel} responded in the group.`
+      ? councilReply || `Agent ${agentLabel} responded in the group.`
       : lastAssistantContent || 'Agent member completed without a textual answer.';
 
   const { result: completed, blocked } = await deps.controlCompletedToolResult({
@@ -311,11 +456,12 @@ export async function completeGroupMemberBarrier(
     // All members done — backfill the group tool call so the parked op's
     // single-tool barrier ([groupTool]) passes. Idempotent across racing
     // last-committers; the resume/finish CAS guarantees one transition.
+    const content = await buildGroupMemberResultsContent(deps, groupToolMessageId, expectedMembers);
     const { result: groupResult, blocked: groupBlocked } = await deps.controlCompletedToolResult({
       operationId: parentOperationId,
       toolMessageId: groupToolMessageId,
       result: {
-        content: `All ${expectedMembers} agent members completed.`,
+        content,
         state: { expectedMembers, status: 'completed' },
         success: true,
       },
