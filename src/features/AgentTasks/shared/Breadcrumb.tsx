@@ -11,9 +11,21 @@ import { useTaskStore } from '@/store/task';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { styles } from './style';
+import type { TaskCollection } from './taskCollection';
 import { taskDetailPath } from './taskDetailPath';
-import { useTaskListCrumbTarget, useTaskListOriginState } from './taskListOrigin';
+import {
+  useTaskListCrumbTarget,
+  useTaskListOriginState,
+  useTaskListRootCrumb,
+} from './taskListOrigin';
 import { useAgentDisplayMeta } from './useAgentDisplayMeta';
+
+/** The root crumb is named after the list tab it leads back to, as the tab strip names it. */
+const ROOT_CRUMB_LABEL_KEYS = {
+  mine: 'taskList.mine.title',
+  scheduled: 'tab.scheduled',
+  tasks: 'taskList.all',
+} as const satisfies Record<TaskCollection, string>;
 
 interface BreadcrumbProps {
   taskId?: string;
@@ -25,7 +37,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
   const agentMeta = useAgentDisplayMeta(aid);
   // Crumbs lead back to the list the detail was opened from, filters included,
   // when that list is the crumb's own list; otherwise to the bare list.
-  const allTasksTarget = useTaskListCrumbTarget('/tasks');
+  const rootCrumb = useTaskListRootCrumb();
   const agentTasksTarget = useTaskListCrumbTarget(aid ? `/agent/${aid}/tasks` : '/tasks');
   const taskListOriginState = useTaskListOriginState();
   const taskTitle = useTaskStore((s) =>
@@ -60,9 +72,9 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
     }),
   );
 
-  const allTasksLabel = (
+  const rootLabel = (
     <Text color={'inherit'} style={{ whiteSpace: 'nowrap' }} weight={500}>
-      {t('taskList.all')}
+      {t(ROOT_CRUMB_LABEL_KEYS[rootCrumb.collection])}
     </Text>
   );
 
@@ -162,11 +174,11 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
               {
                 title:
                   taskId || agentCrumbNode ? (
-                    <WorkspaceLink escape={allTasksTarget.escape} to={allTasksTarget.to}>
-                      {allTasksLabel}
+                    <WorkspaceLink escape={rootCrumb.escape} to={rootCrumb.to}>
+                      {rootLabel}
                     </WorkspaceLink>
                   ) : (
-                    allTasksLabel
+                    rootLabel
                   ),
               },
             ]),

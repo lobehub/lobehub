@@ -1,8 +1,11 @@
 import { createContext, useContext, useMemo } from 'react';
 import { useLocation } from 'react-router';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+
+import { resolveTaskCollection, type TaskCollection, taskCollectionParam } from './taskCollection';
 
 /**
  * The task list a task detail was opened from, as the full in-app URL of that
@@ -45,31 +48,46 @@ export const useTaskListOriginState = (): TaskListOriginState | undefined => {
 const PARSE_BASE = 'https://task-list-origin.invalid';
 
 /**
- * Where a crumb for `listPath` should lead: the carried origin when it is that
- * very list (so its filters survive), otherwise the bare `listPath`.
+ * The carried origin parsed as `listPath`, or `undefined` when it is another
+ * page or not an in-app path at all.
  *
  * History state is page-writable, so the origin is parsed rather than prefix
  * matched: anything that resolves off the parse base (`//host/…`, `/\host/…`,
- * `https://…`) or to another path falls back, and the returned target is
- * rebuilt from the parsed path, query and hash only.
+ * `https://…`) or to another path is rejected, and callers rebuild their target
+ * from the parsed path, query and hash only.
+ */
+const parseTaskListOrigin = (
+  origin: string | undefined,
+  listPath: string,
+  slug: string | null | undefined,
+): URL | undefined => {
+  if (!origin?.startsWith('/')) return undefined;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(origin, PARSE_BASE);
+  } catch {
+    return undefined;
+  }
+  if (parsed.origin !== PARSE_BASE) return undefined;
+  if (parsed.pathname !== buildWorkspaceAwarePath(listPath, slug)) return undefined;
+
+  return parsed;
+};
+
+const toInAppPath = (parsed: URL) => `${parsed.pathname}${parsed.search}${parsed.hash}`;
+
+/**
+ * Where a crumb for `listPath` should lead: the carried origin when it is that
+ * very list (so its filters survive), otherwise the bare `listPath`.
  */
 export const resolveTaskListCrumbTarget = (
   origin: string | undefined,
   listPath: string,
   slug: string | null | undefined,
 ): string => {
-  if (!origin?.startsWith('/')) return listPath;
-
-  let parsed: URL;
-  try {
-    parsed = new URL(origin, PARSE_BASE);
-  } catch {
-    return listPath;
-  }
-  if (parsed.origin !== PARSE_BASE) return listPath;
-  if (parsed.pathname !== buildWorkspaceAwarePath(listPath, slug)) return listPath;
-
-  return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  const parsed = parseTaskListOrigin(origin, listPath, slug);
+  return parsed ? toInAppPath(parsed) : listPath;
 };
 
 export interface TaskListCrumbTarget {
@@ -83,4 +101,48 @@ export const useTaskListCrumbTarget = (listPath: string): TaskListCrumbTarget =>
   const slug = useActiveWorkspaceSlug();
   const to = resolveTaskListCrumbTarget(origin, listPath, slug);
   return { escape: to !== listPath, to };
+};
+
+const GLOBAL_TASK_LIST_PATH = '/tasks';
+
+export interface TaskListRootCrumb extends TaskListCrumbTarget {
+  /** The tab of the global task list the crumb leads to; it also names the crumb. */
+  collection: TaskCollection;
+}
+
+/**
+ * The root crumb of a task detail: the global list tab the detail was opened
+ * from (My tasks, All tasks or Scheduled), its sub-view and filters included.
+ * Without that origin it names and opens "All tasks". Where "My tasks" is
+ * offered it owns the bare `/tasks`, so "All tasks" needs `collection=all`;
+ * a bare link there would land on "My tasks" under an "All tasks" label.
+ */
+export const resolveTaskListRootCrumb = (
+  origin: string | undefined,
+  slug: string | null | undefined,
+  options: { allowMine: boolean },
+): TaskListRootCrumb => {
+  const parsed = parseTaskListOrigin(origin, GLOBAL_TASK_LIST_PATH, slug);
+  if (parsed) {
+    return {
+      collection: resolveTaskCollection(parsed.searchParams, options),
+      escape: true,
+      to: toInAppPath(parsed),
+    };
+  }
+
+  const param = taskCollectionParam('tasks', options);
+  return {
+    collection: 'tasks',
+    escape: false,
+    to: param ? `${GLOBAL_TASK_LIST_PATH}?collection=${param}` : GLOBAL_TASK_LIST_PATH,
+  };
+};
+
+export const useTaskListRootCrumb = (): TaskListRootCrumb => {
+  const origin = useTaskListOrigin();
+  const slug = useActiveWorkspaceSlug();
+  // Mirrors the global task page: "My tasks" exists only inside a workspace.
+  const allowMine = !!useActiveWorkspaceId();
+  return resolveTaskListRootCrumb(origin, slug, { allowMine });
 };

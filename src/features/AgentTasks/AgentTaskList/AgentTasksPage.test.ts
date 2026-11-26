@@ -3,6 +3,11 @@ import { describe, expect, it } from 'vitest';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
 import {
+  resolveMyTaskScope,
+  resolveTaskCollection,
+  taskCollectionParam,
+} from '../shared/taskCollection';
+import {
   clampCollectionPage,
   collectionGroupsByProject,
   getMyTaskViewOptions,
@@ -11,10 +16,7 @@ import {
   getTaskPageHeaderVisibility,
   PAGINATED_COLLECTION_PINNED_OPTIONS,
   resolveHeaderEmptyHero,
-  resolveMyTaskScope,
-  resolveTaskCollection,
   resolveTaskCollectionView,
-  taskCollectionParam,
 } from './AgentTasksPage';
 import {
   collapseSubTasks,
