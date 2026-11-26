@@ -1,4 +1,5 @@
 import type {
+  ChannelAskAnswerItem,
   ChannelDetail,
   ChannelJoinableItem,
   ChannelListItem,
@@ -33,6 +34,12 @@ export interface ChannelViewParams {
 }
 
 class ChannelService {
+  answerAsk = (input: {
+    answers: ChannelAskAnswerItem[];
+    channelId: string;
+    messageId: string;
+    requestKey: string;
+  }) => lambdaClient.channel.answerAsk.mutate(input);
   archive = (channelId: string) => lambdaClient.channel.archive.mutate({ channelId });
   unarchive = (channelId: string) => lambdaClient.channel.unarchive.mutate({ channelId });
   archiveThread = (channelId: string, threadId: string) =>
@@ -99,7 +106,8 @@ class ChannelService {
   shareVisitorTopic = async (topicId: string) =>
     (await lambdaClient.channel.shareVisitorTopic.query({ topicId })).data;
   detail = async (params: ChannelViewParams): Promise<ChannelDetail> =>
-    (await lambdaClient.channel.detail.query(params)).data;
+    // `ReplyWorks` renders the opt-in Work types (files, collections).
+    (await lambdaClient.channel.detail.query({ ...params, includeFileWorks: true })).data;
   list = async (): Promise<ChannelListItem[]> => (await lambdaClient.channel.list.query()).data;
   markRead = (channelId: string, sequence: number) =>
     lambdaClient.channel.markRead.mutate({ channelId, sequence });

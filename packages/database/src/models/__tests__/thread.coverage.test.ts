@@ -47,6 +47,29 @@ describe('ThreadModel coverage', () => {
       expect((await findThread('thread-attach-live'))?.metadata).toEqual({ operationId: 'op-1' });
     });
 
+    // An external agent binds its session at stream start, which can land
+    // before the dispatch that started it records the operation.
+    it('keeps a session the run already bound to the thread', async () => {
+      await serverDB.insert(threads).values({
+        id: 'thread-attach-session',
+        metadata: { heteroSessionId: 'cc-live', startedAt: '2026-10-01T00:00:00.000Z' },
+        status: ThreadStatus.Processing,
+        topicId,
+        type: ThreadType.Isolation,
+        userId,
+      });
+
+      await threadModel.attachRunOperation('thread-attach-session', {
+        heteroSessionId: 'cc-claimed',
+        operationId: 'op-1',
+      });
+
+      expect((await findThread('thread-attach-session'))?.metadata).toEqual({
+        heteroSessionId: 'cc-live',
+        operationId: 'op-1',
+      });
+    });
+
     it('keeps the metadata of a run that already settled', async () => {
       await insertThread('thread-attach-settled', ThreadStatus.Completed);
 

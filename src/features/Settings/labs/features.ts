@@ -17,7 +17,6 @@ type LabFeatureI18nKey =
   | 'agentGraphConfig'
   | 'agentIdentity'
   | 'artifactDeployment'
-  | 'betterCodingExperience'
   | 'claudeCodeSdk'
   | 'codexAppServer'
   | 'desktopSplitView'
@@ -110,12 +109,6 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     flag: 'enableDeviceTunnel',
     i18nKey: 'deviceTunnel',
     searchKeywords: ['tunnel', 'port forwarding', 'dev server', 'localhost'],
-    stage: 'alpha',
-  },
-  {
-    flag: 'enableBetterCodingExperience',
-    i18nKey: 'betterCodingExperience',
-    searchKeywords: ['coding', 'code', 'developer', 'programming', 'IDE'],
     stage: 'alpha',
   },
   {

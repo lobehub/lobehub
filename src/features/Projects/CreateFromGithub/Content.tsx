@@ -1,16 +1,9 @@
-import {
-  Button,
-  cssVar,
-  Flexbox,
-  Input,
-  ModalFooter,
-  Text,
-  toast,
-  useModalContext,
-} from '@lobehub/ui';
+import { Button, cssVar, Flexbox, Input, ModalFooter, Text, useModalContext } from '@lobehub/ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { buildConnectorPagePath } from '@/features/Integrations/connectorPage';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useHomeStore } from '@/store/home';
@@ -70,6 +63,9 @@ const CreateFromGithubContent = () => {
   // Taken once per open dialog: the dedicated agent's previewed character is seeded by it.
   const [reservedIds] = useState(reserveProjectIds);
 
+  /** Create failure that no field explains, shown above the footer buttons: the dialog stays open with the user's input. */
+  const [error, setError] = useState<InlineErrorState | null>(null);
+
   const repository = main && parseGithubRepository(main.url);
   const defaultMainAgentId = useDefaultMainAgent();
   const mainAgentId = form.mainAgentId ?? defaultMainAgentId;
@@ -97,6 +93,7 @@ const CreateFromGithubContent = () => {
 
   const updateName = (name: string) => {
     setForm((current) => ({ ...current, duplicate: undefined, name, nameEdited: true }));
+    setError(null);
   };
 
   const connectGithub = () => {
@@ -106,6 +103,7 @@ const CreateFromGithubContent = () => {
 
   const handleCreate = async () => {
     if (!createInput || !repository || form.loading) return;
+    setError(null);
     setForm((current) => ({ ...current, loading: true }));
     try {
       const project = await createProject({
@@ -133,16 +131,16 @@ const CreateFromGithubContent = () => {
       }
       close();
       navigate(`/project/${project.slug ?? project.id}`);
-    } catch (error) {
+    } catch (err) {
       // A taken slug also comes back as a conflict; this dialog has no slug
       // input, so it reports it on the name the slug is derived from.
-      const field = getProjectConflictField(error);
+      const field = getProjectConflictField(err);
       const duplicate = field === 'slug' ? 'name' : field;
       if (duplicate) {
         setForm((current) => ({ ...current, duplicate }));
       } else {
-        console.error('Failed to create project from GitHub', error);
-        toast.error(t('operationFailed', { ns: 'common' }));
+        console.error('Failed to create project from GitHub', err);
+        setError(toInlineError(t('create.failedRetry'), err));
       }
     } finally {
       setForm((current) => ({ ...current, loading: false }));
@@ -222,6 +220,7 @@ const CreateFromGithubContent = () => {
           onChange={changeRepositories}
           onConnect={connectGithub}
         />
+        {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

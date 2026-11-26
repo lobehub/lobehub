@@ -160,6 +160,47 @@ describe('cliSpawn', () => {
     expect(execFileMock).not.toHaveBeenCalled();
   });
 
+  it("runs Cursor's agent.cmd launcher as its PowerShell script, without cmd.exe", async () => {
+    platformMock.mockReturnValue('win32');
+    vi.stubEnv('SystemRoot', 'C:\\Windows');
+    const shimPath = 'C:\\Users\\Hanam\\AppData\\Local\\cursor-agent\\agent.cmd';
+    const scriptPath = 'C:\\Users\\Hanam\\AppData\\Local\\cursor-agent\\agent.ps1';
+    existingPaths(shimPath, scriptPath);
+    readFileMock.mockResolvedValue(
+      '@echo off\r\npowershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0agent.ps1" %*\r\n',
+    );
+
+    const { resolveCliSpawnPlan } = await import('./cliSpawn');
+    await expect(resolveCliSpawnPlan(shimPath, ['acp'])).resolves.toEqual({
+      args: [
+        '-NoLogo',
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        scriptPath,
+        'acp',
+      ],
+      command: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+    });
+    expect(execFileMock).not.toHaveBeenCalled();
+    vi.unstubAllEnvs();
+  });
+
+  it('leaves a PowerShell launcher alone when its script is missing', async () => {
+    platformMock.mockReturnValue('win32');
+    const shimPath = 'C:\\Users\\Hanam\\AppData\\Local\\cursor-agent\\agent.cmd';
+    existingPaths(shimPath);
+    readFileMock.mockResolvedValue('@echo off\r\npowershell -File "%~dp0agent.ps1" %*\r\n');
+
+    const { resolveCliSpawnPlan } = await import('./cliSpawn');
+    await expect(resolveCliSpawnPlan(shimPath, ['acp'])).resolves.toEqual({
+      args: ['acp'],
+      command: shimPath,
+    });
+  });
+
   it('resolves a .cmd npm shim that invokes node.exe plus a JS bin', async () => {
     platformMock.mockReturnValue('win32');
     const shimPath = 'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\gemini.cmd';

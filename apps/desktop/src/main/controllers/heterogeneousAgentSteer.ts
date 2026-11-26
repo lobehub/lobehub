@@ -2,6 +2,7 @@ import { buildHeterogeneousPrompt } from '@lobechat/heterogeneous-agents/protoco
 import { toPiRpcPrompt } from '@lobechat/heterogeneous-agents/rpc';
 import {
   buildAgentInput,
+  buildAntigravityAcpPrompt,
   buildClaudeSdkUserMessageFromStreamJson,
   buildCodexAppServerInput,
 } from '@lobechat/heterogeneous-agents/spawn';
@@ -50,8 +51,9 @@ const unsupported: SteerSessionResult = { status: 'unsupported' };
  * Deliver a user message into a session's running turn — the native steer of
  * each runtime: Claude Code (SDK input stream, or a live CLI's stdin, read at
  * its next tool boundary — never `priority: 'now'`, which aborts the running
- * tool), Codex app-server `turn/steer`, Pi `steer`. Runtimes with
- * no such channel (ACP agents, one-shot CLIs) answer `unsupported`.
+ * tool), Codex app-server `turn/steer`, Pi `steer`, Antigravity another ACP
+ * `session/prompt`. Runtimes with no such channel (other ACP agents, one-shot
+ * CLIs) answer `unsupported`.
  *
  * A failure while writing is thrown: the caller cannot tell whether the agent
  * got the message, so it must not send it again on its own.
@@ -83,13 +85,10 @@ export const steerAgentSession = async (
   }
 
   if (session.agentType === 'antigravity') {
-    const live = session.liveInput;
-    if (!live) return session.process ? unsupported : rejected;
-    // Antigravity stream-json input accepts text only; reject image steers so
-    // they fall back to the next turn instead of terminating the session.
-    if (params.imageList?.length) return rejected;
-    const plan = await buildAgentInput('antigravity', promptInput, { cacheDir });
-    return live.send(plan.stdin, params.messageId) ? accepted : rejected;
+    const acp = session.antigravityAcpSession;
+    if (!acp) return rejected;
+    const prompt = await buildAntigravityAcpPrompt(promptInput, { cacheDir });
+    return acp.steer(prompt, params.messageId) ? accepted : rejected;
   }
 
   if (session.appServerSession) {

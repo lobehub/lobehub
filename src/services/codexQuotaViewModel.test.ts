@@ -13,6 +13,7 @@ const reading = {
   windowMinutes: 300,
 };
 const live = {
+  credits: { balance: '1250.75', unlimited: false },
   error: null,
   identity: { externalAccountId: 'b' },
   provider: 'codex' as const,
@@ -25,17 +26,19 @@ const live = {
 
 describe('Codex account view', () => {
   it('never merges quota from another account', () => {
-    expect(buildCodexPanelSnapshot(account, [reading], live, now).session?.usedPercent).toBe(23);
+    const result = buildCodexPanelSnapshot(account, [reading], live, now);
+    expect(result.session?.usedPercent).toBe(23);
+    expect(result.credits).toBeUndefined();
   });
-  it('merges newer live buckets only for the same account', () => {
-    expect(
-      buildCodexPanelSnapshot(
-        account,
-        [reading],
-        { ...live, identity: { externalAccountId: 'a' } },
-        now,
-      ).session?.usedPercent,
-    ).toBe(90);
+  it('merges newer live buckets and credits only for the same account', () => {
+    const result = buildCodexPanelSnapshot(
+      account,
+      [reading],
+      { ...live, identity: { externalAccountId: 'a' } },
+      now,
+    );
+    expect(result.session?.usedPercent).toBe(90);
+    expect(result.credits).toEqual(live.credits);
   });
   it('preserves persisted windows after a failed refresh', () => {
     expect(

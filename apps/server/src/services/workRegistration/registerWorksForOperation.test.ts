@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageModel } from '@/database/models/message';
+import type * as WorkModule from '@/database/models/work';
 import { WorkModel } from '@/database/models/work';
 
 import { redeployFileWork, registerWorksForOperation } from './registerWorksForOperation';
@@ -52,7 +53,9 @@ vi.mock('@/database/models/message', () => ({
   }),
 }));
 
-vi.mock('@/database/models/work', () => ({
+vi.mock('@/database/models/work', async (importOriginal) => ({
+  // The push scanner parses git's own report with the real parser.
+  parseGitPushResult: (await importOriginal<typeof WorkModule>()).parseGitPushResult,
   WorkModel: vi.fn(function () {
     return {
       fillAgentWorkCost: mockFillAgentWorkCost,
@@ -813,6 +816,8 @@ describe('registerWorksForOperation · shell github works', () => {
         toolName: 'command_execution',
         topicId: 'topic-1',
       }),
+      // Pull request linking: numbered `gh pr ready|merge` look up the topic's PRs.
+      expect.objectContaining({ pullRequestLifecycle: true }),
     );
     // Hetero runs never pass callLlmFinalizer → the anchor is stamped here.
     expect(mockUpdateMessage).toHaveBeenCalledWith('msg-assistant', {
@@ -863,6 +868,7 @@ describe('registerWorksForOperation · shell github works', () => {
         toolIdentifier: 'claude-code',
         toolName: 'Bash',
       }),
+      expect.objectContaining({ pullRequestLifecycle: true }),
     );
   });
 

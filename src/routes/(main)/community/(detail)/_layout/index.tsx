@@ -29,17 +29,20 @@ const DesktopDiscoverDetailLayout = memo(() => {
       >
         <WideScreenContainer
           className={stylex.props(styles.contentContainer).className}
-          gap={32}
+          gap={16}
           minWidth={MAX_WIDTH}
-          paddingBlock={16}
+          style={{ paddingBottom: 56, paddingTop: 16 }}
           wrapperStyle={{
             minHeight: '100%',
             position: 'relative',
           }}
         >
-          <RouteSkeletonChromeProvider>
-            <Outlet />
-          </RouteSkeletonChromeProvider>
+          {/* Same column and spacing as the list layout, so a page opens where its catalog sat. */}
+          <Flexbox gap={16} style={{ paddingBlockEnd: 40 }} width={'100%'}>
+            <RouteSkeletonChromeProvider>
+              <Outlet />
+            </RouteSkeletonChromeProvider>
+          </Flexbox>
           <div {...stylex.props(styles.spacer)} />
           <Footer />
         </WideScreenContainer>

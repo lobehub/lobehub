@@ -68,21 +68,11 @@ export const useNavLayout = (): NavLayout => {
         },
         {
           icon: getRouteById('tasks')!.icon,
-          additionalActiveTabs: activeWorkspaceSlug ? undefined : ['goals', 'goal', 'task'],
+          additionalActiveTabs: ['goals', 'goal', 'task'],
           key: SidebarTabKey.Tasks,
-          title: activeWorkspaceSlug ? t('tab.tasks') : t('tab.goalsAndTasks', { ns: 'chat' }),
+          title: t('tab.goalsAndTasks', { ns: 'chat' }),
           url: '/tasks',
         },
-        ...(activeWorkspaceSlug
-          ? [
-              {
-                icon: getRouteById('goals')!.icon,
-                key: SidebarTabKey.Goals,
-                title: t('tab.goals'),
-                url: '/goals',
-              },
-            ]
-          : []),
         {
           // Keyed `project` to match the sidebar layout id; the page is `/projects`.
           activeTab: 'projects',
@@ -129,6 +119,8 @@ export const useNavLayout = (): NavLayout => {
           title: t('tab.marketplace'),
           url: getMarketplaceEntryPath(showMarket),
         },
+        // Not a desktop sidebar section (it lives under Settings there): this
+        // entry feeds the mobile home shortcuts.
         {
           hidden: !!activeWorkspaceSlug,
           icon: getRouteById('memory')!.icon,
@@ -153,8 +145,8 @@ export const useNavLayout = (): NavLayout => {
   const userPanel = useMemo(
     () => ({
       showDataImporter: false,
-      // Memory now appears in the sidebar by default; drop the duplicate entry
-      // from the user dropdown to keep that menu focused on account / settings.
+      // Memory is reached through Settings; keep the user dropdown focused on
+      // account / settings.
       showMemory: false,
     }),
     [],

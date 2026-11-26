@@ -252,6 +252,10 @@ const latencyCriticalProcedures = new Set([
   // workspace revalidates every SWR key at once; batched, this read waited for
   // the slowest home read and the admin stayed on the home page.
   'workspace.getSettings',
+  // The member's model override on a shared Workspace Agent: the chat input's
+  // model and Agent-mode controls hold a placeholder until it answers on a
+  // cold load. Batched, that wait grew to the slowest read beside it.
+  'workspaceUserSettings.getPreference',
 ]);
 const SKIP_BATCH_PROCEDURES = new Set([
   ...initialLoadProcedures,
@@ -288,6 +292,9 @@ const LARGE_INPUT_QUERY_PROCEDURES = new Set([
   // dozens of ids, and a dropped lookup would let deleted documents back into
   // the model context.
   'agentDocument.listRevokedDocumentReads',
+  // "Archive merged PR topics" asks for the linked PRs of every listed topic,
+  // 100 ids per read — about 3,000 characters as a GET.
+  'work.listTopicsPullRequests',
 ]);
 
 /**
@@ -391,6 +398,14 @@ export const createWorkspaceLambdaClient = (workspaceId: string | null) => {
     ],
   });
 };
+
+/**
+ * The lambda client for an optional scope: `undefined` follows the active workspace like
+ * `lambdaClient`; a workspace id or `null` (personal) pins it like
+ * {@link createWorkspaceLambdaClient}.
+ */
+export const scopedLambdaClient = (workspaceId?: string | null) =>
+  workspaceId === undefined ? lambdaClient : createWorkspaceLambdaClient(workspaceId);
 
 export const lambdaQuery = createTRPCReact<LambdaRouter>();
 

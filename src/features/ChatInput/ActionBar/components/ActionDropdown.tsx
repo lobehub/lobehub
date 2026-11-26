@@ -107,8 +107,12 @@ const SubmenuScrollStyle = createGlobalStyle`
   /* Submenu triggers that opt into a custom trailing chevron (the Plus menu's
      Skills / Web Search / Attachments rows mark their extra icon with .lobe-submenu-chevron)
      render that chevron themselves; hide base-ui's default triangle submenu arrow
-     — always the last child of the trigger's content — so the two don't stack. */
-  [role='menuitem']:has(.lobe-submenu-chevron) > * > *:last-child {
+     so the two don't stack.
+     Target the arrow by its stable class, never with a universal part after
+     :has() (such as \`> * > *:last-child\`): Chrome shares one invalidation set
+     across every :has() rule, and a universal right-hand side turns each row the
+     message list mounts into a whole-page style recalc (T-14366). */
+  [role='menuitem']:has(.lobe-submenu-chevron) .lobe-dropdown-menu__submenu-arrow {
     display: none;
   }
 `;

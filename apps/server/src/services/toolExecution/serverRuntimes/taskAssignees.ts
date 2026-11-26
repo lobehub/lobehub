@@ -1,6 +1,7 @@
 import { notifyTaskAssigned } from '@/business/server/task/notifyTaskAssigned';
 import { ProjectModel } from '@/database/models/project';
 import { UserModel } from '@/database/models/user';
+import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 import type { TaskRuntimeDeps } from './task';
@@ -63,8 +64,16 @@ export const createTaskAssigneeHelpers = (deps: TaskRuntimeDeps) => {
   const resolveMemberLabel = async (assigneeUserId: string): Promise<string> => {
     if (!deps.db) return assigneeUserId;
     try {
-      const [user] = await UserModel.getDisplayInfoByIds(deps.db, [assigneeUserId]);
-      const name = user?.fullName?.trim() || user?.username?.trim();
+      const [[user], nicknames] = await Promise.all([
+        UserModel.getDisplayInfoByIds(deps.db, [assigneeUserId]),
+        deps.workspaceId && deps.userId
+          ? new WorkspaceMemberModel(deps.db, deps.userId).getNicknames(deps.workspaceId, [
+              assigneeUserId,
+            ])
+          : new Map<string, string>(),
+      ]);
+      const name =
+        nicknames.get(assigneeUserId) || user?.fullName?.trim() || user?.username?.trim();
       return name ? `${name} (${assigneeUserId})` : assigneeUserId;
     } catch {
       return assigneeUserId;

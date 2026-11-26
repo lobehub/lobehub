@@ -96,6 +96,22 @@ const hasInstructionSnapshotChanged = (
 
 type Setter = StoreSetter<TaskStore>;
 
+/**
+ * How long a detail read made while resolving a reference stays usable for the
+ * replica fetch that follows it. That fetch starts on the next render; anything
+ * later than this is a fresh read, so a stale snapshot is never handed back.
+ */
+const RESOLVED_DETAIL_TTL = 5000;
+
+const toTaskNotFound = (error: unknown): never => {
+  if (isTrpcErrorCode(error, 'NOT_FOUND')) {
+    const missing = new Error('Task not found') as Error & { code: string };
+    missing.code = 'TASK_NOT_FOUND';
+    throw missing;
+  }
+  throw error;
+};
+
 const cachedTaskId = (ref: string | undefined, index: Record<string, string>) =>
   ref?.trim().startsWith('task_') ? ref.trim() : ref ? index[ref] : undefined;
 
@@ -108,6 +124,11 @@ export class TaskDetailSliceActionImpl {
   readonly #detail;
   readonly #reconciliations = new WeakMap<TaskDetailData, Promise<void>>();
   readonly #previous = new WeakMap<TaskDetailData, TaskDetailData | undefined>();
+  /**
+   * Detail reads made while resolving a reference (`T-12`) to its id, keyed by
+   * id and taken by the first replica fetch for it — see `#resolveViaDetail`.
+   */
+  readonly #resolvedDetails = new Map<string, { at: number; data: TaskDetailData }>();
   /** Mounted task-detail surfaces, oldest first — see `claimActiveTask`. */
   readonly #activeTaskClaims: { ref: string }[] = [];
 
@@ -154,6 +175,7 @@ export class TaskDetailSliceActionImpl {
       view: recordLens<TaskStore, TaskDetailData>('taskDetailMap'),
     });
     subscribeCacheScope((scope) => {
+      this.#resolvedDetails.clear();
       this.#set({ taskRefIndex: {}, activeTaskId: undefined }, false, 'taskDetail/scopeChanged');
       this.#detail.ensureScope(scope);
     });
@@ -254,15 +276,26 @@ export class TaskDetailSliceActionImpl {
     await this.internal_refreshTaskDetail(taskId);
   };
 
+  #takeResolvedDetail = (taskId: string): { data: TaskDetailData } | undefined => {
+    const entry = this.#resolvedDetails.get(taskId);
+    if (!entry) return;
+    this.#resolvedDetails.delete(taskId);
+    return Date.now() - entry.at <= RESOLVED_DETAIL_TTL ? { data: entry.data } : undefined;
+  };
+
+  /** Park a read for the next replica fetch; one nobody claims is dropped at the TTL. */
+  #parkResolvedDetail = (id: string, data: TaskDetailData) => {
+    const entry = { at: Date.now(), data };
+    this.#resolvedDetails.set(id, entry);
+    setTimeout(() => {
+      if (this.#resolvedDetails.get(id) === entry) this.#resolvedDetails.delete(id);
+    }, RESOLVED_DETAIL_TTL);
+  };
+
   #loadTaskDetail = async (taskId: string): Promise<TaskDetailData> => {
-    const result = await taskService.getDetail(taskId).catch((error) => {
-      if (isTrpcErrorCode(error, 'NOT_FOUND')) {
-        const missing = new Error('Task not found') as Error & { code: string };
-        missing.code = 'TASK_NOT_FOUND';
-        throw missing;
-      }
-      throw error;
-    });
+    const result =
+      this.#takeResolvedDetail(taskId) ??
+      (await taskService.getDetail(taskId).catch(toTaskNotFound));
     if (!result.data?.id) {
       const error = new Error('Task not found') as Error & { code: string };
       error.code = 'TASK_NOT_FOUND';
@@ -310,11 +343,38 @@ export class TaskDetailSliceActionImpl {
     return data.id;
   };
 
+  /**
+   * Resolve a reference for a caller that reads the detail next. `task.detail`
+   * accepts a reference as well, so reading it here answers both questions in
+   * one round trip — opening `/task/T-12` cold otherwise waits for `find`
+   * before the detail request can even start. The response is parked for the
+   * replica fetch that follows, which takes it instead of asking again.
+   */
+  #resolveViaDetail = async (ref: string): Promise<string> => {
+    const known = cachedTaskId(ref, this.#get().taskRefIndex);
+    if (known) return known;
+    const scope = cacheScope.get();
+    const response = await taskService.getDetail(ref).catch(toTaskNotFound);
+    if (cacheScope.get() !== scope) throw new Error('Task scope changed while resolving reference');
+    const data = response.data;
+    if (!data?.id) {
+      const error = new Error('Task not found') as Error & { code: string };
+      error.code = 'TASK_NOT_FOUND';
+      throw error;
+    }
+    this.#parkResolvedDetail(data.id, data);
+    this.#rememberTask({ id: data.id, identifier: data.identifier }, ref);
+    return data.id;
+  };
+
   fetchTaskDetail = async (ref?: string): Promise<TaskDetailData> => {
     ref ??= this.#get().activeTaskId ?? this.#get().activeTaskRef;
     if (!ref) throw new Error('No task identifier provided and no current task context.');
-    const id = await this.internal_resolveTaskId(ref);
+    const id = await this.#resolveViaDetail(ref);
     const { data, applied } = await this.#detail.fetch(id);
+    // A fetch that joined one already in flight never reaches the loader, so
+    // the read parked above would linger for a later revalidation to take.
+    this.#resolvedDetails.delete(id);
     if (!data || !applied) throw new Error('Task detail request was superseded');
     await this.#reconciliations.get(data);
     return data;
@@ -782,18 +842,7 @@ export class TaskDetailSliceActionImpl {
     const knownId = useTaskStore((state) => cachedTaskId(taskRef, state.taskRefIndex));
     const resolution = useClientDataSWR(
       taskRef && !knownId ? ['taskRef', scope, taskRef] : null,
-      async () => {
-        try {
-          return await this.internal_resolveTaskId(taskRef!);
-        } catch (error) {
-          if ((error as { data?: { code?: string } })?.data?.code === 'NOT_FOUND') {
-            const missing = new Error('Task not found') as Error & { code: string };
-            missing.code = 'TASK_NOT_FOUND';
-            throw missing;
-          }
-          throw error;
-        }
-      },
+      () => this.#resolveViaDetail(taskRef!),
     );
     const taskId = knownId;
     const shouldPoll = useTaskStore((state) =>
@@ -927,6 +976,8 @@ export class TaskDetailSliceActionImpl {
 
   internal_refreshTaskDetail = async (ref: string): Promise<void> => {
     const id = await this.internal_resolveTaskId(ref);
+    // A refresh follows a write, so a read parked before it is already stale.
+    this.#resolvedDetails.delete(id);
     await this.#detail.revalidate(id);
   };
 }

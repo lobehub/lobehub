@@ -171,3 +171,22 @@ export const settingsToSave = (
  */
 export const discardPatch = (module: SaveModule, stored: ChannelValues): Record<string, unknown> =>
   Object.fromEntries(module.keys.map((key) => [key, stored.settings?.[key]]));
+
+/**
+ * Drop the save errors of the modules an edit touched, keeping other modules' failures:
+ * editing one block makes only its own failure stale. `previous` is the form values
+ * before the edit; without it nothing is cleared.
+ */
+export const clearEditedModuleErrors = (
+  errors: Partial<Record<SaveModuleId, string>>,
+  modules: SaveModule[],
+  values: ChannelValues,
+  previous: ChannelValues | undefined,
+): Partial<Record<SaveModuleId, string>> => {
+  if (!previous) return errors;
+  const edited = dirtyModuleIds(modules, values, previous).filter((id) => errors[id]);
+  if (edited.length === 0) return errors;
+  return Object.fromEntries(
+    Object.entries(errors).filter(([id]) => !edited.includes(id as SaveModuleId)),
+  );
+};

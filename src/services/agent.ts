@@ -1,12 +1,20 @@
 import {
   type AgentDeleteImpact,
   type AgentItem,
+  type AgentPluginEntry,
+  type AgentPluginMode,
   type AgentRankItem,
   type LobeAgentConfig,
 } from '@lobechat/types';
 import { type PartialDeep } from 'type-fest';
 
 import { lambdaClient } from '@/libs/trpc/client';
+
+/** One of my agents that carries a plugin or skill explicitly, and how. */
+export interface PluginAgentMode {
+  agentId: string;
+  mode: Exclude<AgentPluginMode, 'auto'>;
+}
 
 export const AVAILABLE_AGENTS_CONTEXT_LIMIT = 10;
 export const AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT = AVAILABLE_AGENTS_CONTEXT_LIMIT + 2;
@@ -257,6 +265,26 @@ class AgentService {
   /**
    * Update agent config and return the updated agent data
    */
+  /** Which of my own agents carry a plugin or skill, in one query over their `plugins`. */
+  getPluginAgentModes = async (identifier: string): Promise<PluginAgentMode[]> => {
+    return lambdaClient.agent.getPluginAgentModes.query({ identifier });
+  };
+
+  /**
+   * Sets a plugin or skill's mode on my own agents in one atomic server write.
+   * `auto` removes it; `auto` without `agentIds` removes it from every agent
+   * carrying it. Returns each written agent's new `plugins`.
+   */
+  setPluginMode = async (params: {
+    agentIds?: string[];
+    identifier: string;
+    mode: AgentPluginMode;
+  }): Promise<{ id: string; plugins: AgentPluginEntry[] }[]> => {
+    return lambdaClient.agent.setPluginMode.mutate(params, {
+      context: { showNotification: false },
+    });
+  };
+
   updateAgentConfig = async (
     agentId: string,
     config: PartialDeep<LobeAgentConfig>,

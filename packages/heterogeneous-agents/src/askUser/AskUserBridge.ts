@@ -46,6 +46,8 @@ export interface PendingArgs {
 }
 
 export interface PendingOptions {
+  /** Deliver this call's events on the producer's ordered stream. */
+  onEvent?: (event: AgentStreamEvent) => void;
   /**
    * Called every `progressIntervalMs` while the call is pending. Use it to
    * push MCP `notifications/progress` to keep the SSE channel from timing
@@ -73,6 +75,7 @@ export const NO_DEADLINE_MS = 365 * 24 * 60 * 60 * 1000;
 
 interface PendingEntry {
   cleanup: () => void;
+  emit: (event: AgentStreamEvent) => void;
   reject: (err: unknown) => void;
   resolve: (answer: InterventionAnswer) => void;
 }
@@ -164,6 +167,7 @@ export class AskUserBridge {
     const startedAt = Date.now();
     const expires = Number.isFinite(timeoutMs);
     const deadline = startedAt + (expires ? timeoutMs : NO_DEADLINE_MS);
+    const emit = options.onEvent ?? ((event: AgentStreamEvent) => this.emit(event));
 
     return new Promise<InterventionAnswer>((resolve, reject) => {
       const onTimeout = () => {
@@ -174,7 +178,7 @@ export class AskUserBridge {
         // finishes and gets garbage-collected. Without this, the renderer
         // would still show the form as pending after the bridge has already
         // given up.
-        this.emitResponse(toolCallId, { cancelReason: 'timeout', cancelled: true });
+        this.emitResponse(emit, toolCallId, { cancelReason: 'timeout', cancelled: true });
         resolve({ cancelled: true, cancelReason: 'timeout' });
       };
       const timeoutTimer = expires ? setTimeout(onTimeout, timeoutMs) : undefined;
@@ -192,7 +196,7 @@ export class AskUserBridge {
         if (progressTimer) clearInterval(progressTimer);
       };
 
-      this.pending_.set(toolCallId, { cleanup, reject, resolve });
+      this.pending_.set(toolCallId, { cleanup, emit, reject, resolve });
 
       // Emit the intervention request AFTER setting up the pending entry,
       // so any synchronous resolve from a test fixture finds the slot.
@@ -208,7 +212,7 @@ export class AskUserBridge {
         provider: this.provider,
         toolCallId,
       };
-      this.emit({
+      emit({
         data,
         operationId: this.operationId,
         stepIndex: this.getStepIndex(),
@@ -240,7 +244,7 @@ export class AskUserBridge {
     // the consumer has already optimistically updated, but emitting keeps
     // the wire contract symmetric (request → response) and lets late
     // subscribers reconstruct the terminal state purely from events.
-    this.emitResponse(toolCallId, {
+    this.emitResponse(entry.emit, toolCallId, {
       cancelReason: payload.cancelled ? (payload.cancelReason ?? 'user_cancelled') : undefined,
       cancelled: payload.cancelled,
       result: payload.cancelled ? undefined : payload.result,
@@ -275,7 +279,7 @@ export class AskUserBridge {
     // immediately after.
     for (const [toolCallId, entry] of this.pending_) {
       entry.cleanup();
-      this.emitResponse(toolCallId, { cancelReason: reason, cancelled: true });
+      this.emitResponse(entry.emit, toolCallId, { cancelReason: reason, cancelled: true });
       entry.resolve({ cancelReason: reason, cancelled: true });
     }
     this.pending_.clear();
@@ -326,6 +330,7 @@ export class AskUserBridge {
   }
 
   private emitResponse(
+    emit: (event: AgentStreamEvent) => void,
     toolCallId: string,
     payload: {
       cancelReason?: InterventionAnswer['cancelReason'];
@@ -342,7 +347,7 @@ export class AskUserBridge {
       resolutionRequestId: payload.resolutionRequestId,
       toolCallId,
     };
-    this.emit({
+    emit({
       data,
       operationId: this.operationId,
       stepIndex: this.getStepIndex(),

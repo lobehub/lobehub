@@ -4,9 +4,6 @@ import numeral from 'numeral';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors } from '@/store/user/selectors';
-
 import TokenProgress from './TokenProgress';
 import { type TokenBreakdown } from './useTokenBreakdown';
 
@@ -28,7 +25,6 @@ const TokenDetails = memo<TokenDetailsProps>(({ breakdown }) => {
     toolsToken,
     totalToken,
   } = breakdown;
-  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
   return (
     <Flexbox gap={12} style={{ minWidth: 200 }}>
@@ -63,51 +59,49 @@ const TokenDetails = memo<TokenDetailsProps>(({ breakdown }) => {
           </Center>
         </Tooltip>
       </Flexbox>
-      {isDevMode && (
-        <TokenProgress
-          showIcon
-          data={[
-            {
-              color: cssVar.magenta,
-              id: 'system',
-              title: t('tokenDetails.system'),
-              value: systemToken,
-            },
-            {
-              color: cssVar.geekblue,
-              id: 'tools',
-              title: t('tokenDetails.tools'),
-              value: toolsToken,
-            },
-            {
-              color: cssVar.gold,
-              id: 'chats',
-              title: t('tokenDetails.chats'),
-              value: chatsToken,
-            },
-            {
-              color: cssVar.orange,
-              id: 'fileContext',
-              title: t('tokenDetails.fileContext'),
-              value: fileContextToken,
-            },
-            {
-              color: cssVar.cyan,
-              id: 'toolCalls',
-              title: t('tokenDetails.toolCalls'),
-              value: toolCallsToken,
-            },
-            {
-              color: cssVar.purple,
-              id: 'reasoning',
-              title: t('tokenDetails.reasoning'),
-              value: reasoningToken,
-            },
-          ]}
-        />
-      )}
       <TokenProgress
-        showIcon={isDevMode}
+        showIcon
+        data={[
+          {
+            color: cssVar.magenta,
+            id: 'system',
+            title: t('tokenDetails.system'),
+            value: systemToken,
+          },
+          {
+            color: cssVar.geekblue,
+            id: 'tools',
+            title: t('tokenDetails.tools'),
+            value: toolsToken,
+          },
+          {
+            color: cssVar.gold,
+            id: 'chats',
+            title: t('tokenDetails.chats'),
+            value: chatsToken,
+          },
+          {
+            color: cssVar.orange,
+            id: 'fileContext',
+            title: t('tokenDetails.fileContext'),
+            value: fileContextToken,
+          },
+          {
+            color: cssVar.cyan,
+            id: 'toolCalls',
+            title: t('tokenDetails.toolCalls'),
+            value: toolCallsToken,
+          },
+          {
+            color: cssVar.purple,
+            id: 'reasoning',
+            title: t('tokenDetails.reasoning'),
+            value: reasoningToken,
+          },
+        ]}
+      />
+      <TokenProgress
+        showIcon
         showTotal={t('tokenDetails.total')}
         data={[
           {

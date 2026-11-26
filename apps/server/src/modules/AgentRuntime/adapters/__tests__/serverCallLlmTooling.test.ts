@@ -246,4 +246,64 @@ describe('resolveServerCallLlmTooling', () => {
 
     expect(result.activeDeviceId).toBeUndefined();
   });
+
+  it('keeps the shell of a deferred lobe-skills and restores its skill APIs once activated', () => {
+    const api = (name: string) => ({ description: name, name, parameters: {} });
+    const shellManifest = {
+      api: [api('runCommand'), api('exportFile')],
+      identifier: 'lobe-skills',
+      meta: { title: 'Skills' },
+      systemRole: 'shell only',
+      type: 'builtin' as const,
+    };
+    const fullManifest = {
+      ...shellManifest,
+      api: [api('activateSkill'), ...shellManifest.api],
+      systemRole: 'full',
+    };
+    const ctx = { operationId: 'op-1', stepIndex: 0 };
+    const state = buildState({
+      operationToolSet: {
+        deferredManifestMap: { 'lobe-skills': fullManifest },
+        enabledToolIds: [LobeActivatorManifest.identifier, 'lobe-skills'],
+        manifestMap: {
+          [LobeActivatorManifest.identifier]: LobeActivatorManifest,
+          [CredsIdentifier]: CredsManifest,
+          'lobe-skills': shellManifest,
+        },
+        sourceMap: { 'lobe-skills': 'builtin' },
+        tools: [
+          { function: { name: 'lobe-skills____runCommand' }, type: 'function' },
+          { function: { name: 'lobe-skills____exportFile' }, type: 'function' },
+        ] as unknown as NonNullable<AgentState['tools']>,
+      },
+    });
+
+    const before = resolveServerCallLlmTooling(ctx, state);
+    expect(before.tools?.map((tool) => tool.function.name)).toEqual([
+      'lobe-skills____runCommand',
+      'lobe-skills____exportFile',
+    ]);
+    expect(before.resolved.promptManifestMap['lobe-skills']).toEqual(shellManifest);
+    // A deferred tool is promoted by the runtime, never offered for activation.
+    expect(before.toolDiscoveryConfig?.availableTools.map((tool) => tool.identifier)).toEqual([
+      CredsIdentifier,
+    ]);
+
+    const after = resolveServerCallLlmTooling(
+      { ...ctx, stepIndex: 1 },
+      {
+        ...state,
+        activatedStepTools: [
+          { activatedAtStep: 0, id: 'lobe-skills', manifest: fullManifest, source: 'discovery' },
+        ],
+      },
+    );
+    expect(after.resolved.promptManifestMap['lobe-skills']).toEqual(fullManifest);
+    expect(after.tools?.map((tool) => tool.function.name)).toEqual([
+      'lobe-skills____runCommand',
+      'lobe-skills____exportFile',
+      'lobe-skills____activateSkill',
+    ]);
+  });
 });

@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 
 import { resetPassword } from '@/libs/better-auth/auth-client';
 
+import { translateAuthError } from '../utils/translateAuthError';
+
 interface ResetPasswordFormValues {
   confirmPassword: string;
   newPassword: string;
@@ -17,20 +19,29 @@ interface UseResetPasswordParams {
 }
 
 export const useResetPassword = ({ email, token, onSuccessRedirect }: UseResetPasswordParams) => {
-  const { t } = useTranslation('auth');
+  const { t } = useTranslation(['auth', 'authError']);
   const [loading, setLoading] = useState(false);
+  /** Shown above the submit button instead of a toast, cleared when the user edits a field */
+  const [formError, setFormError] = useState('');
 
   const handleResetPassword = async (values: ResetPasswordFormValues) => {
     if (!token) {
-      toast.error(t('betterAuth.resetPassword.invalidToken'));
+      setFormError(t('betterAuth.resetPassword.linkExpired'));
       return;
     }
 
     setLoading(true);
+    setFormError('');
     try {
       const result = await resetPassword({ newPassword: values.newPassword, token });
       if (result.error) {
-        toast.error(result.error.message || t('betterAuth.resetPassword.error'));
+        console.error('Reset password error:', result.error);
+        // An expired or reused link is the common failure; it needs a new email, not a retry
+        setFormError(
+          result.error.code === 'INVALID_TOKEN'
+            ? t('betterAuth.resetPassword.linkExpired')
+            : translateAuthError(result.error, t) || t('betterAuth.resetPassword.failed'),
+        );
         return;
       }
       toast.success(t('betterAuth.resetPassword.success'));
@@ -38,7 +49,7 @@ export const useResetPassword = ({ email, token, onSuccessRedirect }: UseResetPa
       onSuccessRedirect(redirectUrl);
     } catch (error) {
       console.error('Reset password error:', error);
-      toast.error(t('betterAuth.resetPassword.error'));
+      setFormError(t('betterAuth.errors.requestFailed'));
     } finally {
       setLoading(false);
     }
@@ -46,11 +57,13 @@ export const useResetPassword = ({ email, token, onSuccessRedirect }: UseResetPa
 
   const form = useForm<ResetPasswordFormValues>({
     initialValues: { confirmPassword: '', newPassword: '' },
+    onValuesChange: () => setFormError(''),
     onSubmit: handleResetPassword,
   });
 
   return {
     form,
+    formError,
     loading,
   };
 };

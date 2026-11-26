@@ -114,151 +114,59 @@ describe('resolveSandboxSessionConfig', () => {
     });
   });
 
-  // The instance is one choice with two halves: the directory it works in and
-  // the state restored into it. The snapshot is addressed by the instance's own
-  // id, which is why two copies of one environment never read each other's.
-  it('carries the claim, the mode and the chosen instance', async () => {
+  // T-14825: the cloud sandbox is not set up from an environment any more. A
+  // conversation still bound to a legacy environment directory runs in that
+  // directory as a plain folder on the drive — its files stay where they are.
+  it('runs a legacy environment directory as a folder, without its environment', async () => {
     await expect(resolve()).resolves.toEqual({
       claim: CLAIM,
       drive: 'personal',
       cwd: 'projects/atlas',
-      environment: INSTANCE_ID,
-      mode: 'persistent',
+      mode: 'drive',
     });
   });
 
-  // A built instance's checkout lives on the sandbox's local disk, so commands
-  // run there — while `cwd` keeps naming the instance's directory on the
-  // volume, which is what the call belongs to and may see.
-  it('runs a built repository instance on local disk, scoped to its directory', async () => {
+  // The row outlives a folder renamed or deleted through the drive browser:
+  // the run falls back like any other missing folder instead of a bad cwd.
+  it("falls back when a legacy instance's folder is gone from the drive", async () => {
+    mocks.driveFolderExists.mockResolvedValue(false);
+
+    await expect(resolve()).resolves.toEqual({
+      claim: CLAIM,
+      drive: 'personal',
+      fallback: 'directoryMissing',
+      mode: 'ephemeral',
+    });
+    expect(mocks.driveFolderExists).toHaveBeenCalledWith(
+      expect.objectContaining({ claim: CLAIM, path: 'projects/atlas' }),
+    );
+    expect(mocks.ensureDriveFolder).not.toHaveBeenCalled();
+  });
+
+  // Neither the definition the instance was built from, nor its snapshot, nor
+  // the checkout its build left on local disk come along.
+  it("leaves the instance's definition, snapshot and checkout behind", async () => {
     findInstanceById.mockResolvedValue({
-      configurationSnapshot: { sources: [{ kind: 'git', url: 'https://github.com/a/b' }] },
+      configurationSnapshot: {
+        bootstrapCommand: 'pnpm install',
+        env: { NODE_ENV: 'production' },
+        sources: [{ kind: 'git', url: 'https://github.com/a/b' }],
+      },
       id: INSTANCE_ID,
       status: 'ready',
       workingDirectory: 'projects/atlas',
     });
 
-    await expect(resolve()).resolves.toEqual({
-      claim: CLAIM,
-      drive: 'personal',
-      cwd: 'projects/atlas',
-      environment: INSTANCE_ID,
-      mode: 'persistent',
-      specification: { sources: [{ kind: 'git', url: 'https://github.com/a/b' }] },
-      workingDir: '/root/work',
-    });
-  });
-
-  // Regression: the definition never reached a conversation, so
-  // the declared variables were missing from the agent's shell, the
-  // maintenance command never ran once, and the environment's network switch
-  // could not cut anything. All three are the execution plane acting on this
-  // object, and it only ever received it for a build.
-  it('carries the definition the instance was built from', async () => {
-    findInstanceById.mockResolvedValue({
-      configurationSnapshot: {
-        env: { API_URL: 'https://example.com', NODE_ENV: 'production' },
-        excludePaths: ['node_modules'],
-        internetAccess: false,
-        maintenanceCommand: 'git pull --ff-only',
-      },
-      id: INSTANCE_ID,
-      workingDirectory: 'projects/atlas',
-    });
-
-    await expect(resolve()).resolves.toMatchObject({
-      specification: {
-        env: { API_URL: 'https://example.com', NODE_ENV: 'production' },
-        excludePaths: ['node_modules'],
-        internetAccess: false,
-        maintenanceCommand: 'git pull --ff-only',
-      },
-    });
-  });
-
-  // The column is `jsonb`: its type says "no credentials", but it holds
-  // whatever was written to it, and this object now leaves the server on every
-  // tool call. So the pick is by name — a key nobody here chose does not
-  // travel just because it turned up in the row.
-  it('sends only the named fields, whatever else the row holds', async () => {
-    findInstanceById.mockResolvedValue({
-      configurationSnapshot: {
-        credentials: [{ headers: { Authorization: 'Bearer nope' }, host: 'github.com' }],
-        env: { NODE_ENV: 'production' },
-        requirements: { memoryGiB: 8 },
-      },
-      id: INSTANCE_ID,
-      workingDirectory: 'projects/atlas',
-    });
-
-    const { specification } = await resolve();
-    expect(specification).toEqual({ env: { NODE_ENV: 'production' } });
-  });
-
-  // `kind` is the product's own: an instance whose environment gained one must
-  // send exactly what it sent before, or the execution plane would read every
-  // such session as running a different specification from its build.
-  it('sends the same specification whether or not the definition carries a kind', async () => {
-    const definition = {
-      bootstrapCommand: 'pnpm install',
-      env: { NODE_ENV: 'production' },
-      excludePaths: ['node_modules'],
-      internetAccess: false,
-      maintenanceCommand: 'git pull --ff-only',
-      sources: [{ kind: 'git', url: 'https://github.com/a/b' }],
-    };
-
-    findInstanceById.mockResolvedValue({
-      configurationSnapshot: definition,
-      id: INSTANCE_ID,
-      workingDirectory: 'projects/atlas',
-    });
-    const { specification: before } = await resolve();
-
-    findInstanceById.mockResolvedValue({
-      configurationSnapshot: { ...definition, kind: 'code' },
-      id: INSTANCE_ID,
-      workingDirectory: 'projects/atlas',
-    });
-    const { specification: after } = await resolve();
-
-    expect(after).toEqual(before);
-    expect(after).not.toHaveProperty('kind');
-  });
-
-  // An empty pick is not an empty object: the runtime adopts whatever it is
-  // handed, so a definition with nothing to say must send nothing and leave
-  // the session's own defaults alone.
-  it.each([
-    ['no definition at all', undefined],
-    ['a definition with nothing this session acts on', { requirements: { cpu: 2 } }],
-    ['an empty variable map', { env: {} }],
-    ['a files environment with nothing but its kind', { kind: 'files' }],
-  ])('sends no specification for %s', async (_, configurationSnapshot) => {
-    findInstanceById.mockResolvedValue({
-      configurationSnapshot,
-      id: INSTANCE_ID,
-      workingDirectory: 'projects/atlas',
-    });
-
-    expect(await resolve()).not.toHaveProperty('specification');
-  });
-
-  it.each([
-    ['not built yet', { status: 'pending' }],
-    ['a failed build', { status: 'error' }],
-    ['nothing to clone', { configurationSnapshot: { bootstrapCommand: 'echo' }, status: 'ready' }],
-  ])('keeps an instance with %s on the volume', async (_, fields) => {
-    findInstanceById.mockResolvedValue({
-      configurationSnapshot: { sources: [{ kind: 'git', url: 'https://github.com/a/b' }] },
-      id: INSTANCE_ID,
-      workingDirectory: 'projects/atlas',
-      ...fields,
-    });
-
     const config = await resolve();
+    expect(config).toEqual({
+      claim: CLAIM,
+      cwd: 'projects/atlas',
+      drive: 'personal',
+      mode: 'drive',
+    });
+    expect(config).not.toHaveProperty('environment');
+    expect(config).not.toHaveProperty('specification');
     expect(config).not.toHaveProperty('workingDir');
-    expect(config.cwd).toBe('projects/atlas');
   });
 
   // Without an entitlement the execution plane routes to the ephemeral sandbox
@@ -334,7 +242,7 @@ describe('resolveSandboxSessionConfig', () => {
       await expect(resolve({ workspaceId: 'ws1' })).resolves.toMatchObject({
         cwd: 'atlas',
         drive: 'personal',
-        mode: 'persistent',
+        mode: 'drive',
       });
     });
 
@@ -422,6 +330,7 @@ describe('resolveSandboxSessionConfig', () => {
     // checkout is made on its first run.
     it("creates a repository checkout's folder the drive does not have yet", async () => {
       findById.mockResolvedValue({
+        projectId: 'project-1',
         metadata: {
           sandboxEnvironmentId: 'env-1',
           sandboxWorkingDirectory: 'projects/atlas/repo',
@@ -440,6 +349,7 @@ describe('resolveSandboxSessionConfig', () => {
 
     it('falls back when a checkout folder cannot be created', async () => {
       findById.mockResolvedValue({
+        projectId: 'project-1',
         metadata: {
           sandboxEnvironmentId: 'env-1',
           sandboxWorkingDirectory: 'projects/atlas/repo',
@@ -455,6 +365,22 @@ describe('resolveSandboxSessionConfig', () => {
     });
 
     // A drive that could not be asked is not a folder that is gone.
+    // T-14825: only a project conversation is set up from an environment, so
+    // only its checkout is brought back. Anywhere else a missing folder is
+    // missing, whatever environment the topic still carries.
+    it('does not recreate a missing folder for an environment outside a project', async () => {
+      findById.mockResolvedValue({
+        metadata: { sandboxEnvironmentId: 'env-1', sandboxWorkingDirectory: 'projects/atlas/repo' },
+      });
+      mocks.driveFolderExists.mockResolvedValue(false);
+
+      await expect(resolve()).resolves.toMatchObject({
+        fallback: 'directoryMissing',
+        mode: 'ephemeral',
+      });
+      expect(mocks.ensureDriveFolder).not.toHaveBeenCalled();
+    });
+
     it('keeps the folder when the drive cannot answer', async () => {
       findById.mockResolvedValue({ metadata: { sandboxWorkingDirectory: 'projA' } });
       mocks.driveFolderExists.mockResolvedValue(undefined);
@@ -495,8 +421,8 @@ describe('resolveSandboxSessionConfig', () => {
       });
 
       await expect(resolve()).resolves.toMatchObject({
-        environment: INSTANCE_ID,
-        mode: 'persistent',
+        cwd: 'projects/atlas',
+        mode: 'drive',
       });
     });
   });
@@ -569,7 +495,7 @@ describe('resolveSandboxSessionConfig', () => {
       metadata: { sandboxInstanceId: INSTANCE_ID },
     });
 
-    await expect(resolve()).resolves.toMatchObject({ environment: INSTANCE_ID });
+    await expect(resolve()).resolves.toMatchObject({ cwd: 'projects/atlas', mode: 'drive' });
     expect(getAgentVisibility).not.toHaveBeenCalled();
     expect(mocks.EnvironmentInstanceModel).toHaveBeenCalledWith(
       serverDB,
@@ -623,6 +549,7 @@ describe('resolveSandboxSessionConfig', () => {
     expect(findById).not.toHaveBeenCalled();
   });
 
+  // Only a project conversation is set up from an environment: its project's.
   describe('initializing from an environment', () => {
     const environment = {
       configuration: {
@@ -642,6 +569,7 @@ describe('resolveSandboxSessionConfig', () => {
       resolveSandboxStorageClaim.mockResolvedValue(CLAIM);
       mocks.driveFolderExists.mockResolvedValue(true);
       findById.mockResolvedValue({
+        projectId: 'project-1',
         metadata: { sandboxEnvironmentId: 'env-1', sandboxWorkingDirectory: 'app' },
       });
 
@@ -658,7 +586,10 @@ describe('resolveSandboxSessionConfig', () => {
 
     it('carries the clone credential a private repository needs, resolved for this run', async () => {
       resolveSandboxStorageClaim.mockResolvedValue(null);
-      findById.mockResolvedValue({ metadata: { sandboxEnvironmentId: 'env-1' } });
+      findById.mockResolvedValue({
+        projectId: 'project-1',
+        metadata: { sandboxEnvironmentId: 'env-1' },
+      });
       const credential = { header: 'Authorization: Basic eA==', urlPrefix: 'https://github.com/' };
       mocks.resolveScmCloneCredential.mockResolvedValue(credential);
 
@@ -672,7 +603,10 @@ describe('resolveSandboxSessionConfig', () => {
 
     it('initializes without a credential when none is granted, so a public repository still clones', async () => {
       resolveSandboxStorageClaim.mockResolvedValue(null);
-      findById.mockResolvedValue({ metadata: { sandboxEnvironmentId: 'env-1' } });
+      findById.mockResolvedValue({
+        projectId: 'project-1',
+        metadata: { sandboxEnvironmentId: 'env-1' },
+      });
 
       const config = await resolve();
 
@@ -682,7 +616,10 @@ describe('resolveSandboxSessionConfig', () => {
 
     it('initializes a temporary sandbox too, which has no drive at all', async () => {
       resolveSandboxStorageClaim.mockResolvedValue(null);
-      findById.mockResolvedValue({ metadata: { sandboxEnvironmentId: 'env-1' } });
+      findById.mockResolvedValue({
+        projectId: 'project-1',
+        metadata: { sandboxEnvironmentId: 'env-1' },
+      });
 
       await expect(resolve()).resolves.toMatchObject({
         initialization: { environmentId: 'env-1' },
@@ -695,6 +632,7 @@ describe('resolveSandboxSessionConfig', () => {
       mocks.findEnvironmentById.mockResolvedValue({ ...environment, visibility: 'private' });
       findById.mockResolvedValue({
         agentId: 'agent-shared',
+        projectId: 'project-1',
         metadata: { sandboxEnvironmentId: 'env-1' },
       });
       getAgentVisibility.mockResolvedValue('public');
@@ -710,6 +648,7 @@ describe('resolveSandboxSessionConfig', () => {
       mocks.findEnvironmentById.mockResolvedValue({ ...environment, visibility: 'public' });
       findById.mockResolvedValue({
         agentId: 'agent-shared',
+        projectId: 'project-1',
         metadata: { sandboxEnvironmentId: 'env-1' },
       });
       getAgentVisibility.mockResolvedValue('public');
@@ -719,10 +658,66 @@ describe('resolveSandboxSessionConfig', () => {
       });
     });
 
+    // T-14791: a folder and an environment can now be picked together, so a
+    // private environment could otherwise be checked out where every member
+    // of the workspace can browse it.
+    it("keeps a private environment out of a folder on the workspace's public drive", async () => {
+      resolveSandboxStorageClaim.mockResolvedValue(CLAIM);
+      mocks.driveFolderExists.mockResolvedValue(true);
+      mocks.findEnvironmentById.mockResolvedValue({ ...environment, visibility: 'private' });
+      findById.mockResolvedValue({
+        projectId: 'project-1',
+        metadata: { sandboxEnvironmentId: 'env-1', sandboxWorkingDirectory: 'team' },
+      });
+
+      const config = await resolve({ workspaceId: 'ws-1' });
+
+      expect(config).toMatchObject({ cwd: 'team', drive: 'public', mode: 'drive' });
+      expect(config).not.toHaveProperty('initialization');
+    });
+
+    it("applies a private environment in a folder on the member's personal drive", async () => {
+      resolveSandboxStorageClaim.mockResolvedValue(CLAIM);
+      mocks.driveFolderExists.mockResolvedValue(true);
+      mocks.findEnvironmentById.mockResolvedValue({ ...environment, visibility: 'private' });
+      findById.mockResolvedValue({
+        projectId: 'project-1',
+        metadata: {
+          sandboxDrive: 'personal',
+          sandboxEnvironmentId: 'env-1',
+          sandboxWorkingDirectory: 'mine',
+        },
+      });
+
+      await expect(resolve({ workspaceId: 'ws-1' })).resolves.toMatchObject({
+        drive: 'personal',
+        initialization: { environmentId: 'env-1' },
+        mode: 'drive',
+      });
+    });
+
+    it('applies a published environment in a folder on the public drive', async () => {
+      resolveSandboxStorageClaim.mockResolvedValue(CLAIM);
+      mocks.driveFolderExists.mockResolvedValue(true);
+      mocks.findEnvironmentById.mockResolvedValue({ ...environment, visibility: 'public' });
+      findById.mockResolvedValue({
+        projectId: 'project-1',
+        metadata: { sandboxEnvironmentId: 'env-1', sandboxWorkingDirectory: 'team' },
+      });
+
+      await expect(resolve({ workspaceId: 'ws-1' })).resolves.toMatchObject({
+        drive: 'public',
+        initialization: { environmentId: 'env-1' },
+      });
+    });
+
     it('runs without one when the environment is no longer readable', async () => {
       resolveSandboxStorageClaim.mockResolvedValue(null);
       mocks.findEnvironmentById.mockResolvedValue(undefined);
-      findById.mockResolvedValue({ metadata: { sandboxEnvironmentId: 'env-gone' } });
+      findById.mockResolvedValue({
+        projectId: 'project-1',
+        metadata: { sandboxEnvironmentId: 'env-gone' },
+      });
 
       const config = await resolve();
 
@@ -730,7 +725,24 @@ describe('resolveSandboxSessionConfig', () => {
       expect(config).not.toHaveProperty('initialization');
     });
 
-    it('never initializes a legacy instance run, which its build already set up', async () => {
+    // T-14825: the cloud sandbox is not set up from an environment outside a
+    // project any more. One a conversation still carries from before is
+    // ignored — the run goes ahead without it, rather than failing.
+    it.each([
+      ['a temporary sandbox', {}, 'ephemeral'],
+      ['a folder on the drive', { sandboxWorkingDirectory: 'app' }, 'drive'],
+    ])('ignores an environment outside a project in %s', async (_, placement, mode) => {
+      resolveSandboxStorageClaim.mockResolvedValue(CLAIM);
+      findById.mockResolvedValue({ metadata: { sandboxEnvironmentId: 'env-1', ...placement } });
+
+      const config = await resolve();
+
+      expect(config.mode).toBe(mode);
+      expect(config).not.toHaveProperty('initialization');
+      expect(mocks.findEnvironmentById).not.toHaveBeenCalled();
+    });
+
+    it('runs a legacy instance outside a project without any environment', async () => {
       resolveSandboxStorageClaim.mockResolvedValue(CLAIM);
       findInstanceById.mockResolvedValue({ id: INSTANCE_ID, workingDirectory: 'atlas' });
       findById.mockResolvedValue({
@@ -739,7 +751,25 @@ describe('resolveSandboxSessionConfig', () => {
 
       const config = await resolve();
 
-      expect(config.mode).toBe('persistent');
+      expect(config).toMatchObject({ cwd: 'atlas', mode: 'drive' });
+      expect(config).not.toHaveProperty('initialization');
+      expect(mocks.findEnvironmentById).not.toHaveBeenCalled();
+    });
+
+    // A project conversation keeps its project's environment, but a legacy
+    // instance's folder already holds that conversation's work: cloning or
+    // bootstrapping into it is not "running without the environment".
+    it("never initializes a legacy instance's folder, even in a project", async () => {
+      resolveSandboxStorageClaim.mockResolvedValue(CLAIM);
+      findInstanceById.mockResolvedValue({ id: INSTANCE_ID, workingDirectory: 'atlas' });
+      findById.mockResolvedValue({
+        metadata: { sandboxEnvironmentId: 'env-1', sandboxInstanceId: INSTANCE_ID },
+        projectId: 'project-1',
+      });
+
+      const config = await resolve();
+
+      expect(config).toMatchObject({ cwd: 'atlas', mode: 'drive' });
       expect(config).not.toHaveProperty('initialization');
       expect(mocks.findEnvironmentById).not.toHaveBeenCalled();
     });

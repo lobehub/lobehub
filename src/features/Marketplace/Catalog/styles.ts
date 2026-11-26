@@ -12,6 +12,9 @@ export const catalogStyles = stylex.create({
     width: { 'default': 'calc(100% - 16px)', '@media (max-width: 860px)': '100%' },
   },
   groupFrame: { gap: 16 },
+  /** A page without the catalog header starts as far down as that header does. */
+  pageTop: { paddingBlockStart: 24 },
+  pageTopMobile: { paddingBlockStart: 4 },
   grid: {
     columnGap: 24,
     display: 'grid',

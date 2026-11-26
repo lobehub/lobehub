@@ -3,10 +3,18 @@ import {
   LocalExecutionHeterogeneousAgentTypeSchema,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './agent/heterogeneousAgent';
+import type { ChannelAgentAccessCard } from './agentAccess';
+import type { ChannelAsk, ChannelMessageKind } from './channelAsk';
+import type { ChannelPublicMember } from './channelMember';
+import type {
+  ChannelConnectorRequest,
+  ChannelDeviceGrantCard,
+  ChannelMessageSurface,
+} from './channelMessageCard';
 import type { ContactCard, ContactCardType, ContactUserProfile } from './contact';
 import { getWorkingDirEffectivePath } from './device';
 import type { BotWakeKind } from './signal';
-import type { ExternalWorkSummaryItem } from './work';
+import type { WorkSummaryItem } from './work';
 
 /**
  * Channel: a shared conversation where people and Agents talk together.
@@ -159,7 +167,13 @@ export type ChannelMemberMetadata = Record<string, unknown> & {
 };
 
 /** Free-form channel state that does not need its own column. */
-export type ChannelMetadata = Record<string, unknown>;
+export type ChannelMetadata = Record<string, unknown> & {
+  /**
+   * The Channel a project starts with. Clients show it under the project's name (see
+   * `ChannelListItem.displayTitle`) while its own `title` stays as stored; renaming keeps the mark.
+   */
+  projectDefault?: boolean;
+};
 
 /** Free-form grant state that does not need its own column. */
 export type ChannelMemberGrantMetadata = Record<string, unknown>;
@@ -168,22 +182,74 @@ export type ChannelMemberGrantMetadata = Record<string, unknown>;
 export type ChannelThreadMetadata = Record<string, unknown>;
 
 /** Free-form public message state that does not need its own column. */
-export type ChannelMessageMetadata = Record<string, unknown>;
+export type ChannelMessageMetadata = Record<string, unknown> & {
+  /** Present while an Agent's reply slot shows why its reply failed; see {@link ChannelReplyError}. */
+  replyError?: ChannelReplyError;
+};
 
 /**
- * The Agent that wrote a message on its requester's behalf (`lobe-channel.sendMessage` /
- * `messagePerson`). The person stays the sender and execution identity; this only says who
- * relayed it.
+ * What the person can do about a failed reply, recommended first:
+ * - `resume`: run it again in the same conversation (`channel.resumeJob`), continuing the
+ *   Agent's session where it stopped.
+ * - `retry`: run it again from the start (`channel.retryJob`).
+ * - `switch_device`: the device was the cause; pick another one for the Agent, then retry.
+ * - `request_access`: the requester may not use the Agent; ask its owner (`channel.requestAgentAccess`).
+ */
+export type ChannelReplyErrorAction = 'request_access' | 'resume' | 'retry' | 'switch_device';
+
+/**
+ * `metadata.replyError` of an Agent's message that stands in its reply slot (the request and the
+ * Agent member) after the reply ended for a system reason. One per slot: a repeated failure
+ * updates it (`attempts`), and the reply a later resume or retry publishes replaces it in place,
+ * clearing this field. The message never wakes, mentions or routes anyone, and other Agents read
+ * it only as a one-line note that the reply did not finish.
+ */
+export interface ChannelReplyError {
+  actions: ChannelReplyErrorAction[];
+  /** Failures of this reply so far, counting this one. */
+  attempts: number;
+  /** The device that caused it, when it did. */
+  deviceId?: string | null;
+  /** Raw failure message, shown under "details"; redacted for a shared Agent's visitor. */
+  errorMessage?: string | null;
+  /** Raw failure type (a `ChatErrorType`, or a job-level cause such as `OperationAbandoned`). */
+  errorType?: string | null;
+  /** The failed job; its retry/resume procedures take this id. */
+  jobId: string;
+  /** ISO time of this failure. */
+  occurredAt: string;
+  /** The failed run; a repeated report of the same run changes nothing. */
+  operationId?: string | null;
+  /** One sentence explaining what happened, in the requester's language. */
+  summary: string;
+}
+
+/** `metadata.replyError` of a failed reply's card, or undefined for anything else. */
+export const channelMessageReplyError = (
+  metadata: ChannelMessageMetadata | null | undefined,
+): ChannelReplyError | undefined => {
+  const error = metadata?.replyError as Partial<ChannelReplyError> | undefined;
+  return typeof error?.jobId === 'string' && typeof error.summary === 'string'
+    ? ({
+        ...error,
+        actions: Array.isArray(error.actions) ? error.actions : [],
+        attempts: typeof error.attempts === 'number' ? error.attempts : 1,
+        occurredAt: typeof error.occurredAt === 'string' ? error.occurredAt : '',
+      } as ChannelReplyError)
+    : undefined;
+};
+
+/**
+ * The Agent that posted a request in its own Channel on its requester's behalf (a Thread it
+ * opened, a steer, a scheduled report). The person stays the sender and execution identity; this
+ * only says which Agent posted it.
  */
 export interface ChannelMessageVia {
   agentId: string;
   name: string;
 }
 
-/**
- * Where a relayed request came from (`metadata.via.origin`), kept server-side so the target's
- * reply can be delivered back there as a receipt.
- */
+/** Where an exchange between Agents began, so what the asking Agent concludes is posted there. */
 export interface ChannelRelayOrigin {
   channelId: string;
   threadId: string | null;
@@ -204,15 +270,6 @@ export interface ChannelMessageReceipt {
   /** The published reply in that Channel. */
   messageId: string;
 }
-
-export const channelRelayOrigin = (
-  metadata: ChannelMessageMetadata | null | undefined,
-): ChannelRelayOrigin | undefined => {
-  const origin = (metadata?.via as { origin?: Partial<ChannelRelayOrigin> } | undefined)?.origin;
-  return typeof origin?.channelId === 'string'
-    ? { channelId: origin.channelId, threadId: origin.threadId ?? null }
-    : undefined;
-};
 
 /**
  * `metadata.exchange` of a request one Agent wrote to another in their conversation: where the
@@ -335,9 +392,11 @@ export type ChannelRoutingMode = 'decision' | 'fallback';
  * - `failed`: ended without a publishable reply, or its execution failed or became unknown.
  * - `cancelled`: stopped, or it can never run (requester left, environment switched).
  * - `silent`: a `followup` wake the Agent chose not to answer (`NO_REPLY`). Settled, not failed.
+ * - `merged`: queued behind an earlier request from the same person and answered in that run;
+ *   the run's manifest lists it in `requestMessageIds`.
  */
 export type ChannelJobStatus =
-  'cancelled' | 'completed' | 'failed' | 'queued' | 'running' | 'silent';
+  'cancelled' | 'completed' | 'failed' | 'merged' | 'queued' | 'running' | 'silent';
 
 /**
  * Why a job was woken, frozen when it is delivered.
@@ -371,6 +430,9 @@ export interface ChannelJobWake {
 
 /** Why a queued job cannot start yet. Typed so clients never infer it from error text. */
 export type ChannelJobBlockCode =
+  /** The requester may not use the Agent: its owner was asked, or declined (a failed job). */
+  | 'access_denied'
+  | 'access_request_pending'
   /** A deferred `followup` waiting for the message's primary responder to settle. */
   | 'awaiting_primary'
   | 'device_approval_pending'
@@ -385,6 +447,17 @@ export type ChannelJobBlockCode =
 export type ChannelMemberGrantStatus = 'approved' | 'pending' | 'rejected' | 'revoked';
 
 export type ChannelMemberGrantRevokeReason = 'device_owner_left' | 'revoked_by_owner';
+
+/**
+ * An Agent owner's consent for other people in a Channel to run their Agent, billed to the owner.
+ * Its scope narrows from the whole Channel to one person, one Thread, or one person in one Thread.
+ */
+export type ChannelAgentGrantStatus = 'approved' | 'pending' | 'rejected' | 'revoked';
+
+export type ChannelAgentGrantRevokeReason =
+  'agent_removed' | 'grantee_left' | 'owner_left' | 'revoked_by_owner';
+
+export type ChannelAgentGrantMetadata = Record<string, unknown>;
 
 export interface ChannelContextMessage {
   /** `id` is the actual user/Agent id, or NULL after author deletion. */
@@ -462,14 +535,11 @@ export interface ChannelDirectoryPage {
   hasMore: boolean;
 }
 
-/** A request posted into another Channel for the run's requester, @mentioning its Agents. */
+/** A request one Agent writes to another in the conversation between the two Agents. */
 export interface ChannelSendMessageParams {
-  /**
-   * Agents to address. One Agent is asked in the conversation between the two Agents; several are
-   * addressed in `channelId`, a group Channel they are all active members of.
-   */
+  /** The one Agent to ask; ask several with one call each. */
   agentIds: string[];
-  /** Required for several Agents; for one, only a hint of where the person reaches it. */
+  /** Only a hint of where the person reaches the Agent, whose environment it keeps. */
   channelId?: string;
   content: string;
 }
@@ -480,39 +550,6 @@ export interface ChannelSentMessage {
   channelTitle: string;
   messageId: string;
   /** Link to the Channel the message was posted in, for the reply that mentions it. */
-  url: string;
-}
-
-/** People the run's requester can message one-on-one in the run's scope. */
-export interface ChannelListPeopleParams {
-  limit?: number;
-  /** Case-insensitive part of the person's display name or @handle. */
-  query?: string;
-}
-
-export interface ChannelPerson {
-  name: string;
-  userId: string;
-  username: string | null;
-}
-
-export interface ChannelPeoplePage {
-  /** More people matched than were returned; narrow with `query`. */
-  hasMore: boolean;
-  people: ChannelPerson[];
-}
-
-/** A message for one person, posted in the requester's conversation with them. */
-export interface ChannelMessagePersonParams {
-  content: string;
-  userId: string;
-}
-
-export interface ChannelSentPersonMessage {
-  channelId: string;
-  messageId: string;
-  person: ChannelPerson;
-  /** Link to the requester's conversation with the person. */
   url: string;
 }
 
@@ -661,7 +698,20 @@ export interface ChannelInputManifest {
   primaryReplyMessageId?: string;
   /** The member that triggered this run; its user is the execution identity. */
   requesterMemberId: string;
+  /** The last request this run answers; with a merged batch, the newest of them. */
   requestMessageId: string;
+  /**
+  /**
+   * Every request this run answers, oldest first, when the requester sent several in a row
+   * while the member was busy: their queued jobs settle as `merged` into this one. Absent for
+   * a single request.
+   */
+  requestMessageIds?: string[];
+  /**
+   * Set when the run resumes a failed reply in the same topic (`resumeJob`), so the run gets a
+   * short continuation prompt and the runtime resumes its session.
+   */
+  resumed?: boolean;
   /** Fixed at claim time. */
   self: { agentId: string; memberId: string; name: string };
   threadId: string | null;
@@ -675,6 +725,8 @@ export type ChannelAuditDetails = Record<string, boolean | number | string | str
 /** A public group Channel the caller has not joined yet, as the browse list shows it. */
 export interface ChannelJoinableItem {
   createdAt: Date;
+  /** What clients show as its name; see `ChannelListItem.displayTitle`. */
+  displayTitle: string;
   id: string;
   /** Active people in it, Agents not counted. */
   memberCount: number;
@@ -695,6 +747,11 @@ export interface ChannelAvatarMember {
 /** A Channel's newest message as its list row previews it. */
 export interface ChannelLastMessage {
   /**
+   * An Agent's access request card with its request's current status, for the Agent's owner, so
+   * a list can read "Allowed …" once it was answered; null for any other message or reader.
+   */
+  agentAccess?: ChannelAgentAccessCard | null;
+  /**
    * The first attachment's MIME type and how many there are, so a message of only an image
    * still has a preview line; null without attachments.
    */
@@ -705,6 +762,11 @@ export interface ChannelLastMessage {
   card?: { name: string | null; type: ContactCardType } | null;
   content: string;
   createdAt: Date;
+  /**
+   * An Agent's acknowledgement posted before its run ("got it, checking the logs first"): it says
+   * the work started, not what came of it, so it raises no desktop notification.
+   */
+  opening?: boolean;
   /**
    * The Thread it was posted in, named by its title or else the first line of its root message;
    * null for the main conversation.
@@ -731,6 +793,12 @@ export interface ChannelListItem {
   canDelete: boolean;
   createdAt: Date;
   /**
+   * What clients show as the Channel's name, computed by the server on every read: the project's
+   * name for a project's default Channel (`metadata.projectDefault`) while that project is live
+   * and named, otherwise `title`. Clients only read it; renaming still edits `title`.
+   */
+  displayTitle: string;
+  /**
    * The caller hid the conversation from their list; new activity brings it back. Set by the
    * Channel list. Personal: other members never see it.
    */
@@ -743,6 +811,11 @@ export interface ChannelListItem {
   joined?: boolean;
   /** The newest message, Threads included, cut for a preview; set by the Channel list. */
   lastMessage?: ChannelLastMessage | null;
+  /**
+   * The caller's read position, which `unreadCount` and `mentionCount` count from; set by the
+   * Channel list. Opening the main conversation moves it past every Thread message too.
+   */
+  lastReadSequence?: number;
   /**
    * The first members besides the caller, oldest first, for a group Channel's list avatar;
    * set by the Channel list.
@@ -802,34 +875,17 @@ export interface ChannelListItem {
    */
   threadMentions?: ChannelThreadMention[];
   title: string;
-  /** Main-channel messages the caller has not read; set by the Channel list. */
+  /**
+   * Messages after `lastReadSequence` that are news to the caller: the main conversation, Threads
+   * they follow, started, or wrote in, and any message that @mentions them. Replies in other
+   * Threads are left out. Set by the Channel list.
+   */
   unreadCount?: number;
   /** Bumped by every new message, so it orders conversations by latest activity. */
   updatedAt?: Date;
   /** Ignored for a direct conversation, which is always private. */
   visibility: ChannelVisibility;
   workspaceId: string | null;
-}
-
-/** Where an Agent member runs in this Channel, readable by every member. */
-export interface ChannelMemberEnvironmentPreview {
-  deviceId: string | null;
-  /** The device's friendly name, else its hostname; null when the device row is gone. */
-  deviceName: string | null;
-  /**
-   * The device owner's approval for a private workspace device picked in this Channel;
-   * absent when the device needs none (public, personal, or the Agent's own setting).
-   */
-  grant?: ChannelMemberDeviceGrant;
-  workingDirectory: string | null;
-}
-
-/** One Agent member's grant on someone's private device, as members of the Channel see it. */
-export interface ChannelMemberDeviceGrant {
-  /** Who decides it; the client offers approve / reject / revoke to this person only. */
-  deviceOwnerId: string;
-  id: string;
-  status: ChannelMemberGrantStatus;
 }
 
 /** A request on one of the caller's private devices, as the device owner reviews it. */
@@ -850,30 +906,12 @@ export interface ChannelDeviceGrantItem {
   workingDirectory: string;
 }
 
-export interface ChannelPublicMember {
-  actorType: ChannelMemberActorType;
-  agentId: string | null;
-  avatar: string | null;
-  description: string | null;
-  /** Agent members only; null when the Channel sets no device or directory for it. */
-  environment?: ChannelMemberEnvironmentPreview | null;
-  id: string;
-  /** The member who added this one; null when they joined on their own or the adder is unknown. */
-  invitedBy: string | null;
-  joinedAt: Date;
-  /** An Agent that answers only when @mentioned; see `ChannelMemberConfig.muted`. */
-  muted?: boolean;
-  name: string | null;
-  role: ChannelMemberRole | null;
-  status: ChannelMemberStatus;
-  userAvatar: string | null;
-  userId: string | null;
-  userName: string | null;
-  username: string | null;
-}
-
 export interface ChannelPublicMessage {
+  /** An Agent's card asking its owner (the reader) to let someone use it, with its status. */
+  agentAccess?: ChannelAgentAccessCard | null;
   agentId: string | null;
+  /** An Agent's question with options, on an `ask` message; null otherwise. */
+  ask?: ChannelAsk | null;
   author: {
     avatar: string | null;
     id: string | null;
@@ -882,6 +920,8 @@ export interface ChannelPublicMessage {
   };
   /** A person or an Agent shared as a contact card; the content holds its text fallback. */
   card?: ContactCard | null;
+  /** An Agent asking the reader to connect a connector it needs; see {@link ChannelConnectorRequest}. */
+  connector?: ChannelConnectorRequest | null;
   content: string;
   createdAt: Date;
   /**
@@ -889,14 +929,20 @@ export interface ChannelPublicMessage {
    * attachments, so Threads, replies and jobs that point at it still resolve.
    */
   deletedAt?: Date | null;
+  /** An Agent's request card for the reader's private device, with the grant's current status. */
+  deviceGrant?: ChannelDeviceGrantCard | null;
   /** Set once the author has edited the text; shown as "(edited)". */
   editedAt?: Date | null;
   fileIds: string[];
   id: string;
+  /** What the message is; its payload, if any, is in the field named after it. */
+  kind?: ChannelMessageKind;
   mentions: string[];
   /** Another Channel's reply this request brings back to the relaying Agent; null otherwise. */
   receipt?: ChannelMessageReceipt | null;
   recipientMemberIds: string[];
+  /** Set while this Agent message is the card of a failed reply; null otherwise. */
+  replyError?: ChannelReplyError | null;
   /** Bounded public quote, including when its original is outside the loaded page. */
   replyTo?: Pick<
     ChannelPublicMessage,
@@ -908,15 +954,21 @@ export interface ChannelPublicMessage {
   /** The Agent topic behind a reply, only when the viewer ran it (owns that topic). */
   sourceTopicId?: string | null;
   sourceTopicTitle?: string | null;
+  /** Cards the Agent drew in this reply (A2UI), in the order it drew them. Empty on requests. */
+  surfaces?: ChannelMessageSurface[];
+  /** With `surfaces`: how much of `content` is the reply's own text; the rest is their text form. */
+  surfacesBodyLength?: number;
   threadId: string | null;
   userId: string | null;
   /** The Agent that relayed this request (or answered it, on a receipt); null otherwise. */
   via?: (ChannelMessageVia & { avatar: string | null }) | null;
   /**
-   * External Works a reply's run touched: the conversation's work summaries, for every member,
-   * without the ids that link them to the requester's Work, topic and run. Empty on requests.
+   * Works a reply's run touched, as the conversation's work summaries. Every member gets the
+   * external ones, without the ids that link them to the requester's Work, topic and run. A shared
+   * Agent's visitor also gets the internal Works of their own runs (collections, files, ...), with
+   * the Agent owner's identity and spend removed. Empty on requests.
    */
-  works?: ExternalWorkSummaryItem[];
+  works?: WorkSummaryItem[];
 }
 
 export interface ChannelPublicJob {

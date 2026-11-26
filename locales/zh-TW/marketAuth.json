@@ -27,6 +27,7 @@
   "claimResources.claim": "領取選定項目",
   "claimResources.description": "我們發現與您的帳戶相關聯的資源，您可以領取：",
   "claimResources.error": "資源領取失敗。請再試一次。",
+  "claimResources.failedRetry": "無法領取這些資源。請檢查網路後再試一次。",
   "claimResources.mcpSection": "MCP 伺服器",
   "claimResources.selectedCount": "已選擇 {{count}} 項",
   "claimResources.skillSection": "技能",

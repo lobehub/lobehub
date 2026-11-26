@@ -1,6 +1,7 @@
 'use client';
 
 import { KeyEnum } from '@lobechat/const/hotkeys';
+import { DEFAULT_FOLLOW_UP_BEHAVIOR } from '@lobechat/types';
 import { combineKeys, Flexbox, Hotkey, Select, Switch } from '@lobehub/ui';
 import { Form, type FormFieldProps, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
@@ -13,11 +14,7 @@ import { FORM_STYLE } from '@/const/layoutTokens';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { useSaveState } from '@/hooks/useSaveState';
 import { useUserStore } from '@/store/user';
-import {
-  labPreferSelectors,
-  settingsSelectors,
-  userGeneralSettingsSelectors,
-} from '@/store/user/selectors';
+import { settingsSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { type UserGeneralConfig } from '@/types/user/settings';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
@@ -52,9 +49,6 @@ const Sending = memo(() => {
   const general = useUserStore((s) => settingsSelectors.currentSettings(s).general, isEqual);
   const enablePasteAutoConvert = useUserStore(userGeneralSettingsSelectors.enablePasteAutoConvert);
   const enableVoiceMessage = useUserStore(userGeneralSettingsSelectors.enableVoiceMessage);
-  const enableBetterCodingExperience = useUserStore(
-    labPreferSelectors.enableBetterCodingExperience,
-  );
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const { sendKey, setSendKey } = useSendKeyPreference();
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
@@ -86,31 +80,28 @@ const Sending = memo(() => {
         ),
       };
 
-  // Only read while the Better Coding Experience lab is on.
-  const followUpBehaviorItem: FormFieldProps | undefined = enableBetterCodingExperience
-    ? {
-        children: (
-          <Select
-            style={{ width: 160 }}
-            value={general.followUpBehavior ?? 'steer'}
-            options={[
-              {
-                label: t('settingChatAppearance.followUpBehavior.options.queue'),
-                value: 'queue',
-              },
-              {
-                label: t('settingChatAppearance.followUpBehavior.options.steer'),
-                value: 'steer',
-              },
-            ]}
-            onChange={(value) => update({ followUpBehavior: value })}
-          />
-        ),
-        desc: t('settingChatAppearance.followUpBehavior.desc'),
-        label: t('settingChatAppearance.followUpBehavior.title'),
-        minWidth: undefined,
-      }
-    : undefined;
+  const followUpBehaviorItem: FormFieldProps = {
+    children: (
+      <Select
+        style={{ width: 160 }}
+        value={general.followUpBehavior ?? DEFAULT_FOLLOW_UP_BEHAVIOR}
+        options={[
+          {
+            label: t('settingChatAppearance.followUpBehavior.options.queue'),
+            value: 'queue',
+          },
+          {
+            label: t('settingChatAppearance.followUpBehavior.options.steer'),
+            value: 'steer',
+          },
+        ]}
+        onChange={(value) => update({ followUpBehavior: value })}
+      />
+    ),
+    desc: t('settingChatAppearance.followUpBehavior.desc'),
+    label: t('settingChatAppearance.followUpBehavior.title'),
+    minWidth: undefined,
+  };
 
   const group: FormGroupItem = {
     children: [

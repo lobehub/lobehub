@@ -14,6 +14,16 @@ const SKILLS_IDENTIFIER = 'lobe-skills';
 const ACTIVATOR_IDENTIFIER = 'lobe-activator';
 
 /**
+ * Literal copies of `LobeAgentIdentifier` and its todo-mutating API names
+ * (@lobechat/builtin-tool-lobe-agent), frozen for the same reason as above.
+ */
+const LOBE_AGENT_IDENTIFIER = 'lobe-agent';
+const TODO_MUTATION_APIS = new Set(['clearTodos', 'createTodos', 'updateTodos']);
+
+export const isTodoMutationCall = (identifier?: string, apiName?: string) =>
+  identifier === LOBE_AGENT_IDENTIFIER && !!apiName && TODO_MUTATION_APIS.has(apiName);
+
+/**
  * Options for message visitor traversal
  */
 export interface MessageVisitorOptions {
@@ -207,6 +217,40 @@ export const extractTodosFromMessages = (
 };
 
 /**
+ * Count the todo-mutating calls at the end of the conversation with no other
+ * tool call in between, stopping at the latest user message. Text-only
+ * assistant output does not reset the count: a model stuck re-managing its list
+ * keeps announcing that it will stop while it keeps calling (production: ~490
+ * todo calls in one 33-minute run).
+ */
+export const countTrailingTodoCalls = (
+  messages: UIChatMessage[],
+  /**
+   * Calls of the batch being executed. Its assistant is already persisted with
+   * these calls (and, on an approval resume, their placeholder rows), so they
+   * would otherwise count as history.
+   */
+  pendingToolCallIds: ReadonlySet<string>,
+): number => {
+  let count = 0;
+
+  for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex--) {
+    const message = messages[messageIndex];
+    if (message.role === 'user') return count;
+
+    const invocations = collectToolInvocations(message);
+    for (let invocationIndex = invocations.length - 1; invocationIndex >= 0; invocationIndex--) {
+      const { apiName, identifier, toolCallId } = invocations[invocationIndex];
+      if (toolCallId && pendingToolCallIds.has(toolCallId)) continue;
+      if (!isTodoMutationCall(identifier, apiName)) return count;
+      count++;
+    }
+  }
+
+  return count;
+};
+
+/**
  * Accumulate activated skills from all activateSkill / activateTools tool
  * messages. Skills once activated remain active for the rest of the
  * conversation; the skill id (or name, for filesystem/builtin activations that
@@ -317,3 +361,77 @@ export const extractToolActivationsFromMessages = (
 export const extractActivatedToolIdsFromMessages = (
   messages: UIChatMessage[],
 ): string[] | undefined => extractToolActivationsFromMessages(messages)?.map(({ id }) => id);
+
+const TOOL_NAME_SEPARATOR = '____';
+
+const messageHasToolInvocation = (
+  msg: UIChatMessage,
+  identifier: string,
+  prefix: string,
+  apiNames?: ReadonlySet<string>,
+): boolean => {
+  // A call whose API name was not recorded counts: it cannot be ruled out.
+  const matchesApi = (apiName: string | undefined) =>
+    !apiNames || !apiName || apiNames.has(apiName);
+
+  if (
+    collectToolInvocations(msg).some(
+      (invocation) => invocation.identifier === identifier && matchesApi(invocation.apiName),
+    )
+  ) {
+    return true;
+  }
+
+  if (msg.role === 'assistant') {
+    if (
+      Array.isArray(msg.tools) &&
+      msg.tools.some((tool) => tool?.identifier === identifier && matchesApi(tool?.apiName))
+    ) {
+      return true;
+    }
+
+    const toolCalls = (msg as { tool_calls?: Array<{ function?: { name?: string } }> }).tool_calls;
+    if (
+      Array.isArray(toolCalls) &&
+      toolCalls.some((call) => {
+        const name = call?.function?.name;
+        if (name === identifier) return true;
+        return (
+          typeof name === 'string' &&
+          name.startsWith(prefix) &&
+          matchesApi(name.slice(prefix.length))
+        );
+      })
+    ) {
+      return true;
+    }
+  }
+
+  if (Array.isArray(msg.compressedMessages)) {
+    return msg.compressedMessages.some((compressed) =>
+      messageHasToolInvocation(compressed, identifier, prefix, apiNames),
+    );
+  }
+
+  return false;
+};
+
+/**
+ * Whether the conversation history contains a tool invocation for `identifier`,
+ * optionally limited to the given API names.
+ *
+ * Covers flat DB rows (`role='tool'` and `role='assistant'` with `tools` /
+ * `tool_calls`), grouped `assistantGroup` / `supervisor` nodes, and nested
+ * `compressedGroup` entries. Used to keep the APIs of a deferred tool (such as
+ * the skill APIs of `lobe-skills`) declared when earlier turns already called
+ * them: a provider rejects a history that calls a function the request no
+ * longer declares.
+ */
+export const hasHistoricalToolInvocation = (
+  messages: UIChatMessage[],
+  identifier: string,
+  apiNames?: ReadonlySet<string>,
+): boolean => {
+  const prefix = `${identifier}${TOOL_NAME_SEPARATOR}`;
+  return messages.some((msg) => messageHasToolInvocation(msg, identifier, prefix, apiNames));
+};

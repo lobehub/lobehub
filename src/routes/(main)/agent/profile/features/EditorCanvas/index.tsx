@@ -18,6 +18,7 @@ import { useResourceAccess } from '@/features/ResourcePermission/useResourceAcce
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { usePermission } from '@/hooks/usePermission';
 import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
+import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 import { useAgentStore } from '@/store/agent';
 
 import { useMentionOptions } from '../ProfileEditor/MentionList';
@@ -102,9 +103,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId, description, 
       updateConfigById(targetAgentId, payload, { rethrow: true, showErrorMessage: false }),
     [updateConfigById],
   );
-  const [initialLoad] = useState(
-    editorData === undefined || editorData?.root === undefined ? EMPTY_EDITOR_STATE : editorData,
-  );
+  const [initialLoad] = useState(isValidEditorData(editorData) ? editorData : EMPTY_EDITOR_STATE);
   const mentionOptions = useMentionOptions();
   const editor = useProfileStore((s) => s.editor);
   const handleContentChange = useProfileStore((s) => s.handleContentChange);
@@ -341,7 +340,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId, description, 
     // Don't init if streaming is in progress
     if (streamingInProgress) return;
     try {
-      if (editorData && editorData?.root !== undefined) {
+      if (isValidEditorData(editorData)) {
         setProgrammaticDocument(editor, 'json', editorData, systemRole);
         lastSyncedEditorDataRef.current = structuredClone(editorData);
       } else if (systemRole) {
@@ -380,7 +379,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId, description, 
     if (!editor || !editorInit || !contentInit) return;
     if (streamingInProgress) return;
 
-    const hasEditorData = !!editorData && editorData?.root !== undefined;
+    const hasEditorData = isValidEditorData(editorData);
     if (hasEditorData) {
       lastSyncedRoleRef.current = undefined;
       // A fresh server response is authoritative while this agent has not been

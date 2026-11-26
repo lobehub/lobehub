@@ -1,6 +1,6 @@
 declare module 'word-extractor' {
   export default class WordExtractor {
-    extract(filePath: string): Promise<{
+    extract(source: string | Buffer): Promise<{
       getBody: () => string;
       getHeaders?: () => Record<string, string> | undefined;
       text?: string;

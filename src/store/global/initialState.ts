@@ -81,6 +81,8 @@ export enum SettingsTabs {
   Billing = 'billing',
   /** @deprecated Use Conversation instead */
   ChatAppearance = 'chat-appearance',
+  /** Optional business tab; listed only where `useCodingPlansTab` supplies it. */
+  CodingPlans = 'coding-plans',
   /** @deprecated Use Appearance instead */
   Common = 'common',
   Connector = 'connector',
@@ -221,10 +223,22 @@ export interface SystemStatus {
    */
   agentListExpandedGroupKeys?: string[];
   /**
-   * Whether the "in sidebar" overview section of the agent view-all page is
-   * collapsed. Defaults to expanded so the section is discoverable.
+   * Whether the "Recommended agents" section of the agent view-all page is
+   * collapsed. Defaults to expanded: it is how members find what their
+   * workspace recommends.
+   */
+  agentListRecommendedSectionCollapsed?: boolean;
+  /**
+   * @deprecated Read and written by earlier builds only, whose default
+   *   (expanded) was persisted for everyone; replaced by
+   *   `agentListSidebarSectionExpanded` so the section starts collapsed.
    */
   agentListSidebarSectionCollapsed?: boolean;
+  /**
+   * Whether the "in sidebar" overview section of the agent view-all page is
+   * expanded. Defaults to collapsed: the sidebar itself already shows it.
+   */
+  agentListSidebarSectionExpanded?: boolean;
   /**
    * View mode of the agent view-all page (badge-wall card grid vs table list); defaults to card
    */
@@ -253,6 +267,11 @@ export interface SystemStatus {
    * Order of the sidebar Channel sections. Device-local view setting.
    */
   channelListSort?: ChannelListSort;
+  /**
+   * Channels whose sidebar thread list is folded, keyed by Channel id. Nested booleans for the
+   * same lodash `merge` reason as `assigneeAgentSelectorCollapsedGroups`. Device-local.
+   */
+  channelThreadsCollapsed?: Record<string, boolean>;
   chatInputHeight?: number;
   /**
    * Which topicGroups are collapsed, bucketed by group mode. We persist the
@@ -655,7 +674,8 @@ export interface GlobalState {
 export const INITIAL_STATUS = {
   agentBuilderPanelWidth: 360,
   agentListExpandedGroupKeys: [] as string[],
-  agentListSidebarSectionCollapsed: false,
+  agentListRecommendedSectionCollapsed: false,
+  agentListSidebarSectionExpanded: false,
   agentListViewMode: 'card' as const,
   agentListViewOptions: {
     orderBy: 'updatedAt' as const,

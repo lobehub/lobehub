@@ -63,11 +63,15 @@ describe('Marketplace page copy', () => {
   it('names the Marketplace as the place an agent is published before social sharing', () => {
     const hint = (locale: string) => readNs(locale, 'chat')['shareModal.social.agent.disabledHint'];
 
-    expect(hint('en-US')).toContain(readNs('en-US', 'common')['tab.marketplace']);
-    expect(hint('zh-CN')).toContain(readNs('zh-CN', 'common')['tab.marketplace']);
+    // The entry carries the same name as Lobot's Market.
+    expect(readNs('en-US', 'common')['tab.marketplace']).toBe('Marketplace');
+    expect(readNs('zh-CN', 'common')['tab.marketplace']).toBe('市场');
+    expect(hint('en-US')).toContain('Marketplace');
+    expect(hint('zh-CN')).toContain('市场');
     for (const locale of locales) {
       const value = hint(locale);
-      if (value) expect(value, locale).not.toMatch(/Community|社区|社群/);
+      // 社群 alone is the old "Community" name; 社群媒體 is social media, which the hint names.
+      if (value) expect(value, locale).not.toMatch(/Community|社区|社群(?!媒體)/);
     }
   });
 

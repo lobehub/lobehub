@@ -27,6 +27,7 @@
   "claimResources.claim": "選択したものを請求",
   "claimResources.description": "アカウントにリンクされたリソースが見つかりました。以下を請求できます：",
   "claimResources.error": "リソースの請求に失敗しました。もう一度お試しください。",
+  "claimResources.failedRetry": "これらのリソースを請求できませんでした。ネットワークを確認して、もう一度お試しください。",
   "claimResources.mcpSection": "MCPサーバー",
   "claimResources.selectedCount": "{{count}} 件選択済み",
   "claimResources.skillSection": "スキル",

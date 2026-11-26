@@ -16,13 +16,11 @@ import { ArrowRight } from 'lucide-react';
 import React, { memo, type MouseEvent, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchAgentLabels } from '@/hooks/useFetchAgentLabels';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
-import { usePermission } from '@/hooks/usePermission';
 
 import { useCreateMenuItems } from '../../hooks';
 import Actions from './Actions';
@@ -42,71 +40,15 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
   useFetchAgentLabels();
   // One "Agents" section in both modes. In a workspace it lists shared and
   // private rows together (private ones carry a lock icon).
-  const activeWorkspaceId = useActiveWorkspaceId();
-
   const { openConfigGroupModal } = useAgentModal();
 
-  // Create menu items
-  const {
-    createAgentListMenuItem,
-    createAgentMenuItem,
-    createConnectAgentMenuItem,
-    createGroupChatMenuItem,
-    createMarketAgentMenuItem,
-    createTopLevelMenuItems,
-    isLoading,
-  } = useCreateMenuItems();
-  const { allowed: canCreatePublic } = usePermission('create_content');
+  // One create menu in both modes. In a workspace each dialog (agent, group,
+  // external agent) carries its own "Private / Workspace" field, defaulting to
+  // private, so the menu no longer splits entries by visibility.
+  const { createTopLevelMenuItems, isLoading } = useCreateMenuItems();
+  const addMenuItems = useMemo(() => createTopLevelMenuItems(), [createTopLevelMenuItems]);
 
-  const addMenuItems = useMemo(() => {
-    if (!activeWorkspaceId) return createTopLevelMenuItems();
-
-    // Workspace: new agents start private (the safe default the former
-    // Private section used); a workspace agent is one explicit entry away.
-    const connectItem = createConnectAgentMenuItem({ visibility: 'private' });
-    const workspaceAgentItem = canCreatePublic
-      ? createAgentMenuItem({ visibility: 'public' })
-      : undefined;
-
-    return [
-      createAgentMenuItem({ visibility: 'private' }),
-      ...(workspaceAgentItem
-        ? [
-            {
-              ...workspaceAgentItem,
-              key: 'newWorkspaceAgent',
-              label: t('navPanel.createWorkspaceAgent'),
-            },
-          ]
-        : []),
-      createGroupChatMenuItem({ visibility: 'private' }),
-      ...(connectItem ? [{ type: 'divider' as const }, connectItem] : []),
-      { type: 'divider' as const },
-      createAgentListMenuItem(),
-      createMarketAgentMenuItem(),
-    ];
-  }, [
-    activeWorkspaceId,
-    canCreatePublic,
-    createAgentListMenuItem,
-    createAgentMenuItem,
-    createConnectAgentMenuItem,
-    createGroupChatMenuItem,
-    createMarketAgentMenuItem,
-    createTopLevelMenuItems,
-    t,
-  ]);
-
-  const handleOpenConfigGroupModal = useCallback(
-    (scope?: 'private' | 'public') => {
-      openConfigGroupModal(scope);
-    },
-    [openConfigGroupModal],
-  );
-
-  const dropdownMenu = useAgentActionsDropdownMenu({
-    openConfigGroupModal: handleOpenConfigGroupModal,
-  });
+  const dropdownMenu = useAgentActionsDropdownMenu({ openConfigGroupModal });
 
   const navigate = useWorkspaceAwareNavigate();
   const handleViewAll = useCallback(

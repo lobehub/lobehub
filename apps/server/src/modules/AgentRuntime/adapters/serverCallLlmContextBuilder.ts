@@ -5,7 +5,12 @@ import {
   selectExpertise,
 } from '@lobechat/agent-runtime';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
-import { cacheEconomicsForProvider, getSlicedMessages } from '@lobechat/context-engine';
+import {
+  cacheEconomicsForProvider,
+  getSlicedMessages,
+  skillChangesByMessage,
+  skillsFromSnapshot,
+} from '@lobechat/context-engine';
 import { gatherContextFacts } from '@lobechat/mecha';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
@@ -21,6 +26,7 @@ import {
   createServerContextFactProviders,
   resolveServerConnectorFeatures,
 } from '@/server/modules/Mecha/ContextEngineering/providers';
+import { resolveServerSkillIndex } from '@/server/modules/Mecha/ContextEngineering/providers/skillIndex';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 import { resolveBuilderGroupId } from '@/server/services/toolExecution/serverRuntimes/groupAgentBuilderTarget';
 
@@ -123,49 +129,68 @@ export const buildServerCallLlmContext = async ({
           workspaceId: state.origin?.workspaceId ?? ctx.workspaceId,
         })
       : state.origin?.editingGroupId;
+  const indexTurn = {
+    cacheTtlMs: cacheEconomicsForProvider(provider).ttlMs,
+    messages: messagesForContext,
+    // The engine drops older messages when history is limited; a change note
+    // on a dropped message no longer reaches the model.
+    visibleMessages: getSlicedMessages(messagesForContext, {
+      enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
+      historyCount,
+    }),
+  };
+
   // Which facts this turn needs is decided by the shared rules; the server
   // only answers the lookups they ask for.
-  const facts = await gatherContextFacts(
-    {
-      activeDeviceId,
-      agent: {
-        chatConfig: agentConfig.chatConfig,
-        description: agentConfig.description,
-        name: agentConfig.name,
-        slug: agentConfig.slug,
-        title: agentConfig.title,
-      },
-      agentId,
-      disabledPluginIds: state.world?.disabledPluginIds,
-      discoverableTools: toolDiscoveryConfig?.availableTools,
-      editingAgentId: state.origin?.editingAgentId,
-      editingGroupId,
-      enabledToolIds: resolved.enabledToolIds,
-      executionTarget,
-      features: resolveServerConnectorFeatures(),
-      includeRecentAgents: state.origin?.trigger !== 'channel',
-      isSubAgent: state.origin?.lineage?.isSubAgent === true,
-      mentionedAgents: (state as any).initialContext?.initialContext?.mentionedAgents,
-      messages: messagesForContext,
-      shareVisitor: state.principal?.actor?.shareVisitor ?? ctx.agentShareVisitor,
-      topicId,
-      workspaceId: state.origin?.workspaceId ?? ctx.workspaceId,
-    },
-    createServerContextFactProviders({
-      ctx,
-      documentIndexTurn: {
-        cacheTtlMs: cacheEconomicsForProvider(provider).ttlMs,
+  const liveSkills = resolvedSkills?.enabledSkills ?? [];
+  const [facts, skillIndexSnapshot] = await Promise.all([
+    gatherContextFacts(
+      {
+        activeDeviceId,
+        agent: {
+          chatConfig: agentConfig.chatConfig,
+          description: agentConfig.description,
+          name: agentConfig.name,
+          slug: agentConfig.slug,
+          title: agentConfig.title,
+        },
+        agentId,
+        disabledPluginIds: state.world?.disabledPluginIds,
+        discoverableTools: toolDiscoveryConfig?.availableTools,
+        editingAgentId: state.origin?.editingAgentId,
+        editingGroupId,
+        enabledToolIds: resolved.enabledToolIds,
+        executionTarget,
+        features: resolveServerConnectorFeatures(),
+        includeRecentAgents: state.origin?.trigger !== 'channel',
+        isSubAgent: state.origin?.lineage?.isSubAgent === true,
+        mentionedAgents: (state as any).initialContext?.initialContext?.mentionedAgents,
         messages: messagesForContext,
-        // The engine drops older messages when history is limited; a change note
-        // on a dropped message no longer reaches the model.
-        visibleMessages: getSlicedMessages(messagesForContext, {
-          enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
-          historyCount,
-        }),
+        shareVisitor: state.principal?.actor?.shareVisitor ?? ctx.agentShareVisitor,
+        topicId,
+        workspaceId: state.origin?.workspaceId ?? ctx.workspaceId,
       },
-      state,
-    }),
-  );
+      createServerContextFactProviders({
+        ctx,
+        documentIndexTurn: indexTurn,
+        state,
+      }),
+    ),
+    enableAgentMode !== false
+      ? resolveServerSkillIndex({
+          agentId,
+          ctx,
+          skills: liveSkills,
+          state,
+          turn: indexTurn,
+        }).catch(() => undefined)
+      : Promise.resolve(undefined),
+  ]);
+
+  const effectiveSkills = skillIndexSnapshot
+    ? skillsFromSnapshot(liveSkills, skillIndexSnapshot)
+    : liveSkills;
+  const skillChanges = skillIndexSnapshot ? skillChangesByMessage(skillIndexSnapshot) : undefined;
 
   const contextEngineInput = {
     enableMcpAppContext: await isMcpAppsEnabled(ctx.userId),
@@ -251,9 +276,10 @@ export const buildServerCallLlmContext = async ({
       tools: resolved.enabledToolIds,
     },
     userMemory: state.world?.userMemory,
-    ...(resolvedSkills?.enabledSkills?.length && {
-      skillsConfig: { enabledSkills: resolvedSkills.enabledSkills },
+    ...(effectiveSkills.length > 0 && {
+      skillsConfig: { enabledSkills: effectiveSkills },
     }),
+    ...(skillChanges && { skillChanges }),
     enableAgentMode,
     ...(facts.step.topicReferences && { topicReferences: facts.step.topicReferences }),
     ...(facts.step.documentReferences && {

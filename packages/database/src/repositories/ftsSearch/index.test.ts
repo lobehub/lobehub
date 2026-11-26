@@ -4,7 +4,7 @@ import { drizzle as nodeDrizzle } from 'drizzle-orm/node-postgres';
 import { Pool as NodePool } from 'pg';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getTestDB } from '../../core/getTestDB';
+import { getTestDatabaseUrl, getTestDB } from '../../core/getTestDB';
 import * as schema from '../../schemas';
 import { chatGroups, documents, userMemories, workspaces } from '../../schemas';
 import type { NewAgent } from '../../schemas/agent';
@@ -32,7 +32,6 @@ let ftsSearchRepo: FtsSearchRepo;
 const serverDB: LobeChatDatabase = await getTestDB();
 
 beforeEach(async () => {
-  // Clean up
   await serverDB.delete(users);
 
   // Create test users
@@ -132,6 +131,7 @@ const REWRITTEN_RESULT_TYPES = [
 const SCAN_ALIASES = [
   'agent_hits',
   'chat_group_hits',
+  'file_content_hits',
   'file_hits',
   'folder_hits',
   'knowledge_base_hits',
@@ -1982,7 +1982,7 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
       workspaceId?: string;
     }): Promise<CapturedStatement[]> => {
       const captured: CapturedStatement[] = [];
-      loggingPool ??= new NodePool({ connectionString: process.env.DATABASE_TEST_URL });
+      loggingPool ??= new NodePool({ connectionString: await getTestDatabaseUrl() });
       const db = nodeDrizzle(loggingPool, {
         logger: {
           logQuery: (query: string, params: unknown[]) => captured.push({ params, sql: query }),

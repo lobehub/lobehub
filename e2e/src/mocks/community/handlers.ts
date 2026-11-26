@@ -16,6 +16,7 @@ import {
   mockModelDetails,
   mockModelItems,
   mockModelList,
+  mockOnboardingAgents,
   mockProviderDetails,
   mockProviderItems,
   mockProviderList,
@@ -244,6 +245,10 @@ const findByIdentifier = <T extends { identifier: string }>(items: T[], input: u
 
 const getMockResponse = (procedure: string, input: unknown): unknown => {
   switch (procedure) {
+    case 'market.agent.getOnboardingFull': {
+      return mockOnboardingAgents;
+    }
+
     case 'market.getAssistantCategories': {
       return getAssistantCategories(input);
     }

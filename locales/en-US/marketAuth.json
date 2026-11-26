@@ -27,6 +27,7 @@
   "claimResources.claim": "Claim Selected",
   "claimResources.description": "We found resources linked to your account that you can claim:",
   "claimResources.error": "Failed to claim resources. Please try again.",
+  "claimResources.failedRetry": "Couldn't claim these resources. Check your network and try again.",
   "claimResources.mcpSection": "MCP Servers",
   "claimResources.selectedCount": "{{count}} item(s) selected",
   "claimResources.skillSection": "Skills",

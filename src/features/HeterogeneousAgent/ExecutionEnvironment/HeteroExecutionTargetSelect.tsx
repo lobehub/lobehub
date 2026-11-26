@@ -6,11 +6,18 @@ import type { DeviceExecutionTarget, DeviceListItem } from '@lobechat/types';
 import type { SelectOption, SelectOptions } from '@lobehub/ui';
 import { Select, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { useSelectExecutionTarget } from '@/features/ChatInput/hooks/useSelectExecutionTarget';
+import {
+  isCurrentMachineDevice,
+  isDeviceOffline,
+  splitPickerDevices,
+  useCurrentMachine,
+} from '@/features/DeviceManager/devicePicker';
+import { OfflineDevicesToggle } from '@/features/DeviceManager/OfflineDevicesToggle';
 import {
   devicePoolForAgent,
   ExecutionTargetLabel,
@@ -37,7 +44,7 @@ const styles = stylex.create({
   },
 });
 
-type FixedTarget = Extract<DeviceExecutionTarget, 'local' | 'sandbox'>;
+type FixedTarget = Extract<DeviceExecutionTarget, 'auto' | 'local' | 'none' | 'sandbox'>;
 
 interface HeteroExecutionTargetSelectProps {
   agentId: string;
@@ -45,14 +52,19 @@ interface HeteroExecutionTargetSelectProps {
   isOverridden: boolean;
   isPending: boolean;
   isSelectable: boolean;
-  providerType: string;
+  /** The heterogeneous runtime; absent for a LobeHub agent. */
+  providerType?: string;
   target: DeviceExecutionTarget;
 }
 
 /**
- * Where a heterogeneous agent's new topics run, as the current caller will
+ * Where an agent's new topics run, as the current caller will
  * actually run them: the picker, the line saying whose pick applies, and the
  * device-list error. The host supplies the surrounding card.
+ *
+ * A LobeHub agent (no `providerType`) also lists "No device" and "Auto", as the
+ * chat-input switcher does; a heterogeneous agent must run somewhere, so it
+ * does not.
  *
  * Picks go through the same writer as the chat-input switcher, so a member
  * changes only their own environment and a manager's pick replaces the shared
@@ -60,12 +72,15 @@ interface HeteroExecutionTargetSelectProps {
  */
 export const HeteroExecutionTargetSelect = memo<HeteroExecutionTargetSelectProps>(
   ({ agentId, deviceId, isOverridden, isPending, isSelectable, providerType, target }) => {
-    const { t } = useTranslation(['setting', 'chat']);
+    const { t } = useTranslation(['setting', 'chat', 'device']);
+    const currentMachine = useCurrentMachine();
+    const [showOffline, setShowOffline] = useState(false);
     const agent = useAgentStore((s) => s.agentMap[agentId]);
     const isWorkspaceAgent = !!agent?.workspaceId;
     const { canManageAgent } = useAgentManagementAccess(agentId);
     const selectExecutionTarget = useSelectExecutionTarget(agentId);
     const supportsSandbox = isHeterogeneousSandboxExecutionAvailable(providerType);
+    const builtin = !providerType;
 
     const { data: devices, error, isConfirmed, isLoading, mutate } = useDeviceList();
     const { personal, privateWorkspace, workspace } = groupExecutionTargetDevices(devices);
@@ -84,9 +99,17 @@ export const HeteroExecutionTargetSelect = memo<HeteroExecutionTargetSelectProps
       : undefined;
 
     const fixedTargetLabels: Record<FixedTarget, { description: string; label: string }> = {
+      auto: {
+        description: t('chat:heteroAgent.executionTarget.autoDesc'),
+        label: t('chat:heteroAgent.executionTarget.auto'),
+      },
       local: {
         description: t('chat:heteroAgent.executionTarget.localDesc'),
         label: t('chat:heteroAgent.executionTarget.local'),
+      },
+      none: {
+        description: t('chat:heteroAgent.executionTarget.noneDesc'),
+        label: t('chat:heteroAgent.executionTarget.none'),
       },
       sandbox: {
         description: t(
@@ -94,7 +117,9 @@ export const HeteroExecutionTargetSelect = memo<HeteroExecutionTargetSelectProps
             ? 'chat:heteroAgent.executionTarget.sandboxDesc'
             : 'chat:heteroAgent.executionTarget.sandboxUnsupported',
           {
-            name: HETEROGENEOUS_TYPE_LABELS[providerType as keyof typeof HETEROGENEOUS_TYPE_LABELS],
+            name: providerType
+              ? HETEROGENEOUS_TYPE_LABELS[providerType as keyof typeof HETEROGENEOUS_TYPE_LABELS]
+              : undefined,
           },
         ),
         label: t('chat:heteroAgent.executionTarget.sandbox'),
@@ -121,8 +146,12 @@ export const HeteroExecutionTargetSelect = memo<HeteroExecutionTargetSelectProps
         compact={compact}
         description=""
         device={device}
-        label={device.friendlyName || device.hostname || device.deviceId}
         target={'device'}
+        label={
+          isCurrentMachineDevice(device, currentMachine)
+            ? `${device.friendlyName || device.hostname || device.deviceId} · ${t('device:picker.thisDevice')}`
+            : device.friendlyName || device.hostname || device.deviceId
+        }
       />
     );
 
@@ -148,7 +177,50 @@ export const HeteroExecutionTargetSelect = memo<HeteroExecutionTargetSelectProps
           ? [{ disabled: true, label: emptyLabel, value: 'status:empty' }]
           : [];
 
+    // This machine first, then reachable devices; offline ones fold into one
+    // group at the end unless one of them is the pick.
+    const pickedDeviceId = target === 'device' ? deviceId : undefined;
+    const folds = (device: DeviceListItem) =>
+      isConfirmed && isDeviceOffline(device) && device.deviceId !== pickedDeviceId;
+    const ordered = (rows: DeviceListItem[]) => {
+      const { available, offline } = splitPickerDevices(rows, currentMachine);
+      return [...available, ...offline].filter((device) => !folds(device));
+    };
+    const foldedDevices = (
+      isWorkspaceAgent ? [...privateWorkspace, ...workspace] : personal
+    ).filter(folds);
+    const offlineGroup: SelectOptions<string> =
+      !error && foldedDevices.length > 0
+        ? [
+            {
+              label: (
+                <OfflineDevicesToggle
+                  count={foldedDevices.length}
+                  expanded={showOffline}
+                  onToggle={() => setShowOffline((v) => !v)}
+                />
+              ),
+              options: showOffline
+                ? foldedDevices.map((device) =>
+                    toDeviceOption(
+                      device,
+                      device.scope === 'workspace' &&
+                        device.visibility === 'private' &&
+                        !!privateDeviceBlockedReason,
+                    ),
+                  )
+                : [],
+            },
+          ]
+        : [];
+
+    const fixedTargetOption = (fixedTarget: FixedTarget): SelectOption<string> => ({
+      label: renderFixedTargetLabel(fixedTarget),
+      title: fixedTargetLabels[fixedTarget].label,
+      value: executionTargetValue(fixedTarget),
+    });
     const fixedTargetOptions: SelectOption<string>[] = [
+      ...(builtin ? [fixedTargetOption('none'), fixedTargetOption('auto')] : []),
       ...(isDesktop
         ? [
             {
@@ -172,7 +244,7 @@ export const HeteroExecutionTargetSelect = memo<HeteroExecutionTargetSelectProps
       ? []
       : !isWorkspaceAgent
         ? [
-            ...personal.map((device) => toDeviceOption(device)),
+            ...ordered(personal).map((device) => toDeviceOption(device)),
             ...poolStatusOptions(personal, t('chat:heteroAgent.executionTarget.noDevices')),
           ]
         : [
@@ -183,7 +255,7 @@ export const HeteroExecutionTargetSelect = memo<HeteroExecutionTargetSelectProps
                   {
                     label: t('chat:heteroAgent.executionTarget.personalGroup'),
                     options: [
-                      ...privateWorkspace.map((device) =>
+                      ...ordered(privateWorkspace).map((device) =>
                         toDeviceOption(device, !!privateDeviceBlockedReason),
                       ),
                       ...(privateDeviceBlockedReason
@@ -202,7 +274,7 @@ export const HeteroExecutionTargetSelect = memo<HeteroExecutionTargetSelectProps
             {
               label: t('chat:heteroAgent.executionTarget.workspaceGroup'),
               options: [
-                ...workspace.map((device) => toDeviceOption(device)),
+                ...ordered(workspace).map((device) => toDeviceOption(device)),
                 ...poolStatusOptions(workspace, t('settingAgent.devicePolicy.noPublicDevice')),
               ],
             },
@@ -217,18 +289,16 @@ export const HeteroExecutionTargetSelect = memo<HeteroExecutionTargetSelectProps
           classNames={executionTargetSelectClassNames}
           disabled={isPending || !isSelectable}
           optionRender={(option) => option.label}
-          options={[...fixedTargetOptions, ...deviceOptions]}
+          options={[...fixedTargetOptions, ...deviceOptions, ...offlineGroup]}
           placeholder={t('settingAgent.devicePolicy.selectTarget')}
           popupMatchSelectWidth={true}
-          value={getTargetSelectValue(target, deviceId)}
+          value={getTargetSelectValue(target, deviceId, { builtin })}
           labelRender={(option) => {
             if (typeof option.value !== 'string') return option.label;
             const selection = parseExecutionTargetValue(option.value);
             if (!selection) return option.label;
-            if (selection.target === 'local' || selection.target === 'sandbox')
+            if (selection.target !== 'device')
               return renderFixedTargetLabel(selection.target, true);
-            if (selection.target !== 'device') return option.label;
-
             const device = devicePoolForAgent(devices, isWorkspaceAgent).find(
               (item) => item.deviceId === selection.deviceId,
             );

@@ -90,8 +90,8 @@ export interface WakeConversationLine {
  * Read from a log shared by every bot in the channel, so it holds other people's words too.
  */
 export interface WakeConversation {
-  /** The agent behind the bot: its name and its title (identity or role). */
-  agent?: { name?: string; title?: string };
+  /** The agent behind the bot: its name, its title (identity or role) and what it is for. */
+  agent?: { description?: string; name?: string; title?: string };
   /** Names people may call the bot by (its platform username and display name). */
   botNames: string[];
   /** The bot's own latest message in this conversation, when it is still in the log. */

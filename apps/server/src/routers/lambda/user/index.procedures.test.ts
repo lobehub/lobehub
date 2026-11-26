@@ -50,6 +50,7 @@ function expected(): Array<
     ['saveUserQuestion', 'mutation', 11],
     ['sendOnboardingFirstMessage', 'mutation', 11],
     ['setHeteroPermissionModeDir', 'mutation', 11],
+    ['setHeteroPlanModeDir', 'mutation', 11],
     ['setWorktreeModeDir', 'mutation', 11],
     ['startOnboardingUnderstanding', 'mutation', 14],
     ['updateAgentOnboarding', 'mutation', 11],

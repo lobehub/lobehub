@@ -51,3 +51,12 @@ export const listProjectDeviceTargets = (
         onlineUnknown: !!device?.onlineUnknown,
       };
     });
+
+/**
+ * Whether the cloud sandbox's row is drawn as unavailable. The row in use is
+ * the current pick, not an unavailable one, even when the conversation cannot
+ * leave it: clicking it only closes the picker. Only a sandbox the
+ * conversation can neither use nor move to is greyed out.
+ */
+export const isProjectSandboxRowDisabled = (sandbox: { active: boolean; onSelect?: () => void }) =>
+  !sandbox.active && !sandbox.onSelect;

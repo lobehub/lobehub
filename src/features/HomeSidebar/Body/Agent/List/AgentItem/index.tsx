@@ -4,14 +4,21 @@ import { ActionIcon, Spin } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { PinIcon } from 'lucide-react';
-import { type CSSProperties, type DragEvent } from 'react';
+import { type CSSProperties, type DragEvent, type RefObject } from 'react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AgentAvatar from '@/components/AgentAvatar';
+import AgentAvatar, { isGeneratedAgentAvatar } from '@/components/AgentAvatar';
 import PrivateLockIcon from '@/components/PrivateLockIcon';
+import { useAgentAvatarActivity } from '@/features/AgentAvatarActivity/useAgentAvatarActivity';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
+import { useAgentVisibilityControl } from '@/features/AgentVisibility/useAgentVisibilityControl';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import {
+  type BuildMenuItems,
+  useLazyMenuItems,
+  usePublishMenuItems,
+} from '@/features/NavPanel/components/useLazyMenuItems';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
 import { useChatStore } from '@/store/chat';
@@ -23,7 +30,8 @@ import { useAgentModal } from '../../ModalProvider';
 import { useSidebarPinState } from '../../useSidebarPinState';
 import Actions from '../Item/Actions';
 import { usePreservedAgentUrl } from '../usePreservedAgentUrl';
-import { useAgentDropdownMenu } from './useDropdownMenu';
+import { useAgentDropdownMenu, type UseAgentDropdownMenuParams } from './useDropdownMenu';
+import VisibilityLockAction from './VisibilityLockAction';
 
 const styles = stylex.create({
   badge: {
@@ -77,189 +85,267 @@ interface AgentItemProps {
   style?: CSSProperties;
 }
 
-const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, secondaryLabel }) => {
-  const {
-    id,
-    avatar,
-    backgroundColor,
-    description,
-    name,
-    pinned,
-    slug,
-    title,
-    userId,
-    visibility,
-  } = item;
-  const avatarUrl = typeof avatar === 'string' ? avatar : undefined;
-  // Unread count is server-computed (topics.status === 'unread') and carried on
-  // the sidebar list item, so it stays accurate across agents whose topics
-  // aren't loaded into the chat store on this client.
-  const unreadCount = item.unreadCount ?? 0;
-  const { t } = useTranslation('chat');
-  const { openCreateGroupModal } = useAgentModal();
-  const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
+interface MenuHostProps extends UseAgentDropdownMenuParams {
+  builderRef: RefObject<BuildMenuItems | undefined>;
+}
 
-  const prefetchAgent = usePrefetchAgent();
-  const isUpdating = useHomeStore((s) => s.agentUpdatingId === id);
-
-  // Separate loading state from chat store - only show loading for this specific agent
-  const isLoading = useChatStore(operationSelectors.isAgentVisiblyRunning(id));
-
-  // Name-first label with fallback (see agentDisplayName)
-  const displayTitle = agentDisplayName(item, t('untitledAgent'));
-  // The role shown beside the name — same rule for every agent, heterogeneous
-  // ones included (see agentSecondaryDisplayName).
-  const roleTag = secondaryLabel || agentSecondaryDisplayName(item);
-
-  const agentUrl = usePreservedAgentUrl(id);
-
-  // Memoize event handlers
-  const handleMouseEnter = useCallback(() => {
-    prefetchAgent(id);
-  }, [id, prefetchAgent]);
-
-  const handleDoubleClick = useCallback(() => {
-    openAgentInNewWindow(id);
-  }, [id, openAgentInNewWindow]);
-
-  const handleDragStart = useCallback(
-    (e: DragEvent) => {
-      e.dataTransfer.setData('text/plain', id);
-    },
-    [id],
-  );
-
-  const handleDragEnd = useCallback(
-    (e: DragEvent) => {
-      if (e.dataTransfer.dropEffect === 'none') {
-        openAgentInNewWindow(id);
-      }
-    },
-    [id, openAgentInNewWindow],
-  );
-
-  const handleOpenCreateGroupModal = useCallback(() => {
-    openCreateGroupModal(id, visibility);
-  }, [id, openCreateGroupModal, visibility]);
-
-  // In a workspace the row's column is the team pin (public) or the creator's
-  // own pin (private); the member's own pins live in their preference.
-  const { isMyPinned, isPrivate, isTeamPinned } = useSidebarPinState({ id, pinned, visibility });
-  const showPinIcon = isTeamPinned || isMyPinned;
-
-  // Memoize pin icon
-  // The lock sits with the pin in the fixed trailing slot rather than after
-  // the title, where a long name or role tag would truncate it out of view.
-  const pinIcon = useMemo(
-    () =>
-      showPinIcon || isPrivate ? (
-        <>
-          {isPrivate && <PrivateLockIcon />}
-          {showPinIcon && (
-            <ActionIcon icon={PinIcon} size={12} style={{ opacity: 0.5, pointerEvents: 'none' }} />
-          )}
-        </>
-      ) : undefined,
-    [isPrivate, showPinIcon],
-  );
-
-  // Memoize avatar icon (show loader when updating, running spinner or unread badge at bottom-right)
-  const avatarIcon = useMemo(() => {
-    if (isUpdating) {
-      return <Spin size="small" style={{ color: cssVar.colorTextDescription }} />;
-    }
-
-    const avatarNode = (
-      <AgentAvatar
-        agentId={id}
-        avatar={avatarUrl}
-        background={backgroundColor || undefined}
-        name={displayTitle}
-        size={22}
-      />
-    );
-
-    // Hovering the avatar (not the whole row, which the pointer crosses all
-    // the time) shows the same profile card the Task assignees use.
-    return (
-      <AgentProfilePopup
-        agent={{ avatar: avatarUrl, backgroundColor, description, name, title }}
-        agentId={id}
-        placement={'right'}
-        trigger={'hover'}
-      >
-        <span {...stylex.props(styles.wrapper)}>
-          {avatarNode}
-          {isLoading ? (
-            <span {...stylex.props(styles.runningBadge)}>
-              <Spin size={9} style={{ color: 'inherit' }} />
-            </span>
-          ) : unreadCount > 0 ? (
-            <span {...stylex.props(styles.badge)}>{unreadCount > 99 ? '99+' : unreadCount}</span>
-          ) : null}
-        </span>
-      </AgentProfilePopup>
-    );
-  }, [
-    isUpdating,
-    isLoading,
-    id,
-    avatarUrl,
-    backgroundColor,
-    description,
-    displayTitle,
-    name,
-    title,
-    unreadCount,
-  ]);
-
-  const dropdownMenu = useAgentDropdownMenu({
-    avatar: avatarUrl,
-    backgroundColor: backgroundColor || undefined,
-    group: undefined, // TODO: pass group from parent if needed
-    id,
-    name,
-    openCreateGroupModal: handleOpenCreateGroupModal,
-    pinned: pinned ?? false,
-    slug,
-    title: displayTitle,
-    userId,
-    visibility,
-  });
-
-  return (
-    <WorkspaceLink
-      aria-label={displayTitle}
-      to={agentUrl}
-      onClick={onNavigate}
-      onMouseEnter={handleMouseEnter}
-    >
-      <NavItem
-        actions={<Actions dropdownMenu={dropdownMenu} />}
-        className={className}
-        contextMenuItems={dropdownMenu}
-        disabled={isUpdating}
-        draggable={!isUpdating}
-        extra={pinIcon}
-        icon={avatarIcon}
-        key={id}
-        style={style}
-        title={
-          roleTag ? (
-            <>
-              {displayTitle}
-              <span style={{ fontSize: 12, marginInlineStart: 6, opacity: 0.6 }}>{roleTag}</span>
-            </>
-          ) : (
-            displayTitle
-          )
-        }
-        onDoubleClick={handleDoubleClick}
-        onDragEnd={handleDragEnd}
-        onDragStart={handleDragStart}
-      />
-    </WorkspaceLink>
-  );
+const MenuHost = memo<MenuHostProps>(({ builderRef, ...params }) => {
+  usePublishMenuItems(builderRef, useAgentDropdownMenu(params));
+  return null;
 });
+
+MenuHost.displayName = 'AgentItemMenuHost';
+
+interface AgentItemBodyProps extends AgentItemProps {
+  agentUrl: string;
+}
+
+const AgentItemBody = memo<AgentItemBodyProps>(
+  ({ agentUrl, item, style, className, onNavigate, secondaryLabel }) => {
+    const {
+      id,
+      avatar,
+      backgroundColor,
+      description,
+      name,
+      pinned,
+      slug,
+      title,
+      userId,
+      visibility,
+    } = item;
+    const avatarUrl = typeof avatar === 'string' ? avatar : undefined;
+    // Unread count is server-computed (topics.status === 'unread') and carried on
+    // the sidebar list item, so it stays accurate across agents whose topics
+    // aren't loaded into the chat store on this client.
+    const unreadCount = item.unreadCount ?? 0;
+    const { t } = useTranslation('chat');
+    const { openCreateGroupModal } = useAgentModal();
+    const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
+
+    const prefetchAgent = usePrefetchAgent();
+    const isUpdating = useHomeStore((s) => s.agentUpdatingId === id);
+
+    // Separate loading state from chat store - only show loading for this specific agent
+    const isLoading = useChatStore(operationSelectors.isAgentVisiblyRunning(id));
+    // The row's hover wakes the character; a run plays on it without a hover.
+    const { avatar: avatarActivity, hover: rowHover } = useAgentAvatarActivity(id);
+    // A generated character acts the run out, so only an emoji or image needs the spinner.
+    const showRunningBadge = isLoading && !isGeneratedAgentAvatar(avatarUrl);
+
+    // Name-first label with fallback (see agentDisplayName)
+    const displayTitle = agentDisplayName(item, t('untitledAgent'));
+    // The role shown beside the name — same rule for every agent, heterogeneous
+    // ones included (see agentSecondaryDisplayName).
+    const roleTag = secondaryLabel || agentSecondaryDisplayName(item);
+
+    // Memoize event handlers
+    const handleMouseEnter = useCallback(() => {
+      prefetchAgent(id);
+      rowHover.onMouseEnter();
+    }, [id, prefetchAgent, rowHover]);
+
+    const handleDoubleClick = useCallback(() => {
+      openAgentInNewWindow(id);
+    }, [id, openAgentInNewWindow]);
+
+    const handleDragStart = useCallback(
+      (e: DragEvent) => {
+        e.dataTransfer.setData('text/plain', id);
+      },
+      [id],
+    );
+
+    const handleDragEnd = useCallback(
+      (e: DragEvent) => {
+        if (e.dataTransfer.dropEffect === 'none') {
+          openAgentInNewWindow(id);
+        }
+      },
+      [id, openAgentInNewWindow],
+    );
+
+    const handleOpenCreateGroupModal = useCallback(() => {
+      openCreateGroupModal(id, visibility);
+    }, [id, openCreateGroupModal, visibility]);
+
+    // In a workspace the row's column is a default pin for new members (public)
+    // or the creator's own pin (private); the member's own pins live in their
+    // preference.
+    const { isMyPinned, isPrivate } = useSidebarPinState({ id, pinned, visibility });
+
+    // Memoize pin icon
+    // The lock sits with the pin in the fixed trailing slot rather than after
+    // the title, where a long name or role tag would truncate it out of view.
+    const pinIcon = useMemo(
+      () =>
+        isMyPinned || isPrivate ? (
+          <>
+            {isPrivate && <PrivateLockIcon />}
+            {isMyPinned && (
+              <ActionIcon
+                icon={PinIcon}
+                size={12}
+                style={{ opacity: 0.5, pointerEvents: 'none' }}
+              />
+            )}
+          </>
+        ) : undefined,
+      [isMyPinned, isPrivate],
+    );
+
+    // Memoize avatar icon (show loader when updating, running spinner or unread badge at bottom-right)
+    const avatarIcon = useMemo(() => {
+      if (isUpdating) {
+        return <Spin size="small" style={{ color: cssVar.colorTextDescription }} />;
+      }
+
+      const avatarNode = (
+        <AgentAvatar
+          {...avatarActivity}
+          agentId={id}
+          avatar={avatarUrl}
+          background={backgroundColor || undefined}
+          name={displayTitle}
+          size={22}
+        />
+      );
+
+      // Hovering the avatar (not the whole row, which the pointer crosses all
+      // the time) shows the same profile card the Task assignees use.
+      return (
+        <AgentProfilePopup
+          agent={{ avatar: avatarUrl, backgroundColor, description, name, title }}
+          agentId={id}
+          placement={'right'}
+          trigger={'hover'}
+        >
+          <span {...stylex.props(styles.wrapper)}>
+            {avatarNode}
+            {showRunningBadge ? (
+              <span {...stylex.props(styles.runningBadge)}>
+                <Spin size={9} style={{ color: 'inherit' }} />
+              </span>
+            ) : unreadCount > 0 ? (
+              <span {...stylex.props(styles.badge)}>{unreadCount > 99 ? '99+' : unreadCount}</span>
+            ) : null}
+          </span>
+        </AgentProfilePopup>
+      );
+    }, [
+      isUpdating,
+      showRunningBadge,
+      avatarActivity,
+      id,
+      avatarUrl,
+      backgroundColor,
+      description,
+      displayTitle,
+      name,
+      title,
+      unreadCount,
+    ]);
+
+    // Whoever may change the scope gets the lock on hover, a shortcut into the
+    // Agent's Permissions settings where visibility now lives. The hook also
+    // keeps the row's workspace access record syncing from mount, so a menu
+    // opened right after the first hover already has its management items.
+    const { canChange: canChangeVisibility } = useAgentVisibilityControl({
+      id,
+      slug,
+      userId,
+      visibility,
+    });
+    const showVisibilityLock = isPrivate && canChangeVisibility;
+
+    const { arm, armed, builderRef, items: dropdownMenu, lazyActions } = useLazyMenuItems();
+    // Two direct children widen the hover overlay (NavItem counts them), so the
+    // resting lock fades under the clickable one.
+    const renderActions = useCallback(
+      () =>
+        showVisibilityLock ? (
+          <>
+            <VisibilityLockAction agentId={id} />
+            <Actions dropdownMenu={dropdownMenu} />
+          </>
+        ) : (
+          <Actions dropdownMenu={dropdownMenu} />
+        ),
+      [dropdownMenu, id, showVisibilityLock],
+    );
+
+    return (
+      <>
+        {armed && (
+          <MenuHost
+            builderRef={builderRef}
+            group={undefined} // TODO: pass group from parent if needed
+            id={id}
+            name={name}
+            openCreateGroupModal={handleOpenCreateGroupModal}
+            pinned={pinned ?? false}
+            slug={slug}
+            title={displayTitle}
+            userId={userId}
+            visibility={visibility}
+          />
+        )}
+        <WorkspaceLink
+          aria-label={displayTitle}
+          to={agentUrl}
+          onClick={onNavigate}
+          // The link, not NavItem, takes the keyboard focus; see `lazyActions`.
+          onFocus={arm}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={rowHover.onMouseLeave}
+          onPointerEnter={arm}
+        >
+          <NavItem
+            actions={lazyActions(renderActions)}
+            className={className}
+            contextMenuItems={dropdownMenu}
+            disabled={isUpdating}
+            draggable={!isUpdating}
+            extra={pinIcon}
+            icon={avatarIcon}
+            key={id}
+            style={style}
+            title={
+              roleTag ? (
+                <>
+                  {displayTitle}
+                  <span style={{ fontSize: 12, marginInlineStart: 6, opacity: 0.6 }}>
+                    {roleTag}
+                  </span>
+                </>
+              ) : (
+                displayTitle
+              )
+            }
+            onDoubleClick={handleDoubleClick}
+            onDragEnd={handleDragEnd}
+            onDragStart={handleDragStart}
+          />
+        </WorkspaceLink>
+      </>
+    );
+  },
+);
+
+AgentItemBody.displayName = 'AgentItemBody';
+
+/**
+ * Sidebar agent row. Only this shell reads the location (for the preserved
+ * sub-route), so a navigation that leaves the row's URL unchanged — such as a
+ * topic switch — stops here instead of re-rendering the row. The row menu
+ * mounts on first hover or focus (see `useLazyMenuItems`): its hook reaches
+ * `useNavigate`, which re-renders on every navigation.
+ */
+const AgentItem = memo<AgentItemProps>((props) => {
+  const agentUrl = usePreservedAgentUrl(props.item.id);
+  return <AgentItemBody agentUrl={agentUrl} {...props} />;
+});
+
+AgentItem.displayName = 'AgentItem';
 
 export default AgentItem;

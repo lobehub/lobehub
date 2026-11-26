@@ -73,7 +73,11 @@ import {
 import { resolveDevicePlan } from './devicePlan';
 import { resolveModelContext, startModelMetadataRead } from './modelFacts';
 import { readCredentialFacts, startToolReads } from './reads';
-import { resolveOperationGroup, resolveTurnScopedPluginIds } from './turnContext';
+import {
+  collectSelectedToolIds,
+  resolveOperationGroup,
+  resolveTurnScopedPluginIds,
+} from './turnContext';
 import type { ToolDiscoveryDeps, ToolDiscoveryInput, ToolDiscoveryResult } from './types';
 
 export type { ToolDiscoveryDeps, ToolDiscoveryInput, ToolDiscoveryResult } from './types';
@@ -157,6 +161,9 @@ export const discoverTools = async (
   const toolSourceMap: Record<string, ToolSource> = {};
   const toolExecutorMap: Record<string, ToolExecutor> = {};
   let onlineDevices: DeviceAttachment[] = [];
+  // Managed cloud devices without a live connection: always online for the
+  // model (listed in the device tool's prompt), not for routing.
+  let sleepingCloudDevices: DeviceAttachment[] = [];
   let activeDeviceId: string | undefined;
   let activeDeviceScope: 'personal' | 'workspace' | undefined;
   let executionPlan: ExecutionPlan | undefined;
@@ -187,11 +194,29 @@ export const discoverTools = async (
   let composioManifests: LobeToolManifest[] = [];
   let connectorManifests: ReturnType<typeof buildConnectorManifests> = [];
 
-  // `selectedToolIds` are the user's @-mention picks for this turn; merged in
+  // `selectedToolIds` are the user's @-mention picks for this turn plus any
+  // selections persisted on earlier user turns in the topic; merged in
   // (deduped) alongside the agent's configured plugins and any internal
   // `additionalPluginIds` so a mentioned-but-not-enabled tool (e.g. a custom MCP
-  // connector) is both queried for manifests and enabled by the tools engine.
+  // connector or `lobe-agent-management` from an earlier @agent mention) stays
+  // enabled across follow-up turns in the same conversation.
+  let historyMessagesCache: any[] | undefined;
+  const readHistoryMessages = async () => {
+    historyMessagesCache ??= await loadHistoryMessages();
+    return historyMessagesCache;
+  };
   const isGoalTurn = isGoalPrompt(prompt);
+  const isInGroupMember = appContext?.orchestrationRole === 'member' && !appContext?.threadId;
+  const historyMessages =
+    disableTools || exclusivePluginIds || isGoalTurn || isInGroupMember
+      ? []
+      : await readHistoryMessages();
+  const effectiveSelectedToolIds = collectSelectedToolIds(historyMessages, selectedToolIds, {
+    hasMentionedAgents,
+    isGroupConversation: !!appContext?.groupId,
+    isInGroupMember,
+    resolvedAgentId,
+  });
   const toolMode = resolveToolMode(agentConfig.chatConfig);
   const configuredPluginIds =
     toolMode === 'agent'
@@ -213,8 +238,7 @@ export const discoverTools = async (
                   : id,
             ),
             ...(additionalPluginIds || []),
-            ...(selectedToolIds || []),
-            ...(hasMentionedAgents ? ['lobe-agent-management'] : []),
+            ...effectiveSelectedToolIds,
             ...(shareGate ? getShareGrantActivatedPluginIds(shareGate) : []),
           ]),
         ];
@@ -251,7 +275,7 @@ export const discoverTools = async (
           optedInIds,
           turnIds: [
             ...(additionalPluginIds || []),
-            ...(selectedToolIds || []),
+            ...effectiveSelectedToolIds.filter((id) => id !== 'lobe-agent-management'),
             ...(shareGate ? getShareGrantActivatedPluginIds(shareGate) : []),
             // An eval binds its connectors to the run by snapshot.
             ...boundConnectorIds,
@@ -474,7 +498,7 @@ export const discoverTools = async (
     const gatewayConfigured = deviceGateway.isConfigured;
     const agentBoundDeviceId = agentConfig.agencyConfig?.boundDeviceId;
     const boundDeviceId = topicBoundDeviceId || agentBoundDeviceId;
-    onlineDevices = await toolReads.devicePool;
+    ({ online: onlineDevices, sleepingCloud: sleepingCloudDevices } = await toolReads.devicePool);
     const deviceOnline = onlineDevices.length > 0;
 
     const toolsContext: ServerAgentToolsContext = {
@@ -517,7 +541,7 @@ export const discoverTools = async (
           isBotConversation,
           isProjectConversation: !!appContext?.projectId,
           isProjectCoordinator: projectScope.isCoordinator,
-          loadHistoryMessages,
+          loadHistoryMessages: readHistoryMessages,
           modelMediaCapabilities,
         })),
       ]),
@@ -861,7 +885,7 @@ export const discoverTools = async (
   if (canUseDevice && toolManifestMap[RemoteDeviceManifest.identifier]) {
     toolManifestMap[RemoteDeviceManifest.identifier] = {
       ...toolManifestMap[RemoteDeviceManifest.identifier],
-      systemRole: generateSystemPrompt(onlineDevices),
+      systemRole: generateSystemPrompt([...onlineDevices, ...sleepingCloudDevices]),
     };
   }
 

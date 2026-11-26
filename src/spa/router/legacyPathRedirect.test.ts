@@ -12,6 +12,7 @@ import {
   legacySettingsMarketplaceRedirects,
   marketplaceIndexRoute,
 } from './marketplaceRoutes';
+import { legacyMemoryRedirects, settingsMemoryChildren } from './memoryRoutes';
 
 const CurrentUrl = () => {
   const { hash, pathname, search } = useLocation();
@@ -157,6 +158,45 @@ describe('legacy URL redirects', () => {
     ['/community/whatever/deep/path', '/marketplace/whatever/deep/path'],
   ])('%s → %s', (from, to) => {
     renderAt(from);
+    expect(screen.getByTestId('url').textContent).toBe(to);
+  });
+});
+
+describe('legacyMemoryRedirects', () => {
+  const renderMemoryAt = (url: string) => {
+    const memory = { children: legacyMemoryRedirects, path: 'memory' };
+    const router = createMemoryRouter(
+      [
+        {
+          children: [
+            memory,
+            {
+              // Static like the real sections, so they outrank `:workspaceSlug/memory/*`.
+              children: settingsMemoryChildren.map(({ path }) => ({ element: currentUrl, path })),
+              path: 'settings/memory',
+            },
+            { children: [memory], path: ':workspaceSlug' },
+          ],
+          path: '/',
+        },
+      ],
+      { initialEntries: [url] },
+    );
+    render(createElement(RouterProvider, { router }));
+  };
+
+  it.each([
+    ['/memory', '/settings/memory/overview'],
+    ['/memory/identities', '/settings/memory/identities'],
+    ['/memory/contexts', '/settings/memory/contexts'],
+    ['/memory/activities', '/settings/memory/activities'],
+    ['/memory/rules', '/settings/memory/rules'],
+    // A deep link keeps the detail it opens.
+    ['/memory/preferences?preferenceId=p1#top', '/settings/memory/preferences?preferenceId=p1#top'],
+    // Memory is personal, so a workspace-prefixed link drops the prefix.
+    ['/acme/memory/identities', '/settings/memory/identities'],
+  ])('%s → %s', (from, to) => {
+    renderMemoryAt(from);
     expect(screen.getByTestId('url').textContent).toBe(to);
   });
 });

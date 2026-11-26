@@ -9,6 +9,13 @@ describe('goalsAndTasksTabPath', () => {
     expect(goalsAndTasksTabPath('goals')).toBe('/goals');
   });
 
+  it('addresses the full list by param where My tasks owns the bare URL', () => {
+    expect(goalsAndTasksTabPath('mine', undefined, { showMine: true })).toBe('/tasks');
+    expect(goalsAndTasksTabPath('tasks', undefined, { showMine: true })).toBe(
+      '/tasks?collection=all',
+    );
+  });
+
   it('scopes every tab to the agent', () => {
     expect(goalsAndTasksTabPath('tasks', 'agt_1')).toBe('/agent/agt_1/tasks');
     expect(goalsAndTasksTabPath('scheduled', 'agt_1')).toBe(

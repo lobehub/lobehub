@@ -18,6 +18,9 @@ import { useOpenReplyAgent } from './useOpenReplyAgent';
 
 /** Failure categories with their own text; a shared Agent's visitor learns why only from these. */
 const RECEIPT_ERROR_KEYS = {
+  [ChatErrorType.ChannelAttachmentUnavailable]: 'receipt.errorAttachmentUnavailable',
+  [ChatErrorType.ShareAttachmentTooLarge]: 'receipt.errorShareAttachmentTooLarge',
+  [ChatErrorType.ShareFileStorageExceeded]: 'receipt.errorShareFileStorage',
   [ChatErrorType.ShareHeteroDeviceUnavailable]: 'receipt.errorShareHeteroDevice',
   [ChatErrorType.ShareHeterogeneousAgentUnsupported]: 'receipt.errorShareHeteroUnsupported',
   [ChatErrorType.ShareMessageLimitExceeded]: 'receipt.errorShareMessageLimit',
@@ -49,6 +52,8 @@ export const receiptErrorText = (
 export interface ReplyEntry {
   agentId?: string | null;
   avatar?: string;
+  /** The viewer may open the Agent's page; see `ChannelPublicMember.canOpenAgent`. */
+  canOpenAgent?: boolean;
   job: ChannelPublicJob;
   name: string;
 }
@@ -64,6 +69,7 @@ export const replyEntries = (
     return {
       agentId: member?.agentId,
       avatar: memberAvatar(member),
+      canOpenAgent: member?.canOpenAgent,
       job,
       name: memberName(member, fallbackName),
     };
@@ -72,7 +78,7 @@ export const replyEntries = (
 /** One reply: its state, why it failed, and how to stop it or open its Agent. */
 export function ReplyDetail({
   channelId,
-  entry: { agentId, avatar, job, name },
+  entry: { agentId, avatar, canOpenAgent, job, name },
 }: {
   channelId: string;
   entry: ReplyEntry;
@@ -106,7 +112,7 @@ export function ReplyDetail({
           title={name}
         />
         <Flexbox flex={1} style={{ minWidth: 0 }}>
-          {agentId ? (
+          {agentId && canOpenAgent ? (
             <Button
               aria-label={t('openAgentNamed', { name })}
               icon={ExternalLink}

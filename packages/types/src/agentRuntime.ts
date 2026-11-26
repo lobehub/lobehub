@@ -303,8 +303,21 @@ export const AgentRuntimeErrorType = {
   UserConfigError: 'UserConfigError',
   /** Gateway watchdog killed an idle agent operation — harness-side. */
   OperationInactivityTimeout: 'OperationInactivityTimeout',
+  /**
+   * A server-side LLM call was still streaming when its step invocation was
+   * about to be killed by the host, so the harness stopped it. Deterministic
+   * enough (long thinking at high effort) that re-running the step would burn
+   * the same tokens again, so it is not retried.
+   */
+  LlmStepTimeout: 'LlmStepTimeout',
 
   InvalidOllamaArgs: 'InvalidOllamaArgs',
+  /**
+   * The provider base URL resolves to a private / reserved network address that
+   * the server is not allowed to reach (SSRF protection). The endpoint is only
+   * reachable from the user's own device.
+   */
+  ProviderBaseURLBlocked: 'ProviderBaseURLBlocked',
   /**
    * The model can only be reached from the user's own device, and no open
    * LobeHub client picked up the request (no client declared it can run this

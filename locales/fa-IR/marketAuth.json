@@ -27,6 +27,7 @@
   "claimResources.claim": "دریافت موارد انتخاب شده",
   "claimResources.description": "ما منابع مرتبط با حساب شما را پیدا کردیم که می‌توانید دریافت کنید:",
   "claimResources.error": "دریافت منابع با شکست مواجه شد. لطفاً دوباره تلاش کنید.",
+  "claimResources.failedRetry": "دریافت این منابع ممکن نشد. اتصال شبکه خود را بررسی کرده و دوباره تلاش کنید.",
   "claimResources.mcpSection": "سرورهای MCP",
   "claimResources.selectedCount": "{{count}} مورد انتخاب شده",
   "claimResources.skillSection": "مهارت‌ها",

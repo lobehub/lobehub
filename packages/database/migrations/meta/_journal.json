@@ -1589,6 +1589,34 @@
       "when": 1795232920077,
       "tag": "0226_agent_share_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 227,
+      "version": "7",
+      "when": 1795445232107,
+      "tag": "0227_channel_agent_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 228,
+      "version": "7",
+      "when": 1795457259109,
+      "tag": "0228_channel_message_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 229,
+      "version": "7",
+      "when": 1795513372316,
+      "tag": "0229_agent_operations_waiting_for_human_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 230,
+      "version": "7",
+      "when": 1795541757594,
+      "tag": "0230_custom_emoji_and_reactions",
+      "breakpoints": true
     }
   ],
   "version": "6"

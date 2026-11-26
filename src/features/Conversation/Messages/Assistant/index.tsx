@@ -13,7 +13,7 @@ import { selectionStyles } from '@/features/Conversation/MessageForward/selectio
 import { useMessageCommentCount } from '@/features/TopicComment/hooks';
 import MessageCommentBadge from '@/features/TopicComment/MessageCommentBadge';
 import { useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { userProfileSelectors } from '@/store/user/selectors';
 import { sx } from '@/styles/sx';
 
 import { ReactionDisplay } from '../../components/Reaction';
@@ -21,7 +21,9 @@ import ErrorMessageExtra, { useErrorContent } from '../../Error';
 import { useAgentMeta, useDoubleClickEdit } from '../../hooks';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
 import { normalizeThinkTags, processWithArtifact } from '../../utils/markdown';
+import ActionRowSpacer from '../components/ActionRowSpacer';
 import MessageBranch from '../components/MessageBranch';
+import Reasoning from '../components/Reasoning';
 import RefreshingIndicator from '../components/RefreshingIndicator';
 import {
   useSetMessageItemActionElementPortialContext,
@@ -33,6 +35,7 @@ import InterruptedHint from './components/InterruptedHint';
 import MessageContent from './components/MessageContent';
 import ThreadExecutionSummary from './components/ThreadExecutionSummary';
 import { AssistantMessageExtra } from './Extra';
+import { shouldShowReasoningAboveError } from './reasoningAboveError';
 
 const actionBarHolder = (
   <div
@@ -68,6 +71,7 @@ const AssistantMessage = memo<AssistantMessageProps>(
       performance,
       usage,
       metadata,
+      reasoning,
       taskDetail,
     } = item;
 
@@ -116,7 +120,6 @@ const AssistantMessage = memo<AssistantMessageProps>(
       useSetMessageItemActionElementPortialContext();
     const setMessageItemActionTypeContext = useSetMessageItemActionTypeContext();
 
-    const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
     const { count: commentCount, topicId: commentTopicId } = useMessageCommentCount(id);
 
     const onMouseEnter: MouseEventHandler<HTMLDivElement> = useCallback(
@@ -144,7 +147,16 @@ const AssistantMessage = memo<AssistantMessageProps>(
     return (
       <ChatItem
         showTitle
-        aboveMessage={runningThreadId ? undefined : <ThreadExecutionSummary messageId={id} />}
+        aboveMessage={
+          runningThreadId ? undefined : (
+            <>
+              <ThreadExecutionSummary messageId={id} />
+              {shouldShowReasoningAboveError({ hasEmptyErrorMessage, reasoning }) && (
+                <Reasoning {...reasoning} id={id} />
+              )}
+            </>
+          )
+        }
         // ChatItem renders this as the primary block when the message is empty,
         // or inside messageExtra (below the content) when the turn streamed
         // content before erroring — so don't gate it on empty content.
@@ -177,14 +189,14 @@ const AssistantMessage = memo<AssistantMessageProps>(
         }
         actions={
           <>
-            {isDevMode && branch && (
+            {branch && (
               <MessageBranch
                 activeBranchIndex={branch.activeBranchIndex}
                 count={branch.count}
                 messageId={id}
               />
             )}
-            {!disableEditing && actionBarHolder}
+            {disableEditing ? <ActionRowSpacer /> : actionBarHolder}
           </>
         }
         afterActions={

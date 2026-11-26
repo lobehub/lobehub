@@ -52,6 +52,25 @@ describe('resolveStaleModelState', () => {
     expect(state?.meta?.displayName).toBe('GPT-5.4 nano');
   });
 
+  it('resolves an enabled model a business policy hides as restricted, with its name', () => {
+    const state = resolveStaleModelState(
+      { model: 'claude-opus-4-6', provider: 'lobehub' },
+      { ...context, isModelHidden: (model) => model === 'claude-opus-4-6' },
+    );
+
+    expect(state?.status).toBe('restricted');
+    expect(state?.meta?.displayName).toBe('Claude Opus 4.6');
+  });
+
+  it('keeps an enabled model the policy does not hide valid', () => {
+    expect(
+      resolveStaleModelState(
+        { model: 'claude-opus-4-6', provider: 'lobehub' },
+        { ...context, isModelHidden: () => false },
+      ),
+    ).toBeUndefined();
+  });
+
   it('resolves an unknown model id as removed', () => {
     const state = resolveStaleModelState({ model: 'gpt-4o-mini', provider: 'openai' }, context);
 

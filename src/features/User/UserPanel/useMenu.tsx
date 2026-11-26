@@ -7,7 +7,6 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import useBusinessMenuItems from '@/business/client/features/User/useBusinessMenuItems';
-import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
 import { type MenuProps } from '@/components/Menu';
 import { DEFAULT_DESKTOP_HOTKEY_CONFIG } from '@/const/desktop';
 import { OFFICIAL_URL } from '@/const/url';
@@ -54,7 +53,6 @@ export const useMenu = () => {
   ]);
   const { userPanel } = useNavLayout();
   const businessMenuItems = useBusinessMenuItems(isLogin);
-  const hasActiveWorkspace = useHasActiveWorkspace();
   const navigate = useWorkspaceAwareNavigate();
 
   // Navigation items navigate from the row's `onClick` instead of wrapping the
@@ -69,11 +67,9 @@ export const useMenu = () => {
       ) : undefined,
       icon: <Icon icon={Settings2} />,
       key: 'setting',
-      label: (
-        <NewVersionBadge showBadge={hasNewVersion}>
-          {t(hasActiveWorkspace ? 'userPanel.workspaceSetting' : 'userPanel.setting')}
-        </NewVersionBadge>
-      ),
+      label: <NewVersionBadge showBadge={hasNewVersion}>{t('userPanel.setting')}</NewVersionBadge>,
+      // Lands on the active space's own settings (a workspace's General, the
+      // personal space's first tab); the sidebar card opens account settings.
       onClick: () => navigate('/settings'),
     },
     ...(userPanel.showMemory

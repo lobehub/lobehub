@@ -358,10 +358,21 @@ export const RedisKeys = {
     agentDocumentIndex: (topicId: string, threadId: string | undefined, agentId: string): string =>
       `agent_document_index:v1:${topicId}:${threadId ?? 'main'}:${agentId}`,
     /**
+     * The skill-index snapshot one conversation renders `<available_skills>` from, and its change notes.
+     * Full key: lobechat:skill_index:v1:{topicId}:{threadId|main}:{agentId}
+     */
+    skillIndex: (topicId: string, threadId: string | undefined, agentId: string): string =>
+      `skill_index:v1:${topicId}:${threadId ?? 'main'}:${agentId}`,
+    /**
      * Digest of the body the last projection of a page's collaboration room wrote.
      * Full key: lobechat:page_projection:v1:{documentId}
      */
     pageProjection: (documentId: string): string => `page_projection:v1:${documentId}`,
+    /**
+     * Yjs state vector of the room state a page's stored body was last written from.
+     * Full key: lobechat:page_room_state:v1:{documentId}
+     */
+    pageRoomState: (documentId: string): string => `page_room_state:v1:${documentId}`,
   },
   /**
    * Send-path cache scope — see {@link RedisKeyNamespace.SEND_PATH_CACHE}.
