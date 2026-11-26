@@ -328,9 +328,10 @@ export default class BrowserControlCtr extends ControllerModule {
   ): Promise<BrowserToolCallResult> {
     const {
       __agentId: agentId,
+      __threadId: threadId,
       __topicId: topicId,
       ...toolArgs
-    } = args as { __agentId?: string; __topicId?: string };
+    } = args as { __agentId?: string; __threadId?: string; __topicId?: string };
     if (!agentId) {
       return { content: 'Browser tool call is missing the agent context', success: false };
     }
@@ -368,6 +369,7 @@ export default class BrowserControlCtr extends ControllerModule {
         apiName,
         args: toolArgs,
         requestId,
+        threadId,
         topicId,
       });
     }).catch((error: Error) => ({ content: error.message, success: false }));

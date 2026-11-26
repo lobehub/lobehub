@@ -96,6 +96,8 @@ export interface BrowserGatewayToolCallPayload {
   apiName: string;
   args: Record<string, unknown>;
   requestId: string;
+  /** Sub-agent thread the run belongs to; it gets a page apart from its topic's. */
+  threadId?: string;
   /** Topic the run belongs to — keys the browser session (`topic:<topicId>`). */
   topicId: string;
 }

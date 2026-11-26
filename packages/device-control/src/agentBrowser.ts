@@ -64,12 +64,19 @@ interface BatchStep {
 
 /**
  * Session name for a run's browser, matching the desktop's `topic:<topicId>`
- * isolation: every topic drives its own page. agent-browser names sessions on
- * disk, so the id is reduced to a safe charset.
+ * isolation: every topic drives its own page, and so does every sub-agent thread
+ * inside it. agent-browser names sessions on disk, so ids are reduced to a safe
+ * charset. The name becomes a socket path capped near 103 bytes, and the call
+ * fails past that, so a thread session must stay no longer than a topic one and
+ * uses a short prefix plus the random tail of its `thd_` id.
  */
-export const agentBrowserSessionName = (topicId: unknown): string => {
-  const id = typeof topicId === 'string' ? topicId.replaceAll(/[^\w-]/g, '_') : '';
-  return id ? `lobehub-topic-${id}` : 'lobehub-default';
+export const agentBrowserSessionName = (topicId: unknown, threadId?: unknown): string => {
+  const sanitize = (value: unknown) =>
+    typeof value === 'string' ? value.replaceAll(/[^\w-]/g, '_') : '';
+  const topic = sanitize(topicId);
+  if (!topic) return 'lobehub-default';
+  const thread = sanitize(threadId);
+  return thread ? `lh-${topic}-${thread.slice(-8)}` : `lobehub-topic-${topic}`;
 };
 
 /** Model refs come as `e12` (or `@e12`, or `[ref=e12]`); agent-browser wants `@e12`. */
@@ -215,8 +222,8 @@ export const runAgentBrowserCall = async (
 ): Promise<AgentBrowserToolResult> => {
   try {
     // The server rides the run identity in the args; it is not an api parameter.
-    const { __agentId: _agentId, __topicId: topicId, ...args } = rawArgs;
-    const session = agentBrowserSessionName(topicId);
+    const { __agentId: _agentId, __threadId: threadId, __topicId: topicId, ...args } = rawArgs;
+    const session = agentBrowserSessionName(topicId, threadId);
     const platform = options.platform ?? process.platform;
     const commands = buildAgentBrowserCommands(apiName, args, options.screenshotPath, {
       fillsSelect: apiName === 'fill' && (await isNativeSelect(options.exec, session, args.ref)),

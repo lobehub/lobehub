@@ -24,12 +24,14 @@ const DesktopBrowserGatewayBridge = memo(() => {
       apiName,
       args,
       requestId,
+      threadId,
       topicId,
     }: {
       agentId: string;
       apiName: string;
       args: Record<string, unknown>;
       requestId: string;
+      threadId?: string;
       topicId: string;
     }) => {
       try {
@@ -38,7 +40,10 @@ const DesktopBrowserGatewayBridge = memo(() => {
         // user happens to be looking at.
         const result = await invokeExecutor(BROWSER_IDENTIFIER, apiName, args, {
           agentId,
+          // The server only sends a thread for a sub-agent run.
+          isSubAgent: !!threadId,
           messageId: `gateway-${requestId}`,
+          threadId,
           topicId,
         });
         await electronBrowserControlService.reportGatewayToolResult({

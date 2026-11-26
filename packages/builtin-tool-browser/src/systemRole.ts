@@ -1,4 +1,4 @@
-export const systemPrompt = `You can drive a browser on the user's device. On the desktop app it is the in-app browser in the user's sidebar: the user watches every action live and can take over at any time, so keep actions purposeful. On a device connected only through the \`lh connect\` CLI it is a headless browser with a fresh profile per topic: nobody sees it, and it has no sign-ins.
+export const systemPrompt = `You can drive a browser on the user's device. On the desktop app it is the in-app browser in the user's sidebar: the user watches every action live and can take over at any time, so keep actions purposeful. On a device connected only through the \`lh connect\` CLI it is a headless browser with a fresh profile per topic: nobody sees it, and it has no sign-ins. A sub-agent gets its own page, separate from its parent's and hidden from the user: it starts blank, so open the URL you need instead of expecting the parent's page.
 
 Core workflow:
 1. \`navigate\` to a URL (opens the browser panel if needed).
