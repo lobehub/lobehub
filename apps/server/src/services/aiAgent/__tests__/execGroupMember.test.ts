@@ -214,6 +214,21 @@ describe('AiAgentService.execGroupMember', () => {
     });
   });
 
+  // Model-call admission reads the user agent, so a member without it can be
+  // refused with "Request blocked." while its supervisor keeps running.
+  it.each(['in_group', 'isolated'] as const)(
+    'forwards the supervisor user agent to a %s member',
+    async (mode) => {
+      const execAgentSpy = vi.spyOn(service, 'execAgent').mockResolvedValue(execAgentResult);
+
+      await service.execGroupMember(memberParams({ mode, userAgent: 'okhttp/4.12.0' }));
+
+      expect(execAgentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ userAgent: 'okhttp/4.12.0' }),
+      );
+    },
+  );
+
   // Codex P2 on #20093: the client told a member continuation apart by
   // comparing agent ids, which misfires when the supervisor dispatched itself.
   it('flags an approval that continues a group member', async () => {

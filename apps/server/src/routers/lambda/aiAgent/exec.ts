@@ -665,6 +665,7 @@ export const execRouter = router({
           message,
           newTopic,
           topicId,
+          userAgent: ctx.userAgent ?? undefined,
         });
 
         // Get messages and topics for UI sync
@@ -753,6 +754,7 @@ export const execRouter = router({
               llmExecutor && llmRelayChannel
                 ? { channel: llmRelayChannel, executor: llmExecutor }
                 : undefined,
+            userAgent: ctx.userAgent ?? undefined,
           },
         );
       } catch (error: any) {

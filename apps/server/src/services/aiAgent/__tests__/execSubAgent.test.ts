@@ -317,6 +317,18 @@ describe('AiAgentService.execSubAgent', () => {
       );
     });
 
+    it('forwards the dispatching request user agent to execAgent', async () => {
+      const execAgentSpy = vi
+        .spyOn(service, 'execAgent')
+        .mockResolvedValue(createSuccessfulExecAgentResult());
+
+      await service.execSubAgent(createSubAgentParams(), { userAgent: 'okhttp/4.12.0' });
+
+      expect(execAgentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ userAgent: 'okhttp/4.12.0' }),
+      );
+    });
+
     it('keeps a callSubAgent child inside its eval attempt', async () => {
       const execAgentSpy = vi
         .spyOn(service, 'execAgent')

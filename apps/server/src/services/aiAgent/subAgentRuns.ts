@@ -118,6 +118,12 @@ export interface ExecAgentThreadRunOptions {
   provider?: string;
   resumeParentOnComplete?: boolean;
   /**
+   * User agent of the request that started the parent run. Model-call admission
+   * reads it (the mobile app is exempt from the onboarding gate), so a child
+   * without it can be refused while its parent is allowed.
+   */
+  userAgent?: string;
+  /**
    * Approval policy for the spawned run. Isolated group members inherit the
    * supervisor's; unset keeps the headless default of async sub-agent runs.
    */
@@ -701,6 +707,7 @@ export const execAgentThreadRun = async (
       prompt: instruction,
       provider: options.provider,
       trigger: inheritedTrigger,
+      userAgent: options.userAgent,
       userInterventionConfig: options.userInterventionConfig ?? HEADLESS_INTERVENTION,
     });
   } catch (error) {
@@ -902,6 +909,7 @@ export const execAgentMember = async (
     // The member answers to the approval mode the user picked for the turn: a
     // hard-coded headless let members silently run `humanIntervention:
     // 'required'` tools that the supervisor itself would have to ask for.
+    userAgent: params.userAgent,
     userInterventionConfig: params.userInterventionConfig ?? HEADLESS_INTERVENTION,
   });
 
@@ -960,6 +968,7 @@ export const execIsolatedAgentMember = async (
       // resume through the group bridge (its own timeout), not the sub-agent one.
       orchestrationRole: 'member',
       resumeParentOnComplete: true,
+      userAgent: params.userAgent,
       userInterventionConfig: params.userInterventionConfig,
     },
   );
