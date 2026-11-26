@@ -40,7 +40,7 @@ export const BROWSER_MCP_TOOLS: BrowserMcpToolSpec[] = [
   {
     apiName: 'snapshot',
     description:
-      'Capture an accessibility snapshot of the current in-app browser page: interactive elements (links, buttons, inputs, headings) with stable refs like [ref=e12] for use in click/fill. Always snapshot before acting, and re-snapshot after the page changes.',
+      'Capture an accessibility snapshot of the current in-app browser page: interactive elements (links, buttons, inputs, headings) and file upload inputs, hidden ones included, with stable refs like [ref=e12] for use in click/fill/upload. Always snapshot before acting, and re-snapshot after the page changes.',
     inputSchema: {},
     name: 'browser_snapshot',
     title: 'Snapshot in-app browser page',
@@ -115,6 +115,30 @@ export const BROWSER_MCP_TOOLS: BrowserMcpToolSpec[] = [
     inputSchema: {},
     name: 'browser_screenshot',
     title: 'Screenshot in-app browser page',
+  },
+  {
+    apiName: 'uploadFile',
+    description:
+      "Attach files from the user's device to a file upload field in the in-app browser page, as choosing them in the file picker would. Target the `file-input` ref from the latest snapshot (listed even when the input is hidden), the ref of the upload button or drop zone, or a CSS selector; with none of them, the page's only file input is used. Do not click an upload button to open the native file picker. When it answers that the user must choose the file manually, ask the user instead of retrying.",
+    inputSchema: {
+      paths: z
+        .array(z.string())
+        .describe(
+          "Absolute paths of files on the user's device, e.g. /Users/me/Downloads/site.zip (a leading ~ is the home folder).",
+        ),
+      ref: z
+        .string()
+        .optional()
+        .describe(
+          'Ref of the file input, or of the button / drop zone that opens the file picker, from the latest snapshot.',
+        ),
+      selector: z
+        .string()
+        .optional()
+        .describe('CSS selector of the file input when it has no ref.'),
+    },
+    name: 'browser_upload_file',
+    title: 'Upload file in in-app browser',
   },
   {
     apiName: 'readPage',

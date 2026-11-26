@@ -248,3 +248,105 @@ describe('runAgentBrowserCall', () => {
     });
   });
 });
+
+describe('uploadFile through agent-browser', () => {
+  const statFile = vi.fn(async (filePath: string) => {
+    if (filePath.endsWith('missing.zip'))
+      throw Object.assign(new Error('nope'), { code: 'ENOENT' });
+    return { isFile: () => !filePath.endsWith('/dir'), size: 12 };
+  });
+  const upload = (args: Record<string, unknown>, steps: unknown[][]) => {
+    const exec = vi.fn();
+    for (const batch of steps) exec.mockResolvedValueOnce(JSON.stringify(batch));
+    const promise = runAgentBrowserCall('uploadFile', args, {
+      exec,
+      homeDir: '/home/me',
+      readFile: vi.fn(),
+      screenshotPath: '/s.png',
+      statFile,
+    });
+    return { exec, promise };
+  };
+  const pageInfo = [
+    step(['get', 'title'], { title: 'Deploy' }),
+    step(['get', 'url'], { url: 'https://console.example/deploy' }),
+  ];
+
+  it('uploads to a ref and returns what was sent', async () => {
+    const { exec, promise } = upload({ paths: ['~/site.zip'], ref: 'e3' }, [
+      [step(['upload'], { uploaded: 1 }), ...pageInfo],
+    ]);
+
+    await expect(promise).resolves.toEqual({
+      content: expect.stringMatching(/^Attached site\.zip \(12 B\) to the page's file input\./),
+      state: {
+        files: [{ name: 'site.zip', size: 12 }],
+        title: 'Deploy',
+        url: 'https://console.example/deploy',
+        via: 'input',
+      },
+      success: true,
+    });
+    expect(exec).toHaveBeenCalledWith('lobehub-default', [
+      ['upload', '@e3', '/home/me/site.zip'],
+      ['get', 'title'],
+      ['get', 'url'],
+    ]);
+  });
+
+  // agent-browser attaches a missing path as an empty file and reports
+  // `uploaded: 1`, so the path check has to happen before it runs.
+  it('refuses missing files and folders without running agent-browser', async () => {
+    const { exec, promise } = upload(
+      { paths: ['/u/missing.zip', '/u/dir', 'rel.zip'], selector: '#f' },
+      [],
+    );
+
+    await expect(promise).resolves.toEqual({
+      content: '',
+      error:
+        'Cannot upload: /u/missing.zip: no such file on this device; /u/dir is not a file; rel.zip is not an absolute path',
+      success: false,
+    });
+    expect(exec).not.toHaveBeenCalled();
+  });
+
+  it("uses the page's only file input when nothing is named", async () => {
+    const { exec, promise } = upload({ paths: ['/u/site.zip'] }, [
+      [step(['get', 'count'], { count: 1 })],
+      [step(['upload'], { uploaded: 1 }), ...pageInfo],
+    ]);
+
+    await expect(promise).resolves.toMatchObject({ success: true });
+    expect(exec).toHaveBeenNthCalledWith(1, 'lobehub-default', [
+      ['get', 'count', 'input[type="file"]'],
+    ]);
+    expect(exec.mock.calls[1][1][0]).toEqual(['upload', 'input[type="file"]', '/u/site.zip']);
+  });
+
+  it('asks for a target when the page has several file inputs or none', async () => {
+    const several = upload({ paths: ['/u/site.zip'] }, [[step(['get', 'count'], { count: 3 })]]);
+    await expect(several.promise).resolves.toMatchObject({
+      error: expect.stringContaining('3 file inputs'),
+      success: false,
+    });
+
+    const none = upload({ paths: ['/u/site.zip'] }, [[step(['get', 'count'], { count: 0 })]]);
+    await expect(none.promise).resolves.toMatchObject({
+      error: expect.stringContaining('no file input'),
+      success: false,
+    });
+  });
+
+  it('is unavailable without a file check', async () => {
+    const exec = vi.fn();
+    await expect(
+      runAgentBrowserCall(
+        'uploadFile',
+        { paths: ['/u/site.zip'], ref: 'e1' },
+        { exec, readFile: vi.fn(), screenshotPath: '/s.png' },
+      ),
+    ).resolves.toMatchObject({ error: 'File upload is not available on this device' });
+    expect(exec).not.toHaveBeenCalled();
+  });
+});

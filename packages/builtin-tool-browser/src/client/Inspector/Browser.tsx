@@ -15,6 +15,7 @@ import {
   MoveVertical,
   ScanText,
   TextCursorInput,
+  Upload,
 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -54,6 +55,7 @@ interface BrowserArgs {
   dy?: number;
   height?: number;
   key?: string;
+  paths?: string[];
   ref?: string;
   text?: string;
   url?: string;
@@ -72,6 +74,7 @@ const API_ICONS: Record<BrowserApiNameType, LucideIcon> = {
   [BrowserApiName.scroll]: MoveVertical,
   [BrowserApiName.setViewport]: Monitor,
   [BrowserApiName.snapshot]: ScanText,
+  [BrowserApiName.uploadFile]: Upload,
 };
 
 const stripProtocol = (url: string): string => url.replace(/^https?:\/\//i, '');
@@ -102,6 +105,13 @@ const getChipValue = (apiName: BrowserApiNameType, args: BrowserArgs): string =>
     }
     case BrowserApiName.scroll: {
       return formatScroll(args);
+    }
+    case BrowserApiName.uploadFile: {
+      // Only the file names: full paths would spell out the user's folders.
+      const names = (Array.isArray(args.paths) ? args.paths : [])
+        .filter((path): path is string => typeof path === 'string')
+        .map((path) => path.split(/[/\\]/).pop() || path);
+      return names.join(', ');
     }
     case BrowserApiName.setViewport: {
       const { height, width } = args;

@@ -500,7 +500,10 @@ export default {
   'builtins.lobe-browser.apiName.scroll': 'Scrolled page',
   'builtins.lobe-browser.apiName.setViewport': 'Set viewport',
   'builtins.lobe-browser.apiName.snapshot': 'Read page elements',
+  'builtins.lobe-browser.apiName.uploadFile': 'Uploaded file',
   'builtins.lobe-browser.title': 'Browser',
+  'builtins.lobe-browser.uploadFile.confirm':
+    'These files on your device will be handed to the page open in the browser panel:',
   'builtins.github.render.error': 'Error',
   'builtins.github.render.rawResult': 'Raw result',
   'builtins.github.render.updatedAt': 'Updated {{time}}',

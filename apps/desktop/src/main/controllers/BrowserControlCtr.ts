@@ -18,6 +18,8 @@ import type {
   BrowserControlSetViewportParams,
   BrowserControlSetViewportResult,
   BrowserControlSnapshotResult,
+  BrowserControlUploadFileParams,
+  BrowserControlUploadFileResult,
   BrowserControlWaitForParams,
   BrowserGatewayToolResultParams,
   BrowserToolCallResult,
@@ -30,6 +32,7 @@ import {
   overlayControllingScript,
   overlayCursorScript,
 } from '@/modules/browser/agentOverlayScript';
+import { checkUploadPaths, uploadFilesToGuest } from '@/modules/browser/fileUpload';
 import type { GuestViewport } from '@/modules/browser/guestViewport';
 import { guestViewports, guestViewportScale } from '@/modules/browser/guestViewport';
 import { createLogger } from '@/utils/logger';
@@ -175,8 +178,11 @@ const evaluate = (guest: WebContents, code: string): Promise<any> =>
  */
 export const SNAPSHOT_SCRIPT = `(() => {
   const MAX = 250;
+  const MAX_FILE_INPUTS = 20;
   const refs = {};
   let counter = 0;
+  let listed = 0;
+  let fileInputs = 0;
   const lines = [];
   // Closed modals are commonly kept in the DOM under a wrapper faded to
   // opacity 0, or marked aria-hidden / inert. Their own box still has a size,
@@ -224,16 +230,60 @@ export const SNAPSHOT_SCRIPT = `(() => {
   const nameOf = (el) =>
     (el.getAttribute('aria-label') || el.innerText || (isSensitive(el) ? '' : el.value) || el.placeholder || el.title || el.getAttribute('alt') || '')
       .trim().replaceAll(/\\s+/g, ' ').slice(0, 80);
+  const clean = (text) => String(text || '').trim().replaceAll(/\\s+/g, ' ').slice(0, 80);
+  // A file input is usually hidden behind a styled button or drop zone, so the
+  // visibility check drops exactly the control an upload needs. Each one is
+  // listed hidden or not, unless a closed dialog holds it, with what it takes.
+  const isFileInput = (el) => el.tagName === 'INPUT' && (el.getAttribute('type') || '').toLowerCase() === 'file';
+  const inClosedContainer = (el) => {
+    for (let node = el.parentElement; node && node !== document.documentElement; node = node.parentElement) {
+      if (node.getAttribute('aria-hidden') === 'true' || node.hasAttribute('inert')) return true;
+      if (getComputedStyle(node).opacity === '0') return true;
+    }
+    return false;
+  };
+  // A hidden input has no text of its own; the visible part of the widget
+  // around it says what it is for ("Click or drag a ZIP here").
+  const fileInputName = (el) => {
+    const own = clean(el.getAttribute('aria-label') || (el.labels && el.labels[0] && el.labels[0].innerText) || el.title);
+    if (own) return own;
+    for (let node = el.parentElement, depth = 0; node && node !== document.body && depth < 3; node = node.parentElement, depth += 1) {
+      const text = clean(node.innerText);
+      if (text) return text;
+    }
+    return clean(el.name || el.id);
+  };
+  const fileInputLine = (el, ref) => {
+    let line = '- file-input "' + fileInputName(el) + '" [ref=' + ref + ']';
+    if (el.accept) line += ' [accept="' + clean(el.accept) + '"]';
+    if (el.multiple) line += ' [multiple]';
+    if (el.webkitdirectory) line += ' [directory]';
+    if (!isVisible(el)) line += ' [hidden]';
+    if (el.disabled) line += ' [disabled]';
+    if (el.files && el.files.length) line += ' [files="' + clean(Array.from(el.files, (file) => file.name).join(', ')) + '"]';
+    return line;
+  };
   const candidates = document.querySelectorAll('a,button,input,select,textarea,summary,h1,h2,h3,[role],[onclick],[contenteditable=true]');
   const seen = new Set();
   for (const el of candidates) {
-    if (counter >= MAX) break;
-    if (seen.has(el) || !isVisible(el)) continue;
+    if (seen.has(el)) continue;
     seen.add(el);
+    if (isFileInput(el)) {
+      if (fileInputs >= MAX_FILE_INPUTS || inClosedContainer(el)) continue;
+      fileInputs += 1;
+      counter += 1;
+      refs['e' + counter] = el;
+      lines.push(fileInputLine(el, 'e' + counter));
+      continue;
+    }
+    // Past the cap only file inputs are still collected, so an upload field
+    // at the end of a long page is not lost.
+    if (listed >= MAX || !isVisible(el)) continue;
     const role = roleOf(el);
     if (!role || role === 'presentation' || role === 'none') continue;
     const name = nameOf(el);
     if (!name && !['checkbox', 'combobox', 'radio', 'textbox'].includes(role)) continue;
+    listed += 1;
     counter += 1;
     const ref = 'e' + counter;
     refs[ref] = el;
@@ -410,19 +460,36 @@ export default class BrowserControlCtr extends ControllerModule {
         return { error: 'click needs a ref or x/y coordinates', success: false };
       }
 
-      this.markControlling(params.sessionId, guest);
-      this.showCursor(guest, x, y, true);
-      await sleep(CURSOR_TRAVEL_MS);
-
-      // The cursor overlay lives in the page (CSS pixels); input lands on the panel.
-      const scale = guestViewportScale(guest);
-      const at = { x: Math.round(x * scale), y: Math.round(y * scale) };
-      guest.sendInputEvent({ type: 'mouseMove', ...at });
-      guest.sendInputEvent({ button: 'left', clickCount: 1, type: 'mouseDown', ...at });
-      guest.sendInputEvent({ button: 'left', clickCount: 1, type: 'mouseUp', ...at });
-
+      await this.clickAt(params.sessionId, guest, x, y);
       await sleep(300);
       return { success: true, title: guest.getTitle(), url: guest.getURL() };
+    });
+  }
+
+  /**
+   * Puts local files into the page's file input, as picking them in the file
+   * chooser would. The paths are checked here first, so a typo comes back by
+   * name instead of as an empty upload.
+   */
+  @IpcMethod()
+  async uploadFile(
+    params: BrowserControlUploadFileParams,
+  ): Promise<BrowserControlUploadFileResult> {
+    const checked = await checkUploadPaths(params.paths);
+    if ('error' in checked) return { error: checked.error, success: false };
+
+    return this.withGuest(params.sessionId, async (guest) => {
+      this.markControlling(params.sessionId, guest);
+      const outcome = await uploadFilesToGuest(
+        guest,
+        { paths: checked.paths, ref: params.ref, selector: params.selector },
+        { clickAt: (x, y) => this.clickAt(params.sessionId, guest, x, y) },
+      );
+      if (!outcome.success) return outcome;
+
+      // The page reacts to `change` (lists the file, starts uploading); give it a beat.
+      await sleep(300);
+      return { ...outcome, title: guest.getTitle(), url: guest.getURL() };
     });
   }
 
@@ -645,6 +712,20 @@ export default class BrowserControlCtr extends ControllerModule {
     evaluate(guest, script).catch((error: Error) => {
       logger.debug(`Agent overlay injection failed: ${error.message}`);
     });
+  }
+
+  /** Animates the agent cursor to CSS (x, y), then clicks there with real input events. */
+  private async clickAt(sessionId: string, guest: WebContents, x: number, y: number) {
+    this.markControlling(sessionId, guest);
+    this.showCursor(guest, x, y, true);
+    await sleep(CURSOR_TRAVEL_MS);
+
+    // The cursor overlay lives in the page (CSS pixels); input lands on the panel.
+    const scale = guestViewportScale(guest);
+    const at = { x: Math.round(x * scale), y: Math.round(y * scale) };
+    guest.sendInputEvent({ type: 'mouseMove', ...at });
+    guest.sendInputEvent({ button: 'left', clickCount: 1, type: 'mouseDown', ...at });
+    guest.sendInputEvent({ button: 'left', clickCount: 1, type: 'mouseUp', ...at });
   }
 
   private showCursor(guest: WebContents, x: number, y: number, click: boolean) {
