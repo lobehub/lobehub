@@ -306,6 +306,7 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
       azureImageLogger('Is Image Edit: %s', isImageEdit);
 
       if (userInput.size === 'auto') delete userInput.size;
+      if (userInput.background === 'auto') delete userInput.background;
 
       applyImageOutputParams(userInput, { isImageEdit });
 
