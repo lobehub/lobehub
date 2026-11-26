@@ -15,6 +15,12 @@ import { useTaskExecutionSelection } from './useTaskExecutionSelection';
 interface TaskExecutionControlsProps {
   /** The assignee whose execution environment a task inherits by default. */
   assigneeAgentId?: string;
+  /**
+   * The caller is the task's creator, or is creating it. A task's scheduled
+   * runs execute as its creator, so only then may it pin the caller's own
+   * private workspace devices (see `devicePoolForTask`).
+   */
+  canPinPrivateDevices: boolean;
   disabled?: boolean;
   onChange: (execution?: TaskExecutionConfig) => void;
   /** The task's current selection; empty means "inherit the agent". */
@@ -56,10 +62,15 @@ const TaskExecutionControls = memo<TaskExecutionControlsProps>((props) => {
 
 const TaskExecutionControlsInner = memo<
   Omit<TaskExecutionControlsProps, 'assigneeAgentId'> & { assigneeAgentId: string }
->(({ assigneeAgentId, disabled, onChange, value }) => {
+>(({ assigneeAgentId, canPinPrivateDevices, disabled, onChange, value }) => {
   const canExecuteSomewhere = useTaskExecutionAvailability(assigneeAgentId);
   const { changeDevice, changeDirectory, changeFollowing, changeRepos, following, target } =
-    useTaskExecutionSelection({ agentId: assigneeAgentId, onChange, value });
+    useTaskExecutionSelection({
+      agentId: assigneeAgentId,
+      canPinPrivateDevices,
+      onChange,
+      value,
+    });
 
   if (!canExecuteSomewhere) return null;
 
@@ -71,6 +82,7 @@ const TaskExecutionControlsInner = memo<
     <>
       <TaskDeviceChip
         agentId={assigneeAgentId}
+        canPinPrivateDevices={canPinPrivateDevices}
         disabled={disabled}
         following={following}
         value={value?.boundDeviceId}

@@ -19,13 +19,14 @@ import { useTranslation } from 'react-i18next';
 import CommandLine from '@/components/CommandLine';
 import { CLI_INSTALL_COMMAND } from '@/features/Apps/const';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { acceptanceHomePath } from '../Viewer/routes';
 
 const styles = stylex.create({
   description: {
     maxWidth: '520px',
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     lineHeight: 1.6,
     color: cssVar.colorTextSecondary,
     textAlign: 'center',
@@ -81,9 +82,9 @@ const styles = stylex.create({
   step: {
     display: 'grid',
     gridTemplateColumns: '24px minmax(0, 1fr)',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     minWidth: '0',
-    padding: '12px',
+    padding: densityTokens['--lobe-density-content-gap'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
@@ -105,7 +106,7 @@ const styles = stylex.create({
   steps: {
     display: 'grid',
     gridTemplateColumns: { 'default': 'minmax(0, 1fr)', '@media (width <= 680px)': '1fr' },
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
   },
   tab: { flex: '1', justifyContent: 'center' },
   tabList: { width: '100%' },
@@ -129,7 +130,7 @@ const styles = stylex.create({
     overflowWrap: 'anywhere',
   },
   promptBox: {
-    padding: '12px',
+    padding: densityTokens['--lobe-density-content-gap'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
@@ -137,7 +138,11 @@ const styles = stylex.create({
     backgroundColor: cssVar.colorFillQuaternary,
     backgroundImage: 'none',
   },
-  sectionTitle: { fontSize: '14px', fontWeight: 600, color: cssVar.colorText },
+  sectionTitle: {
+    fontSize: densityTokens['--lobe-density-font-size'],
+    fontWeight: 600,
+    color: cssVar.colorText,
+  },
   title: {
     fontSize: cssVar.fontSizeHeading2,
     fontWeight: 600,

@@ -180,7 +180,7 @@ describe('createSidebarUISlice', () => {
         await result.current.removeAgent(mockAgentId);
       });
 
-      expect(agentService.removeAgent).toHaveBeenCalledWith(mockAgentId);
+      expect(agentService.removeAgent).toHaveBeenCalledWith(mockAgentId, undefined);
       expect(spyOnRefresh).toHaveBeenCalled();
     });
 

@@ -14,13 +14,15 @@ describe('foreground operation triggers', () => {
     },
   );
 
-  it.each([RequestTrigger.Task, RequestTrigger.Cron])(
-    'leaves %s runs to finish when the user sends',
-    (trigger) => {
-      expect(isForegroundOperationTrigger(trigger)).toBe(false);
-      expect(isComposerSupersedableTrigger(trigger)).toBe(false);
-    },
-  );
+  it.each([
+    RequestTrigger.Task,
+    RequestTrigger.Cron,
+    RequestTrigger.McpEvent,
+    RequestTrigger.Webhook,
+  ])('leaves %s runs to finish when the user sends', (trigger) => {
+    expect(isForegroundOperationTrigger(trigger)).toBe(false);
+    expect(isComposerSupersedableTrigger(trigger)).toBe(false);
+  });
 
   it('lets the composer retire foreground runs, including legacy rows without a trigger', () => {
     expect(isComposerSupersedableTrigger(RequestTrigger.Chat)).toBe(true);

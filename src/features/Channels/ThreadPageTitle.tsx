@@ -1,15 +1,13 @@
 import type { ChannelDetail } from '@lobechat/types';
-import { ActionIcon, cssVar, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { ChevronRight, GitBranch, Hash, MoreHorizontal } from 'lucide-react';
+import { ChevronRight, GitBranch, Hash } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { channelSelectors, useChannelStore } from '@/store/channel';
 
 import { styles } from './styles';
-import { ThreadFollowers } from './ThreadPanel';
 import { threadTitle } from './threadTitle';
-import { useThreadMenu } from './useThreadMenu';
 
 /** The header of a thread opened as the page: `# Channel › thread`, the Channel leading back. */
 export const ThreadPageTitle = ({
@@ -46,35 +44,6 @@ export const ThreadPageTitle = ({
       <Text ellipsis title={title} weight={500}>
         {title}
       </Text>
-    </Flexbox>
-  );
-};
-
-/** Followers and the thread menu, as the side panel shows them. */
-export const ThreadPageActions = ({
-  detail,
-  threadId,
-}: {
-  detail: ChannelDetail;
-  threadId: string;
-}) => {
-  const { t } = useTranslation('channel');
-  const threadMenu = useThreadMenu();
-  const thread = detail.threads.find((entry) => entry.id === threadId);
-  const menuItems = thread ? threadMenu(detail.channel, thread) : [];
-  return (
-    <Flexbox horizontal align="center" gap={8}>
-      <ThreadFollowers detail={detail} target={threadId} />
-      {menuItems.length > 0 && (
-        <DropdownMenu items={menuItems}>
-          <ActionIcon
-            aria-label={t('more', { ns: 'common' })}
-            icon={MoreHorizontal}
-            size="small"
-            title={t('more', { ns: 'common' })}
-          />
-        </DropdownMenu>
-      )}
     </Flexbox>
   );
 };

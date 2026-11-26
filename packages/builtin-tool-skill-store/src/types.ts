@@ -12,6 +12,7 @@ export interface ImportSkillParams {
 }
 
 export interface ImportSkillState {
+  description?: string;
   name?: string;
   skillId?: string;
   status: 'created' | 'updated' | 'unchanged';
@@ -32,13 +33,18 @@ export interface SearchSkillParams {
    */
   page?: number;
   /**
-   * Page size (default: 20)
+   * Page size (default: 10)
    */
   pageSize?: number;
   /**
-   * Search query (searches name, description, summary)
+   * @deprecated Legacy alias for `query`, kept for backward compatibility with
+   * older tool calls and Market API callers.
    */
   q?: string;
+  /**
+   * Search query (searches name, description, summary)
+   */
+  query?: string;
   /**
    * Sort field: createdAt | installCount | forks | name | relevance | stars | updatedAt | watchers
    */
@@ -82,6 +88,7 @@ export interface ImportFromMarketParams {
 }
 
 export interface ImportFromMarketState {
+  description?: string;
   name?: string;
   skillId?: string;
   status: 'created' | 'updated' | 'unchanged';

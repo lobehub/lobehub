@@ -25,7 +25,7 @@ import {
   formatWorkspaceMembers,
   priorityLabel,
 } from '@lobechat/prompts';
-import type { TaskAutomationMode, TaskStatus } from '@lobechat/types';
+import type { TaskAutomationMode, TaskChannelDeliveryInput, TaskStatus } from '@lobechat/types';
 import { invertTaskLabelChange } from '@lobechat/types';
 import { formatInvalidScheduleMessage, validateScheduleUpdate } from '@lobechat/utils/cronEval';
 import pMap from 'p-map';
@@ -41,6 +41,7 @@ import { formatPgError, unwrapPgError } from '@/server/modules/AgentRuntime/pgEr
 import { taskRouter } from '@/server/routers/lambda/task';
 import { taskLabelRouter } from '@/server/routers/lambda/taskLabel';
 import { TaskService } from '@/server/services/task';
+import { queueTaskDelivery } from '@/server/services/task/channelDelivery';
 import { resolveTaskOrThrow, resolveTasksOrThrow } from '@/server/services/task/utils';
 
 import { resolveTaskWorkspaceId } from './resolveWorkspaceScope';
@@ -667,7 +668,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
           : (() => {
               const self = selectAssignableMembers([{ id: userId, isSelf: true }], args);
               return {
-                rows: self.members.map((m) => ({ role: null, userId: m.id })),
+                rows: self.members.map((m) => ({ nickname: null, role: null, userId: m.id })),
                 total: self.total,
               };
             })();
@@ -703,7 +704,8 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
             id: m.userId,
             imAccounts: imMap.get(m.userId),
             isSelf: m.userId === userId,
-            name: profile?.fullName,
+            // The name they go by in this workspace, as everywhere else it lists them.
+            name: m.nickname ?? profile?.fullName,
             role: m.role,
             username: profile?.username,
           };
@@ -722,6 +724,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
     setTaskSchedule: async (args: {
       automationMode?: TaskAutomationMode | null;
+      channelDelivery?: TaskChannelDeliveryInput | null;
       heartbeatInterval?: number;
       identifier: string;
       maxExecutions?: number | null;
@@ -747,6 +750,9 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
       const changes: string[] = [];
       const ops: Promise<unknown>[] = [];
+      // Checked first, so a refused Channel delivery leaves the schedule untouched too.
+      const deliveryError = await queueTaskDelivery(deps, task, args.channelDelivery, ops, changes);
+      if (deliveryError) return { content: deliveryError, success: false };
 
       // Mirrors client executor: schedule columns go through taskCaller.update;
       // maxExecutions lives in `tasks.config.schedule.maxExecutions` (JSONB) and
@@ -1070,7 +1076,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       }
 
       const task = await resolveTaskOrThrow(taskModel(), id);
-      const detail = await taskService().getTaskDetail(task.id);
+      const detail = await taskService().getTaskDetail(task.id, task);
       if (!detail) return { content: `Task not found: ${id}`, success: false };
 
       return {

@@ -1,4 +1,4 @@
-import type { ChannelDetail, ChannelPublicMessage } from '@lobechat/types';
+import type { ChannelDetail, ChannelPublicJob, ChannelPublicMessage } from '@lobechat/types';
 import {
   ActionIcon,
   Button,
@@ -25,23 +25,32 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
+import { HoverFollowAgentAvatar } from '@/components/AgentAvatar/HoverFollowAgentAvatar';
 import CollapsibleContent from '@/components/CollapsibleContent';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { ChatItem } from '@/features/Conversation/ChatItem';
 import Markdown from '@/features/Conversation/Markdown';
 import EntityLinkElement from '@/features/EntityLink/element';
+import MemberProfilePopup from '@/features/MemberProfileCard/MemberProfilePopup';
 import UserAvatar from '@/features/User/UserAvatar';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
+import { actionMessagePreview, readActionMessage } from './actionMessage';
+import { ActionMessageCard } from './ActionMessageCard';
+import { AskCard } from './AskCard';
 import { authorAvatar, isCurrentUserAuthor, memberName } from './memberName';
 import { CHANNEL_MENTION_TAG, remarkChannelMentions } from './mentionMarkdown';
 import { MessageAttachments } from './MessageAttachments';
 import { channelMessageTime, channelTimeFormatters } from './messagePresentation';
-import { MessageFailureMark, MessageRoutingStatus } from './MessageReceipts';
+import { MessageRoutingStatus } from './MessageReceipts';
+import { MessageSurfaces } from './MessageSurfaces';
+import { ReplyFailureCard } from './ReplyFailure';
 import { showsReplyQuote } from './replyQuote';
 import type { ReplyTopic } from './ReplyTopicPanel';
 import { ReplyWorks } from './ReplyWorks';
+import { shareRefusalOf } from './shareRefusal';
+import { ShareRefusalNotice } from './ShareRefusalNotice';
 import { styles } from './styles';
 import type { ChannelThreadDraft } from './threadDraft';
 import { ThreadPreviewCard } from './ThreadPreviewCard';
@@ -78,6 +87,7 @@ export const ChannelMessage = ({
   delivery,
   detail,
   continuation = false,
+  failures,
   message,
   isRoot,
   highlighted,
@@ -93,6 +103,8 @@ export const ChannelMessage = ({
   /** For a message the server has not confirmed: its send status, in place of routing. */
   delivery?: ReactNode;
   detail: ChannelDetail;
+  /** Replies that acknowledged with this message and then failed; their cards mount under it. */
+  failures?: ChannelPublicJob[];
   isRoot?: boolean;
   highlighted?: boolean;
   message: ChannelPublicMessage;
@@ -109,12 +121,8 @@ export const ChannelMessage = ({
   const { t, i18n } = useTranslation('channel');
   const timeFormats = useMemo(() => channelTimeFormatters(i18n.language), [i18n.language]);
   const date = new Date(message.createdAt);
-  // Failed/unassigned requests keep their identity row and recovery affordance.
-  const compact =
-    continuation &&
-    !isRoot &&
-    message.routingStatus !== 'unassigned' &&
-    !detail.jobs.some((job) => job.messageId === message.id && job.status === 'failed');
+  // Unassigned requests keep their identity row and recovery affordance.
+  const compact = continuation && !isRoot && message.routingStatus !== 'unassigned';
   // A continuation sits under its header, so its hover stamp only needs the clock.
   const timestamp = (
     <time
@@ -140,11 +148,28 @@ export const ChannelMessage = ({
       attachments: detail.attachments.filter((file) => message.fileIds.includes(file.id)),
     });
   const isRequest = message.author.type === 'user' && !isRoot;
+  const shareRefusal = isRequest && !delivery ? shareRefusalOf(detail, message.id) : undefined;
   const agentAuthorId = message.author.type === 'agent' ? message.author.id : null;
   const agentMember = agentAuthorId
     ? detail.members.find((member) => member.agentId === agentAuthorId)
     : undefined;
   const sourceTopicId = message.sourceTopicId;
+  // A question card shows its options itself; the text fallback after the Agent's words is for
+  // clients that cannot render it.
+  // A card's text form follows the reply's own words in `content`; only the words are shown.
+  const body = message.ask
+    ? message.content.slice(0, message.ask.bodyLength)
+    : message.surfaces?.length
+      ? message.content.slice(0, message.surfacesBodyLength ?? message.content.length)
+      : message.content;
+  // A reply sent from a card's button reads as the form it submitted, not the payload it carries.
+  const submittedAction =
+    message.author.type === 'user' && body.includes('<a2ui_action>')
+      ? readActionMessage(
+          body,
+          detail.messages.find((entry) => entry.id === message.replyToId)?.surfaces,
+        )
+      : undefined;
   // A direct conversation is a chat with one Agent; folding its answers only adds a click.
   const collapsible = !detail.channel.agentId;
   // Long messages stay open by default; folding one is an explicit choice from "more".
@@ -225,12 +250,18 @@ export const ChannelMessage = ({
         placement="left"
         showHeader={!compact}
         style={{ paddingInlineStart: 48 }}
+        titleAddon={timestamp}
         avatar={{
           avatar: authorAvatar(message.author),
           title: message.author.name || t('deletedMember'),
         }}
         belowMessage={
-          delivery ?? (isRequest ? <MessageRoutingStatus message={message} /> : undefined)
+          delivery ??
+          (shareRefusal ? (
+            <ShareRefusalNotice {...shareRefusal} />
+          ) : isRequest ? (
+            <MessageRoutingStatus message={message} />
+          ) : undefined)
         }
         customAvatarRender={(_, avatar) => (
           <Flexbox {...stylex.props(styles.messageAvatar)}>
@@ -248,15 +279,18 @@ export const ChannelMessage = ({
                 }}
               >
                 <span style={{ cursor: 'pointer', display: 'inline-flex' }}>
-                  <AgentAvatar
+                  <HoverFollowAgentAvatar
                     agentId={agentAuthorId}
                     avatar={message.author.avatar}
                     name={message.author.name}
-                    shape={'circle'}
                     size={36}
                   />
                 </span>
               </AgentProfilePopup>
+            ) : message.author.type === 'user' && message.author.id ? (
+              <MemberProfilePopup fallback={avatar} userId={message.author.id}>
+                <span style={{ cursor: 'pointer', display: 'inline-flex' }}>{avatar}</span>
+              </MemberProfilePopup>
             ) : (
               avatar
             )}
@@ -264,6 +298,27 @@ export const ChannelMessage = ({
         )}
         message={
           <Flexbox gap={8}>
+            {message.via && (
+              // Sent as this person's request, but written by an Agent in another Channel; a
+              // receipt brings that Channel's answer back, under the Agent that gave it.
+              <Flexbox horizontal align={'center'} gap={6}>
+                <AgentAvatar
+                  agentId={message.via.agentId}
+                  avatar={message.via.avatar ?? undefined}
+                  name={message.via.name}
+                  shape={'circle'}
+                  size={16}
+                />
+                <Text fontSize={12} type="secondary">
+                  {message.receipt
+                    ? t('message.relayReplyFrom', {
+                        channel: message.receipt.channelTitle,
+                        name: message.via.name,
+                      })
+                    : t('message.relayedBy', { name: message.via.name })}
+                </Text>
+              </Flexbox>
+            )}
             {!isRoot &&
               showsReplyQuote(message) &&
               (message.replyTo ? (
@@ -278,7 +333,7 @@ export const ChannelMessage = ({
                   <Text ellipsis as="span" fontSize={12} type="secondary">
                     {message.replyTo.author.name || t('deletedMember')}
                     {': '}
-                    {message.replyTo.content || t('reply.attachment')}
+                    {actionMessagePreview(message.replyTo.content) || t('reply.attachment')}
                   </Text>
                 </Button>
               ) : (
@@ -289,7 +344,10 @@ export const ChannelMessage = ({
             {message.fileIds.length > 0 && (
               <MessageAttachments attachments={detail.attachments} fileIds={message.fileIds} />
             )}
-            {message.content &&
+            {submittedAction ? (
+              <ActionMessageCard fields={submittedAction.fields} title={submittedAction.title} />
+            ) : (
+              body &&
               (collapsible ? (
                 <CollapsibleContent
                   hideCollapseToggle
@@ -299,12 +357,20 @@ export const ChannelMessage = ({
                   onCollapsedChange={setCollapsed}
                   onOverflowChange={setOverflowing}
                 >
-                  <MessageText content={message.content} names={mentionNames} />
+                  <MessageText content={body} names={mentionNames} />
                 </CollapsibleContent>
               ) : (
-                <MessageText content={message.content} names={mentionNames} />
-              ))}
+                <MessageText content={body} names={mentionNames} />
+              ))
+            )}
+            {!!message.surfaces?.length && (
+              <MessageSurfaces detail={detail} message={message} threadId={threadId} />
+            )}
+            {message.ask && <AskCard ask={message.ask} detail={detail} message={message} />}
             {!!message.works?.length && <ReplyWorks works={message.works} />}
+            {failures?.map((job) => (
+              <ReplyFailureCard job={job} key={job.id} />
+            ))}
             {thread && (
               <ThreadPreviewCard
                 root={message}
@@ -313,12 +379,6 @@ export const ChannelMessage = ({
               />
             )}
           </Flexbox>
-        }
-        titleAddon={
-          <>
-            {timestamp}
-            {isRequest && !delivery && <MessageFailureMark detail={detail} message={message} />}
-          </>
         }
       />
       {hasToolbar && (
@@ -360,11 +420,13 @@ export const ChannelMessage = ({
 
 export function ThreadRootMessage({
   detail,
+  failures,
   root,
   onReply,
   highlighted,
 }: {
   detail: ChannelDetail;
+  failures?: ChannelPublicJob[];
   root: ChannelPublicMessage;
   onReply?: (message: ChannelPublicMessage) => void;
   highlighted?: boolean;
@@ -375,6 +437,7 @@ export function ThreadRootMessage({
       <ChannelMessage
         isRoot
         detail={detail}
+        failures={failures}
         highlighted={highlighted}
         message={root}
         onReply={onReply}

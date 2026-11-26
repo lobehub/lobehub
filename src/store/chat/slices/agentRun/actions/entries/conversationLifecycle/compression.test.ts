@@ -172,11 +172,53 @@ describe('executeCompression', () => {
     expect(finalizeSpy).toHaveBeenCalledWith({
       agentId,
       content: 'summary',
+      groupId: undefined,
       messageGroupId: 'group-1',
+      threadId: null,
       topicId,
     });
     expect(messageService.cancelCompression).not.toHaveBeenCalled();
     expect(getMessageIds()).toEqual(['group-1']);
+  });
+
+  it('compacts the open thread, not the main conversation it branched from', async () => {
+    const threadId = 'thread-1';
+    const threadContext = { agentId, threadId, topicId };
+    const threadKey = messageMapKey(threadContext);
+    // A thread page shows the main-conversation turn it branched from (read back with
+    // `threadId: null`), then its own turns.
+    const threadMessages = [
+      ...originalMessages.map((message) => ({ ...message, threadId: null })),
+      { content: 'follow-up', id: 'thread-user-1', role: 'user', threadId, topicId },
+      { content: 'reply', id: 'thread-assistant-1', role: 'assistant', threadId, topicId },
+    ] as any[];
+    act(() => {
+      useChatStore.setState({
+        dbMessagesMap: { [threadKey]: threadMessages },
+        messagesMap: { [threadKey]: threadMessages },
+      });
+    });
+    const finalizeSpy = vi
+      .spyOn(messageService, 'finalizeCompression')
+      .mockResolvedValue({ messages: [] });
+    vi.spyOn(chatService, 'fetchPresetTaskResult').mockImplementation(
+      async ({ onMessageHandle }) => {
+        onMessageHandle?.({ text: 'summary', type: 'text' });
+      },
+    );
+
+    await act(async () => {
+      await useChatStore.getState().executeCompression(threadContext, '');
+    });
+
+    expect(messageService.createCompressionGroup).toHaveBeenCalledWith({
+      agentId,
+      groupId: undefined,
+      messageIds: ['thread-user-1', 'thread-assistant-1'],
+      threadId,
+      topicId,
+    });
+    expect(finalizeSpy).toHaveBeenCalledWith(expect.objectContaining({ threadId, topicId }));
   });
 
   describe('summary model', () => {

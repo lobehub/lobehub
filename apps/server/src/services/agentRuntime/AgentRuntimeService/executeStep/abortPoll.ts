@@ -46,10 +46,10 @@ export function startStepAbortPoll(
   let lastLegacyInterruptStatePollAt = Date.now();
   const pollForAbort = async () => {
     try {
-      // Prefer the sentinel. During the first rolling deployment, an old
-      // worker can still write only the authoritative state, so sample
-      // that large blob at a much lower cadence until all writers have
-      // sentinel support.
+      // Prefer the sentinel. Some stops (share-run gate, client LLM wait,
+      // intervention) persist `status: 'interrupted'` without it, so also
+      // sample the persisted status at a lower cadence. Only the status is
+      // read, not the whole state blob.
       let interrupted = await deps.coordinator.isInterrupted(operationId);
       const now = Date.now();
       if (
@@ -57,8 +57,7 @@ export function startStepAbortPoll(
         now - lastLegacyInterruptStatePollAt >= LEGACY_INTERRUPT_STATE_POLL_INTERVAL_MS
       ) {
         lastLegacyInterruptStatePollAt = now;
-        interrupted =
-          (await deps.coordinator.loadAgentState(operationId))?.status === 'interrupted';
+        interrupted = (await deps.coordinator.loadAgentStatus(operationId)) === 'interrupted';
       }
       abortPollFailures = 0;
       if (interrupted) {

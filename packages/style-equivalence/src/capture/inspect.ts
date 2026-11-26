@@ -214,7 +214,9 @@ export const inspectRules = (page: Page): Promise<RuleInspection> =>
       const hostClasses = (section: Element) => {
         const owners = new Map<string, string | null>();
         for (const element of section.querySelectorAll('[data-synthetic-element]')) {
-          const id = element.getAttribute('data-synthetic-element')!;
+          const id =
+            element.getAttribute('data-synthetic-pair') ??
+            element.getAttribute('data-synthetic-element')!;
           for (const name of element.classList)
             owners.set(name, owners.has(name) && owners.get(name) !== id ? null : id);
         }

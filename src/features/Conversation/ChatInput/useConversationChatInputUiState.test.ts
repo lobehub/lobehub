@@ -53,7 +53,6 @@ describe('useConversationChatInputUiState', () => {
 
     expect(result.current).toEqual({
       placeholderVariant: 'followUp',
-      showSendMenu: false,
       showSendWhileGenerating: false,
       showStopButton: true,
     });
@@ -84,7 +83,6 @@ describe('useConversationChatInputUiState', () => {
 
     expect(result.current).toEqual({
       placeholderVariant: 'default',
-      showSendMenu: true,
       showSendWhileGenerating: false,
       showStopButton: false,
     });

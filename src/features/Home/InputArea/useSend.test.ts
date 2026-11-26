@@ -71,9 +71,11 @@ const agentState = vi.hoisted(() => ({
   internal_dispatchAgentMap: vi.fn(),
 }));
 
+const CACHE_SCOPE = vi.hoisted(() => 'user-1:personal');
+
 const globalState = vi.hoisted(() => ({
   systemStatus: {
-    homeSelectedAgentId: undefined as string | undefined,
+    homeSelectedAgentIdByScope: {} as Record<string, string>,
   },
   toggleTaskAgentPanel: toggleTaskAgentPanelMock,
   updateSystemStatus: vi.fn(),
@@ -144,8 +146,13 @@ vi.mock('@/store/global', () => ({
 
 vi.mock('@/store/global/selectors', () => ({
   systemStatusSelectors: {
-    homeSelectedAgentId: (state: typeof globalState) => state.systemStatus.homeSelectedAgentId,
+    homeSelectedAgentId: (scope: string) => (state: typeof globalState) =>
+      state.systemStatus.homeSelectedAgentIdByScope[scope],
   },
+}));
+
+vi.mock('@/libs/swr/useCacheScope', () => ({
+  useCacheScope: () => CACHE_SCOPE,
 }));
 
 vi.mock('@/store/chat', () => {
@@ -223,7 +230,7 @@ describe('Home InputArea useSend', () => {
     fileState.chatUploadFileList = [];
     homeState.inputActiveMode = null;
     homeState.ungroupedAgents = [];
-    globalState.systemStatus.homeSelectedAgentId = undefined;
+    globalState.systemStatus.homeSelectedAgentIdByScope = {};
     delete agentState.agentMap.agt_custom;
     activeWorkspaceSlugMock.value = null;
     activeWorkspaceIdMock.value = null;
@@ -231,7 +238,7 @@ describe('Home InputArea useSend', () => {
 
   it('creates a private workspace task without starting it', async () => {
     activeWorkspaceIdMock.value = 'workspace-1';
-    globalState.systemStatus.homeSelectedAgentId = 'agt_custom';
+    globalState.systemStatus.homeSelectedAgentIdByScope = { [CACHE_SCOPE]: 'agt_custom' };
     homeState.ungroupedAgents = [{ id: 'agt_custom', type: 'agent' }];
     agentState.agentMap.agt_custom = {};
     createTaskMock.mockResolvedValue({
@@ -591,7 +598,7 @@ describe('Home InputArea useSend', () => {
   });
 
   it('sends chat-mode messages to the Agent selected on Home', async () => {
-    globalState.systemStatus.homeSelectedAgentId = 'agt_custom';
+    globalState.systemStatus.homeSelectedAgentIdByScope = { [CACHE_SCOPE]: 'agt_custom' };
     homeState.ungroupedAgents = [{ id: 'agt_custom', type: 'agent' }];
     agentState.agentMap.agt_custom = {};
 

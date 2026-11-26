@@ -151,6 +151,19 @@ export const getServerAiProviderConfig = async (provider: ModelProvider) => {
   };
 };
 
+/**
+ * The model an unset file embedding slot runs, for Service Model to show. An
+ * invalid `DEFAULT_FILES_CONFIG` still fails where embedding runs, as before;
+ * it must not take the whole client config down with it.
+ */
+const getDeploymentFileEmbeddingModel = () => {
+  try {
+    return parseFilesConfig(knowledgeEnv.DEFAULT_FILES_CONFIG).embeddingModel;
+  } catch {
+    return undefined;
+  }
+};
+
 export const getServerGlobalConfig = async () => {
   const { DEFAULT_AGENT_CONFIG } = getAppConfig();
 
@@ -219,7 +232,10 @@ export const getServerGlobalConfig = async () => {
     // Same derivation as the provider's own issuer (`libs/oidc-provider/provider.ts`).
     ...(appEnv.APP_URL ? { oidcIssuer: urlJoin(appEnv.APP_URL, OIDC_ISSUER_PATH) } : undefined),
     sandbox: getSandboxDeployment(),
-    systemAgent: parseSystemAgent(appEnv.SYSTEM_AGENT),
+    systemAgent: {
+      ...parseSystemAgent(appEnv.SYSTEM_AGENT),
+      fileEmbedding: getDeploymentFileEmbeddingModel(),
+    },
     telemetry: {
       langfuse: langfuseEnv.ENABLE_LANGFUSE,
     },

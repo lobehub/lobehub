@@ -12,6 +12,7 @@ import {
 } from '@/features/Conversation';
 import { MessageActionProvider } from '@/features/Conversation/Messages/Contexts/MessageActionProvider';
 import { dataSelectors, useConversationStore } from '@/features/Conversation/store';
+import { densityVars } from '@/styles/densityVars';
 
 import { DEVTOOLS_AGENT_ID } from './fixtures';
 import { deriveFixtureProps, type LifecycleMode } from './lifecycleMode';
@@ -26,7 +27,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   thread: css`
     width: 100%;
     padding-block: 8px 48px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     background: ${cssVar.colorBgContainer};
   `,
 }));

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getDarwinMajorVersion, isMacOSWithLargeWindowBorders } from '@/utils/platform';
 
-import { getInnerCssVariables, getOuterCssVariables } from './cssVariables';
+import { getContainerTopInset, getInnerCssVariables, getOuterCssVariables } from './cssVariables';
 
 vi.mock('@/utils/platform', () => ({
   getDarwinMajorVersion: vi.fn(() => 0),
@@ -21,6 +21,16 @@ describe('getOuterCssVariables', () => {
   it('drops the left padding while the nav panel is expanded', () => {
     expect(getOuterCssVariables({ expand: true })['--container-padding-left']).toBe('0px');
     expect(getOuterCssVariables({ expand: false })['--container-padding-left']).toBe('8px');
+  });
+});
+
+describe('getContainerTopInset', () => {
+  it('adds the 1px card border to the 8px web top padding', () => {
+    expect(getContainerTopInset(false)).toBe(9);
+  });
+
+  it('is only the card border on desktop, where the container has no top padding', () => {
+    expect(getContainerTopInset(true)).toBe(1);
   });
 });
 

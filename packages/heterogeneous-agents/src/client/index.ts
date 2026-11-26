@@ -1,13 +1,13 @@
 import type { IconType } from '@lobehub/icons';
 import {
   Amp,
+  Antigravity,
   ClaudeCode,
   CodeBuddy,
   Codex,
   Cursor,
   DeepSeek,
   Devin,
-  getLobeIconCDN,
   GithubCopilot,
   Grok,
   Kimi,
@@ -24,6 +24,7 @@ import {
   isRemoteHeterogeneousType,
   LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS,
 } from '../config';
+import { getHeterogeneousAgentAvatar } from '../connectAgent';
 import { DROID_AVATAR_URL, DroidIcon } from './DroidIcon';
 
 export { DROID_AVATAR_URL, DroidIcon, isLocalRuntimeHeterogeneousType, isRemoteHeterogeneousType };
@@ -40,6 +41,7 @@ export type LocalRuntimeHeterogeneousAgentClientConfig =
   };
 
 const heterogeneousAgentIcons = {
+  'antigravity': Antigravity,
   'amp': Amp,
   'claude-code': ClaudeCode,
   'codebuddy': CodeBuddy,
@@ -56,24 +58,16 @@ const heterogeneousAgentIcons = {
   'trae': Trae,
 } as const satisfies Record<HeterogeneousAgentClientConfig['type'], IconType>;
 
-const createAgentAvatar = (iconId: string) =>
-  iconId === 'Droid'
-    ? DROID_AVATAR_URL
-    : getLobeIconCDN(iconId, {
-        cdn: 'aliyun',
-        format: 'avatar',
-      });
-
 export const HETEROGENEOUS_AGENT_CLIENT_CONFIGS = HETEROGENEOUS_AGENT_CONFIGS.map((config) => ({
   ...config,
-  avatar: createAgentAvatar(config.iconId),
+  avatar: getHeterogeneousAgentAvatar(config.iconId),
   icon: heterogeneousAgentIcons[config.type],
 })) as readonly HeterogeneousAgentClientConfig[];
 
 export const LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CLIENT_CONFIGS =
   LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS.map((config) => ({
     ...config,
-    avatar: createAgentAvatar(config.iconId),
+    avatar: getHeterogeneousAgentAvatar(config.iconId),
     icon: DeepSeek,
   })) as readonly LocalRuntimeHeterogeneousAgentClientConfig[];
 
@@ -86,7 +80,7 @@ export const getHeterogeneousAgentClientConfig = (type: string) => {
 
   return {
     ...config,
-    avatar: createAgentAvatar(config.iconId),
+    avatar: getHeterogeneousAgentAvatar(config.iconId),
     icon: heterogeneousAgentIcons[config.type as keyof typeof heterogeneousAgentIcons],
   } satisfies HeterogeneousAgentClientConfig;
 };

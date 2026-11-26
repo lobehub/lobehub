@@ -1,7 +1,12 @@
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import { describe, expect, it } from 'vitest';
 
-import { isDefaultAgentAvatar, pickDomProps, resolveAgentAvatar } from './resolve';
+import {
+  isDefaultAgentAvatar,
+  isGeneratedAgentAvatar,
+  pickDomProps,
+  resolveAgentAvatar,
+} from './resolve';
 
 describe('isDefaultAgentAvatar', () => {
   it('treats empty values and the legacy default image as no avatar', () => {
@@ -17,7 +22,34 @@ describe('isDefaultAgentAvatar', () => {
   });
 });
 
+describe('isGeneratedAgentAvatar', () => {
+  it('counts a picked character as the generated one, not as an emoji or image', () => {
+    expect(isGeneratedAgentAvatar('agent-avatar:rocket:cyan')).toBe(true);
+    expect(isGeneratedAgentAvatar(undefined)).toBe(true);
+    expect(isGeneratedAgentAvatar(DEFAULT_AVATAR)).toBe(true);
+  });
+
+  it('keeps an emoji, an image and a malformed value as they are', () => {
+    expect(isGeneratedAgentAvatar('🤖')).toBe(false);
+    expect(isGeneratedAgentAvatar('https://example.com/a.png')).toBe(false);
+    expect(isGeneratedAgentAvatar('agent-avatar:nope:cyan')).toBe(false);
+  });
+});
+
 describe('resolveAgentAvatar', () => {
+  // A picked character used to fall through as a "custom" avatar, and the plain Avatar
+  // printed its raw `agent-avatar:…` text.
+  it('draws a picked character with its shape and color, still seeded by the id', () => {
+    expect(
+      resolveAgentAvatar({ agentId: 'agt_1', avatar: 'agent-avatar:rocket:cyan', name: 'Bot' }),
+    ).toEqual({
+      choice: { color: 'cyan', shape: 'rocket' },
+      kind: 'generated',
+      label: 'Bot',
+      seed: 'agt_1',
+    });
+  });
+
   it('draws the generated character instead of the legacy default image', () => {
     expect(
       resolveAgentAvatar({ agentId: 'agt_1', avatar: DEFAULT_AVATAR, name: 'Researcher' }),

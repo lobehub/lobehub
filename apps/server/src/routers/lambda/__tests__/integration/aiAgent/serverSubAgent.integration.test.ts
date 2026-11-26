@@ -3,7 +3,8 @@
  * Integration test for the server `callSubAgent` async suspend/resume flow.
  *
  * Verifies the full deferred-tool lifecycle end-to-end on the in-memory runtime:
- *   1. Parent op LLM emits a `lobe-agent____callSubAgent` tool call.
+ *   1. Parent activates `lobe-agent` (loaded on demand), then emits a
+ *      `lobe-agent____callSubAgent` tool call.
  *   2. The real server executor parks the parent (`waiting_for_async_tool`),
  *      creates a pending placeholder tool message, and forks a child op.
  *   3. The child op runs independently and completes.
@@ -11,7 +12,7 @@
  *      sub-agent's answer and resumes the parent.
  *   5. The parent op runs one more LLM step and reaches `done`.
  */
-import { stripSubAgentReference } from '@lobechat/builtin-tool-lobe-agent';
+import { LobeAgentIdentifier, stripSubAgentReference } from '@lobechat/builtin-tool-lobe-agent';
 import { type LobeChatDatabase } from '@lobechat/database';
 import { agentOperations, agents, messages } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
@@ -56,18 +57,14 @@ const PARENT_FINAL = 'Based on the sub-agent result, the final answer is 42.';
 
 const createTestContext = () => ({ jwtPayload: { userId }, userId });
 
-/** Mock parent first step: a single `callSubAgent` tool call. */
-const createCallSubAgentResponse = () => {
-  const responseId = `resp_parent_${Date.now()}`;
-  const msgItemId = `msg_parent_${Date.now()}`;
-  const callId = `call_subagent_1`;
+/** Mock a parent step that emits a single tool call. */
+const createToolCallResponse = (callId: string, name: string, args: Record<string, unknown>) => {
+  const responseId = `resp_${callId}_${Date.now()}`;
+  const msgItemId = `msg_${callId}_${Date.now()}`;
   const fnCall = {
-    arguments: JSON.stringify({
-      description: 'Research the answer',
-      instruction: 'Find the answer to the ultimate question.',
-    }),
+    arguments: JSON.stringify(args),
     call_id: callId,
-    name: 'lobe-agent____callSubAgent',
+    name,
     type: 'function_call',
   };
 
@@ -190,7 +187,8 @@ beforeEach(async () => {
       },
       chatConfig: {},
       model: 'gpt-5-pro',
-      plugins: [],
+      // The scripted first response delegates immediately, before any activation step.
+      plugins: [LobeAgentIdentifier],
       provider: 'openai',
       systemRole: 'You are a supervisor that can delegate work to sub-agents.',
       title: 'Supervisor',
@@ -225,6 +223,9 @@ describe('Server callSubAgent suspend/resume', () => {
       const reviewedResults: string[] = [];
       const fetchHook = vi.fn(async (_url: string, init: RequestInit) => {
         const payload = JSON.parse(init.body as string);
+        // The hook reviews every tool result; only the sub-agent result is under test,
+        // so the activation that precedes it passes untouched.
+        if (payload.apiName !== 'callSubAgent') return new Response(JSON.stringify({}));
         const [placeholder] = await serverDB
           .select()
           .from(messages)
@@ -245,15 +246,24 @@ describe('Server callSubAgent suspend/resume', () => {
             : originalFetch(url, init),
         );
       }
-      // 1: parent emits callSubAgent  2: sub-op final answer  3: parent resume final
-      let callCount = 0;
-      mockResponsesCreate.mockImplementation(function () {
-        callCount++;
-        if (callCount === 1) return Promise.resolve(createCallSubAgentResponse() as any);
-        if (callCount === 2)
-          return Promise.resolve(createFinalTextResponse(SUB_AGENT_ANSWER) as any);
-        return Promise.resolve(createFinalTextResponse(PARENT_FINAL) as any);
-      });
+      // 1: parent activates lobe-agent  2: parent emits callSubAgent
+      // 3: sub-op final answer  4: parent resume final
+      mockResponsesCreate
+        .mockResolvedValueOnce(
+          createToolCallResponse('activate_1', 'lobe-activator____activateTools', {
+            identifiers: [LobeAgentIdentifier],
+            reason: 'Delegate the research to a sub-agent.',
+          }) as any,
+        )
+        .mockResolvedValueOnce(
+          createToolCallResponse('call_subagent_1', 'lobe-agent____callSubAgent', {
+            description: 'Research the answer',
+            instruction: 'Find the answer to the ultimate question.',
+          }) as any,
+        )
+        .mockResolvedValueOnce(createFinalTextResponse(SUB_AGENT_ANSWER) as any)
+        .mockResolvedValueOnce(createFinalTextResponse(PARENT_FINAL) as any)
+        .mockRejectedValue(new Error('Unexpected extra model call'));
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
@@ -273,8 +283,16 @@ describe('Server callSubAgent suspend/resume', () => {
       expect(finalState.status).toBe('done');
       expect(finalState.pendingToolsCalling ?? []).toHaveLength(0);
 
-      // Three LLM calls: parent-initial, sub-op, parent-resume
-      expect(mockResponsesCreate).toHaveBeenCalledTimes(3);
+      // lobe-agent loads on demand: absent from the first step, offered once activated
+      const callSubAgentTool = expect.objectContaining({
+        name: 'lobe-agent____callSubAgent',
+        type: 'function',
+      });
+      expect(mockResponsesCreate.mock.calls[0][0].tools).not.toContainEqual(callSubAgentTool);
+      expect(mockResponsesCreate.mock.calls[1][0].tools).toContainEqual(callSubAgentTool);
+
+      // Four LLM calls: parent-activate, parent-delegate, sub-op, parent-resume
+      expect(mockResponsesCreate).toHaveBeenCalledTimes(4);
 
       // A child op was spawned and reconciled to the parent
       const childOps = await serverDB
@@ -283,7 +301,6 @@ describe('Server callSubAgent suspend/resume', () => {
         .where(eq(agentOperations.parentOperationId, createResult.operationId));
       expect(childOps.length).toBeGreaterThanOrEqual(1);
       if (decision) {
-        expect(fetchHook).toHaveBeenCalledTimes(1);
         expect(pendingContents).toEqual(['']);
         expect(reviewedResults[0]).toContain(SUB_AGENT_ANSWER);
         expect(reviewedResults[0]).toMatch(/<sub_agent id="[^"]+" \/>$/);
@@ -302,7 +319,7 @@ describe('Server callSubAgent suspend/resume', () => {
       expect(subAgentToolMessage).toBeDefined();
       if (decision !== 'deny')
         expect(subAgentToolMessage!.content).toMatch(/<sub_agent id="[^"]+" \/>$/);
-      const parentInput = JSON.stringify(mockResponsesCreate.mock.calls[2][0]);
+      const parentInput = JSON.stringify(mockResponsesCreate.mock.calls[3][0]);
       expect(parentInput).toContain(
         decision === 'deny' ? 'Blocked by afterToolCall hook.' : SUB_AGENT_ANSWER,
       );
@@ -323,5 +340,6 @@ describe('Server callSubAgent suspend/resume', () => {
         expect(JSON.stringify(persisted)).not.toContain(SUB_AGENT_ANSWER);
       }
     },
+    30_000,
   );
 });

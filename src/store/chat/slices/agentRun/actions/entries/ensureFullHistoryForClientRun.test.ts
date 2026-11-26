@@ -4,7 +4,11 @@ import { isPartialHeadWindow } from '@/services/message/roundCursorPage';
 import { displayMessageSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
 
-import { readClientRunMessages } from './ensureFullHistoryForClientRun';
+import { readClientRunInputs } from './ensureFullHistoryForClientRun';
+
+vi.mock('@/store/tool', () => ({
+  getToolStoreState: () => ({ getUninstalledBuiltinToolsForRun: async () => ['lobe-calculator'] }),
+}));
 
 vi.mock('@/services/message/roundCursorPage', () => ({ isPartialHeadWindow: vi.fn() }));
 vi.mock('@/store/chat/selectors', () => ({
@@ -26,7 +30,7 @@ const setup = () => {
   return { get: () => store, store };
 };
 
-describe('readClientRunMessages', () => {
+describe('readClientRunInputs', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -35,8 +39,13 @@ describe('readClientRunMessages', () => {
     vi.mocked(isPartialHeadWindow).mockReturnValue(true);
     const { get, store } = setup();
 
-    const messages = await readClientRunMessages(get, context, 'main_agt_1_tpc_1');
+    const { messages, uninstalledBuiltinTools } = await readClientRunInputs(
+      get,
+      context,
+      'main_agt_1_tpc_1',
+    );
 
+    expect(uninstalledBuiltinTools).toEqual(['lobe-calculator']);
     expect(store.refreshMessages).toHaveBeenCalledWith(context);
     expect(messages.map((message) => message.id)).toEqual(['msg_oldest', 'msg_newest']);
     expect(displayMessageSelectors.getDisplayMessagesByKey).toHaveBeenCalledWith(
@@ -48,8 +57,13 @@ describe('readClientRunMessages', () => {
     vi.mocked(isPartialHeadWindow).mockReturnValue(false);
     const { get, store } = setup();
 
-    const messages = await readClientRunMessages(get, context, 'main_agt_1_tpc_1');
+    const { messages, uninstalledBuiltinTools } = await readClientRunInputs(
+      get,
+      context,
+      'main_agt_1_tpc_1',
+    );
 
+    expect(uninstalledBuiltinTools).toEqual(['lobe-calculator']);
     expect(store.refreshMessages).not.toHaveBeenCalled();
     expect(messages.map((message) => message.id)).toEqual(['msg_newest']);
   });

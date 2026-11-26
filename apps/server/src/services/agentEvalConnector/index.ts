@@ -410,10 +410,8 @@ export class AgentEvalConnectorService {
           throw unavailable();
         await syncConnectorToolsById(
           binding.connectorId,
-          {
-            connectorModel,
-            connectorToolModel: this.toolModel,
-          },
+          // Eval connections never tunnel to a user's device
+          { connectorModel, connectorToolModel: this.toolModel, serverDB: undefined },
           { pruneMissingAutoTools: true },
         );
         // The canonical LobeBench adapter authenticates /sessions/* before lookup.

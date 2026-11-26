@@ -1,12 +1,17 @@
 import { Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { memo, useMemo } from 'react';
+import { memo, type ReactNode, useMemo } from 'react';
+
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { type ActionKey } from '../ActionBar/config';
 import { actionMap } from '../ActionBar/config';
 import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
 import { useChatInputStore } from '../store';
+import { resolveRightActionsForVoicePlacement } from '../utils/resolveVoiceActionPlacement';
 import { resolveSendAreaActionKeys } from './resolveActionKeys';
+import RunningIndicator from './RunningIndicator';
 import SendButton from './SendButton';
 
 const mapActionsToItems = (keys: ActionKey[]) =>
@@ -22,10 +27,14 @@ interface SendAreaProps {
    * `false` or the token indicator has nowhere to render.
    */
   hideContextWindow?: boolean;
+  /** Host content placed right before the actions, e.g. a heterogeneous agent's model selector. */
+  prefix?: ReactNode;
 }
 
-const SendArea = memo<SendAreaProps>(({ hideContextWindow = true }) => {
+const SendArea = memo<SendAreaProps>(({ hideContextWindow = true, prefix }) => {
+  const enableVoiceMessage = useUserStore(userGeneralSettingsSelectors.enableVoiceMessage);
   const { canShowControls } = useChatInputResourceAccess();
+  const leftActions = useChatInputStore((s) => s.leftActions, isEqual);
   const rightActions = useChatInputStore((s) => s.rightActions, isEqual);
   const activeAudioInputMode = useChatInputStore((s) => s.activeAudioInputMode);
   const audioInputActive = activeAudioInputMode !== undefined;
@@ -35,20 +44,37 @@ const SendArea = memo<SendAreaProps>(({ hideContextWindow = true }) => {
       canShowControls
         ? mapActionsToItems(
             resolveSendAreaActionKeys(
-              rightActions as ActionKey[],
+              resolveRightActionsForVoicePlacement(
+                leftActions,
+                rightActions as ActionKey[],
+                enableVoiceMessage,
+              ),
               hideContextWindow,
               activeAudioInputMode,
             ),
           )
         : [],
-    [activeAudioInputMode, canShowControls, hideContextWindow, rightActions],
+    [
+      activeAudioInputMode,
+      canShowControls,
+      enableVoiceMessage,
+      hideContextWindow,
+      leftActions,
+      rightActions,
+    ],
   );
 
   return (
     /** The model label must yield space before the footer clips Send on narrow panels. */
-    <Flexbox horizontal align={'center'} flex={'0 1 auto'} gap={12} style={{ minWidth: 0 }}>
-      {items}
-      {!audioInputActive && <SendButton />}
+    <Flexbox horizontal align={'center'} flex={'0 1 auto'} gap={6} style={{ minWidth: 0 }}>
+      {/* Heads the group, so it sits beside the model selector — the host's prefix or the
+          first action item — whichever one this composer shows. */}
+      {!audioInputActive && <RunningIndicator />}
+      {prefix}
+      <Flexbox horizontal align={'center'} flex={'0 1 auto'} gap={12} style={{ minWidth: 0 }}>
+        {items}
+        {!audioInputActive && <SendButton />}
+      </Flexbox>
     </Flexbox>
   );
 });

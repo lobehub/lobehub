@@ -5,6 +5,7 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ImperativeModal from '@/components/ImperativeModal';
+import InlineErrorText from '@/components/InlineErrorText';
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import PluginTag from '@/components/Plugins/PluginTag';
 import { usePermission } from '@/hooks/usePermission';
@@ -12,7 +13,6 @@ import { useAgentStore } from '@/store/agent';
 import { useToolStore } from '@/store/tool';
 import { mcpStoreSelectors } from '@/store/tool/selectors';
 import { type McpConnectionParams } from '@/types/plugins';
-import { type LobeToolCustomPlugin } from '@/types/tool/plugin';
 
 import ConfigDisplay from './ConfigDisplay';
 import { type McpInstallRequest } from './types';
@@ -27,6 +27,9 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
   ({ installRequest, isMarketplace = false, onComplete }) => {
     const { t } = useTranslation('plugin');
     const [loading, setLoading] = useState(false);
+    const [installError, setInstallError] = useState<{ detail?: string; summary: string } | null>(
+      null,
+    );
     const { allowed: canCreate } = usePermission('create_content');
     const { allowed: canEdit } = usePermission('edit_own_content');
 
@@ -36,7 +39,7 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
       headers?: Record<string, string>;
     }>({});
 
-    const [installCustomPlugin] = useToolStore((s) => [s.installCustomPlugin]);
+    const installCustomMcpConnector = useToolStore((s) => s.installCustomMcpConnector);
     const testMcpConnection = useToolStore((s) => s.testMcpConnection);
     const togglePlugin = useAgentStore((s) => s.togglePlugin);
 
@@ -51,6 +54,7 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
     useEffect(() => {
       if (!installRequest) {
         setLoading(false);
+        setInstallError(null);
         setUpdatedConfig({});
       }
     }, [installRequest]);
@@ -59,6 +63,7 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
       if (!canCreate || !canEdit || !installRequest || !schema) return;
 
       setLoading(true);
+      setInstallError(null);
       try {
         // Merge original config with user-updated config
         const finalConfig = {
@@ -87,30 +92,24 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
           throw new Error(t('protocolInstall.messages.manifestNotFound'));
         }
 
-        // Third-party marketplace and custom plugins: build custom plugin data
-        // Use the real manifest obtained from connection testing
-        const customPlugin: LobeToolCustomPlugin = {
-          customParams: {
-            avatar: schema.icon,
-            description: schema.description,
-            mcp: {
-              ...finalConfig, // Use the merged config
-              headers: finalConfig.type === 'http' ? finalConfig.headers : undefined,
-            },
-          },
+        // Third-party marketplace and custom MCP servers are added as custom connectors
+        await installCustomMcpConnector({
+          config: finalConfig,
+          description: schema.description,
+          icon: schema.icon,
           identifier: schema.identifier,
-          manifest: testResult.manifest, // Use the real manifest
-          type: 'customPlugin',
-        };
-
-        await installCustomPlugin(customPlugin);
-        await togglePlugin(schema.identifier);
+          name: schema.name,
+        });
+        await togglePlugin(schema.identifier, true);
         toast.success(t('protocolInstall.messages.installSuccess', { name: schema.name }));
 
         onComplete?.();
       } catch (error) {
         console.error('Plugin installation error:', error);
-        toast.error(t('protocolInstall.messages.installError'));
+        setInstallError({
+          detail: error instanceof Error ? error.message : undefined,
+          summary: t('protocolInstall.messages.installFailedRetry'),
+        });
         setLoading(false);
       }
     }, [
@@ -120,7 +119,7 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
       schema,
       updatedConfig,
       onComplete,
-      installCustomPlugin,
+      installCustomMcpConnector,
       testMcpConnection,
       togglePlugin,
       t,
@@ -207,7 +206,13 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
           </Block>
 
           <Flexbox>
-            <ConfigDisplay schema={schema} onConfigUpdate={setUpdatedConfig} />
+            <ConfigDisplay
+              schema={schema}
+              onConfigUpdate={(config) => {
+                setInstallError(null);
+                setUpdatedConfig(config);
+              }}
+            />
             {/* Show connection test error */}
             {testState.error && (
               <Alert
@@ -220,6 +225,10 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
               />
             )}
           </Flexbox>
+
+          {installError && (
+            <InlineErrorText detail={installError.detail}>{installError.summary}</InlineErrorText>
+          )}
         </Flexbox>
       </ImperativeModal>
     );

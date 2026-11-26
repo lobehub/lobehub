@@ -38,9 +38,6 @@
   "agentMarketplace.picker.empty": "Шаблоны отсутствуют.",
   "agentMarketplace.picker.failedToLoad": "Не удалось загрузить шаблоны. Пожалуйста, попробуйте позже.",
   "agentMarketplace.picker.summary": "Доступно шаблонов: {{filtered}} из {{total}}.",
-  "agentMarketplace.render.alreadyInLibraryTag": "Уже в библиотеке",
-  "agentMarketplace.render.alreadyInLibrary_one": "{{count}} уже в библиотеке",
-  "agentMarketplace.render.alreadyInLibrary_other": "{{count}} уже в библиотеке",
   "askUserQuestion.checkStatus": "Проверить статус отправки",
   "askUserQuestion.checking": "Проверка статуса отправки…",
   "askUserQuestion.customOption.placeholder": "Или напишите свой вариант…",
@@ -115,7 +112,7 @@
   "connector.error.stdioDesktopOnly": "Stdio-коннекторы могут синхронизироваться только в настольном приложении. Откройте LobeHub Desktop, чтобы синхронизировать этот коннектор.",
   "connector.kind.agent": "Коннектор агента",
   "connector.kind.builtin": "Встроенный инструмент",
-  "connector.kind.community": "Инструмент сообщества",
+  "connector.kind.community": "Инструмент торговой площадки",
   "connector.kind.custom": "Пользовательский коннектор",
   "connector.kind.oauth": "OAuth-коннектор",
   "connector.manageOnlyCreator": "Только создатель или владелец рабочего пространства может управлять этим коннектором",
@@ -311,7 +308,6 @@
   "updateArgs.form.add": "Добавить элемент",
   "updateArgs.form.key": "Ключ поля",
   "updateArgs.form.value": "Значение поля",
-  "updateArgs.formValidationFailed": "Ошибка проверки формы, проверьте формат параметров",
   "updateArgs.keyRequired": "Ключ поля не может быть пустым",
   "updateArgs.stringifyError": "Не удалось сериализовать параметры, проверьте их формат"
 }

@@ -8,6 +8,8 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import type { OperationStatus } from '@/store/chat/slices/operation/types';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 import type { AssistantContentBlock } from '@/types/index';
 
 import { messageStateSelectors, useConversationStore } from '../../../store';
@@ -137,6 +139,7 @@ const Group = memo<GroupChildrenProps>(
     // Off: no view is lifted or broken out, and the turn renders as it did
     // before MCP Apps.
     const enableMcpApps = useServerConfigStore(serverConfigSelectors.enableMcpApps);
+    const showImageReads = useUserStore(userGeneralSettingsSelectors.showImageReadPreview);
 
     const views = useMemo(
       () =>
@@ -145,9 +148,10 @@ const Group = memo<GroupChildrenProps>(
             enableMcpApps,
             hasActiveOperation: !!activeFlags[index],
             isGenerating: !!generatingFlags[index],
+            showImageReads,
           }),
         ),
-      [activeFlags, chainsWithFinishTypes, enableMcpApps, generatingFlags],
+      [activeFlags, chainsWithFinishTypes, enableMcpApps, generatingFlags, showImageReads],
     );
     const lastView = views.at(-1)!;
     const isGenerating = lastView.isGenerating;

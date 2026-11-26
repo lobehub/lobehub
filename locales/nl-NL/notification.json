@@ -99,7 +99,6 @@
   "promotion_gift_granted_title": "Bonus saldo toegevoegd",
   "storage_overage_cap_reached": "Uw maandelijkse limiet van ${{monthlyCap}} voor opslag op basis van verbruik is bereikt. Geschatte kosten voor deze cyclus zijn ${{estimatedCycleCharge}}. Nieuwe uploads buiten uw inbegrepen opslag worden geblokkeerd tot de volgende factureringscyclus of totdat u de limiet verhoogt.",
   "storage_overage_cap_reached_title": "Limiet voor opslag op basis van verbruik bereikt",
-  "subscription_one_time_expired": "Je eenmalige {{plan}}-abonnement is afgelopen en je account staat nu op het Gratis-abonnement. Vernieuw {{plan}} om je voordelen terug te krijgen.",
   "subscription_one_time_expired_action": "Vernieuw {{plan}}",
   "subscription_one_time_expired_title": "Je {{plan}}-abonnement is afgelopen",
   "subscription_payment_failed": "Uw abonnementsverlengingsbetaling is mislukt. Werk uw betaalmethode bij om uw abonnement actief te houden.",

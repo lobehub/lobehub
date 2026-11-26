@@ -1,7 +1,13 @@
-import { produce } from 'immer';
+import { Immer } from 'immer';
 
 import { type EditorContentState } from './initialState';
 import { createInitialEditorContentState } from './initialState';
+
+// A long page's body is a multi-megabyte tree. Auto-freeze walks every body
+// assigned here to freeze it, which costs tens of milliseconds per update on such
+// a page, inside the document switch and on every edit. Stored bodies are never
+// mutated: the editor clones whatever it loads.
+const { produce } = new Immer({ autoFreeze: false });
 
 // ============ Action Types ============
 

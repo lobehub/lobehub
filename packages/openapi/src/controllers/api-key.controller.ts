@@ -1,6 +1,8 @@
 import type { Context } from 'hono';
 
 import { BaseController } from '../common/base.controller';
+import type { LegacyArrayListQuery } from '../helpers/legacy-array-list';
+import { pageLoadedList } from '../helpers/legacy-array-list';
 import { ApiKeyService } from '../services/api-key.service';
 import type { CreateApiKeyRequest, UpdateApiKeyRequest } from '../types/api-key.type';
 
@@ -23,7 +25,11 @@ export class ApiKeyController extends BaseController {
   async getApiKeys(c: Context) {
     try {
       const service = await this.getService(c);
-      return this.success(c, await service.getApiKeys(), 'API keys retrieved');
+      return this.success(
+        c,
+        pageLoadedList(await service.getApiKeys(), this.getQuery<LegacyArrayListQuery>(c)),
+        'API keys retrieved',
+      );
     } catch (error) {
       return this.handleError(c, error);
     }

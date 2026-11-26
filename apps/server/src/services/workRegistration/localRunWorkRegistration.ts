@@ -4,6 +4,7 @@ import type { MessageModel } from '@/database/models/message';
 import type { WorkModel } from '@/database/models/work';
 
 import { UNEXECUTED_INTERVENTION_STATUSES } from './constants';
+import type { ShellPullRequestLinking } from './pullRequestLinking';
 import { registerShellWorks } from './shellWorkRegistration';
 
 const log = debug('lobe-server:local-run-work-registration');
@@ -53,10 +54,13 @@ export const registerShellWorksForLocalRun = async (params: {
   anchorMessageId: string;
   messageIds: string[];
   messageModel: MessageModel;
+  /** Pull request linking; see `registerShellWorks`. */
+  pullRequestLinking?: ShellPullRequestLinking;
   topicId: string;
   workModel: WorkModel;
 }): Promise<LocalRunShellWorksResult> => {
-  const { anchorMessageId, messageIds, messageModel, topicId, workModel } = params;
+  const { anchorMessageId, messageIds, messageModel, pullRequestLinking, topicId, workModel } =
+    params;
 
   const anchor = await messageModel.findById(anchorMessageId);
   // The anchor must be an assistant message of the claimed topic — anything
@@ -95,6 +99,7 @@ export const registerShellWorksForLocalRun = async (params: {
     cumulativeCost: null,
     cumulativeUsage: null,
     operationId: rootOperationId,
+    pullRequestLinking,
     records,
     threadId: anchor.threadId,
     topicId,

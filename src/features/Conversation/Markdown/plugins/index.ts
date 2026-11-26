@@ -7,6 +7,7 @@ import LobeArtifact from './LobeArtifact';
 import LobeThinking from './LobeThinking';
 import LocalFile from './LocalFile';
 import LocalFileLink from './LocalFileLink';
+import McpEvent from './McpEvent';
 import Mention from './Mention';
 import ReferDocument from './ReferDocument';
 import ReferTopic from './ReferTopic';
@@ -17,6 +18,7 @@ import Thinking from './Thinking';
 import Tool from './Tool';
 import { type MarkdownElement } from './type';
 import UserFeedback from './UserFeedback';
+import WebhookEvent from './WebhookEvent';
 
 export type { MarkdownElement } from './type';
 
@@ -32,6 +34,8 @@ export const markdownElements: MarkdownElement[] = [
   Tool,
   Task,
   ScmEvent,
+  McpEvent,
+  WebhookEvent,
   GoalTurn,
   UserFeedback,
   ImageSearchRef,

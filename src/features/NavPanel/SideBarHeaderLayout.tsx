@@ -9,15 +9,17 @@ import {
   Text,
 } from '@lobehub/ui';
 import { ChevronRightIcon, HomeIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import { memo } from 'react';
 import { flushSync } from 'react-dom';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import { getContainerTopInset } from '@/features/DesktopLayoutContainer/cssVariables';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useDensityTokens, useHeaderActionSize } from '@/styles/density';
 import { isModifierClick } from '@/utils/navigation';
 
 import BackButton from './components/BackButton';
+import { useNavItemMetrics } from './density';
 import ToggleLeftPanelButton from './ToggleLeftPanelButton';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -39,11 +41,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface SideBarHeaderLayoutProps {
+  /** `backTo` is a literal path that already carries its workspace scope. */
+  backEscape?: boolean;
   backTo?: string;
   breadcrumb?: BreadcrumbItem[];
   /** Override the leading home breadcrumb item (defaults to home icon → `/`). */
   homeItem?: BreadcrumbItem;
   left?: ReactNode;
+  /** Runs before the back navigation; `preventDefault()` cancels it. */
+  onBack?: (event: MouseEvent) => void;
   right?: ReactNode;
   showBack?: boolean;
   showTogglePanelButton?: boolean;
@@ -54,12 +60,18 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
     left,
     right,
     backTo = '/',
+    backEscape,
+    onBack,
     showBack = true,
     breadcrumb = [],
     homeItem,
     showTogglePanelButton = true,
   }) => {
     const navigate = useWorkspaceAwareNavigate();
+    const { headerTitleFontSize, headerTitleWeight } = useNavItemMetrics();
+    const { headerHeight } = useDensityTokens();
+    const topInset = getContainerTopInset();
+    const headerActionSize = useHeaderActionSize(true);
     const leftContent = left ? (
       <Flexbox
         horizontal
@@ -70,9 +82,11 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
           overflow: 'hidden',
         }}
       >
-        {showBack && <BackButton size={DESKTOP_HEADER_ICON_SMALL_SIZE} to={backTo} />}
+        {showBack && (
+          <BackButton escape={backEscape} size={headerActionSize} to={backTo} onClick={onBack} />
+        )}
         {left && typeof left === 'string' ? (
-          <Text ellipsis fontSize={16} weight={500}>
+          <Text ellipsis fontSize={headerTitleFontSize} weight={headerTitleWeight}>
             {left}
           </Text>
         ) : (
@@ -113,11 +127,13 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
         align={'center'}
         className={styles.container}
         flex={'none'}
+        height={headerHeight + topInset}
         justify={'space-between'}
-        padding={'8px 6px'}
+        paddingInline={6}
+        style={{ paddingBlockStart: topInset }}
       >
         {leftContent}
-        <Flexbox horizontal align={'center'} gap={2} justify={'flex-end'}>
+        <Flexbox horizontal align={'center'} flex={'none'} gap={2} justify={'flex-end'}>
           {showTogglePanelButton && <ToggleLeftPanelButton />}
           {right}
         </Flexbox>

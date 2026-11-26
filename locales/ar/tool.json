@@ -38,9 +38,6 @@
   "agentMarketplace.picker.empty": "لا توجد قوالب متاحة.",
   "agentMarketplace.picker.failedToLoad": "فشل في تحميل القوالب. يرجى المحاولة مرة أخرى لاحقًا.",
   "agentMarketplace.picker.summary": "{{filtered}} / {{total}} قوالب متاحة.",
-  "agentMarketplace.render.alreadyInLibraryTag": "موجود بالفعل في المكتبة",
-  "agentMarketplace.render.alreadyInLibrary_one": "{{count}} موجود بالفعل في المكتبة",
-  "agentMarketplace.render.alreadyInLibrary_other": "{{count}} موجود بالفعل في المكتبة",
   "askUserQuestion.checkStatus": "تحقق من حالة الإرسال",
   "askUserQuestion.checking": "جارٍ التحقق من حالة الإرسال…",
   "askUserQuestion.customOption.placeholder": "أو اكتب خيارك الخاص…",
@@ -115,7 +112,7 @@
   "connector.error.stdioDesktopOnly": "يمكن لموصلات Stdio المزامنة فقط في تطبيق سطح المكتب. افتح LobeHub Desktop لمزامنة هذا الموصل.",
   "connector.kind.agent": "موصل الوكيل",
   "connector.kind.builtin": "أداة مدمجة",
-  "connector.kind.community": "أداة المجتمع",
+  "connector.kind.community": "أداة السوق",
   "connector.kind.custom": "موصل مخصص",
   "connector.kind.oauth": "موصل OAuth",
   "connector.manageOnlyCreator": "يمكن فقط للمنشئ أو مالك مساحة العمل إدارة هذا الموصل",
@@ -311,7 +308,6 @@
   "updateArgs.form.add": "إضافة عنصر",
   "updateArgs.form.key": "مفتاح الحقل",
   "updateArgs.form.value": "قيمة الحقل",
-  "updateArgs.formValidationFailed": "فشل التحقق من صحة النموذج، يرجى التحقق من تنسيق المعلمات",
   "updateArgs.keyRequired": "لا يمكن أن يكون مفتاح الحقل فارغًا",
   "updateArgs.stringifyError": "تعذر تحويل المعلمات إلى سلسلة، يرجى التحقق من تنسيق المعلمات"
 }

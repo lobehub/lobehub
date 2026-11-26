@@ -7,8 +7,8 @@ export interface ChannelJoinEvent {
   at: number;
   id: string;
   /**
-   * Only owners and admins add members. With no admin besides the owner, the owner added
-   * everyone else; otherwise the adder is unknown and the line says who joined.
+   * The member who added them, from `ChannelPublicMember.invitedBy`. Absent when they joined on
+   * their own, or joined before the adder was kept: the line then says who joined.
    */
   inviter?: ChannelPublicMember;
   members: ChannelPublicMember[];
@@ -17,16 +17,17 @@ export interface ChannelJoinEvent {
 const time = (value: Date | string) => new Date(value).getTime();
 
 export const channelJoinEvents = (members: ChannelPublicMember[]): ChannelJoinEvent[] => {
+  const byId = new Map(members.map((member) => [member.id, member]));
   const owner = members.find((member) => member.role === 'owner');
-  const inviter = members.some((member) => member.role === 'admin') ? undefined : owner;
   const joined = members
     .filter((member) => member !== owner)
     .sort((a, b) => time(a.joinedAt) - time(b.joinedAt));
   const events: ChannelJoinEvent[] = [];
   for (const member of joined) {
     const at = time(member.joinedAt);
+    const inviter = member.invitedBy ? byId.get(member.invitedBy) : undefined;
     const last = events.at(-1);
-    if (last && at - last.at <= BATCH_MS) last.members.push(member);
+    if (last && at - last.at <= BATCH_MS && last.inviter === inviter) last.members.push(member);
     else events.push({ at, id: `join:${member.id}`, inviter, members: [member] });
   }
   return events;

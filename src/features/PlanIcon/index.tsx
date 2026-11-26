@@ -19,6 +19,12 @@ export const themes = {
       color: undefined,
     },
   },
+  [Plans.Basic]: {
+    theme: {
+      background: 'linear-gradient(45deg, #3B82F6, #1D4ED8)',
+      color: '#DBEAFE',
+    },
+  },
   [Plans.Hobby]: {
     theme: {
       background: 'linear-gradient(45deg, #21B2EE, #2271ED)',

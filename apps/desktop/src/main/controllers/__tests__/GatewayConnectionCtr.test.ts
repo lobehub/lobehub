@@ -342,6 +342,7 @@ const mockMcpCtr = {
 
 const mockRemoteServerConfigCtr = {
   getAccessToken: vi.fn().mockResolvedValue('mock-access-token'),
+  getDesktopBootstrapIdentity: () => ({ userId: 'user-a' }),
   getRemoteServerConfig: vi.fn().mockResolvedValue({
     active: true,
     remoteServerUrl: 'https://server.example.com',
@@ -2857,7 +2858,6 @@ describe('GatewayConnectionCtr', () => {
           },
         }),
       );
-
       const info = await ctr.getDeviceInfo();
 
       expect(info.deviceId).toBe('my-device');

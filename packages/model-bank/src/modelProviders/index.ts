@@ -21,9 +21,11 @@ import CohereProvider from './cohere';
 import CometAPIProvider from './cometapi';
 import ComfyUIProvider from './comfyui';
 import DeepSeekProvider from './deepseek';
+import DoubaoSpeechProvider from './doubaospeech';
 import ElevenLabsProvider from './elevenlabs';
 import FalProvider from './fal';
 import FireworksAIProvider from './fireworksai';
+import FishAudioProvider from './fishaudio';
 import GiteeAIProvider from './giteeai';
 import GithubProvider from './github';
 import GithubCopilotProvider from './githubCopilot';
@@ -174,6 +176,8 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   OpenRouterProvider,
   FalProvider,
   ElevenLabsProvider,
+  FishAudioProvider,
+  DoubaoSpeechProvider,
   OllamaProvider,
   OllamaCloudProvider,
   VLLMProvider,
@@ -327,9 +331,11 @@ export { default as CohereProviderCard } from './cohere';
 export { default as CometAPIProviderCard } from './cometapi';
 export { default as ComfyUIProviderCard } from './comfyui';
 export { default as DeepSeekProviderCard } from './deepseek';
+export { default as DoubaoSpeechProviderCard } from './doubaospeech';
 export { default as ElevenLabsProviderCard } from './elevenlabs';
 export { default as FalProviderCard } from './fal';
 export { default as FireworksAIProviderCard } from './fireworksai';
+export { default as FishAudioProviderCard } from './fishaudio';
 export { default as GiteeAIProviderCard } from './giteeai';
 export { default as GithubProviderCard } from './github';
 export { default as GithubCopilotProviderCard } from './githubCopilot';

@@ -27,6 +27,7 @@ import { homeRecentSelectors } from '@/store/home/slices/recent/selectors';
 import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/library';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 
 import { isArtifactPage } from '../Layout/Body/PageSection/group';
 import { docsFilePath, docsPagePath, DRIVE_PATH, LIBRARY_INDEX_PATH } from '../paths';
@@ -75,9 +76,9 @@ const styles = stylex.create({
   header: {
     display: 'grid',
     gridTemplateColumns: { default: COLUMNS, [PHONE]: PHONE_COLUMNS },
-    gap: '16px',
+    gap: densityTokens['--lobe-density-section-gap'],
     paddingBlock: '8px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorBorderSecondary,
@@ -93,18 +94,18 @@ const styles = stylex.create({
     color: cssVar.colorTextSecondary,
   },
   name: {
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     color: cssVar.colorText,
   },
   row: {
     cursor: 'pointer',
     display: 'grid',
     gridTemplateColumns: { default: COLUMNS, [PHONE]: PHONE_COLUMNS },
-    gap: '16px',
+    gap: densityTokens['--lobe-density-section-gap'],
     alignItems: 'center',
     width: '100%',
-    paddingBlock: '10px',
-    paddingInline: '12px',
+    paddingBlock: `calc((${sidebarRow.listRowHeight} - 28px) / 2)`,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderWidth: 0,
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
@@ -114,13 +115,13 @@ const styles = stylex.create({
   },
   tab: {
     cursor: 'pointer',
-    paddingBlock: '6px',
+    paddingBlock: `calc((${sidebarRow.controlHeight} - 20px) / 2)`,
     paddingInline: 0,
     borderWidth: 0,
     borderBlockEndWidth: '2px',
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: 'transparent',
-    fontSize: '14px',
+    fontSize: sidebarRow.textFontSize,
     color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
     backgroundColor: 'transparent',
   },

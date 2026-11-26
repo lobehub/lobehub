@@ -8,6 +8,7 @@ import {
   cssVar,
   cx,
   DropdownMenu,
+  type DropdownMenuProps,
   Flexbox,
   Icon,
   Text,
@@ -16,11 +17,14 @@ import {
 } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { EyeOffIcon, GlobeIcon, MoreHorizontalIcon, Trash2Icon } from 'lucide-react';
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import PrivateLockIcon from '@/components/PrivateLockIcon';
 import UserAvatar from '@/components/UserAvatar';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
+import { useDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import { describeError } from './errorMessage';
 import { repositoryPath } from './repository';
@@ -59,6 +63,12 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorFillTertiary};
   `,
+  /** Compact density: 36px tile in a 52px row (6px padding, 20px + 2 + 18px text). */
+  iconTileCompact: css`
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  `,
   metaDivider: css`
     flex: none;
     width: 1px;
@@ -78,8 +88,8 @@ const styles = createStaticStyles(({ css }) => ({
   row: css`
     cursor: pointer;
 
-    padding-block: 12px;
-    padding-inline: 12px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadius};
 
     transition: background 0.15s ease;
@@ -104,10 +114,24 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillSecondary};
     }
   `,
+  rowCompact: css`
+    padding-block: 6px;
+  `,
 }));
 
 interface EnvironmentItemProps {
   environment: SandboxEnvironment;
+  /**
+   * What the place listing the row adds to it, before the creator — a project
+   * shows how many of its folders come from the environment.
+   */
+  extra?: ReactNode;
+  /**
+   * The menu, when the place listing the row acts on something other than the
+   * environment itself — a project unlinks it rather than deleting it.
+   * Replaces the environment's own items; an empty list hides the menu.
+   */
+  menuItems?: DropdownMenuProps['items'];
   onSelect: () => void;
   selected?: boolean;
 }
@@ -119,15 +143,20 @@ interface EnvironmentItemProps {
  * repository is this, and who put it here. Every
  * other property of an environment — setup command, variables, branch — is a
  * detail of one environment rather than a way to tell environments apart, so it
- * lives in the panel this row opens.
+ * lives on the page this row opens.
  */
-const EnvironmentItem = memo<EnvironmentItemProps>(({ environment, onSelect, selected }) => {
+const EnvironmentItem = memo<EnvironmentItemProps>((props) => {
+  const { environment, extra, menuItems, onSelect, selected } = props;
   const { t } = useTranslation('setting');
   const { t: tCommon } = useTranslation('common');
   const actions = useEnvironmentActions();
   const canEdit = useCanEditEnvironment()(environment);
+  const { compact, tokens } = useDensity();
 
-  const repository = repositoryPath(environment.configuration);
+  // A row restored from storage carries only its plain `owner/name`.
+  const repository = environment.configuration
+    ? repositoryPath(environment.configuration)
+    : environment.repository;
   const creator =
     environment.creator?.fullName ||
     environment.creator?.username ||
@@ -189,24 +218,43 @@ const EnvironmentItem = memo<EnvironmentItemProps>(({ environment, onSelect, sel
   const confirmRemoveEnvironment = useConfirmRemoveEnvironment();
   const confirmRemove = () => confirmRemoveEnvironment(environment);
 
+  // Nothing here acts on an environment you only have the use of, so the menu
+  // goes away rather than offering items that would be refused.
+  const items =
+    menuItems ??
+    (canEdit
+      ? [
+          ...visibilityItems,
+          {
+            danger: true,
+            icon: <Icon icon={Trash2Icon} />,
+            key: 'remove',
+            label: t('environments.remove'),
+            onClick: confirmRemove,
+          },
+        ]
+      : []);
+
   return (
     <Flexbox
       horizontal
       align={'center'}
-      className={cx(styles.row, selected && styles.rowActive)}
-      gap={16}
+      className={cx(styles.row, compact && styles.rowCompact, selected && styles.rowActive)}
+      gap={tokens.sectionGap}
       role={'button'}
       tabIndex={0}
       onClick={onSelect}
       onKeyDown={(event) => {
-        // Mirror native button keyboard semantics for the div-as-button row.
+        // Mirror native button keyboard semantics for the div-as-button row —
+        // for the row itself only, so a control inside it keeps its own keys.
+        if (event.target !== event.currentTarget) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           onSelect();
         }
       }}
     >
-      <div className={styles.iconTile}>
+      <div className={cx(styles.iconTile, compact && styles.iconTileCompact)}>
         <Github size={20} />
       </div>
 
@@ -219,10 +267,21 @@ const EnvironmentItem = memo<EnvironmentItemProps>(({ environment, onSelect, sel
               own: it is a gloss on the name, not a second fact, and a third
               line made every row taller for the rows that have one. It gives
               way first, since the name is what the row is found by. */}
-        <Flexbox horizontal align={'baseline'} gap={8} style={{ minWidth: 0 }}>
-          <Text ellipsis fontSize={15} style={{ flex: '0 1 auto', minWidth: 0 }} weight={500}>
+        <Flexbox
+          horizontal
+          align={'baseline'}
+          gap={8}
+          style={{ lineHeight: compact ? '20px' : undefined, minWidth: 0 }}
+        >
+          <Text
+            ellipsis
+            fontSize={compact ? 14 : 15}
+            style={{ flex: '0 1 auto', minWidth: 0 }}
+            weight={500}
+          >
             {environment.name}
           </Text>
+          {environment.workspaceId && environment.visibility === 'private' && <PrivateLockIcon />}
           {environment.description && (
             /* Shrinks a thousand times more readily than the name, the same
                  way the repository yields to the facts on the line below. */
@@ -236,7 +295,12 @@ const EnvironmentItem = memo<EnvironmentItemProps>(({ environment, onSelect, sel
             </Text>
           )}
         </Flexbox>
-        <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          gap={8}
+          style={{ lineHeight: compact ? '18px' : undefined, minWidth: 0 }}
+        >
           {/* The repository leads because it is what the name is usually taken
                 from, and it truncates because it is the only part of this line
                 that can afford to. */}
@@ -257,6 +321,7 @@ const EnvironmentItem = memo<EnvironmentItemProps>(({ environment, onSelect, sel
       </Flexbox>
 
       <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
+        {extra && <span onClick={(event) => event.stopPropagation()}>{extra}</span>}
         {environment.creator && (
           // Who put this here, at a glance — the same answer the device list
           // gives with the enroller's avatar.
@@ -266,25 +331,10 @@ const EnvironmentItem = memo<EnvironmentItemProps>(({ environment, onSelect, sel
             </span>
           </Tooltip>
         )}
-        {/* Nothing here acts on an environment you only have the use of, so
-              the menu goes away rather than offering items that would be
-              refused. */}
-        {canEdit && (
+        {items.length > 0 && (
           <span onClick={(event) => event.stopPropagation()}>
-            <DropdownMenu
-              placement={'bottomRight'}
-              items={[
-                ...visibilityItems,
-                {
-                  danger: true,
-                  icon: <Icon icon={Trash2Icon} />,
-                  key: 'remove',
-                  label: t('environments.remove'),
-                  onClick: confirmRemove,
-                },
-              ]}
-            >
-              <Button icon={MoreHorizontalIcon} />
+            <DropdownMenu items={items} placement={'bottomRight'}>
+              <Button aria-label={tCommon('more')} icon={MoreHorizontalIcon} />
             </DropdownMenu>
           </span>
         )}

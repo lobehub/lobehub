@@ -2,7 +2,12 @@ name: Desktop PR Build
 
 on:
   pull_request:
-    types: [synchronize, labeled, unlabeled] # PR 更新或标签变化时触发
+    # opened/reopened 让 overlay type check 在普通 PR 上也能跑，不必等到被打上桌面构建标签
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - '**/*.mdx'
 
 # 确保同一 PR 同一时间只运行一个相同的 workflow，取消正在进行的旧的运行
 concurrency:
@@ -53,6 +58,63 @@ jobs:
       - name: Desktop type-check
         run: bun run type-check
         working-directory: apps/desktop
+
+  # 业务 overlay 与当前源码一起做类型检查：bundle 不做类型检查，overlay 仍在读取
+  # 本仓库已删除的 API 时会一路构建发布，到运行时才失败。
+  # 这个 job 不跟随 trigger:build-desktop 标签，普通 PR 也要检查。
+  overlay-type-check:
+    name: Overlay type check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Create overlay token
+        id: overlay-token
+        uses: ./.github/actions/overlay-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+          repository: ${{ vars.OVERLAY_REPOSITORY }}
+
+      - name: Type check this pull request with the overlay
+        id: head
+        if: steps.overlay-token.outputs.token != ''
+        continue-on-error: true
+        uses: ./.github/actions/overlay-type-check
+        with:
+          log-name: head.log
+          node-version: 24.11.1
+          overlay-repository: ${{ vars.OVERLAY_REPOSITORY }}
+          overlay-token: ${{ steps.overlay-token.outputs.token }}
+
+      # The overlay follows this branch with a delay, so the base can already fail
+      # for reasons this pull request did not cause; only errors it adds count.
+      - name: Check out the base with this pull request's workflow tooling
+        if: steps.head.outcome == 'failure'
+        run: |
+          set -euo pipefail
+          head_sha="$(git rev-parse HEAD)"
+          git checkout --force --detach HEAD^1
+          git checkout "$head_sha" -- .github
+
+      - name: Type check the base with the same overlay
+        if: steps.head.outcome == 'failure'
+        continue-on-error: true
+        uses: ./.github/actions/overlay-type-check
+        with:
+          log-name: base.log
+          node-version: 24.11.1
+          overlay-ref: ${{ env.OVERLAY_REF }}
+          overlay-repository: ${{ vars.OVERLAY_REPOSITORY }}
+          overlay-token: ${{ steps.overlay-token.outputs.token }}
+
+      - name: Fail on type errors this pull request introduces
+        if: steps.head.outcome == 'failure'
+        run: node .github/scripts/overlayTypeErrors.mjs "$RUNNER_TEMP/base.log" "$RUNNER_TEMP/head.log"
 
   version:
     name: Determine version

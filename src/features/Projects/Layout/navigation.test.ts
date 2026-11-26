@@ -11,6 +11,7 @@ import {
   getProjectTasksPath,
   getProjectTopicPath,
   isProjectSectionActive,
+  resolveProjectSettingsSection,
   toProjectPathname,
 } from './navigation';
 
@@ -33,6 +34,18 @@ describe('project workspace navigation', () => {
   it('builds new and existing conversation routes inside the project', () => {
     expect(getProjectTopicPath('prj_1')).toBe('/project/prj_1/topic');
     expect(getProjectTopicPath('prj_1', 'tpc_1')).toBe('/project/prj_1/topic/tpc_1');
+  });
+});
+
+describe('resolveProjectSettingsSection', () => {
+  it('opens folded-in tabs where their content now lives', () => {
+    expect(resolveProjectSettingsSection('sites')).toBe('advanced');
+    expect(resolveProjectSettingsSection('directories')).toBe('environments');
+  });
+
+  it('keeps current sections unchanged', () => {
+    expect(resolveProjectSettingsSection('advanced')).toBe('advanced');
+    expect(resolveProjectSettingsSection('members')).toBe('members');
   });
 });
 

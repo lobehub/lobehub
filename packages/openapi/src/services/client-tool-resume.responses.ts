@@ -7,6 +7,7 @@ import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { agentOperations } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import type { AgentRuntimeService } from '@/server/services/agentRuntime';
 
 import type { FunctionCallOutputItem, OutputItem } from '../types/responses.type';
@@ -90,14 +91,34 @@ export interface ParkedClientToolsResume {
  * still out. Returns `undefined` when nothing on the topic waits on the
  * caller, so the caller can start a new run instead.
  */
-export const resumeParkedClientTools = async ({
+export interface ParkedCallerRun {
+  callerCalls: ChatToolPayload[];
+  operation: NonNullable<Awaited<ReturnType<AgentOperationModel['findById']>>>;
+  operationId: string;
+  operationModel: AgentOperationModel;
+  pending: ChatToolPayload[];
+  state: AgentState;
+}
+
+interface ResolveParkedParams {
+  agentRuntimeService: AgentRuntimeService;
+  db: LobeChatDatabase;
+  topicId: string;
+  userId: string;
+  workspaceId?: string;
+}
+
+/**
+ * The run parked on `topicId` waiting on the caller's tools, when one exists —
+ * a read-only lookup shared by authorization preflight and the resume itself.
+ */
+export const resolveParkedCallerRun = async ({
   agentRuntimeService,
   db,
-  outputs,
   topicId,
   userId,
   workspaceId,
-}: ResumeParams): Promise<ParkedClientToolsResume | undefined> => {
+}: ResolveParkedParams): Promise<ParkedCallerRun | undefined> => {
   const topic = await new TopicModel(db, userId, workspaceId).findById(topicId);
   const operationId = topic?.metadata?.runningOperation?.operationId;
   if (!operationId) return;
@@ -112,6 +133,57 @@ export const resumeParkedClientTools = async ({
   const pending = (state.pendingToolsCalling ?? []) as ChatToolPayload[];
   const callerCalls = pending.filter(isCallerTool);
   if (callerCalls.length === 0) return;
+
+  return { callerCalls, operation, operationId, operationModel, pending, state };
+};
+
+/**
+ * Authorize the agent a parked run resumes with — the parked operation's own
+ * agent, which can differ from the request's declared `model`. Runs in
+ * read-only preflight and again before the claim writes any results, so a
+ * revoked `use` grant on that agent (or its parent groups) can never let tool
+ * outputs drive its run.
+ */
+export const assertCanResumeParkedRun = ({
+  db,
+  run,
+  userId,
+  workspaceId,
+}: {
+  db: LobeChatDatabase;
+  run: ParkedCallerRun;
+  userId: string;
+  workspaceId?: string;
+}) =>
+  assertCanUseWorkspaceAgent({
+    agentId: run.state.origin?.agentId ?? run.operation.agentId ?? undefined,
+    db,
+    groupId: run.state.origin?.groupId ?? undefined,
+    userId,
+    workspaceId,
+  });
+
+export const resumeParkedClientTools = async ({
+  agentRuntimeService,
+  db,
+  outputs,
+  topicId,
+  userId,
+  workspaceId,
+}: ResumeParams): Promise<ParkedClientToolsResume | undefined> => {
+  const parked = await resolveParkedCallerRun({
+    agentRuntimeService,
+    db,
+    topicId,
+    userId,
+    workspaceId,
+  });
+  if (!parked) return;
+  const { callerCalls, operation, operationId, operationModel, pending, state } = parked;
+
+  // Preflight already checked this; enforce again here so a state change
+  // between them can never slip a claim past the parked agent's guard.
+  await assertCanResumeParkedRun({ db, run: parked, userId, workspaceId });
 
   const outputByCallId = new Map(outputs.map((item) => [item.call_id, item.output]));
   for (const item of outputs) {

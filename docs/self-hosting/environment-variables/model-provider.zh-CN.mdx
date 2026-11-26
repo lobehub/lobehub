@@ -760,7 +760,7 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 ### `FAL_API_KEY`
 
 - 类型：必选
-- 描述：这是你在 FAL 服务中申请的 API 密钥
+- 描述：这是你在 FAL 服务中申请的 API 密钥（在 [fal.ai/dashboard/keys](https://fal.ai/dashboard/keys) 创建）。未设置 `FAL_API_KEY` 时，LobeHub 会读取 fal 官方 SDK 使用的 `FAL_KEY`。该密钥用于 fal 的图片、视频与音乐生成。音乐生成（MiniMax Music 与 ACE-Step 1.5）只走 fal：MiniMax 官方音乐接口已对新用户停售。详见 [音乐生成](/zh/docs/usage/getting-started/music)。
 - 默认值：-
 - 示例：`fal-xxxxxx...xxxxxx`
 
@@ -799,6 +799,70 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 示例：`-all,+eleven_v4,+eleven_flash_v2_5`
 
 上述示例表示隐藏所有默认模型，只启用 `eleven_v4` 和 `eleven_flash_v2_5`。
+
+## Fish Audio
+
+仅提供语音合成（TTS）。设置步骤见[在 LobeHub 中使用 Fish Audio](/zh/docs/usage/providers/fishaudio)。
+
+### `FISHAUDIO_API_KEY`
+
+- 类型：部署时可选；提供共享服务端密钥时必填。用户也可以在 Fish Audio 服务商设置中填写自己的密钥，用户密钥优先。
+- 描述：在 [Fish Audio API Keys](https://fish.audio/app/api-keys) 页面创建的密钥。设置非空密钥后，服务端配置会自动启用 Fish Audio。`ENABLED_FISHAUDIO` 由此密钥派生，不是独立的环境变量开关。两处都没有密钥时，调用 Fish Audio 语音合成会返回 `InvalidProviderAPIKey` 错误。
+- 默认值：未设置，不提供共享服务端密钥。
+- 示例：`xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+### `FISHAUDIO_PROXY_URL`
+
+- 类型：可选
+- 描述：覆盖 Fish Audio API 的 Base URL。仅与服务端密钥一起使用。末尾带 `/v1` 也可以。
+- 默认值：`https://api.fish.audio`
+- 示例：`https://fish-proxy.example.com`
+
+### `FISHAUDIO_MODEL_LIST`
+
+- 类型：可选
+- 描述：使用通用的 [模型列表语法][model-list] 自定义 Fish Audio 模型列表。
+- 默认值：未设置，使用内置模型列表。
+- 示例：`-all,+s2.1-pro`
+
+## Doubao Speech
+
+豆包语音（火山引擎语音合成），仅提供语音合成（TTS），与火山方舟服务商相互独立。设置步骤见[在 LobeHub 中使用豆包语音](/zh/docs/usage/providers/doubaospeech)。配置 `DOUBAOSPEECH_API_KEY`，或同时配置 `DOUBAOSPEECH_APP_ID` 与 `DOUBAOSPEECH_ACCESS_TOKEN`。用户在豆包语音服务商设置中保存的凭证优先，且不会与服务端凭证混用。
+
+### `DOUBAOSPEECH_API_KEY`
+
+- 类型：可选
+- 描述：火山引擎新版语音控制台「API Key 管理」中的 API Key，以 `X-Api-Key` 发送。与 App ID + Access Token 同时设置时优先使用。`ENABLED_DOUBAOSPEECH` 由已配置的凭证派生，不是独立的环境变量开关。
+- 默认值：未设置
+- 示例：`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
+
+### `DOUBAOSPEECH_APP_ID`
+
+- 类型：可选
+- 描述：旧版语音控制台的 App ID，需与 `DOUBAOSPEECH_ACCESS_TOKEN` 一起使用。
+- 默认值：未设置
+- 示例：`1234567890`
+
+### `DOUBAOSPEECH_ACCESS_TOKEN`
+
+- 类型：可选
+- 描述：旧版语音控制台的 Access Token，需与 `DOUBAOSPEECH_APP_ID` 一起使用。
+- 默认值：未设置
+- 示例：`xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+### `DOUBAOSPEECH_PROXY_URL`
+
+- 类型：可选
+- 描述：覆盖豆包语音 API 的 Base URL。仅与服务端凭证一起使用。末尾带 `/api/v3` 也可以。
+- 默认值：`https://openspeech.bytedance.com`
+- 示例：`https://doubao-proxy.example.com`
+
+### `DOUBAOSPEECH_MODEL_LIST`
+
+- 类型：可选
+- 描述：使用通用的 [模型列表语法][model-list] 自定义豆包语音模型列表。
+- 默认值：未设置，使用内置模型列表。
+- 示例：`-all,+seed-tts-2.0`
 
 ## BFL
 

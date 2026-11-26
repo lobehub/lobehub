@@ -100,6 +100,7 @@ export interface MarketOAuthProxyRequest {
   parameters?: MarketOAuthProxyParameter[];
   /** Market OAuth provider identifier. */
   provider: string;
+  signal?: AbortSignal;
 }
 
 /** Provider response returned through the Market OAuth proxy. */
@@ -241,6 +242,7 @@ export class MarketService {
     method,
     parameters,
     provider,
+    signal,
   }: MarketOAuthProxyRequest): Promise<MarketOAuthProxyResponse> => {
     const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const url = new URL(
@@ -286,6 +288,7 @@ export class MarketService {
       body: body === undefined ? undefined : JSON.stringify(body),
       headers: forwardedHeaders,
       method,
+      signal,
     });
 
     return { data: (await response.json()) as unknown, status: response.status };
@@ -817,6 +820,16 @@ export class MarketService {
     } finally {
       if (timeout) clearTimeout(timeout);
     }
+  }
+
+  /** The provider ids of the user's LobeHub Skills connections, without listing their tools. */
+  async listLobehubSkillProviderIds(): Promise<string[]> {
+    const { connections } = await this.market.connect.listConnections({
+      signal: AbortSignal.timeout(LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS),
+    });
+    return (connections ?? [])
+      .map((connection) => (connection as { providerId?: string }).providerId)
+      .filter((providerId): providerId is string => !!providerId);
   }
 
   /**

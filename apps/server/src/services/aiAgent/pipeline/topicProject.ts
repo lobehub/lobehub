@@ -79,8 +79,8 @@ export const withProjectSandbox = async (
   const { agentId, hasDirectory, projectId } = input;
   // Creation-time markers, never stored. `sandboxTemporary`: the composer chose
   // a temporary sandbox on purpose, so nothing is applied over it.
-  // `sandboxSeeded`: the placement is the plan's default nobody chose, so a
-  // project's checkout takes its place.
+  // `sandboxSeeded`: the placement is the plan's default nobody chose, so the
+  // project's repository, cloned into a temporary sandbox, takes its place.
   const { sandboxSeeded, sandboxTemporary, ...rest } = input.metadata ?? {};
   const metadata =
     sandboxSeeded === undefined && sandboxTemporary === undefined
@@ -100,7 +100,7 @@ export const withProjectSandbox = async (
   const sandbox = await resolveProjectTopicSandbox({ ...deps, agentId, projectId });
   if (Object.keys(sandbox).length === 0) return metadata;
 
-  // The checkout replaces a default placement whole, drive included.
+  // The repository replaces a default placement whole, drive folder included.
   const {
     sandboxDrive: _drive,
     sandboxEnvironmentId: _environment,

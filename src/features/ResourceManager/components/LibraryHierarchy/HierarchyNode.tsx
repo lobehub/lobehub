@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import FileIcon from '@/components/FileIcon';
+import { useNavItemMetrics } from '@/features/NavPanel/density';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import {
   getTransparentDragImage,
@@ -32,6 +33,7 @@ import { useFileItemDropdown } from '../Explorer/ItemDropdown/useFileItemDropdow
 import FolderAddButton from './FolderAddButton';
 import HierarchyNodeMenuButton from './HierarchyNodeMenuButton';
 import HierarchyNodeToggle from './HierarchyNodeToggle';
+import { isRowOwnClick, resolveFolderRowClick } from './rowClick';
 import { isHierarchyNodeActive, resolveDeletedFolderRedirect } from './selection';
 import { styles } from './styles';
 
@@ -54,6 +56,7 @@ interface HierarchyNodeProps {
 
 export const HierarchyNode = memo<HierarchyNodeProps>(
   ({ item, level = 0, flat, isExpanded, isLoading, onToggle, selectedKey, parentKey }) => {
+    const metrics = useNavItemMetrics();
     const navigate = useWorkspaceAwareNavigate();
 
     const [setMode, libraryId] = useResourceManagerStore((s) => [s.setMode, s.libraryId]);
@@ -305,6 +308,12 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     if (item.isFolder) {
       const isActive = isHierarchyNodeActive(item, selectedKey);
 
+      const handleRowClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        const action = resolveFolderRowClick(e, { flat, isActive });
+        if (action === 'toggle') onToggle(item.id);
+        else if (action === 'navigate') handleFolderClick(item.id);
+      };
+
       return (
         <Flexbox gap={2}>
           <Block
@@ -316,9 +325,9 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
             data-is-folder={String(item.isFolder)}
             data-parent-key={flat ? undefined : parentKey}
             draggable={!flat}
-            gap={8}
-            height={36}
-            paddingInline={4}
+            gap={metrics.gap}
+            height={metrics.rowHeight}
+            paddingInline={metrics.paddingInline}
             variant={isActive ? 'filled' : 'borderless'}
             className={cx(
               styles.treeItem,
@@ -328,9 +337,10 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
               isDragging && styles.dragging,
             )}
             style={{
-              paddingInlineStart: level * 12 + 4,
+              ...(metrics.radius === undefined ? undefined : { borderRadius: metrics.radius }),
+              paddingInlineStart: level * 12 + metrics.paddingInline,
             }}
-            onClick={() => handleFolderClick(item.id)}
+            onClick={handleRowClick}
             onDragEnd={handleDragEnd}
             onDragLeave={flat ? undefined : handleDragLeave}
             onDragOver={flat ? undefined : handleDragOver}
@@ -354,10 +364,10 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
               horizontal
               align={'center'}
               flex={1}
-              gap={8}
-              style={{ minHeight: 28, minWidth: 0, overflow: 'hidden' }}
+              gap={metrics.gap}
+              style={{ minHeight: metrics.iconBox, minWidth: 0, overflow: 'hidden' }}
             >
-              <Icon icon={isExpanded ? FolderOpenIcon : FolderIcon} size={18} />
+              <Icon icon={isExpanded ? FolderOpenIcon : FolderIcon} size={metrics.iconSize} />
               {isRenaming ? (
                 <Input
                   ref={inputRef}
@@ -382,6 +392,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
                 <span
                   style={{
                     flex: 1,
+                    fontSize: metrics.fontSize,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
@@ -403,6 +414,10 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     // Render as file. A document that holds other documents gets the folder's
     // caret; the row itself still opens the document.
     const isActive = isHierarchyNodeActive(item, selectedKey);
+    const handleFileRowClick = (e: React.MouseEvent<HTMLDivElement>) => {
+      if (isRowOwnClick(e)) handleItemClick();
+    };
+
     return (
       <Flexbox gap={2}>
         <Block
@@ -414,9 +429,9 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
           data-is-folder={false}
           data-parent-key={flat ? undefined : parentKey}
           draggable={!flat}
-          gap={8}
-          height={36}
-          paddingInline={4}
+          gap={metrics.gap}
+          height={metrics.rowHeight}
+          paddingInline={metrics.paddingInline}
           variant={isActive ? 'filled' : 'borderless'}
           className={cx(
             styles.treeItem,
@@ -426,9 +441,10 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
             dropPosition === 'after' && styles.dropAfter,
           )}
           style={{
-            paddingInlineStart: level * 12 + 4,
+            ...(metrics.radius === undefined ? undefined : { borderRadius: metrics.radius }),
+            paddingInlineStart: level * 12 + metrics.paddingInline,
           }}
-          onClick={handleItemClick}
+          onClick={handleFileRowClick}
           onDragEnd={handleDragEnd}
           onDragLeave={flat ? undefined : handleDragLeave}
           onDragOver={flat ? undefined : handleDragOver}
@@ -452,25 +468,26 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
             horizontal
             align={'center'}
             flex={1}
-            gap={8}
-            style={{ minHeight: 28, minWidth: 0, overflow: 'hidden' }}
+            gap={metrics.gap}
+            style={{ minHeight: metrics.iconBox, minWidth: 0, overflow: 'hidden' }}
           >
             {isPrivate ? (
               <Tooltip title={t('resources.visibility.privateTooltip', { ns: 'chat' })}>
-                <Icon icon={LockIcon} size={18} />
+                <Icon icon={LockIcon} size={metrics.iconSize} />
               </Tooltip>
             ) : isPage ? (
               emoji ? (
-                <span style={{ fontSize: 18 }}>{emoji}</span>
+                <span style={{ fontSize: metrics.iconSize }}>{emoji}</span>
               ) : (
-                <Icon icon={FileText} size={18} />
+                <Icon icon={FileText} size={metrics.iconSize} />
               )
             ) : (
-              <FileIcon fileName={item.name} fileType={item.fileType} size={18} />
+              <FileIcon fileName={item.name} fileType={item.fileType} size={metrics.iconSize} />
             )}
             <span
               style={{
                 flex: 1,
+                fontSize: metrics.fontSize,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',

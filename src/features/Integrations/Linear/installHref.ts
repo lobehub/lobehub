@@ -2,7 +2,7 @@ import urlJoin from 'url-join';
 
 import { integrationInstallOrigin } from '@/utils/integrationInstallOrigin';
 
-/** Where the OAuth callback sends the user back to. */
+/** Where the OAuth callback returns; the route forwards it to the connector page. */
 export const LINEAR_RETURN_TO = '/settings/integrations/linear';
 
 interface LinearInstallHrefParams {

@@ -8,6 +8,7 @@ import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolv
 import type { RuntimeProbeCache } from '@lobechat/heterogeneous-agents/runtimeProbeCache';
 import { CodexAppServerClient } from '@lobechat/heterogeneous-agents/spawn';
 import { getShellInfo } from '@lobechat/local-file-shell';
+import { CODEX_COLLABORATION_MODE_RUNTIME } from '@lobechat/types';
 
 import { CLI_CONFIG_DIR_NAME } from '../constants/identity';
 import { cliVersion } from '../pkg';
@@ -71,15 +72,21 @@ async function supportsNativeCodex(): Promise<boolean> {
   }
 }
 
-/** Native agent runtimes the resolved binaries support; one handshake per call. */
+/**
+ * Native agent runtimes the resolved binaries support; one handshake per call.
+ * `codex-collaboration-mode-v1` says this `lh` also takes the Codex Plan switch.
+ */
 export async function probeNativeRuntimes(): Promise<string[]> {
-  return (await supportsNativeCodex()) ? ['codex-app-server-v1'] : [];
+  return (await supportsNativeCodex())
+    ? ['codex-app-server-v1', CODEX_COLLABORATION_MODE_RUNTIME]
+    : [];
 }
 
 /**
  * The answer to a gateway `system_info_request`: host paths and live native capabilities.
  * `supportedTools` lists the opt-in tools this device can run; the server refuses those
- * tools on a device that does not list them.
+ * tools on a device that does not list them. `supportedToolCallTypes` tells it this
+ * client runs tunneled MCP calls, which older CLIs mis-dispatched by apiName.
  *
  * Use when: a gateway requests this connection's current system information.
  * Expects: local paths and binary resolution belong to this connect process.
@@ -113,6 +120,8 @@ export async function collectSystemInfo(
     musicPath: path.join(home, 'Music'),
     picturesPath: path.join(home, 'Pictures'),
     supportedAgentRuntimes: await nativeRuntimes.get(),
+    // Tunneled MCP calls (stdio / local-network servers) run on this machine.
+    supportedToolCallTypes: ['tool', 'mcp'],
     ...(supportedTools.length > 0 && { supportedTools }),
     userDataPath: path.join(home, CLI_CONFIG_DIR_NAME),
     videosPath: path.join(home, videosDir),

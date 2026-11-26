@@ -2,14 +2,14 @@
 
 import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
 
-import InboxButton from './components/InboxButton';
+import HeaderActions from './components/HeaderActions';
 import Nav from './components/Nav';
 import User from './components/User';
 
 const Header = () => {
   return (
     <>
-      <SideBarHeaderLayout left={<User />} right={<InboxButton />} showBack={false} />
+      <SideBarHeaderLayout left={<User />} right={<HeaderActions />} showBack={false} />
       <Nav />
     </>
   );

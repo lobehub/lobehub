@@ -28,9 +28,13 @@ interface ChainContext {
   forward?: { application?: string; element: ForwardElement };
   inner?: Record<string, InnerNode[]>;
   layout: Set<string>;
+  masks?: Array<{ index: number; style: string }>;
   omitted?: number[];
+  pairId?: string;
   probed: Set<string>;
   real?: Record<string, RealComponent>;
+  realIds?: Set<string>;
+  realLeaf?: boolean;
   samples?: InnerNode[];
 }
 
@@ -58,10 +62,13 @@ const renderChain = (chain: StyleElement[], context: ChainContext, depth = 0): s
   const [element, ...rest] = chain;
   if (!rest.length && context.forward)
     return renderForward(element.id, context.forward.element, context.forward.application);
-  const real = rendersReal(element, !rest.length, context.real);
+  const learned = !!context.realIds?.has(element.id);
+  const real = rendersReal(element, !rest.length, context.real) || learned;
   const tag = real ? element.tag : placementTag(element, layout);
   const substituted = tag !== element.tag;
   const attributes = [`data-synthetic-element=${JSON.stringify(element.id)}`];
+  if (learned && context.pairId)
+    attributes.push(`data-synthetic-pair=${JSON.stringify(context.pairId)}`);
   for (const [name, value] of Object.entries(element.literalProps))
     if (keepLiteral(name, substituted)) attributes.push(renderLiteral(name, value));
   if (element.inlineStyle) attributes.push(`style={(${element.inlineStyle})}`);
@@ -77,10 +84,13 @@ const renderChain = (chain: StyleElement[], context: ChainContext, depth = 0): s
   }
   if (element.runtimeStyle && probed.has(element.runtimeStyle))
     attributes.push(`style={${element.runtimeStyle}}`);
+  const mask = context.masks?.find((item) => item.index === depth);
+  if (mask) attributes.push(`style={(${mask.style})}`);
   const component = real ? context.real?.[element.tag] : undefined;
   if (component?.sample) attributes.push(component.sample(sampleContent(context.samples)));
   const open = `<${tag} ${attributes.join(' ')}`;
-  if (VOID_TAGS.has(tag) || component?.leaf) return `<>${open} />${neutral.join('')}</>`;
+  if (VOID_TAGS.has(tag) || component?.leaf || (learned && context.realLeaf))
+    return `<>${open} />${neutral.join('')}</>`;
   const inner = rest.length
     ? renderChain(rest, context, depth + 1)
     : `{${JSON.stringify(SAMPLE_TEXT)}}`;
@@ -177,6 +187,27 @@ const preludeNames = (prelude: string) => {
   }
   return names;
 };
+
+const componentImports = (
+  plan: FilePlan,
+  side: Side,
+  byId: Map<string, StyleElement>,
+  prelude: Set<string>,
+) =>
+  plan.cases.flatMap((entry) =>
+    (entry.realElements?.[side] ?? []).flatMap((id) => {
+      const element = byId.get(id);
+      const component = element?.component;
+      if (!element || !component || prelude.has(element.tag)) return [];
+      const source = JSON.stringify(component.source);
+      if (component.imported === 'default') return [`import ${element.tag} from ${source};`];
+      const name =
+        component.imported === element.tag
+          ? element.tag
+          : `${component.imported} as ${element.tag}`;
+      return [`import { ${name} } from ${source};`];
+    }),
+  );
 
 const counterpartEntries = (
   plan: FilePlan,
@@ -298,9 +329,13 @@ export const generateModule = (
       },
       inner: entry.inner,
       layout,
+      masks: entry.inlineMasks?.[side],
       omitted: entry.neutralOmitted,
       probed,
       real: config.realComponents,
+      pairId: entry.realElements ? entry.elementIds.base : undefined,
+      realIds: new Set(entry.realElements?.[side]),
+      realLeaf: entry.realLeaf,
       samples: entry.samples,
     };
     return `${JSON.stringify(entry.key)}: (__v: Record<string, boolean | string>) => { ${lines.join(' ')} return (${renderChain(chain, context)}); }`;
@@ -315,17 +350,12 @@ export const generateModule = (
         config,
       ),
     );
-  const counterparts = counterpartEntries(
-    plan,
-    side,
-    byId,
-    preludeNames(extraction.prelude),
-    config,
-  );
+  const prelude = preludeNames(extraction.prelude);
+  const counterparts = counterpartEntries(plan, side, byId, prelude, config);
   unpaired.push(...counterparts.entries);
   return [
     extraction.prelude,
-    ...counterparts.imports,
+    ...new Set([...counterparts.imports, ...componentImports(plan, side, byId, prelude)]),
     ...forwardImports(plan.cases, side),
     config.cxFallback
       ? `import { ${config.cxFallback.name} as __cx } from ${JSON.stringify(config.cxFallback.source)};`

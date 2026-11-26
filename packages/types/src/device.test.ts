@@ -2,7 +2,12 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { z } from 'zod';
 
 import type { DeviceActivityOrder, WorkingDirConfig } from './device';
-import { deriveWorktreePath, sortDevicesByActivity, workingDirConfigSchema } from './device';
+import {
+  deriveWorktreePath,
+  getWorkingDirSessionPath,
+  sortDevicesByActivity,
+  workingDirConfigSchema,
+} from './device';
 
 describe('sortDevicesByActivity', () => {
   const device = (
@@ -171,12 +176,12 @@ describe('deriveWorktreePath', () => {
     deriveWorktreePath(sourcePath, 'b', { homeDir: home }).split(/[/\\]/).at(-2) as string;
 
   // The folder the worktree modal previews for a generated branch
-  // (`wt/<timestamp>-<adjective>-<noun>`): the `/` folds to `-`, and the
+  // (`lobehub/<timestamp>-<adjective>-<noun>`): the `/` folds to `-`, and the
   // checkout lands under the central root, keyed by repo name + path hash.
   it('folds a generated branch into the central worktree root', () => {
     expect(
-      deriveWorktreePath('/code/lobehub', 'wt/202610020308-quiet-hill', { homeDir: home }),
-    ).toBe(`/Users/me/.lobehub/worktrees/${key('/code/lobehub')}/wt-202610020308-quiet-hill`);
+      deriveWorktreePath('/code/lobehub', 'lobehub/202610020308-quiet-hill', { homeDir: home }),
+    ).toBe(`/Users/me/.lobehub/worktrees/${key('/code/lobehub')}/lobehub-202610020308-quiet-hill`);
     expect(key('/code/lobehub')).toMatch(/^lobehub-[\da-f]{8}$/);
     // Trailing separators on either input don't change the result.
     expect(deriveWorktreePath('/code/lobehub/', 'feat/x', { homeDir: '/Users/me/' })).toBe(
@@ -184,11 +189,20 @@ describe('deriveWorktreePath', () => {
     );
   });
 
+  // The `lobehub/` namespace of a generated branch survives as the leaf's
+  // `lobehub-` prefix; the parent folder is still the repo name + path hash.
+  it('keeps the lobehub/ namespace as the lobehub- leaf prefix', () => {
+    expect(
+      deriveWorktreePath('/code/my-app', 'lobehub/202610020308-quiet-hill', { homeDir: home }),
+    ).toBe(`/Users/me/.lobehub/worktrees/${key('/code/my-app')}/lobehub-202610020308-quiet-hill`);
+    expect(key('/code/my-app')).toMatch(/^my-app-[\da-f]{8}$/);
+  });
+
   it('keeps the source path separator on Windows', () => {
     const source = 'C:\\code\\lobehub';
     expect(
-      deriveWorktreePath(source, 'wt/202610020308-quiet-hill', { homeDir: 'C:\\Users\\me' }),
-    ).toBe(`C:\\Users\\me\\.lobehub\\worktrees\\${key(source)}\\wt-202610020308-quiet-hill`);
+      deriveWorktreePath(source, 'lobehub/202610020308-quiet-hill', { homeDir: 'C:\\Users\\me' }),
+    ).toBe(`C:\\Users\\me\\.lobehub\\worktrees\\${key(source)}\\lobehub-202610020308-quiet-hill`);
   });
 
   it('keeps same-named repos at different paths apart', () => {
@@ -216,12 +230,89 @@ describe('deriveWorktreePath', () => {
   // Without a known home (a device that does not report one) the previous
   // sibling layout is kept, so released devices still get an absolute path.
   it('falls back to a sibling folder without a home directory', () => {
-    expect(deriveWorktreePath('/code/lobehub', 'wt/202610020308-quiet-hill')).toBe(
-      '/code/lobehub-wt-202610020308-quiet-hill',
+    expect(deriveWorktreePath('/code/lobehub', 'lobehub/202610020308-quiet-hill')).toBe(
+      '/code/lobehub-lobehub-202610020308-quiet-hill',
     );
-    expect(deriveWorktreePath('C:\\code\\lobehub', 'wt/x', { homeDir: ' ' })).toBe(
-      'C:\\code\\lobehub-wt-x',
+    expect(deriveWorktreePath('C:\\code\\lobehub', 'lobehub/x', { homeDir: ' ' })).toBe(
+      'C:\\code\\lobehub-lobehub-x',
     );
     expect(deriveWorktreePath('/code/lobehub', '')).toBe('/code/lobehub');
+  });
+
+  // The folder is named after the branch's own name: the
+  // app's `lobehub/` namespace is dropped, every other name folds as before.
+  describe('stripBranchPrefix', () => {
+    const root = () => `/Users/me/.lobehub/worktrees/${key('/code/lobehub')}`;
+    const opts = { homeDir: home, stripBranchPrefix: 'lobehub' };
+
+    it('drops a leading namespace segment from the folder name', () => {
+      expect(deriveWorktreePath('/code/lobehub', 'lobehub/202611170300-quiet-hill', opts)).toBe(
+        `${root()}/202611170300-quiet-hill`,
+      );
+    });
+
+    it('folds any other branch exactly as without the option', () => {
+      expect(deriveWorktreePath('/code/lobehub', 'feat/foo', opts)).toBe(`${root()}/feat-foo`);
+      expect(deriveWorktreePath('/code/lobehub', 'lobehubx/foo', opts)).toBe(
+        `${root()}/lobehubx-foo`,
+      );
+      // A branch called exactly the namespace keeps its name.
+      expect(deriveWorktreePath('/code/lobehub', 'lobehub', opts)).toBe(`${root()}/lobehub`);
+    });
+
+    it('keeps the repo key folder and the traversal guard', () => {
+      expect(deriveWorktreePath('/code/lobehub', 'lobehub/../..', opts)).toBe(`${root()}/worktree`);
+    });
+
+    it('leaves the result unchanged when not asked to strip', () => {
+      expect(deriveWorktreePath('/code/lobehub', 'lobehub/x', { homeDir: home })).toBe(
+        `${root()}/lobehub-x`,
+      );
+    });
+  });
+});
+
+describe('getWorkingDirSessionPath', () => {
+  const worktree = '/Users/me/.lobehub/worktrees/lobehub-0000beef/quiet-hill';
+
+  it('starts in the source repo for a worktree picked mid-conversation', () => {
+    expect(
+      getWorkingDirSessionPath({ git: { activeWorktree: worktree }, path: '/code/lobehub' }),
+    ).toBe('/code/lobehub');
+  });
+
+  it('starts in the worktree a topic was born in, even after it moved on', () => {
+    const born: WorkingDirConfig = {
+      git: { activeWorktree: worktree, autoCreated: true },
+      path: '/code/lobehub',
+      sessionPath: worktree,
+    };
+    expect(getWorkingDirSessionPath(born)).toBe(worktree);
+    // An agent forked another worktree later: the marker went, the session stays.
+    expect(getWorkingDirSessionPath({ ...born, git: { activeWorktree: '/wt/other' } })).toBe(
+      worktree,
+    );
+  });
+
+  it('keeps bare and empty entries as they are', () => {
+    expect(getWorkingDirSessionPath('/code/lobehub')).toBe('/code/lobehub');
+    expect(getWorkingDirSessionPath(undefined)).toBeUndefined();
+    // The ownership marker alone does not move the session.
+    expect(getWorkingDirSessionPath({ git: { autoCreated: true }, path: '/code/a' })).toBe(
+      '/code/a',
+    );
+  });
+
+  it('keeps the auto-created marker and session path through the config schema', () => {
+    const value = {
+      git: {
+        activeWorktree: worktree,
+        autoCreated: true,
+        autoCreatedAt: '2026-11-17T00:00:00.000Z',
+      },
+      path: '/code/lobehub',
+      sessionPath: worktree,
+    };
+    expect(workingDirConfigSchema.parse(value)).toEqual(value);
   });
 });

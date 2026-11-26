@@ -16,6 +16,7 @@ import {
 } from '@/features/LobeBench/lobeBench';
 import { createRunEditModal } from '@/routes/(main)/eval/bench/[benchmarkId]/features/RunEditModal';
 import RunCard from '@/routes/(main)/eval/bench/[benchmarkId]/features/RunsTab/RunCard';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   sectionTitle: {
@@ -27,7 +28,7 @@ const styles = stylex.create({
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))',
-    gap: 12,
+    gap: densityTokens['--lobe-density-content-gap'],
   },
   filterEmpty: {
     alignItems: 'center',

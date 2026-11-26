@@ -116,7 +116,11 @@ describe('single tool executors', () => {
 
     const stepTools = result.newState.activatedStepTools ?? [];
     expect(stepTools).toHaveLength(1);
-    expect(stepTools[0]).toMatchObject({ id: 'lobe-web-browsing', source: 'discovery' });
+    expect(stepTools[0]).toMatchObject({
+      afterToolCallId: 'tool-call-1',
+      id: 'lobe-web-browsing',
+      source: 'discovery',
+    });
   });
 
   it('parks single client-source tools without invoking the transport runner', async () => {
@@ -654,5 +658,177 @@ describe('single tool executors', () => {
     expect(publishChunk).toHaveBeenCalledWith(
       expect.not.objectContaining({ toolMessageIds: expect.anything() }),
     );
+  });
+
+  it('auto-activates deferred lobe-skills after lobe-skill-store imports a skill in the same operation', async () => {
+    const skillsManifest = {
+      api: [{ description: 'Activate skill', name: 'activateSkill', parameters: {} }],
+      identifier: 'lobe-skills',
+      meta: { title: 'Skills' },
+      type: 'builtin',
+    };
+    runTool.mockResolvedValue({
+      attempts: 1,
+      result: {
+        content: 'Skill "pptx" created successfully from market.',
+        state: { name: 'pptx', skillId: 'skl_1', status: 'created', success: true },
+        success: true,
+      },
+    });
+
+    // The run started without skills: `lobe-skills` is enabled with its shell
+    // surface only, and the full manifest waits in `deferredManifestMap`.
+    const shellManifest = {
+      ...skillsManifest,
+      api: [{ description: 'Run a command', name: 'runCommand', parameters: {} }],
+    };
+    const state = createState({
+      operationToolSet: {
+        deferredManifestMap: { 'lobe-skills': skillsManifest },
+        enabledToolIds: ['lobe-activator', 'lobe-skill-store', 'lobe-skills'],
+        manifestMap: { 'lobe-skills': shellManifest },
+        sourceMap: { 'lobe-skills': 'builtin' },
+        tools: [],
+      },
+    } as any);
+
+    const result = await callTool(host)(
+      {
+        payload: {
+          parentMessageId: 'assistant-msg-1',
+          toolCalling: {
+            ...createToolCall('import-call-1', 'lobe-skill-store'),
+            apiName: 'importFromMarket',
+          },
+        },
+        type: 'call_tool',
+      },
+      state,
+    );
+
+    expect(result.newState.activatedStepTools).toEqual([
+      expect.objectContaining({
+        afterToolCallId: 'import-call-1',
+        id: 'lobe-skills',
+        manifest: skillsManifest,
+        source: 'discovery',
+      }),
+    ]);
+  });
+
+  it('does not auto-activate lobe-skills when skill import fails or when the run did not defer it', async () => {
+    runTool.mockResolvedValue({
+      attempts: 1,
+      result: {
+        content: 'Failed to import skill',
+        success: false,
+      },
+    });
+
+    const failed = await callTool(host)(
+      {
+        payload: {
+          parentMessageId: 'assistant-msg-1',
+          toolCalling: {
+            ...createToolCall('import-fail', 'lobe-skill-store'),
+            apiName: 'importSkill',
+          },
+        },
+        type: 'call_tool',
+      },
+      createState({
+        operationToolSet: {
+          deferredManifestMap: { 'lobe-skills': { api: [], identifier: 'lobe-skills' } },
+          enabledToolIds: ['lobe-activator', 'lobe-skill-store'],
+          manifestMap: {},
+          sourceMap: {},
+          tools: [],
+        },
+      } as any),
+    );
+    expect(failed.newState.activatedStepTools).toBeUndefined();
+
+    runTool.mockResolvedValue({
+      attempts: 1,
+      result: {
+        content: 'Skill "pptx" created successfully.',
+        state: { name: 'pptx', skillId: 'skl_1', status: 'created', success: true },
+        success: true,
+      },
+    });
+    const notDeferred = await callTool(host)(
+      {
+        payload: {
+          parentMessageId: 'assistant-msg-1',
+          toolCalling: {
+            ...createToolCall('import-no-manifest', 'lobe-skill-store'),
+            apiName: 'importSkill',
+          },
+        },
+        type: 'call_tool',
+      },
+      // `lobe-skills` is enabled in full here, so there is nothing to promote.
+      createState({
+        operationToolSet: {
+          enabledToolIds: ['lobe-activator', 'lobe-skills'],
+          manifestMap: { 'lobe-skills': { api: [], identifier: 'lobe-skills' } },
+          sourceMap: {},
+          tools: [],
+        },
+      } as any),
+    );
+    expect(notDeferred.newState.activatedStepTools).toBeUndefined();
+  });
+
+  it('auto-activates deferred lobe-skills when lobe-activator activates a skill via fallback', async () => {
+    const skillsManifest = {
+      api: [{ description: 'Activate skill', name: 'activateSkill', parameters: {} }],
+      identifier: 'lobe-skills',
+      meta: { title: 'Skills' },
+      type: 'builtin',
+    };
+    runTool.mockResolvedValue({
+      attempts: 1,
+      result: {
+        content: 'Activated skill content',
+        state: {
+          activatedSkills: [{ id: 'skl_1', name: 'pptx' }],
+          activatedTools: [],
+        },
+        success: true,
+      },
+    });
+
+    const result = await callTool(host)(
+      {
+        payload: {
+          parentMessageId: 'assistant-msg-1',
+          toolCalling: {
+            ...createToolCall('activate-skill-fallback', 'lobe-activator'),
+            apiName: 'activateTools',
+          },
+        },
+        type: 'call_tool',
+      },
+      createState({
+        // A device run: nothing of `lobe-skills` is enabled at start.
+        operationToolSet: {
+          deferredManifestMap: { 'lobe-skills': skillsManifest },
+          enabledToolIds: ['lobe-activator'],
+          manifestMap: {},
+          sourceMap: {},
+          tools: [],
+        },
+      } as any),
+    );
+
+    expect(result.newState.activatedStepTools).toEqual([
+      expect.objectContaining({
+        afterToolCallId: 'activate-skill-fallback',
+        id: 'lobe-skills',
+        manifest: skillsManifest,
+        source: 'discovery',
+      }),
+    ]);
   });
 });

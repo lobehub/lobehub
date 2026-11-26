@@ -129,4 +129,52 @@ describe('buildBotContext', () => {
       expect(ctx.isDeviceTrusted).toBeUndefined();
     });
   });
+
+  describe('device channel scope', () => {
+    it('marks a restricted channel on the context', () => {
+      const ctx = buildBotContext({ ...baseParams, deviceChannelRestricted: true });
+      expect(ctx.isDeviceChannelRestricted).toBe(true);
+    });
+
+    it('omits the flag when the channel is allowed or no scope is configured', () => {
+      expect(buildBotContext({ ...baseParams, deviceChannelRestricted: false })).not.toHaveProperty(
+        'isDeviceChannelRestricted',
+      );
+      expect(buildBotContext(baseParams)).not.toHaveProperty('isDeviceChannelRestricted');
+    });
+  });
+
+  describe('device channel grant', () => {
+    it('grants a sender who is not the owner in a granted channel', () => {
+      const ctx = buildBotContext({
+        ...baseParams,
+        authorUserId: 'team-mate',
+        deviceChannelGranted: true,
+        operatorUserId: 'owner-1',
+      });
+      expect(ctx.isOwner).toBe(false);
+      expect(ctx.isDeviceChannelGranted).toBe(true);
+    });
+
+    it('does not grant an unknown sender', () => {
+      const ctx = buildBotContext({
+        ...baseParams,
+        authorUserId: undefined,
+        deviceChannelGranted: true,
+        operatorUserId: 'owner-1',
+      });
+      expect(ctx).not.toHaveProperty('isDeviceChannelGranted');
+    });
+
+    it('leaves the owner marked as owner only', () => {
+      const ctx = buildBotContext({
+        ...baseParams,
+        authorUserId: 'owner-1',
+        deviceChannelGranted: true,
+        operatorUserId: 'owner-1',
+      });
+      expect(ctx.isOwner).toBe(true);
+      expect(ctx).not.toHaveProperty('isDeviceChannelGranted');
+    });
+  });
 });

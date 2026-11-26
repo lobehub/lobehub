@@ -72,9 +72,93 @@ describe('resolveDeviceAccessPolicy', () => {
     expect(
       resolveDeviceAccessPolicy({
         botContext: baseBotContext({ isDeviceTrusted: true }),
-        shareVisitor: true,
+        shareVisitor: { canUseDevice: false },
       }),
     ).toEqual({ canUseDevice: false, reason: 'share-visitor' });
+  });
+
+  it('grants devices to a shared-agent visitor only through the share grant', () => {
+    expect(resolveDeviceAccessPolicy({ shareVisitor: { canUseDevice: true } })).toEqual({
+      canUseDevice: true,
+      reason: 'share-visitor-granted',
+    });
+    expect(resolveDeviceAccessPolicy({ shareVisitor: { canUseDevice: false } })).toEqual({
+      canUseDevice: false,
+      reason: 'share-visitor',
+    });
+  });
+
+  describe('device channel grant', () => {
+    it('grants a channel member in a granted channel', () => {
+      expect(
+        resolveDeviceAccessPolicy({
+          botContext: baseBotContext({ isDeviceChannelGranted: true }),
+        }),
+      ).toEqual({ canUseDevice: true, reason: 'bot-channel-granted' });
+    });
+
+    it('keeps the owner decision ahead of the channel grant', () => {
+      expect(
+        resolveDeviceAccessPolicy({
+          botContext: baseBotContext({ isDeviceChannelGranted: true, isOwner: true }),
+        }),
+      ).toEqual({ canUseDevice: true, reason: 'bot-owner' });
+    });
+
+    it('still denies a granted channel member in a shared-agent visitor run', () => {
+      expect(
+        resolveDeviceAccessPolicy({
+          botContext: baseBotContext({ isDeviceChannelGranted: true }),
+          shareVisitor: { canUseDevice: false },
+        }),
+      ).toEqual({ canUseDevice: false, reason: 'share-visitor' });
+    });
+  });
+
+  describe('device channel scope', () => {
+    it('denies the owner in a channel outside the device channel list', () => {
+      expect(
+        resolveDeviceAccessPolicy({
+          botContext: baseBotContext({ isDeviceChannelRestricted: true, isOwner: true }),
+        }),
+      ).toEqual({ canUseDevice: false, reason: 'bot-channel-restricted' });
+    });
+
+    it('denies a trusted sender in a channel outside the device channel list', () => {
+      expect(
+        resolveDeviceAccessPolicy({
+          botContext: baseBotContext({ isDeviceChannelRestricted: true, isDeviceTrusted: true }),
+        }),
+      ).toEqual({ canUseDevice: false, reason: 'bot-channel-restricted' });
+    });
+
+    it('still lets the people check decide inside an allowed channel', () => {
+      expect(
+        resolveDeviceAccessPolicy({
+          botContext: baseBotContext({ isDeviceChannelRestricted: false, isOwner: true }),
+        }),
+      ).toEqual({ canUseDevice: true, reason: 'bot-owner' });
+      expect(
+        resolveDeviceAccessPolicy({
+          botContext: baseBotContext({ isDeviceChannelRestricted: false, isDeviceTrusted: true }),
+        }),
+      ).toEqual({ canUseDevice: true, reason: 'bot-trusted' });
+      expect(
+        resolveDeviceAccessPolicy({
+          botContext: baseBotContext({ isDeviceChannelRestricted: false }),
+        }),
+      ).toEqual({ canUseDevice: false, reason: 'bot-external-sender' });
+    });
+
+    it('keeps share-visitor and first-party decisions ahead of the channel scope', () => {
+      expect(
+        resolveDeviceAccessPolicy({
+          botContext: baseBotContext({ isDeviceChannelRestricted: true, isOwner: true }),
+          shareVisitor: { canUseDevice: false },
+        }),
+      ).toEqual({ canUseDevice: false, reason: 'share-visitor' });
+      expect(resolveDeviceAccessPolicy({})).toEqual({ canUseDevice: true, reason: 'first-party' });
+    });
   });
 
   describe('personal-scope bot platforms', () => {

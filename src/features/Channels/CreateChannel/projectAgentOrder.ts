@@ -15,6 +15,19 @@ export const projectAgentIds = (detail?: Pick<ProjectDetail, 'agents' | 'project
 };
 
 /**
+ * Every Agent that already belongs to the project, enabled or not: a project Channel seats only
+ * these, and anyone else joins the project first.
+ */
+export const projectMemberAgentIds = (
+  detail?: Pick<ProjectDetail, 'agents' | 'project'>,
+): string[] => {
+  if (!detail) return [];
+  const mainAgentId = detail.project.coordinatorAgentId;
+  const members = (detail.agents ?? []).map(({ agent }) => agent.id);
+  return mainAgentId ? [mainAgentId, ...members.filter((id) => id !== mainAgentId)] : members;
+};
+
+/**
  * Splits picker candidates into the project's Agents (in `priorityIds` order) and everyone
  * else (in their original order), so a project Channel starts from its own team.
  */

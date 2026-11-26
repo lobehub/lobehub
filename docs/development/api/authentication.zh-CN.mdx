@@ -1,0 +1,205 @@
+---
+title: LobeHub API 鉴权、工作区与 scope
+description: >-
+  使用 API Key 或通过 PKCE 获取的 OIDC 访问令牌为 LobeHub 公开 API 调用鉴权，选择工作区，并为
+  API Key 选择 scope。
+tags:
+  - LobeHub
+  - REST API
+  - 鉴权
+  - OIDC
+  - PKCE
+  - API Key
+---
+
+# LobeHub API 鉴权、工作区与 scope
+
+除 `GET /api/v1/health`、`/api/v1/openapi.json` 和 `/api/v1/docs` 外，每个 `/api/v1` 请求都必须携带 Bearer 令牌：
+
+```http
+Authorization: Bearer <token>
+```
+
+服务端根据令牌的形态判断其类型：
+
+- 符合 API Key 格式（`sk-lh-` 加 58 位小写字母和数字，较早创建的 Key 为 16 位）的令牌按 **API Key** 查找。Key 必须处于启用状态且未过期。
+- 其他令牌一律按 **OIDC 访问令牌** 校验（受众为 `urn:lobehub:chat` 的 RS256 JWT），由部署自身的 OIDC 提供方签发。自托管实例只有在配置了 `JWKS_KEY` 时才接受 OIDC 令牌。
+
+不存在 `X-API-Key` 请求头。缺少令牌或令牌无效时返回 `401`，并附带一个说明去哪里认证的质询头：
+
+```http
+WWW-Authenticate: Bearer realm="LobeHub API", resource_metadata="https://app.lobehub.com/.well-known/oauth-protected-resource/api/v1"
+```
+
+该地址是 API 的 [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728) 受保护资源元数据：资源（`<origin>/api/v1`）、它的授权服务器（启用 OIDC 时为 `<origin>/oidc`）以及令牌的携带方式。授权服务器的 [RFC 8414](https://www.rfc-editor.org/rfc/rfc8414) 元数据位于 `<origin>/.well-known/oauth-authorization-server/oidc`，内容与下文的 OIDC 发现文档相同。
+
+## 选择凭证
+
+| 你要构建的是                   | 使用                                                                 |
+| ------------------------ | ------------------------------------------------------------------ |
+| 以你本人身份运行的服务端集成、脚本或 CI 任务 | 仅授予必要最小 scope 的 API Key                                            |
+| 由每位用户各自登录的原生或桌面应用        | 带 PKCE 的 OIDC 授权码流程，使用部署提供的公开客户端（见 [OIDC 与 PKCE](#oidc-with-pkce)） |
+| 由用户授权的第三方 Web 应用         | 在设置中注册的 OAuth 应用：客户端密钥加 PKCE（见下文）                                  |
+| 运行在无浏览器设备上的命令行工具         | OIDC 设备流程（内置的 `lobehub-cli` 客户端即使用此流程）                             |
+
+## API Key
+
+在工作区的 **设置 → API Keys**（`/<workspace>/settings/apikey`）中创建 Key。Key 属于创建它的人以及该工作区。
+
+- Key 的权限是其创建者自身权限（工作区角色与 RBAC）与 Key 的 scope 的**交集**。scope 只会收窄访问范围，永远不会超出创建者拥有的权限。
+- 创建者之后可以在 Key 详情页（**编辑权限**）修改 scope。工作区管理员可以吊销其他成员的 Key，但不能修改其 scope。
+- 在 scope 机制引入之前创建的 Key，或以 **完全访问** 创建的 Key，拥有全部 scope。
+
+<a id="oidc-with-pkce" />
+
+## OIDC 与 PKCE
+
+LobeHub 在 `<origin>/oidc` 运行 OpenID Connect 提供方。
+
+| 端点   | 路径                                       |
+| ---- | ---------------------------------------- |
+| 发现   | `/oidc/.well-known/openid-configuration` |
+| 授权   | `/oidc/auth`                             |
+| 令牌   | `/oidc/token`                            |
+| 用户信息 | `/oidc/me`                               |
+| JWKS | `/oidc/jwks`                             |
+| 设备授权 | `/oidc/device/auth`                      |
+| 撤销   | `/oidc/token/revocation`                 |
+
+每个授权码请求都必须使用 PKCE，且使用 `code_challenge_method=S256`。
+
+可以使用哪种客户端：
+
+- **LobeHub 自己的应用**使用内置的公开客户端（`lobehub-desktop`、`lobehub-mobile` 等）。公开客户端没有密钥，因此下面的令牌请求只发送 `client_id`。
+- **你在 LobeHub Cloud 上的应用**需要在设置中注册 Web OAuth 应用（见 [OAuth 应用](#oauth-apps)）。它是机密客户端：令牌请求需要附加 `client_secret`，重定向 URI 使用 `https` 或回环地址上的 `http`。自行注册的应用目前不支持 `myapp://` 这类自定义 URL scheme。
+- **第三方原生应用的公开客户端**将随动态客户端注册（`token_endpoint_auth_method: none`）提供，即将推出，见 [#23322](https://github.com/lobehub/lobehub/pull/23322)。
+
+### 授权码流程
+
+1. 生成随机的 `code_verifier` 及其 S256 `code_challenge`（SHA-256 摘要的 base64url 编码）。
+
+2. 在系统浏览器中打开授权 URL：
+
+   ```text
+   https://app.lobehub.com/oidc/auth
+     ?response_type=code
+     &client_id=<client id>
+     &redirect_uri=<registered redirect uri>
+     &scope=openid profile email offline_access
+     &resource=urn:lobehub:chat
+     &code_challenge=<code_challenge>
+     &code_challenge_method=S256
+     &prompt=consent
+     &state=<random state>
+   ```
+
+   `resource=urn:lobehub:chat` 用于请求 `/api/v1` 接受的访问令牌。`offline_access` 配合 `prompt=consent` 会返回刷新令牌。
+
+3. 登录后，LobeHub 携带 `code` 和 `state` 重定向到 `redirect_uri`。如果 `state` 不匹配，应拒绝该回调。
+
+4. 兑换授权码：
+
+   ```bash
+   curl https://app.lobehub.com/oidc/token \
+     -d grant_type=authorization_code \
+     -d client_id=<client id> \
+     -d code=<code> \
+     -d redirect_uri=<redirect uri> \
+     -d code_verifier=<code_verifier>
+   # confidential clients (a web OAuth app) also send:
+   #  -d client_secret=<client secret>
+   ```
+
+5. 使用 `Authorization: Bearer <access_token>` 调用 API。在访问令牌过期前使用 `grant_type=refresh_token` 刷新。
+
+刷新令牌会轮换：每次刷新都会返回新的刷新令牌，旧令牌随即失效，因此务必保存最新的那个。刷新令牌和会话有效期为 30 天。
+
+TypeScript SDK 将上述步骤实现为 `createPkcePair`、`createAuthorizationUrl`、`parseAuthorizationCallback`、`exchangeAuthorizationCode` 和 `refreshAccessToken`，适用于公开客户端，不会发送客户端密钥。见 [SDK](/zh/docs/development/api/sdks#sign-in-with-oidc-and-pkce)。
+
+<a id="oauth-apps" />
+
+### OAuth 应用
+
+如需让其他人授权你的应用，请在 **设置 → OAuth 应用**（`/<workspace>/settings/oauth-apps`）中注册：
+
+- Web 应用会获得客户端 id `lca_…` 和客户端密钥 `lcs_…`，密钥只显示一次。它使用 `authorization_code` 和 `refresh_token` 授权类型，认证方式为 `client_secret_post`。
+- 设备应用是使用设备流程的公开客户端。
+- 重定向 URI 必须使用 `https`，或在回环地址上使用 `http`。不允许使用通配符，每个应用最多 20 个。
+
+目前 OAuth 访问令牌是完整的用户令牌：它能访问的 API 与其用户相同，不做 scope 收窄。
+
+<Callout type="info">
+  **即将推出**（[#23322](https://github.com/lobehub/lobehub/pull/23322)）：OAuth 令牌的细粒度 API
+  scope（名称与 API Key scope 相同，并显示在授权同意页上）、在 `POST /oidc/reg` 使用一次性注册令牌进行动态客户端注册，以及面向服务端到服务端应用的
+  `client_credentials` 授权类型。每项能力都按部署通过环境变量开启。
+</Callout>
+
+<a id="workspace-selection" />
+
+## 工作区选择
+
+请求要么在调用者的个人空间中执行，要么在某一个工作区中执行。工作区由凭证和可选的 `X-Workspace-Id` 请求头决定：
+
+| 凭证          | `X-Workspace-Id`   | 结果                                                             |
+| ----------- | ------------------ | -------------------------------------------------------------- |
+| 工作区 API Key | 未发送                | 在 Key 所属工作区中执行                                                 |
+| 工作区 API Key | 同一工作区              | 在 Key 所属工作区中执行                                                 |
+| 工作区 API Key | 不同工作区              | `403` `Workspace API Key cannot access a different workspace`  |
+| 个人 API Key  | 已发送                | `403` `Personal API Key cannot access workspace data`          |
+| OIDC 令牌     | 已发送                | 用户是该工作区成员时在该工作区中执行，否则返回 `403` `Not a member of this workspace` |
+| OIDC 令牌     | 未知的工作区 id          | `404` `Workspace not found`                                    |
+| 工作区 API Key | 所属工作区不允许使用 API Key | `403` `Workspace API Key access is not available`              |
+
+在工作区内，部分操作还要求最低工作区角色（`viewer` \< `member` \< `admin` \< `owner`）。角色不足时返回 `403` `Requires <role> role or higher`。
+
+<a id="scopes" />
+
+## Scope
+
+scope 定义在 [`packages/const/src/apiKeyScope.ts`](https://github.com/lobehub/lobehub/blob/canary/packages/const/src/apiKeyScope.ts) 中。`:write` scope 同时授予对应的 `:read` scope。
+
+### 已可用的 scope
+
+| Scope                                | 授予                                                   |
+| ------------------------------------ | ---------------------------------------------------- |
+| `*`                                  | 完全访问：创建者能做的一切，但不包括下文所列、上线后仅可显式授予的 scope              |
+| `agent:read` / `agent:write`         | Agent、Agent 群组、任务、目标、插件、技能                           |
+| `agent:credential:write`             | 为 Agent 账户设置密码、令牌或签名密钥（还需要 `agent:write`）            |
+| `chat:read` / `chat:write`           | 话题、消息、子话题、会话、翻译                                      |
+| `model:invoke`                       | 调用模型：`POST /responses`、聊天、图像、视频、语音、转写。这是会消耗额度的 scope |
+| `model:read` / `model:write`         | 模型服务商与模型配置                                           |
+| `file:read` / `file:write`           | 文件、上传、解析和分块                                          |
+| `knowledge:read` / `knowledge:write` | 资源库（知识库）、文档、分块                                       |
+| `mcp:read` / `mcp:write`             | MCP 服务器配置                                            |
+| `eval:read` / `eval:write`           | 评测、Benchmark、数据集、测试用例                                |
+| `usage:read`                         | 用量与额度配额                                              |
+| `workspace:read` / `workspace:write` | 工作区详情、成员、审计日志                                        |
+| `user:read` / `user:write`           | 用户资料、设置、记忆、通知                                        |
+
+部分操作需要多个 scope。例如 `POST /responses` 需要 `model:invoke`、`chat:write` 和 `agent:write`，因为它会运行 Agent 并写入对话。
+
+受限 Key 无论持有哪些 scope，都无法访问 API Key 管理、角色与 RBAC 管理或计费。
+
+scope 校验失败时返回 `403`。统一错误码上线后，错误码为 `insufficient_scope`；见[错误](/zh/docs/development/api/conventions#error-codes)。
+
+### 即将推出的 scope
+
+以下 scope 由尚未合并的 Pull Request 与所需端点一同添加：
+
+| Scope                                                                                                                                      | 端点                                               | Pull Request                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ | ------------------------------------------------------- |
+| `run:read` / `run:write`                                                                                                                   | `/runs`（Agent 运行、事件、取消、引导、审批）                    | [#23253](https://github.com/lobehub/lobehub/pull/23253) |
+| `webhook:read` / `webhook:write`                                                                                                           | `/webhooks`                                      | [#23272](https://github.com/lobehub/lobehub/pull/23272) |
+| `document:read` / `document:write`                                                                                                         | `/documents`、`/notebooks`                        | [#23255](https://github.com/lobehub/lobehub/pull/23255) |
+| `generation:read` / `generation:write`                                                                                                     | `/images`、`/videos`、`/generations`、`/audio`      | [#23267](https://github.com/lobehub/lobehub/pull/23267) |
+| `tool:invoke`                                                                                                                              | `POST /tools/call`                               | [#23274](https://github.com/lobehub/lobehub/pull/23274) |
+| `agent:transfer`                                                                                                                           | 将 Agent 转移到其他工作区或成员                              | [#23292](https://github.com/lobehub/lobehub/pull/23292) |
+| `share:read` / `share:write`                                                                                                               | 公开分享链接                                           | [#23301](https://github.com/lobehub/lobehub/pull/23301) |
+| `project:read` / `project:write`、`widget:read` / `widget:write` / `widget:publish`、`dashboard:read` / `dashboard:write`、`artifact:publish` | `/projects`、`/widgets`、`/dashboards`、Artifact 发布 | [#23311](https://github.com/lobehub/lobehub/pull/23311) |
+| `oauth_app:read` / `oauth_app:write`、`trash:read` / `trash:write`                                                                          | `/oauth-apps`、`/trash`                           | [#23315](https://github.com/lobehub/lobehub/pull/23315) |
+| `device:read` / `device:operate`                                                                                                           | `/devices`、沙箱                                    | [#23316](https://github.com/lobehub/lobehub/pull/23316) |
+| `bot:read` / `bot:write`                                                                                                                   | `/bots`                                          | [#23332](https://github.com/lobehub/lobehub/pull/23332) |
+
+`device:operate` 计划作为**显式** scope：完全访问不包含它，创建 Key 时必须单独勾选。
+
+[#23246](https://github.com/lobehub/lobehub/pull/23246) 上线后，OpenAPI 规范中的每个操作都会在 `x-required-scopes` 下列出所需 scope，SDK 也会在每个方法的文档中展示这些 scope。

@@ -2,6 +2,7 @@ import { type ChildProcess } from 'node:child_process';
 
 import type {
   Options as ClaudeAgentSdkOptions,
+  PermissionResult,
   Query as ClaudeAgentSdkQuery,
   SDKMessage,
   SDKUserMessage,
@@ -9,15 +10,29 @@ import type {
   SpawnOptions as SdkSpawnOptions,
 } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import type { HeteroPermissionMode } from '@lobechat/types';
 import { spawnManaged } from '@lobechat/utils/managedProcess';
 
+import type { AskUserBridge } from '../askUser/AskUserBridge';
+import {
+  askThroughBridge,
+  buildSetPermissionModeRequest,
+  decideClaudeCodePermission,
+  fromCanUseTool,
+  isRunningAsRoot,
+  PermissionModeReporter,
+  resolveClaudeCodePermissionMode,
+} from '../claudeCodePermission';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
 import { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
 import { resolveCliSpawnPlan } from './cliSpawn';
+import { buildWslSpawnPlan, getSettledWslPathEnv, getWslPathEnv, parseWslCommand } from './wsl';
 
 const CLAUDE_SDK_DISALLOWED_TOOLS = ['AskUserQuestion', 'Monitor', 'ScheduleWakeup'] as const;
 const DEFAULT_INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
 const INPUT_CLOSE_POLL_MS = 1000;
+/** How often the input stream checks for a steered message to hand over. */
+const STEER_POLL_MS = 100;
 
 const readTimeoutMs = (name: string, fallback: number) => {
   const raw = process.env[name];
@@ -37,6 +52,14 @@ export const resolveClaudeSdkExecutablePath = async (
   env: NodeJS.ProcessEnv,
   platform: NodeJS.Platform = process.platform,
 ): Promise<string> => {
+  // A WSL command reaches the SDK verbatim (it has no `.js` extension, so the SDK
+  // hands it to `spawnClaudeCodeCliProcess` as the command). Learn the distro's
+  // PATH now, while still async, for that synchronous spawn hook.
+  const wslCommand = parseWslCommand(commandPath);
+  if (wslCommand) {
+    await getWslPathEnv(wslCommand.distro);
+    return commandPath;
+  }
   if (platform !== 'win32' || !/\.(?:bat|cmd)$/i.test(commandPath)) return commandPath;
 
   // The Agent SDK spawns native paths directly and runs JavaScript paths with
@@ -153,6 +176,7 @@ export interface HeterogeneousAgentRuntimeStatus {
   state: HeterogeneousAgentRuntimeState;
   transport:
     | 'acp-stdio'
+    | 'antigravity-acp'
     | 'claude-sdk'
     | 'cli-spawn'
     | 'codex-app-server'
@@ -166,6 +190,8 @@ export interface HeterogeneousAgentRuntimeStatus {
 
 export interface ClaudeAgentSdkSessionOptions {
   args: string[];
+  /** Raises the permission cards when `permissionMode` is set. */
+  askUserBridge?: AskUserBridge;
   commandPath: string;
   /** Claude profile root the transcript lives under; defaults to `env.CLAUDE_CONFIG_DIR`. */
   configDir?: string;
@@ -183,6 +209,17 @@ export interface ClaudeAgentSdkSessionOptions {
   onSessionId: (sessionId: string) => void;
   onStderr: (data: string) => Promise<void> | void;
   operationId: string;
+  /**
+   * Claude Code permission mode. With `askUserBridge`, Claude Code asks
+   * through `canUseTool` and each request raises a card; absent, every action
+   * is allowed.
+   */
+  permissionMode?: HeteroPermissionMode;
+  /**
+   * Have Claude Code replay every user message it reads (`--replay-user-messages`),
+   * so a message `steer` delivers is known to be picked up.
+   */
+  replayUserMessages?: boolean;
   resumeSessionId?: string;
   sessionId: string;
   stdinPayload: string;
@@ -208,12 +245,17 @@ export const spawnClaudeCodeCliProcess = (
   },
   platform: NodeJS.Platform = process.platform,
 ): SdkSpawnedProcess => {
-  const child: ChildProcess = spawnManaged(options.command, options.args, {
+  // The SDK types env as a plain string map; this repo augments ProcessEnv
+  // with required keys, which no spawn caller carries.
+  const sdkEnv = options.env as NodeJS.ProcessEnv;
+  const wslCommand = parseWslCommand(options.command);
+  const plan = wslCommand
+    ? buildWslSpawnPlan(wslCommand, options.args, sdkEnv, getSettledWslPathEnv(wslCommand.distro))
+    : { args: options.args, command: options.command, env: sdkEnv };
+  const child: ChildProcess = spawnManaged(plan.command, plan.args, {
     cwd: options.cwd,
     detached: platform !== 'win32',
-    // The SDK types env as a plain string map; this repo augments ProcessEnv
-    // with required keys, which no spawn caller carries.
-    env: options.env as NodeJS.ProcessEnv,
+    env: plan.env ?? sdkEnv,
     signal: options.signal,
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
@@ -224,8 +266,8 @@ export const spawnClaudeCodeCliProcess = (
   child.stderr?.on('data', (chunk: Buffer | string) => hooks.onStderr(chunk.toString()));
 
   hooks.onProcessSpawn?.({
-    args: [options.command, ...options.args],
-    command: options.command,
+    args: [plan.command, ...plan.args],
+    command: plan.command,
     pid: child.pid,
   });
 
@@ -243,7 +285,17 @@ export class ClaudeAgentSdkSession {
   private pipeline: AgentStreamPipeline;
   private queryHandle: ClaudeAgentSdkQuery | undefined;
   private sawErrorEvent = false;
+  /** Permission requests waiting for the user: no inactivity timeout meanwhile. */
+  private pendingPermissions = 0;
+  private readonly isRoot = isRunningAsRoot();
+  private readonly modeReporter: PermissionModeReporter | undefined;
+  /** Messages `steer` queued for the input stream, not yet handed to the SDK. */
+  private readonly steerQueue: SDKUserMessage[] = [];
+  /** Steered messages Claude Code has not replayed yet; input stays open for them. */
+  private readonly unconsumed = new Set<string>();
   private taskNotificationPending = false;
+  /** A turn is under way: its own `result` will decide about the input. */
+  private turnOpen = true;
 
   constructor(private readonly options: ClaudeAgentSdkSessionOptions) {
     this.pipeline = new AgentStreamPipeline({
@@ -252,6 +304,16 @@ export class ClaudeAgentSdkSession {
       operationId: options.operationId,
       uploadImage: options.uploadImage,
     });
+    this.modeReporter = this.permissionPrompts
+      ? new PermissionModeReporter(
+          options.operationId,
+          resolveClaudeCodePermissionMode(options.permissionMode!, this.isRoot).fallback,
+        )
+      : undefined;
+  }
+
+  private get permissionPrompts(): boolean {
+    return !!this.options.permissionMode && !!this.options.askUserBridge;
   }
 
   async run(): Promise<void> {
@@ -313,6 +375,51 @@ export class ClaudeAgentSdkSession {
     }
   }
 
+  /**
+   * Stop one background task of the live session. CC answers with a
+   * `task_notification` of status `stopped`, which is the only proof the stop
+   * took: resolving here means the request was accepted, nothing more.
+   *
+   * @throws When no query is running any more.
+   */
+  async stopTask(taskId: string): Promise<void> {
+    if (!this.queryHandle) throw new Error('The Claude Code session is no longer running');
+    await this.queryHandle.stopTask(taskId);
+  }
+
+  /**
+   * Switch the running session's permission mode (the mode chip). Claude Code
+   * confirms with a `status` record, which the mode report follows.
+   *
+   * @returns the mode the session took (`acceptEdits` for a bypass pick as root)
+   * @throws When no query is running any more.
+   */
+  async setPermissionMode(mode: HeteroPermissionMode): Promise<HeteroPermissionMode> {
+    if (!this.queryHandle) throw new Error('The Claude Code session is no longer running');
+    const taken = buildSetPermissionModeRequest(mode, this.isRoot).mode;
+    // Report against the pick: as root a bypass pick runs as acceptEdits.
+    this.modeReporter?.requested(mode, this.isRoot);
+    await this.queryHandle.setPermissionMode(taken);
+    return taken;
+  }
+
+  /**
+   * Deliver a user message into the running session. Claude Code reads it at
+   * its next tool boundary, so a running tool is never cut short (a message
+   * sent with `priority: 'now'` would abort it). Claude Code replays it under
+   * `uuid` once read (with `replayUserMessages`); until then
+   * input stays open for it.
+   *
+   * @returns false once input has closed, so the caller runs it as a new turn
+   */
+  steer(message: SDKUserMessage, uuid: string): boolean {
+    if (this.closeInput || this.abortController.signal.aborted) return false;
+
+    this.unconsumed.add(uuid);
+    this.steerQueue.push({ ...message, uuid: uuid as SDKUserMessage['uuid'] });
+    return true;
+  }
+
   close(): void {
     this.closedByHost = true;
     this.closeInput = true;
@@ -329,14 +436,13 @@ export class ClaudeAgentSdkSession {
     );
 
     return {
-      allowDangerouslySkipPermissions: true,
+      ...this.buildPermissionOptions(),
       abortController: this.abortController,
       cwd: this.options.cwd,
       disallowedTools: [...CLAUDE_SDK_DISALLOWED_TOOLS],
       env: this.options.env,
       includePartialMessages: true,
       pathToClaudeCodeExecutable: executablePath,
-      permissionMode: 'bypassPermissions',
       spawnClaudeCodeProcess: (spawnOptions) =>
         spawnClaudeCodeCliProcess(spawnOptions, {
           onProcessSpawn: this.options.onProcessSpawn,
@@ -344,9 +450,60 @@ export class ClaudeAgentSdkSession {
         }),
       ...(this.options.resumeSessionId ? { resume: this.options.resumeSessionId } : {}),
       ...argOptions,
+      ...(this.options.replayUserMessages && {
+        extraArgs: { ...argOptions.extraArgs, 'replay-user-messages': null },
+      }),
       stderr: (data) => {
         void this.options.onStderr(data);
       },
+    };
+  }
+
+  /**
+   * Lab off: every action allowed, as before. Lab on: start in the picked mode
+   * (`acceptEdits` as root, which cannot bypass) and ask through `canUseTool`.
+   * Skipping permissions stays allowed off root so a later switch to
+   * `bypassPermissions` takes (see `buildClaudeCodePermissionArgs`).
+   */
+  private buildPermissionOptions(): Pick<
+    ClaudeAgentSdkOptions,
+    'allowDangerouslySkipPermissions' | 'canUseTool' | 'permissionMode'
+  > {
+    const bridge = this.options.askUserBridge;
+    if (!this.permissionPrompts || !bridge) {
+      return { allowDangerouslySkipPermissions: true, permissionMode: 'bypassPermissions' };
+    }
+
+    return {
+      allowDangerouslySkipPermissions: !this.isRoot,
+      canUseTool: async (toolName, input, extra) => {
+        const request = fromCanUseTool(extra.requestId ?? extra.toolUseID, toolName, input, {
+          ...extra,
+          suggestions: extra.suggestions,
+          toolUseId: extra.toolUseID,
+        });
+        const ask = askThroughBridge(bridge);
+        this.pendingPermissions += 1;
+        this.clearInactivityTimer();
+        try {
+          return (await decideClaudeCodePermission(
+            request,
+            (intervention) => {
+              // Claude Code withdrew the request (the turn was interrupted).
+              extra.signal.addEventListener('abort', () =>
+                bridge.cancel(intervention.toolCallId, 'session_ended'),
+              );
+              return ask(intervention);
+            },
+            { isRoot: this.isRoot },
+          )) as PermissionResult;
+        } finally {
+          this.pendingPermissions -= 1;
+          this.armInactivityTimer();
+        }
+      },
+      permissionMode: resolveClaudeCodePermissionMode(this.options.permissionMode!, this.isRoot)
+        .mode,
     };
   }
 
@@ -354,7 +511,12 @@ export class ClaudeAgentSdkSession {
     yield message;
 
     while (!this.closeInput && !this.abortController.signal.aborted) {
-      await sleep(INPUT_CLOSE_POLL_MS);
+      const steered = this.steerQueue.shift();
+      if (steered) {
+        yield steered;
+        continue;
+      }
+      await sleep(this.unconsumed.size > 0 ? STEER_POLL_MS : INPUT_CLOSE_POLL_MS);
     }
   }
 
@@ -362,17 +524,47 @@ export class ClaudeAgentSdkSession {
     this.lastEventAt = Date.now();
     this.armInactivityTimer();
     this.updateTaskState(message);
+    if (message.type === 'user' && 'isReplay' in message && message.isReplay) {
+      this.unconsumed.delete(message.uuid);
+    }
 
     const line = `${JSON.stringify(message)}\n`;
     await this.options.onRawMessage(line);
 
     const events = await this.pipeline.push(line);
+    const modeReport = this.modeReporter?.observe(message);
+    if (modeReport) events.unshift(modeReport);
     this.sawErrorEvent ||= events.some((event) => event.type === 'error');
     await this.options.onEvents(events);
 
     if (this.pipeline.sessionId) this.options.onSessionId(this.pipeline.sessionId);
+    this.trackTurn(message);
     this.maybeCloseInputAfterResult(message);
+    this.maybeCloseInputAfterStop(message);
     this.emitStatus(this.resolveRuntimeState());
+  }
+
+  private trackTurn(message: SDKMessage): void {
+    if (message.type === 'result') this.turnOpen = false;
+    else if (
+      message.type === 'assistant' ||
+      (message.type === 'system' && message.subtype === 'init')
+    ) {
+      this.turnOpen = true;
+    }
+  }
+
+  /**
+   * Claude Code wakes the model for a task that ended on its own, not for one
+   * that was stopped: no `result` follows a `stopped` notification. Between
+   * turns, the last task being stopped is therefore what ends the session.
+   */
+  private maybeCloseInputAfterStop(message: SDKMessage): void {
+    if (message.type !== 'system' || message.subtype !== 'task_notification') return;
+    if (message.status !== 'stopped' || this.turnOpen) return;
+    // A steered message still waiting to be read starts the next turn.
+    if (this.unconsumed.size > 0 || this.steerQueue.length > 0) return;
+    if (this.activeTasks.size === 0 && !this.taskNotificationPending) this.closeInput = true;
   }
 
   private async flushPipeline(): Promise<void> {
@@ -422,19 +614,29 @@ export class ClaudeAgentSdkSession {
     }
 
     if (message.subtype === 'task_notification') {
-      this.taskNotificationPending = true;
+      // A stopped task wakes no follow-up turn (see `maybeCloseInputAfterStop`).
+      if (message.status !== 'stopped') this.taskNotificationPending = true;
       this.activeTasks.delete(message.task_id);
     }
   }
 
+  /**
+   * Close the input once nothing can still need it. It stays open while a task
+   * lives: stopping one is a control request written to it, and with the input
+   * closed Claude Code never reads the request.
+   */
   private maybeCloseInputAfterResult(message: SDKMessage): void {
     if (message.type !== 'result') return;
+    const notificationTurn = message.origin?.kind === 'task-notification';
+    // The notification's turn is over, whether or not input closes now.
+    if (notificationTurn) this.taskNotificationPending = false;
+    // A message written as a cycle ends is read after that cycle's result;
+    // it still has to be read and answered.
+    if (this.unconsumed.size > 0 || this.steerQueue.length > 0) return;
 
-    if (message.origin?.kind === 'task-notification') {
-      this.taskNotificationPending = false;
-      this.closeInput = true;
-      return;
-    }
+    // A resumed session first reports the previous run's leftover tasks and
+    // ends that pass with an empty result, before this run's own turn.
+    if (notificationTurn && message.num_turns === 0) return;
 
     if (this.activeTasks.size === 0 && !this.taskNotificationPending) {
       this.closeInput = true;
@@ -481,6 +683,8 @@ export class ClaudeAgentSdkSession {
 
   private armInactivityTimer(): void {
     this.clearInactivityTimer();
+    // A permission request waits for the user, however long that takes.
+    if (this.pendingPermissions > 0) return;
     this.inactivityTimer = setTimeout(() => {
       this.closeReason = new Error(
         `Claude SDK session produced no messages for ${this.inactivityTimeoutMs}ms`,

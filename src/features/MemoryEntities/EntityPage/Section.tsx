@@ -2,8 +2,14 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode } from 'react';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 const styles = stylex.create({
-  root: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  root: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: densityTokens['--lobe-density-content-gap'],
+  },
   head: { alignItems: 'baseline', display: 'flex', gap: '8px' },
   title: {
     color: cssVar.colorTextSecondary,

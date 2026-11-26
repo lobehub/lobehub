@@ -8,7 +8,9 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { NavPanelDensityContext } from '@/features/NavPanel/density';
 import { useAiInfraStore } from '@/store/aiInfra/store';
+import { useInterfaceDensity } from '@/styles/density';
 
 import { PROVIDER_MENU_WIDTH } from '../const';
 import AddNew from './AddNew';
@@ -23,63 +25,66 @@ const Layout = memo(({ children, mobile }: ProviderMenuProps) => {
   const { t } = useTranslation('modelProvider');
 
   const providerSearchKeyword = useAiInfraStore((s) => s.providerSearchKeyword);
+  const interfaceDensity = useInterfaceDensity();
 
   const width = mobile ? undefined : PROVIDER_MENU_WIDTH;
   return (
-    <Flexbox
-      width={width}
-      style={{
-        background: cssVar.colorBgContainer,
-        borderRight: `1px solid ${cssVar.colorBorderSecondary}`,
-        minWidth: width,
-        overflow: mobile ? undefined : 'scroll',
-      }}
-    >
+    <NavPanelDensityContext value={mobile ? null : interfaceDensity}>
       <Flexbox
-        horizontal
-        align={'center'}
-        gap={8}
-        justify={'space-between'}
-        padding={8}
-        width={'100%'}
+        width={width}
         style={{
           background: cssVar.colorBgContainer,
-          borderBottom: `1px solid ${cssVar.colorBorderSecondary}`,
-          marginBottom: 8,
-          position: 'sticky',
-          top: 0,
-          zIndex: 50,
+          borderRight: `1px solid ${cssVar.colorBorderSecondary}`,
+          minWidth: width,
+          overflow: mobile ? undefined : 'scroll',
         }}
       >
-        <SearchBar
-          allowClear
-          placeholder={t('menu.searchProviders')}
-          style={{ width: '100%' }}
-          value={providerSearchKeyword}
-          variant={'borderless'}
-          prefix={
-            <Icon
-              color={cssVar.colorTextDescription}
-              icon={SearchIcon}
-              style={{
-                marginRight: 12,
-              }}
-            />
-          }
-          styles={{
-            input: {
-              paddingBlock: 3,
-              paddingLeft: 6,
-            },
+        <Flexbox
+          horizontal
+          align={'center'}
+          gap={8}
+          justify={'space-between'}
+          padding={8}
+          width={'100%'}
+          style={{
+            background: cssVar.colorBgContainer,
+            borderBottom: `1px solid ${cssVar.colorBorderSecondary}`,
+            marginBottom: 8,
+            position: 'sticky',
+            top: 0,
+            zIndex: 50,
           }}
-          onInputChange={(v) => {
-            useAiInfraStore.setState({ providerSearchKeyword: v });
-          }}
-        />
-        <AddNew />
+        >
+          <SearchBar
+            allowClear
+            placeholder={t('menu.searchProviders')}
+            style={{ width: '100%' }}
+            value={providerSearchKeyword}
+            variant={'borderless'}
+            prefix={
+              <Icon
+                color={cssVar.colorTextDescription}
+                icon={SearchIcon}
+                style={{
+                  marginRight: 12,
+                }}
+              />
+            }
+            styles={{
+              input: {
+                paddingBlock: 3,
+                paddingLeft: 6,
+              },
+            }}
+            onInputChange={(v) => {
+              useAiInfraStore.setState({ providerSearchKeyword: v });
+            }}
+          />
+          <AddNew />
+        </Flexbox>
+        {children}
       </Flexbox>
-      {children}
-    </Flexbox>
+    </NavPanelDensityContext>
   );
 });
 

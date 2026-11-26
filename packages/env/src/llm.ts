@@ -59,6 +59,14 @@ export const getLLMConfig = () => {
       ENABLED_ELEVENLABS: z.boolean(),
       ELEVENLABS_API_KEY: z.string().optional(),
 
+      ENABLED_FISHAUDIO: z.boolean(),
+      FISHAUDIO_API_KEY: z.string().optional(),
+
+      ENABLED_DOUBAOSPEECH: z.boolean(),
+      DOUBAOSPEECH_API_KEY: z.string().optional(),
+      DOUBAOSPEECH_APP_ID: z.string().optional(),
+      DOUBAOSPEECH_ACCESS_TOKEN: z.string().optional(),
+
       ENABLED_MISTRAL: z.boolean(),
       MISTRAL_API_KEY: z.string().optional(),
 
@@ -309,6 +317,16 @@ export const getLLMConfig = () => {
       ENABLED_ELEVENLABS: !!process.env.ELEVENLABS_API_KEY,
       ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
 
+      ENABLED_FISHAUDIO: !!process.env.FISHAUDIO_API_KEY,
+      FISHAUDIO_API_KEY: process.env.FISHAUDIO_API_KEY,
+
+      ENABLED_DOUBAOSPEECH:
+        !!process.env.DOUBAOSPEECH_API_KEY ||
+        (!!process.env.DOUBAOSPEECH_APP_ID && !!process.env.DOUBAOSPEECH_ACCESS_TOKEN),
+      DOUBAOSPEECH_API_KEY: process.env.DOUBAOSPEECH_API_KEY,
+      DOUBAOSPEECH_APP_ID: process.env.DOUBAOSPEECH_APP_ID,
+      DOUBAOSPEECH_ACCESS_TOKEN: process.env.DOUBAOSPEECH_ACCESS_TOKEN,
+
       ENABLED_MISTRAL: !!process.env.MISTRAL_API_KEY,
       MISTRAL_API_KEY: process.env.MISTRAL_API_KEY,
 
@@ -463,7 +481,8 @@ export const getLLMConfig = () => {
       INFINIAI_API_KEY: process.env.INFINIAI_API_KEY,
 
       ENABLED_FAL: process.env.ENABLED_FAL !== '0',
-      FAL_API_KEY: process.env.FAL_API_KEY,
+      // `FAL_KEY` is the name fal's own SDKs and docs use
+      FAL_API_KEY: process.env.FAL_API_KEY || process.env.FAL_KEY,
 
       ENABLED_BFL: !!process.env.BFL_API_KEY,
       BFL_API_KEY: process.env.BFL_API_KEY,

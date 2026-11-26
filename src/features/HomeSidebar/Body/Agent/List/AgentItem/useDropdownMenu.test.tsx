@@ -11,7 +11,11 @@ const mocks = vi.hoisted(() => ({
   canEditResource: false,
   canManageResource: false,
   canManage: false,
+  canManageSettings: false,
+  myPinnedIds: [] as string[],
+  recommendedIds: [] as string[],
   confirmModal: vi.fn(),
+  confirmRemoveAgent: vi.fn(),
   copyToClipboard: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
@@ -19,17 +23,19 @@ const mocks = vi.hoisted(() => ({
   home: {
     duplicateAgent: vi.fn(),
     pinAgent: vi.fn(),
+    pinAgentGroup: vi.fn(),
+    pinItemForMe: vi.fn(),
     refreshAgentList: vi.fn(),
     removeAgent: vi.fn(),
     toggleAgentLabel: vi.fn(),
     updateAgentGroup: vi.fn(),
+    updateRecommendedAgents: vi.fn(),
     updateAgentMeta: vi.fn(),
   },
   navigate: vi.fn(),
   openAgentInNewWindow: vi.fn(),
   openRenameModal: vi.fn(),
   setSidebarItemVisible: vi.fn(),
-  transferMenuItems: null as null | { key: string; label: string }[],
 }));
 
 vi.mock('antd', async (importOriginal) => {
@@ -56,10 +62,6 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => mocks.activeWorkspaceId,
 }));
 
-vi.mock('@/business/client/hooks/useAgentTransferMenuItem', () => ({
-  useAgentTransferMenuItem: () => mocks.transferMenuItems,
-}));
-
 vi.mock('@/components/RenameModal', () => ({ openRenameModal: mocks.openRenameModal }));
 
 vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
@@ -84,8 +86,13 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
 }));
 
 vi.mock('@/hooks/usePermission', () => ({
-  usePermission: (action: 'create_content' | 'edit_own_content') => ({
-    allowed: action === 'create_content' ? mocks.canCreate : mocks.canEdit,
+  usePermission: (action: 'create_content' | 'edit_own_content' | 'manage_settings') => ({
+    allowed:
+      action === 'create_content'
+        ? mocks.canCreate
+        : action === 'manage_settings'
+          ? mocks.canManageSettings
+          : mocks.canEdit,
     reason: '',
   }),
 }));
@@ -95,6 +102,9 @@ vi.mock('@/hooks/useResourceManageable', () => ({
 }));
 
 vi.mock('@/services/agent', () => ({ agentService: {} }));
+vi.mock('@/features/AgentDeleteConfirm', () => ({
+  confirmRemoveAgent: mocks.confirmRemoveAgent,
+}));
 
 vi.mock('@/features/HomeSidebar/Body/Agent/ModalProvider', () => ({
   useOptionalAgentModal: () => null,
@@ -116,16 +126,31 @@ vi.mock('@/store/home/selectors', () => ({
   homeAgentListSelectors: {
     agentGroups: () => [],
     privateAgentGroups: () => [],
+    recommendedAgentIds: () => mocks.recommendedIds,
   },
 }));
 
+interface UserStateMock {
+  userId: string;
+  workspaceUserPreference: { sidebarPinnedItemIds: string[] };
+}
+
 vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (state: { userId: string }) => unknown) =>
-    selector({ userId: 'member-1' }),
+  useUserStore: (selector: (state: UserStateMock) => unknown) =>
+    selector({
+      userId: 'member-1',
+      workspaceUserPreference: { sidebarPinnedItemIds: mocks.myPinnedIds },
+    }),
 }));
 
 vi.mock('@/store/user/selectors', () => ({
-  userProfileSelectors: { userId: (state: { userId: string }) => state.userId },
+  userProfileSelectors: { userId: (state: UserStateMock) => state.userId },
+  workspaceUserSettingsSelectors: {
+    sidebarPinnedItemIds: (state: UserStateMock) =>
+      state.workspaceUserPreference.sidebarPinnedItemIds,
+    // The member's sidebar was already set up.
+    sidebarSetupPreview: () => null,
+  },
 }));
 
 vi.mock('../../../../hooks', () => ({ useRevealSidebarSection: () => vi.fn() }));
@@ -155,15 +180,17 @@ const getMenuItem = (
 };
 
 type PublicAgentMenuOptions = Partial<
-  Pick<
-    Parameters<typeof useAgentDropdownMenu>[0],
-    'id' | 'labelsEnabled' | 'sidebarVisibilityEnabled'
-  >
+  Pick<Parameters<typeof useAgentDropdownMenu>[0], 'id' | 'labelsEnabled' | 'pinned' | 'visibility'>
 >;
 
 const renderPublicAgentMenu = (
   userId: string,
-  { id = 'agent-1', labelsEnabled, sidebarVisibilityEnabled }: PublicAgentMenuOptions = {},
+  {
+    id = 'agent-1',
+    labelsEnabled,
+    pinned = false,
+    visibility = 'public',
+  }: PublicAgentMenuOptions = {},
 ) =>
   renderHook(() =>
     useAgentDropdownMenu({
@@ -171,11 +198,10 @@ const renderPublicAgentMenu = (
       id,
       ...(labelsEnabled === undefined ? {} : { labelsEnabled }),
       openCreateGroupModal: vi.fn(),
-      pinned: false,
-      ...(sidebarVisibilityEnabled === undefined ? {} : { sidebarVisibilityEnabled }),
+      pinned,
       title: 'Public Agent',
       userId,
-      visibility: 'public',
+      visibility,
     }),
   );
 
@@ -188,7 +214,104 @@ describe('useAgentDropdownMenu', () => {
     mocks.canEditResource = false;
     mocks.canManageResource = false;
     mocks.canManage = false;
-    mocks.transferMenuItems = null;
+    mocks.canManageSettings = false;
+    mocks.myPinnedIds = [];
+    mocks.recommendedIds = [];
+  });
+
+  describe('workspace pins', () => {
+    it('offers a personal pin but no recommend entry to a member', async () => {
+      const { result } = renderPublicAgentMenu('creator-1');
+      const keys = getMenuKeys(result.current());
+
+      expect(keys).toContain('pin');
+      expect(keys).not.toContain('recommend');
+
+      await getMenuItem(result.current(), 'pin').onClick({
+        domEvent: { stopPropagation: vi.fn() },
+      });
+      expect(mocks.home.pinItemForMe).toHaveBeenCalledWith(
+        { id: 'agent-1', pinned: false, type: 'agent', visibility: 'public' },
+        true,
+      );
+      // A member's pin never touches the shared column.
+      expect(mocks.home.pinAgent).not.toHaveBeenCalled();
+    });
+
+    it('lets an owner/admin add a public agent to the recommended agents', async () => {
+      mocks.canManageSettings = true;
+      mocks.recommendedIds = ['other'];
+
+      const { result } = renderPublicAgentMenu('creator-1');
+      expect(getMenuKeys(result.current())).toEqual(expect.arrayContaining(['pin', 'recommend']));
+
+      await getMenuItem(result.current(), 'recommend').onClick({
+        domEvent: { stopPropagation: vi.fn() },
+      });
+      expect(mocks.home.updateRecommendedAgents).toHaveBeenCalledWith(['other', 'agent-1']);
+      expect(mocks.home.pinAgent).not.toHaveBeenCalled();
+      expect(mocks.toastSuccess).toHaveBeenCalledWith('recommendAgentSuccess');
+    });
+
+    it('lets an owner/admin remove a recommended agent', async () => {
+      mocks.canManageSettings = true;
+      mocks.recommendedIds = ['agent-1', 'other'];
+
+      const { result } = renderPublicAgentMenu('creator-1');
+      const recommendItem = getMenuItem(result.current(), 'recommend') as unknown as {
+        label: string;
+      };
+      expect(recommendItem.label).toBe('unrecommendAgent');
+
+      await getMenuItem(result.current(), 'recommend').onClick({
+        domEvent: { stopPropagation: vi.fn() },
+      });
+      expect(mocks.home.updateRecommendedAgents).toHaveBeenCalledWith(['other']);
+    });
+
+    it('does not pin a legacy team pin for a member whose sidebar is set up', () => {
+      const { result } = renderPublicAgentMenu('creator-1', { pinned: true });
+      const keys = getMenuKeys(result.current());
+      const pinItem = getMenuItem(result.current(), 'pin') as unknown as { label: string };
+
+      expect(keys).toEqual(expect.arrayContaining(['pin', 'hideFromSidebar']));
+      expect(pinItem.label).toBe('pin');
+    });
+
+    it('lets a member unpin a team pin copied into their own list', async () => {
+      mocks.myPinnedIds = ['agent-1'];
+      const { result } = renderPublicAgentMenu('creator-1', { pinned: true });
+      const pinItem = getMenuItem(result.current(), 'pin') as unknown as { label: string };
+      expect(pinItem.label).toBe('pinOff');
+
+      await getMenuItem(result.current(), 'pin').onClick({
+        domEvent: { stopPropagation: vi.fn() },
+      });
+      expect(mocks.home.pinItemForMe).toHaveBeenCalledWith(
+        { id: 'agent-1', pinned: true, type: 'agent', visibility: 'public' },
+        false,
+      );
+      expect(mocks.home.pinAgent).not.toHaveBeenCalled();
+    });
+
+    it('never offers to recommend a private agent', () => {
+      mocks.canManageSettings = true;
+
+      const { result } = renderPublicAgentMenu('member-1', { visibility: 'private' });
+      const keys = getMenuKeys(result.current());
+
+      expect(keys).toContain('pin');
+      expect(keys).not.toContain('recommend');
+    });
+
+    it('reads a personal pin from the member preference', () => {
+      mocks.myPinnedIds = ['agent-1'];
+
+      const { result } = renderPublicAgentMenu('creator-1');
+      const pinItem = getMenuItem(result.current(), 'pin') as unknown as { label: string };
+
+      expect(pinItem.label).toBe('pinOff');
+    });
   });
 
   it('keeps non-config actions available to a use-only Workspace member', () => {
@@ -237,7 +360,9 @@ describe('useAgentDropdownMenu', () => {
 
     const { result } = renderPublicAgentMenu('creator-1');
 
+    // A personal pin only writes the viewer's own preference, so it stays.
     expect(getMenuKeys(result.current())).toEqual([
+      'pin',
       'hideFromSidebar',
       'openInNewWindow',
       'copyAgentId',
@@ -270,15 +395,6 @@ describe('useAgentDropdownMenu', () => {
     expect(mocks.setSidebarItemVisible).toHaveBeenCalledWith('agent-1', false);
   });
 
-  it('omits the hide action for lists that ignore the sidebar preference', () => {
-    const { result } = renderPublicAgentMenu('member-1', { sidebarVisibilityEnabled: false });
-
-    const keys = (result.current() ?? []).map((item) =>
-      item && typeof item === 'object' && 'key' in item ? item.key : undefined,
-    );
-    expect(keys).not.toContain('hideFromSidebar');
-  });
-
   it('tells the user to wait when delete is refused by a pending history migration', async () => {
     // Regression: a 409 TRANSFER_IN_PROGRESS used to fall through to the
     // generic "operation failed, please try again", which invited immediate
@@ -299,10 +415,44 @@ describe('useAgentDropdownMenu', () => {
     if (!deleteItem) throw new Error('Expected delete menu item');
 
     deleteItem.onClick({ domEvent: { stopPropagation: vi.fn() } });
-    const { onOk } = mocks.confirmModal.mock.calls[0][0] as { onOk: () => Promise<void> };
-    await onOk();
+    const { agentId, onConfirm } = mocks.confirmRemoveAgent.mock.calls[0][0] as {
+      agentId: string;
+      onConfirm: (options: { acknowledgeForeignContent: boolean }) => Promise<void>;
+    };
+    expect(agentId).toBe('agent-1');
+    await onConfirm({ acknowledgeForeignContent: true });
 
+    expect(mocks.home.removeAgent).toHaveBeenCalledWith('agent-1', {
+      acknowledgeForeignContent: true,
+    });
     expect(mocks.toastError).toHaveBeenCalledWith('deleteHistoryMigrating');
+  });
+
+  const findDeleteItem = (items: unknown[]) =>
+    items.find(
+      (item) => item && typeof item === 'object' && 'key' in item && item.key === 'delete',
+    );
+
+  it("offers delete to a workspace Admin on another member's shared agent", () => {
+    // Admin: not the creator and not the Owner (client `canManage` false), but
+    // the server's `canManage` (AGENT_UPDATE:all) is true.
+    mocks.canEditResource = true;
+    mocks.canManage = false;
+    mocks.canManageResource = true;
+
+    const { result } = renderPublicAgentMenu('member-1');
+
+    expect(findDeleteItem(result.current() ?? [])).toBeDefined();
+  });
+
+  it("hides delete from a member on another member's agent", () => {
+    mocks.canEditResource = true;
+    mocks.canManage = false;
+    mocks.canManageResource = false;
+
+    const { result } = renderPublicAgentMenu('member-1');
+
+    expect(findDeleteItem(result.current() ?? [])).toBeUndefined();
   });
 
   it('stays native-eligible (string labels only, including the Move to Category submenu)', () => {
@@ -317,7 +467,6 @@ describe('useAgentDropdownMenu', () => {
     mocks.canEditResource = true;
     mocks.canManage = true;
     mocks.canManageResource = true;
-    mocks.transferMenuItems = [{ key: 'copy-agent', label: 'Copy to…' }];
 
     const { result } = renderPublicAgentMenu('member-1');
 
@@ -330,13 +479,37 @@ describe('useAgentDropdownMenu', () => {
       'rename',
       'duplicate',
       'moveGroup',
-      'copy-agent',
       'divider',
       'permission',
-      'makePrivate',
       'divider',
       'delete',
     ]);
+  });
+
+  it('keeps Lobe AI (the inbox) organizable but never deletable or duplicable', () => {
+    mocks.canEditResource = true;
+    mocks.canManage = true;
+    mocks.canManageResource = true;
+
+    const { result } = renderHook(() =>
+      useAgentDropdownMenu({
+        group: undefined,
+        id: 'inbox-agent',
+        openCreateGroupModal: vi.fn(),
+        pinned: false,
+        slug: 'inbox',
+        title: 'Lobe AI',
+        userId: 'member-1',
+        visibility: 'public',
+      }),
+    );
+
+    const keys = getMenuKeys(result.current());
+    expect(keys).toEqual(expect.arrayContaining(['pin', 'hideFromSidebar', 'rename', 'moveGroup']));
+    expect(keys).not.toContain('delete');
+    expect(keys).not.toContain('duplicate');
+    expect(keys).not.toContain('permission');
+    expect(keys).not.toContain('visibility');
   });
 
   it('hides the Permission shortcut from a non-author member who can configure the agent', () => {
@@ -358,6 +531,9 @@ describe('useAgentDropdownMenu', () => {
     ) as { onClick: (info: { domEvent: { stopPropagation: () => void } }) => void } | undefined;
 
     expect(permissionItem).toBeTruthy();
+    expect((permissionItem as unknown as { label: string }).label).toBe(
+      'permission.page.agentEntry',
+    );
 
     permissionItem?.onClick({ domEvent: { stopPropagation: vi.fn() } });
 

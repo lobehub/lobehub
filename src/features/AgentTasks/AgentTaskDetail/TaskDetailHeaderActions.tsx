@@ -23,7 +23,6 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useTaskTransferMenuItem } from '@/business/client/hooks/useTaskTransferMenuItem';
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { FavoriteButton, useFavoriteMenuItem } from '@/features/Favorites';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -32,16 +31,20 @@ import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { useHeaderActionSize } from '@/styles/density';
 
 import { getArchiveErrorKey } from '../features/archiveErrorKey';
 import { useTaskArchiveGate } from '../features/useTaskArchiveGate';
+import { useTaskListCrumbTarget } from '../shared/taskListOrigin';
 import { useTaskCopyActions } from './useTaskCopyActions';
 import { useTaskFavoriteTarget } from './useTaskFavoriteTarget';
 
 const TaskDetailHeaderActions = memo(() => {
   const { t } = useTranslation(['chat', 'common']);
+  const headerActionSmallSize = useHeaderActionSize(true);
 
   const navigate = useWorkspaceAwareNavigate();
+  const allTasksTarget = useTaskListCrumbTarget('/tasks');
   const activeWorkspaceId = useActiveWorkspaceId();
   const { allowed: canEditTask } = usePermission('create_content');
   const { copyContent, copyId, copyLink, hasContent, taskId } = useTaskCopyActions();
@@ -70,11 +73,11 @@ const TaskDetailHeaderActions = memo(() => {
       okText: t('taskDetail.deleteConfirm.ok'),
       onOk: async () => {
         await deleteTask(taskId);
-        navigate('/tasks');
+        navigate(allTasksTarget.to, { escape: allTasksTarget.escape });
       },
       title: t('taskDetail.deleteConfirm.title'),
     });
-  }, [canEditTask, taskId, t, deleteTask, navigate]);
+  }, [canEditTask, taskId, t, deleteTask, navigate, allTasksTarget.to, allTasksTarget.escape]);
 
   const toggleArchive = useCallback(async () => {
     if (!taskId) return;
@@ -287,7 +290,7 @@ const TaskDetailHeaderActions = memo(() => {
         aria-label={archiveLabel}
         color={canArchive ? undefined : cssVar.colorTextDisabled}
         icon={isArchived ? ArchiveRestoreIcon : ArchiveIcon}
-        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+        size={headerActionSmallSize}
         style={canArchive ? undefined : { cursor: 'not-allowed' }}
         title={archiveDeniedReason ?? archiveLabel}
         tooltipProps={{ placement: 'bottom' }}

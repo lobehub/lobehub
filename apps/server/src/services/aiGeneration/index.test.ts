@@ -186,3 +186,84 @@ describe('AiGenerationService.decide', () => {
     expect(result).toBe(response);
   });
 });
+
+describe('AiGenerationService.generateText', () => {
+  const chat = vi.fn();
+  const initSpy = vi.spyOn(ModelRuntimeModule, 'initModelRuntimeFromDB');
+
+  /** A runtime whose stream calls the given callbacks once it is drained. */
+  const streamWith = (emit: (callback: any) => void) =>
+    chat.mockImplementation(
+      async (_payload: unknown, options: { callback: any }) =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('data: "x"\n\n'));
+              emit(options.callback);
+              controller.close();
+            },
+          }),
+        ),
+    );
+
+  beforeEach(() => {
+    chat.mockReset();
+    initSpy.mockReset();
+    initSpy.mockResolvedValue({ chat } as any);
+  });
+
+  it('streams one completion and returns the text with reasoning kept apart', async () => {
+    streamWith((callback) =>
+      callback.onFinal({
+        finishReason: 'stop',
+        text: 'Pegboard',
+        thinking: 'One word is enough.',
+        usage: { totalTokens: 9 },
+      }),
+    );
+
+    const ai = new AiGenerationService({} as any, 'user-1', 'ws-1');
+    const result = await ai.generateText(
+      {
+        maxTokens: 20,
+        messages: [{ content: 'one word?', role: 'user' }],
+        model: 'deepseek-flash',
+        provider: 'lobehub',
+        temperature: 0,
+      },
+      { metadata: { trigger: RequestTrigger.Api } },
+    );
+
+    expect(initSpy).toHaveBeenCalledWith({}, 'user-1', 'lobehub', 'ws-1');
+    expect(chat.mock.calls[0][0]).toEqual({
+      max_tokens: 20,
+      messages: [{ content: 'one word?', role: 'user' }],
+      model: 'deepseek-flash',
+      stream: true,
+      temperature: 0,
+    });
+    expect(chat.mock.calls[0][1].metadata).toEqual({ trigger: RequestTrigger.Api });
+    expect(result).toEqual({
+      finishReason: 'stop',
+      reasoning: 'One word is enough.',
+      text: 'Pegboard',
+      usage: { totalTokens: 9 },
+    });
+  });
+
+  it('throws the stream error instead of returning partial text', async () => {
+    const failure = { errorType: 'ProviderBizError' };
+    streamWith((callback) => {
+      callback.onError(failure);
+      callback.onFinal({ text: 'partial' });
+    });
+
+    const ai = new AiGenerationService({} as any, 'user-1');
+    await expect(
+      ai.generateText(
+        { messages: [{ content: 'hi', role: 'user' }], model: 'm', provider: 'p' },
+        { metadata: { trigger: RequestTrigger.Api } },
+      ),
+    ).rejects.toBe(failure);
+  });
+});

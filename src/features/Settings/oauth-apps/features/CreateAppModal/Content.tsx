@@ -10,6 +10,7 @@ import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AvatarUpload from '@/components/AvatarUpload';
+import { densityTokens } from '@/styles/density.stylex';
 import { type CreateOAuthAppParams } from '@/types/oauthApp';
 
 import { useLogoUpload } from '../../useLogoUpload';
@@ -23,7 +24,7 @@ const styles = stylex.create({
     position: 'relative',
     flex: '1',
     minWidth: '0',
-    padding: '12px',
+    padding: densityTokens['--lobe-density-content-gap'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
@@ -134,7 +135,7 @@ const CreateAppModalContent: FC<CreateAppModalContentProps> = ({ onSubmit }) => 
   });
   const type = useWatch(form, 'type');
 
-  const { upload: uploadLogo, uploading: logoUploading } = useLogoUpload();
+  const { error: logoError, upload: uploadLogo, uploading: logoUploading } = useLogoUpload();
 
   const handleUpload = async (file: File) => {
     const url = await uploadLogo(file);
@@ -188,6 +189,11 @@ const CreateAppModalContent: FC<CreateAppModalContentProps> = ({ onSubmit }) => 
             <Input placeholder={t('oauthApp.form.name.placeholder')} />
           </Form.Field>
         </Flexbox>
+        {logoError && (
+          <Text fontSize={12} role={'alert'} type={'danger'}>
+            {logoError}
+          </Text>
+        )}
 
         <Form.Field
           label={t('oauthApp.form.type.label')}

@@ -4,6 +4,8 @@ import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import { type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 import { MIN_RAIL_ANCHORS } from './resultAnchors';
 import { RAIL_ROW, RAIL_TOP, useResultAnchorRail } from './useResultAnchorRail';
 
@@ -69,7 +71,7 @@ const styles = createStaticStyles(({ css }) => ({
     white-space: nowrap;
   `,
   labelChild: css`
-    padding-inline-start: 12px;
+    padding-inline-start: ${densityVars.contentGap};
   `,
   rail: css`
     position: absolute;
@@ -99,7 +101,7 @@ const styles = createStaticStyles(({ css }) => ({
        that outlives the gesture would cover the page it just navigated. */
     &:hover,
     &:has(:focus-visible) {
-      padding-inline-start: 12px;
+      padding-inline-start: ${densityVars.contentGap};
       border-color: ${cssVar.colorBorderSecondary};
       background: ${cssVar.colorBgElevated};
       box-shadow: ${cssVar.boxShadowSecondary};

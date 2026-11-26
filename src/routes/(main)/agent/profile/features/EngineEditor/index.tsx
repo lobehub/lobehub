@@ -37,9 +37,12 @@ const EngineEditor = memo(() => {
   const agentId = useAgentStore((s) => s.activeAgentId || '');
   const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
   const { isShared } = useAgentShareSupported(agentId);
+  const shareModelExempt = useAgentStore(
+    agentByIdSelectors.isAgentShareModelRestrictionExemptById(agentId),
+  );
   const chatModels = useEnabledChatModels();
   const enabledList =
-    isShared && AGENT_SHARE_ALLOWED_PROVIDERS
+    isShared && AGENT_SHARE_ALLOWED_PROVIDERS && !shareModelExempt
       ? chatModels.filter((provider) => AGENT_SHARE_ALLOWED_PROVIDERS?.includes(provider.id))
       : undefined;
   const selectedModel = useAiInfraStore(
@@ -77,6 +80,19 @@ const EngineEditor = memo(() => {
         agentId={agentId}
         canEdit={canEdit && !isRemoteHetero && !isWorkspaceAgent}
       />
+    </Flexbox>
+  );
+
+  const environmentHint = (
+    <Flexbox horizontal align={'center'} gap={4}>
+      <Text type={'secondary'}>{t('settingAgent.engine.heteroHint', { name: driverName })}</Text>
+      <Button
+        size={'small'}
+        type={'text'}
+        onClick={() => navigate(buildAgentProfileTabPath(agentId, 'environment'))}
+      >
+        {t('tab.environment', { ns: 'chat' })}
+      </Button>
     </Flexbox>
   );
 
@@ -168,21 +184,7 @@ const EngineEditor = memo(() => {
         <Text type={'secondary'}>{t('settingAgent.engine.desc')}</Text>
       </Flexbox>
       {!isWorkspaceAgent ? driverForm : null}
-      {isHeterogeneous ? (
-        // Where it runs lives on its own page, so say so rather than leave this one bare.
-        <Flexbox horizontal align={'center'} gap={4}>
-          <Text type={'secondary'}>
-            {t('settingAgent.engine.heteroHint', { name: driverName })}
-          </Text>
-          <Button
-            size={'small'}
-            type={'text'}
-            onClick={() => navigate(buildAgentProfileTabPath(agentId, 'environment'))}
-          >
-            {t('tab.environment', { ns: 'chat' })}
-          </Button>
-        </Flexbox>
-      ) : isWorkspaceAgent ? (
+      {isHeterogeneous ? null : isWorkspaceAgent ? (
         <>
           {configHeading}
           <Flexbox horizontal gap={8} wrap={'wrap'}>
@@ -193,6 +195,8 @@ const EngineEditor = memo(() => {
       ) : (
         modelForm
       )}
+      {/* Where it runs lives on its own page for every driver, so say so here. */}
+      {environmentHint}
     </Flexbox>
   );
 });

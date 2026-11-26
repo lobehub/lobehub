@@ -21,9 +21,11 @@ import { default as cohere } from './cohere';
 import { default as cometapi } from './cometapi';
 import { default as comfyui } from './comfyui';
 import { default as deepseek } from './deepseek';
+import { default as doubaospeech } from './doubaospeech';
 import { default as elevenlabs } from './elevenlabs';
 import { default as fal } from './fal';
 import { default as fireworksai } from './fireworksai';
+import { default as fishaudio } from './fishaudio';
 import { default as giteeai } from './giteeai';
 import { default as github } from './github';
 import { default as githubcopilot } from './githubCopilot';
@@ -136,9 +138,11 @@ const staticModelMap: ModelsMap = {
   cometapi,
   comfyui,
   deepseek,
+  doubaospeech,
   elevenlabs,
   fal,
   fireworksai,
+  fishaudio,
   giteeai,
   github,
   githubcopilot,
@@ -257,9 +261,11 @@ export { default as cohere } from './cohere';
 export { default as cometapi } from './cometapi';
 export { default as comfyui } from './comfyui';
 export { default as deepseek } from './deepseek';
+export { default as doubaospeech } from './doubaospeech';
 export { default as elevenlabs } from './elevenlabs';
 export { default as fal, fluxSchnellParamsSchema } from './fal';
 export { default as fireworksai } from './fireworksai';
+export { default as fishaudio } from './fishaudio';
 export { default as giteeai } from './giteeai';
 export { default as github } from './github';
 export { default as githubcopilot } from './githubCopilot';

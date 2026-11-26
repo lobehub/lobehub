@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import { memo } from 'react';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import KindIcon from '../components/KindIcon';
 import { useEntityDataContext } from '../context';
 import { useEntityFormat } from '../format';
@@ -17,7 +19,11 @@ import { type MemoryEntity } from '../types';
 import { useSelection } from '../useSelection';
 
 const styles = stylex.create({
-  root: { display: 'flex', flexDirection: 'column', gap: '16px' },
+  root: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: densityTokens['--lobe-density-section-gap'],
+  },
   back: {
     alignItems: 'center',
     alignSelf: 'flex-start',
@@ -35,7 +41,11 @@ const styles = stylex.create({
     paddingBlock: 0,
     paddingInline: 0,
   },
-  top: { alignItems: 'flex-start', display: 'flex', gap: '12px' },
+  top: {
+    alignItems: 'flex-start',
+    display: 'flex',
+    gap: densityTokens['--lobe-density-content-gap'],
+  },
   titles: { display: 'flex', flex: '1', flexDirection: 'column', gap: '4px', minWidth: 0 },
   eyebrow: {
     alignItems: 'center',
@@ -48,7 +58,7 @@ const styles = stylex.create({
   tags: { color: cssVar.colorTextTertiary, fontSize: '12px' },
   summary: {
     color: cssVar.colorTextSecondary,
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     lineHeight: '22px',
     margin: 0,
   },

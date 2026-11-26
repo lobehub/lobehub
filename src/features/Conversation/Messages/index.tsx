@@ -30,7 +30,7 @@ import PendingRetryTurn from './components/PendingRetryTurn';
 import TextSelectionActionLayer from './components/TextSelectionActionLayer';
 import CompressedGroupMessage from './CompressedGroup';
 import GroupTasksMessage from './GroupTasks';
-import { getMessageInteractionState } from './messageInteraction';
+import { getMessageContextMenuAction, getMessageInteractionState } from './messageInteraction';
 import TaskMessage from './Task';
 import TaskCallbackMessage from './TaskCallback';
 import TasksMessage from './Tasks';
@@ -57,6 +57,8 @@ export interface MessageItemProps {
   continuations?: SteerContinuation[];
   defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
   disableEditing?: boolean;
+  /** Keep the row out of multi-select (compressed history rows). */
+  disableSelection?: boolean;
   enableHistoryDivider?: boolean;
   endRender?: ReactNode;
   footerRender?: ReactNode;
@@ -76,6 +78,7 @@ const MessageItem = memo<MessageItemProps>(
     endRender,
     footerRender,
     disableEditing,
+    disableSelection,
     inPortalThread = false,
     index,
     isLatestItem,
@@ -115,7 +118,10 @@ const MessageItem = memo<MessageItemProps>(
 
     const onContextMenu = useCallback(
       async (event: MouseEvent<HTMLDivElement>) => {
-        if (shouldSuppressContextMenu) {
+        const action = getMessageContextMenuAction(event.target, shouldSuppressContextMenu);
+        if (action === 'native') return;
+
+        if (action === 'suppress') {
           event.preventDefault();
           return;
         }
@@ -297,7 +303,7 @@ const MessageItem = memo<MessageItemProps>(
           data-index={index}
           onContextMenu={onContextMenu}
         >
-          <MessageSelectionWrapper id={id} role={role}>
+          <MessageSelectionWrapper id={id} readOnlyHistory={disableSelection} role={role}>
             {selectableContent}
           </MessageSelectionWrapper>
           {!shouldInjectFooter && footerRender}

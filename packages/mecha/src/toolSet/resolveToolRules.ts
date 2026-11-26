@@ -6,6 +6,7 @@ import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import { McpEventsManifest } from '@lobechat/builtin-tool-mcp-events';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest } from '@lobechat/builtin-tool-message';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
@@ -16,6 +17,7 @@ import {
   chatModeAllowedToolIds,
   defaultToolIds,
   groupSupervisorToolIds,
+  runtimeManagedToolIds,
 } from '@lobechat/builtin-tools';
 import { executionTargetToRuntimeMode, resolveToolMode } from '@lobechat/types';
 
@@ -53,7 +55,10 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
   const runtimeMode = executionTargetToRuntimeMode(executionTarget);
   // Device tools only exist for device-capable targets: `none` means no
   // device, and `sandbox` and devices are mutually exclusive.
-  const deviceCapable = executionTarget === 'local' || executionTarget === 'device';
+  const deviceCapable =
+    executionTarget === 'local' ||
+    executionTarget === 'device' ||
+    (executionTarget === 'auto' && !!device);
   const deviceLocked = deviceAccess?.deviceLocked ?? false;
 
   const searchMode = agent.chatConfig?.searchMode ?? 'auto';
@@ -90,7 +95,7 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
   // Custom mode: the tool set is EXACTLY the agent's declared plugins, for
   // focused builtin sub-agents that configure themselves precisely.
   const customModeRules = enableAll(pinnedPluginIds);
-  const agentModeRules = {
+  const agentModeRules: Record<string, boolean> = {
     ...enableAll(request.runtimePluginIds ?? []),
     ...enableAll(pinnedPluginIds),
     ...enableAll(alwaysOnToolIds),
@@ -110,6 +115,7 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
     // on-demand action half and only costs a schema when the agent owns an
     // account. Replaces the always-on mailbox slot the channel design paid.
     [AgentAccountManifest.identifier]: request.hasIdentityAccount ?? false,
+    [McpEventsManifest.identifier]: request.hasEventConnector ?? false,
     ...(request.isGroupSupervisor && enableAll(groupSupervisorToolIds)),
     // The device picker: only for device-capable targets behind a gateway,
     // and only while the run still has a device decision to make. The wall
@@ -121,8 +127,26 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
   // Walls follow the policy and the plan, with or without a gateway; the
   // Computer Use opt-in is a gateway device's own report.
   const excludedIdentifiers = new Set(request.disabledPluginIds ?? []);
+  // The flag and connector capability are authoritative, including explicit
+  // activation and custom-mode pinning. Browser runtimes omit this server fact.
+  if (!request.hasEventConnector) excludedIdentifiers.add(McpEventsManifest.identifier);
   if (device && !device.supportedTools?.includes(AuvManifest.identifier))
     excludedIdentifiers.add(AuvManifest.identifier);
+  if (toolMode === 'agent') {
+    // A runtime capability grants discovery. Its functions are loaded only after activation.
+    for (const id of runtimeManagedToolIds) {
+      // A device can be selected later in this operation. Keep its local executor
+      // available for the step that binds it.
+      if (
+        id === LocalSystemManifest.identifier &&
+        deviceCapable &&
+        device &&
+        !request.disableLocalSystem
+      )
+        continue;
+      if (!agentModeRules[id]) excludedIdentifiers.add(id);
+    }
+  }
   if (deviceAccess) {
     if (!deviceAccess.canUseDevice) {
       for (const identifier of DEVICE_TOOL_IDENTIFIERS) excludedIdentifiers.add(identifier);
@@ -141,6 +165,7 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
           : [
               ...defaultToolIds,
               ...(request.hasIdentityAccount ? [AgentAccountManifest.identifier] : []),
+              ...(request.hasEventConnector ? [McpEventsManifest.identifier] : []),
               ...(request.isGroupSupervisor ? groupSupervisorToolIds : []),
             ],
     deviceCapable,

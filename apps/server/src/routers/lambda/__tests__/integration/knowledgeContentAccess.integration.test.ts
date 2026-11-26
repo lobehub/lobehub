@@ -746,4 +746,75 @@ describe('knowledge content read boundaries', () => {
       (await contents(owner, ['docs_content_workspace'], 'content-workspace'))[0].content,
     ).toBe('restricted text');
   });
+
+  it('lets an agent read a No-access knowledge base a browser mounted, never a self-mount', async () => {
+    const workspaceId = 'content-workspace';
+    await db
+      .insert(schema.workspaceMembers)
+      .values([owner, viewer].map((userId) => ({ userId, workspaceId })));
+    await db.insert(schema.agents).values(
+      ['agt_content_mounted', 'agt_content_self_mounted', 'agt_content_unmounted'].map((id) => ({
+        id,
+        userId: id === 'agt_content_self_mounted' ? viewer : owner,
+        workspaceId,
+      })),
+    );
+    await db.insert(schema.agentsKnowledgeBases).values(
+      [
+        // Mounted by the knowledge base's creator, who may browse it.
+        { agentId: 'agt_content_mounted', userId: owner },
+        // Mounted by the No-access member on their own agent.
+        { agentId: 'agt_content_self_mounted', userId: viewer },
+      ].map((mount) => ({ ...mount, knowledgeBaseId: 'content-kb-workspace', workspaceId })),
+    );
+    await db
+      .insert(schema.projects)
+      .values({ id: 'project_content', name: 'Project', userId: owner, workspaceId });
+    await db.insert(schema.projectKnowledgeBases).values({
+      addedByUserId: owner,
+      knowledgeBaseId: 'content-kb-workspace',
+      projectId: 'project_content',
+      workspaceId,
+    });
+
+    const readAs = async (scope: { agentId?: string; projectId?: string }) => {
+      const runtime = (await knowledgeBaseRuntime.factory({
+        ...scope,
+        serverDB: db,
+        userId: viewer,
+        workspaceId,
+      } as any)) as any;
+      return runtime.readKnowledge({
+        fileIds: ['file_content_workspace', 'docs_content_workspace'],
+      });
+    };
+
+    for (const scope of [{ agentId: 'agt_content_mounted' }, { projectId: 'project_content' }]) {
+      const read = await readAs(scope);
+      expect(read.success).toBe(true);
+      expect(read.content).toContain('restricted text');
+    }
+
+    for (const agentId of ['agt_content_self_mounted', 'agt_content_unmounted']) {
+      const read = await readAs({ agentId });
+      expect(read.success).toBe(false);
+      expect(read.content).toContain('Only knowledge base managers');
+    }
+
+    // A creator who left the workspace no longer vouches for their mount.
+    await db
+      .update(schema.workspaceMembers)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.workspaceMembers.userId, owner));
+    expect((await readAs({ agentId: 'agt_content_mounted' })).success).toBe(false);
+    await db
+      .update(schema.workspaceMembers)
+      .set({ deletedAt: null })
+      .where(eq(schema.workspaceMembers.userId, owner));
+
+    // The member's own direct read stays manager-only.
+    await expect(contents(viewer, ['file_content_workspace'], workspaceId)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+  });
 });

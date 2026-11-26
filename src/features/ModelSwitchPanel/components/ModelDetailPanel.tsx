@@ -17,6 +17,7 @@ import type { FC } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
 import { getModelDescriptionI18nKey } from '@/utils/modelDescriptionI18n';
 
@@ -35,7 +36,7 @@ export type { PricingMode } from '../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   actionText: css`
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
     color: ${cssVar.colorText};
   `,
@@ -53,7 +54,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   radarClickable: css`
     cursor: pointer;
-    border-radius: 8px;
+    border-radius: ${densityVars.radius};
     transition: background 0.2s ${cssVar.motionEaseInOut};
 
     &:hover {
@@ -89,7 +90,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-variant-numeric: tabular-nums;
   `,
   titleText: css`
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 400;
     color: ${cssVar.colorTextSecondary};
   `,

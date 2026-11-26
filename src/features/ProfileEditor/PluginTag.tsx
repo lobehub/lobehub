@@ -14,12 +14,13 @@ import {
   Text,
   Tooltip,
 } from '@lobehub/ui';
-import { McpIcon } from '@lobehub/ui/icons';
+import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
 import isEqual from 'fast-deep-equal';
 import { AlertCircle, Loader2, Square, SquareCheckBig, SquareMinus, X } from 'lucide-react';
 import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import MarketSkillIcon from '@/components/MarketSkillIcon';
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useDiscoverStore } from '@/store/discover';
@@ -27,6 +28,7 @@ import { pluginSelectors as discoverPluginSelectors } from '@/store/discover/sel
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import {
+  agentSkillsSelectors,
   builtinToolSelectors,
   composioStoreSelectors,
   lobehubSkillStoreSelectors,
@@ -35,7 +37,7 @@ import {
 import { type LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
 
-import { type ItemDetail } from './ItemDetailPanel';
+import { type ItemConnection, type ItemDetail } from './ItemDetailPanel';
 import ItemRow from './ItemRow';
 
 /**
@@ -104,6 +106,11 @@ export interface PluginTagProps {
    * so an agent-exclusive connector doesn't render as "Not Installed".
    */
   agentId?: string;
+  /**
+   * In a row, which connection the item runs on for this agent, when that is worth saying:
+   * a short label beside the name, and a sentence about it in the item's details.
+   */
+  connection?: ItemConnection;
   disabled?: boolean;
   /** In a row, an on/off switch for the item; `onToggle` makes it appear. */
   enabled?: boolean;
@@ -172,6 +179,7 @@ export interface PluginTagProps {
 const PluginTag = memo<PluginTagProps>(
   ({
     agentId,
+    connection,
     pluginId,
     onRemove,
     onSelect,
@@ -196,6 +204,12 @@ const PluginTag = memo<PluginTagProps>(
 
     // Extract identifier
     const identifier = typeof pluginId === 'string' ? pluginId : pluginId?.identifier;
+    const showMarketSkillIcon = useToolStore(
+      (s) =>
+        variant === 'row' &&
+        isSkill &&
+        agentSkillsSelectors.getAgentSkillByIdentifier(identifier)(s)?.source === 'market',
+    );
 
     // Agent-scoped connectors (empty unless agentId is provided).
     const agentConnectors = useToolStore(
@@ -240,6 +254,11 @@ const PluginTag = memo<PluginTagProps>(
 
     // Custom connector state
     const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
+    // Marketplace MCPs installed on the connector path, without a legacy plugin row
+    const marketplaceConnectors = useToolStore(
+      connectorSelectors.marketplaceMcpConnectors,
+      isEqual,
+    );
 
     // Check if plugin is installed
     const isInstalled = useToolStore(pluginSelectors.isPluginInstalled(identifier));
@@ -305,9 +324,13 @@ const PluginTag = memo<PluginTagProps>(
         return {
           availableInWeb,
           avatar: builtinMeta.meta.avatar,
-          description: builtinMeta.meta.description,
+          description: t(`tools.builtins.${identifier}.description` as any, {
+            defaultValue: builtinMeta.meta.description || '',
+          }),
           isInstalled: true,
-          title: builtinMeta.meta.title,
+          title: t(`tools.builtins.${identifier}.title` as any, {
+            defaultValue: builtinMeta.meta.title || identifier,
+          }),
           type: 'builtin' as const,
         };
       }
@@ -320,6 +343,21 @@ const PluginTag = memo<PluginTagProps>(
           description: installedMeta.description,
           isInstalled: true,
           title: installedMeta.title,
+          type: 'plugin' as const,
+        };
+      }
+
+      // A marketplace MCP installed as a connector alone: listed as the plugin it
+      // replaces, as Settings lists it
+      const marketplaceConnector = marketplaceConnectors.find((c) => c.identifier === identifier);
+      if (marketplaceConnector) {
+        const { avatar, description } = marketplaceConnector.metadata ?? {};
+        return {
+          availableInWeb: true,
+          avatar: typeof avatar === 'string' ? avatar : undefined,
+          description: typeof description === 'string' ? description : undefined,
+          isInstalled: true,
+          title: marketplaceConnector.name || identifier,
           type: 'plugin' as const,
         };
       }
@@ -353,6 +391,8 @@ const PluginTag = memo<PluginTagProps>(
       isLobehubSkillEnabled,
       allLobehubSkillServers,
       customConnectors,
+      marketplaceConnectors,
+      t,
       useAllMetaList,
     ]);
 
@@ -388,6 +428,17 @@ const PluginTag = memo<PluginTagProps>(
       // Show warning icon when not installed
       if (!meta.isInstalled) {
         return <AlertCircle className={styles.warningIcon} size={14} />;
+      }
+
+      if (showMarketSkillIcon) {
+        return (
+          <MarketSkillIcon
+            fallback={<Icon icon={SkillsIcon} size={16} />}
+            identifier={identifier}
+            name={displayTitle}
+            size={16}
+          />
+        );
       }
 
       // Composio type has icon property
@@ -441,7 +492,8 @@ const PluginTag = memo<PluginTagProps>(
     );
     const connectorTools = (
       agentConnectors.find((c) => c.identifier === identifier) ??
-      customConnectors.find((c) => c.identifier === identifier)
+      customConnectors.find((c) => c.identifier === identifier) ??
+      marketplaceConnectors.find((c) => c.identifier === identifier)
     )?.tools;
     const toolList: ItemDetail['tools'] = connectorTools?.length
       ? connectorTools.map((tool) => ({
@@ -506,12 +558,18 @@ const PluginTag = memo<PluginTagProps>(
                   />
                 </Tooltip>
               ) : null}
+              {connection?.label ? (
+                <Tooltip title={connection.desc}>
+                  <Tag style={{ flex: 'none', margin: 0 }}>{connection.label}</Tag>
+                </Tooltip>
+              ) : null}
             </>
           }
           onClick={
             onOpen
               ? () =>
                   onOpen({
+                    connection,
                     description,
                     icon: renderIcon(),
                     identifier,

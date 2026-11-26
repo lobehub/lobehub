@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as ReplicaModule from '@/libs/replica';
 import { discoverService } from '@/services/discover';
 import { mcpService } from '@/services/mcp';
-import { pluginService } from '@/services/plugin';
 import type { ToolStore } from '@/store/tool/store';
 
 import { createMCPPluginStoreSlice } from './action';
+import { installMarketplaceConnector } from './installMarketplaceConnector';
 
 vi.mock('@/libs/replica', async (original) => ({
   ...(await original<typeof ReplicaModule>()),
@@ -26,7 +26,7 @@ vi.mock('@/services/discover', () => ({
   },
 }));
 vi.mock('@/services/mcp', () => ({ mcpService: { getStreamableMcpServerManifest: vi.fn() } }));
-vi.mock('@/services/plugin', () => ({ pluginService: { installPlugin: vi.fn() } }));
+vi.mock('./installMarketplaceConnector', () => ({ installMarketplaceConnector: vi.fn() }));
 vi.mock('@/utils/sleep', () => ({ sleep: async () => {} }));
 
 const TEMPLATE_URL = 'https://quotes.example.com/mcp?apikey={{API_KEY}}';
@@ -78,7 +78,7 @@ beforeEach(() => {
     identifier: 'quote-mcp',
     meta: { title: 'Quote MCP' },
   } as never);
-  vi.mocked(pluginService.installPlugin).mockResolvedValue(undefined);
+  vi.mocked(installMarketplaceConnector).mockResolvedValue(undefined);
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -98,23 +98,22 @@ describe('marketplace HTTP MCP with config placeholders in the URL', () => {
     );
   });
 
-  it('stores the template URL so the key stays in settings, not in the saved connection', async () => {
+  // A connector has no plugin settings to fill the template on each call
+  it('stores the URL the install connected with on the connector', async () => {
     await actions.installMCPPlugin('quote-mcp', {
       config: { API_KEY: 'k&1', X_REGION: 'eu' },
       resume: false,
     });
 
-    expect(pluginService.installPlugin).toHaveBeenCalledWith(
+    expect(installMarketplaceConnector).toHaveBeenCalledWith(
       expect.objectContaining({
-        customParams: {
-          mcp: expect.objectContaining({
-            headers: { 'X-Client': 'lobehub', 'X_REGION': 'eu' },
-            type: 'http',
-            url: TEMPLATE_URL,
-          }),
-        },
-        settings: { API_KEY: 'k&1', X_REGION: 'eu' },
+        connection: expect.objectContaining({
+          headers: { 'X-Client': 'lobehub', 'X_REGION': 'eu' },
+          type: 'http',
+          url: 'https://quotes.example.com/mcp?apikey=k%261',
+        }),
       }),
+      expect.any(Function),
     );
   });
 });

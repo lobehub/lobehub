@@ -26,11 +26,14 @@ export type StepContinuationDeps = Pick<
 export async function scheduleNextStep(
   deps: StepContinuationDeps,
   {
+    beforeQueue,
     inlineContinuation,
     operationId,
     stepIndex,
     stepResult,
   }: {
+    /** Runs before the next step is queued, which lets another invocation start it. */
+    beforeQueue?: () => Promise<void>;
     inlineContinuation: boolean;
     operationId: string;
     stepIndex: number;
@@ -104,6 +107,7 @@ export async function scheduleNextStep(
     // partial from the store — it has to see this step. The gateway
     // pushes this invocation issued have to land for the same reason:
     // nothing carries them once it stops running.
+    await beforeQueue?.();
     await deps.traceRecorder.flushPartial();
     await deps.streamManager.drainPushes?.(operationId);
     await deps.queueService.scheduleMessage({ ...next, endpoint: `${deps.baseURL}/run` });

@@ -5,6 +5,7 @@ import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
+import { toolSetsFrom } from './helpers/connectorToolSets';
 
 const {
   mockCreateOperation,
@@ -97,6 +98,7 @@ vi.mock('@/database/models/connector', () => ({
     return {
       queryByIdentifiers: vi.fn().mockResolvedValue([]),
       resolveByIdentifiers: vi.fn().mockResolvedValue([]),
+      resolveToolSets: toolSetsFrom(vi.fn().mockResolvedValue([])),
     };
   }),
 }));
@@ -218,7 +220,9 @@ const createBaseAgentConfig = (overrides: Record<string, any> = {}) => ({
 
 describe('AiAgentService.execAgent - device tool pipeline ()', () => {
   let service: AiAgentService;
-  const mockDb = {} as any;
+  const mockDb = {
+    query: { userSettings: { findFirst: vi.fn().mockResolvedValue(undefined) } },
+  } as never;
   const userId = 'test-user-id';
 
   beforeEach(() => {
@@ -241,15 +245,15 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
   });
 
   describe('RemoteDevice flows through ToolsEngine pipeline', () => {
-    it('should pass RemoteDevice identifier in pluginIds to ToolsEngine', async () => {
+    it('should defer the RemoteDevice schema on the first turn', async () => {
       mockGetAgentConfig.mockResolvedValue(createBaseAgentConfig());
 
       await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
 
-      // Verify generateToolsDetailed receives RemoteDevice in toolIds
+      // The engine considers the picker for discovery separately from first-turn tools.
       expect(mockGenerateToolsDetailed).toHaveBeenCalledTimes(1);
       const toolIds = mockGenerateToolsDetailed.mock.calls[0][0].toolIds;
-      expect(toolIds).toContain(RemoteDeviceManifest.identifier);
+      expect(toolIds).not.toContain(RemoteDeviceManifest.identifier);
     });
 
     it('should pass RemoteDevice identifier in pluginIds to getEnabledPluginManifests', async () => {
@@ -284,9 +288,13 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
     ).toBeDefined();
   });
 
-  it.each([undefined, ['lobe-computer-use']])(
-    'gates Computer Use discovery on reported support %j',
-    async (supportedTools) => {
+  it.each([
+    { discoverable: false, supportedTools: undefined },
+    { discoverable: false, supportedTools: [] },
+    { discoverable: true, supportedTools: [AuvManifest.identifier] },
+  ])(
+    'gates default Computer Use discovery on reported support $supportedTools',
+    async ({ discoverable, supportedTools }) => {
       const { deviceGateway } = await import('@/server/services/deviceGateway');
       vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
       mockQueryDeviceList.mockResolvedValue([
@@ -298,9 +306,27 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
       );
       await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', deviceId: 'dev-1' });
       const map = mockCreateOperation.mock.calls[0][0].toolSet.manifestMap;
-      expect(Boolean(map[AuvManifest.identifier])).toBe(Boolean(supportedTools));
+      expect(Boolean(map[AuvManifest.identifier])).toBe(discoverable);
     },
   );
+
+  it('keeps explicitly disabled Computer Use out even on a supporting device', async () => {
+    const { deviceGateway } = await import('@/server/services/deviceGateway');
+    vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
+    mockQueryDeviceList.mockResolvedValue([
+      { deviceId: 'dev-1', hostname: 'Mac', online: true, platform: 'darwin' },
+    ]);
+    mockQueryDeviceSystemInfo.mockResolvedValue({ supportedTools: [AuvManifest.identifier] });
+    mockGetAgentConfig.mockResolvedValue(
+      createBaseAgentConfig({
+        agencyConfig: { executionTarget: 'local' },
+        plugins: [{ identifier: AuvManifest.identifier, mode: 'disabled' }],
+      }),
+    );
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', deviceId: 'dev-1' });
+    const map = mockCreateOperation.mock.calls[0][0].toolSet.manifestMap;
+    expect(map[AuvManifest.identifier]).toBeUndefined();
+  });
 
   describe('deviceContext forwarded to createServerAgentToolsEngine', () => {
     it('should pass deviceContext when gateway is configured', async () => {
@@ -423,8 +449,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
 
       const callArgs = mockCreateOperation.mock.calls[0][0];
 
-      // RemoteDevice is present in manifestMap (discoverable builtin),
-      // but should NOT be in enabledToolIds when gateway is not configured
+      expect(callArgs.toolSet.manifestMap[RemoteDeviceManifest.identifier]).toBeUndefined();
       const enabledToolIds = callArgs.toolSet.enabledToolIds;
       expect(enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
     });
@@ -592,7 +617,16 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
       mockGetLobehubSkillManifests.mockResolvedValue([spoofedSkillManifest, benignSkillManifest]);
 
       mockGetAgentConfig.mockResolvedValue(
-        createBaseAgentConfig({ agencyConfig: { executionTarget: 'auto' } }),
+        createBaseAgentConfig({
+          agencyConfig: { executionTarget: 'auto' },
+          // Connectors are opt-in per agent. Both manifests are turned on the
+          // same way, so the spoofed one gets past the opt-in cut and only the
+          // ingest wall is left to stop it.
+          plugins: [
+            { identifier: RemoteDeviceManifest.identifier, mode: 'auto' },
+            { identifier: 'my-normal-skill', mode: 'auto' },
+          ],
+        }),
       );
 
       await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
@@ -603,7 +637,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
       expect(manifestMap['my-normal-skill']).toBeDefined();
     });
 
-    it('should still ingest the skill-claimed identifier when the run is NOT locked', async () => {
+    it('should keep the builtin picker discoverable when multiple devices are online', async () => {
       const { deviceGateway } = await import('@/server/services/deviceGateway');
       vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
       // Two online devices → 'auto' stays unrouted (ambiguous), picker still needed
@@ -611,7 +645,9 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
         { deviceId: 'dev-1', hostname: 'PC A', online: true, platform: 'win32' },
         { deviceId: 'dev-2', hostname: 'PC B', online: true, platform: 'darwin' },
       ]);
-      mockGetLobehubSkillManifests.mockResolvedValue([]);
+      const { createServerAgentToolsEngine } =
+        await import('@/server/modules/Mecha/AgentToolsEngine');
+      mockCreateServerAgentToolsEngine.mockImplementationOnce(createServerAgentToolsEngine);
 
       mockGetAgentConfig.mockResolvedValue(
         createBaseAgentConfig({ agencyConfig: { executionTarget: 'auto' } }),

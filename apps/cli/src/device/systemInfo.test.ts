@@ -35,7 +35,10 @@ describe('probeNativeRuntimes', () => {
   });
 
   it('advertises native Codex after a successful handshake on the resolved binary', async () => {
-    await expect(probeNativeRuntimes()).resolves.toEqual(['codex-app-server-v1']);
+    await expect(probeNativeRuntimes()).resolves.toEqual([
+      'codex-app-server-v1',
+      'codex-collaboration-mode-v1',
+    ]);
     /** @example Resolution PATH is carried into the exact probed executable. */
     expect(codexProbe.options).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -59,6 +62,13 @@ describe('probeNativeRuntimes', () => {
     });
     /** @example A failed probe does not leave its subprocess alive. */
     expect(codexProbe.close).toHaveBeenCalledOnce();
+  });
+
+  /** @example The server tunnels stdio / local-network MCP calls only to a CLI that says it runs them. */
+  it('reports that this client runs tunneled MCP calls', async () => {
+    await expect(collectSystemInfo(uncachedProbe)).resolves.toMatchObject({
+      supportedToolCallTypes: ['tool', 'mcp'],
+    });
   });
 
   /** @example A handshake timeout must not stall device discovery or advertise support. */

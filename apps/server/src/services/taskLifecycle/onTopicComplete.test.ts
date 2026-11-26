@@ -59,6 +59,11 @@ vi.mock('@/business/server/task/onTaskRunCompleted', () => ({
   onTaskRunCompleted: (...args: unknown[]) => runCompleted(...args),
 }));
 
+const postToChannel = vi.fn().mockResolvedValue('posted');
+vi.mock('@/server/services/task/channelDelivery', () => ({
+  postTaskRunToChannel: (...args: unknown[]) => postToChannel(...args),
+}));
+
 const baseTask = (overrides: Partial<TaskItem> = {}): TaskItem =>
   ({
     automationMode: 'heartbeat',
@@ -113,6 +118,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
     notifyFailed.mockReset().mockResolvedValue(undefined);
     notifyRunFailed.mockReset().mockResolvedValue(undefined);
     runCompleted.mockReset().mockResolvedValue(undefined);
+    postToChannel.mockReset().mockResolvedValue('posted');
     cascadeOnCompletion.mockReset().mockResolvedValue({ failed: [], paused: [], started: [] });
 
     service = new TaskLifecycleService({} as any, 'user-1');
@@ -829,6 +835,40 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       });
 
       expect(runCompleted).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Channel delivery', () => {
+    it('posts a finished run to the task Channel, and a failed post does not fail the lifecycle', async () => {
+      const task = baseTask({ config: { delivery: { channelId: 'chn_1' } } } as Partial<TaskItem>);
+      findById.mockResolvedValue(task);
+      postToChannel.mockRejectedValueOnce(new Error('boom'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(service.onTopicComplete(createDoneParams())).resolves.toBeUndefined();
+
+      expect(postToChannel).toHaveBeenCalledWith(expect.anything(), {
+        operationId: 'op-1',
+        scope: { userId: 'user-1', workspaceId: undefined },
+        task,
+      });
+    });
+
+    it('defers a verify-bound run to the verify settle path', async () => {
+      findById.mockResolvedValue(
+        baseTask({ config: { delivery: { channelId: 'chn_1' } } } as Partial<TaskItem>),
+      );
+      verifyFindByOperation.mockResolvedValueOnce({ planConfirmedAt: new Date() });
+
+      await service.onTopicComplete(createDoneParams());
+
+      expect(postToChannel).not.toHaveBeenCalled();
+    });
+
+    it('posts nothing for a failed run', async () => {
+      findById.mockResolvedValue(baseTask());
+      await service.onTopicComplete(createErrorParams('schedule'));
+      expect(postToChannel).not.toHaveBeenCalled();
     });
   });
 

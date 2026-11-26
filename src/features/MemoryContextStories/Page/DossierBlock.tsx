@@ -4,6 +4,8 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo, useState } from 'react';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { useStoryFormat } from '../format';
 import StatusMark from '../StatusMark';
 import EvidenceRow from './EvidenceRow';
@@ -19,8 +21,8 @@ const styles = stylex.create({
     borderWidth: '1px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px',
-    paddingBlock: '16px',
+    gap: densityTokens['--lobe-density-content-gap'],
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
     paddingInline: '20px',
   },
   head: { display: 'flex', flexDirection: 'column', gap: '4px' },
@@ -34,15 +36,20 @@ const styles = stylex.create({
     gap: '8px',
   },
   title: { fontSize: '15px', fontWeight: 600, lineHeight: '24px', margin: 0 },
-  now: { color: cssVar.colorText, fontSize: '14px', lineHeight: '22px', margin: 0 },
+  now: {
+    color: cssVar.colorText,
+    fontSize: densityTokens['--lobe-density-font-size'],
+    lineHeight: '22px',
+    margin: 0,
+  },
   list: {
     borderBlockStartColor: cssVar.colorBorderSecondary,
     borderBlockStartStyle: 'solid',
     borderBlockStartWidth: '1px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px',
-    paddingBlockStart: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
+    paddingBlockStart: densityTokens['--lobe-density-content-gap'],
   },
   more: { alignSelf: 'flex-start', color: cssVar.colorTextSecondary, marginInlineStart: '96px' },
 });

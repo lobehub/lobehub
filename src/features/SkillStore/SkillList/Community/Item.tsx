@@ -1,5 +1,6 @@
 'use client';
 
+import { parsePluginEntry } from '@lobechat/types';
 import {
   ActionIcon,
   Block,
@@ -13,7 +14,7 @@ import {
 } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { t as translate } from 'i18next';
-import { MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
+import { MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import React, { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -65,9 +66,12 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
     isEqual,
   );
 
-  const [togglePlugin, isPluginEnabledInAgent] = useAgentStore((s) => [
+  const [togglePlugin, removePlugin, hasPluginEntry] = useAgentStore((s) => [
     s.togglePlugin,
-    agentSelectors.currentAgentPlugins(s).includes(identifier),
+    s.removePlugin,
+    (agentSelectors.currentAgentConfig(s)?.plugins ?? []).some(
+      (entry) => parsePluginEntry(entry).identifier === identifier,
+    ),
   ]);
   const { isAuthenticated, signIn } = useMarketAuth();
 
@@ -86,7 +90,7 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
     const isSuccess = await installMCPPlugin(identifier);
 
     if (isSuccess) {
-      await togglePlugin(identifier);
+      await togglePlugin(identifier, true);
     }
   };
 
@@ -112,8 +116,8 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
                 confirmModal({
                   okButtonProps: { danger: true },
                   onOk: async () => {
-                    if (isPluginEnabledInAgent) {
-                      await togglePlugin(identifier, false);
+                    if (hasPluginEntry) {
+                      await removePlugin(identifier);
                     }
                     await unInstallPlugin(identifier);
                   },
@@ -125,7 +129,10 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
             },
           ]}
         >
-          <ActionIcon icon={MoreVerticalIcon} />
+          <ActionIcon
+            aria-label={t('connectorMarket.action.manage', { ns: 'setting' })}
+            icon={MoreHorizontalIcon}
+          />
         </DropdownMenu>
       );
     }

@@ -6,10 +6,6 @@ import type { DocsHomeTab } from './projection';
 /** Items of one recents query; `undefined` until it is hydrated or fetched. */
 const query = (queryKey: string) => (s: HomeStore) => s.recentListMap[queryKey];
 
-/** Latest topics per owner for the IM conversation list. */
-const conversationRecents = (queryKey: string) => (s: HomeStore) =>
-  s.conversationRecentMap[queryKey];
-
 /**
  * Whether a recents query has been answered by the server in this session. A
  * hydrated snapshot may be stale or empty, so "no rows" only means empty once
@@ -25,7 +21,6 @@ const item = (queryKey: string, ref: RecentEntityRef) => (s: HomeStore) =>
 const docsHome = (tab: DocsHomeTab) => (s: HomeStore) => s.docsHomeMap[tab];
 
 export const homeRecentSelectors = {
-  conversationRecents,
   docsHome,
   isQueryConfirmed,
   item,

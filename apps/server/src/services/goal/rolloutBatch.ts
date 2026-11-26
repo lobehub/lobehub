@@ -323,7 +323,7 @@ export const materializeRolloutBatch = async ({
   const template = await writer.createNode(goalId, {
     createdByAgentId,
     description: recipeOutline,
-    kind: 'finding',
+    kind: 'template',
     scopeId: batch.id,
     title: GOAL_BATCH_TEMPLATE_TITLE,
   });

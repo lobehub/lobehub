@@ -1,4 +1,3 @@
-import { DEFAULT_FILE_EMBEDDING_MODEL_ITEM } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
   type ChatSemanticSearchChunk,
@@ -9,6 +8,7 @@ import {
 import { and, inArray } from 'drizzle-orm';
 import pMap from 'p-map';
 
+import { AgentDocumentModel } from '@/database/models/agentDocuments';
 import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
@@ -17,12 +17,16 @@ import { knowledgeBaseFiles } from '@/database/schemas';
 import { isFileBackedPlaceholder } from '@/database/utils/fileBackedPlaceholder';
 import { readOriginalCharCount } from '@/database/utils/parsedDocument';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
-import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { DocumentService } from '@/server/services/document';
 import { resolveEnterpriseContentScopes } from '@/server/services/enterpriseKnowledge/contentAccess';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
-import { assertContentsNotInRestrictedKnowledgeBase } from '@/server/services/knowledgeBaseAccess';
+import {
+  assertContentsNotInRestrictedKnowledgeBase,
+  type UsableKnowledgeBaseResolver,
+} from '@/server/services/knowledgeBaseAccess';
+
+import { resolveFileEmbeddingModel } from './fileEmbeddingModel';
 
 export interface FileContentResult {
   content: string;
@@ -138,8 +142,11 @@ export class KnowledgeBaseSearchService {
 
     // Path 1: vector search over file chunks
     const vectorPath = async (): Promise<ChatSemanticSearchChunk[]> => {
-      const { model, provider } =
-        getServerDefaultFilesConfig().embeddingModel || DEFAULT_FILE_EMBEDDING_MODEL_ITEM;
+      const { model, provider } = await resolveFileEmbeddingModel(
+        this.serverDB,
+        this.userId,
+        this.workspaceId,
+      );
       const modelRuntime = await initModelRuntimeFromDB(
         this.serverDB,
         this.userId,
@@ -232,7 +239,15 @@ export class KnowledgeBaseSearchService {
     };
   }
 
-  async getFileContents(ids: string[]): Promise<FileContentResult[]> {
+  /**
+   * @param options.resolveUsableKnowledgeBaseIds Only agent tool runtimes pass it, so a
+   *   member's "No access" knowledge base stays readable by the agents it is mounted on while
+   *   direct reads keep the manager-only rule.
+   */
+  async getFileContents(
+    ids: string[],
+    options: { resolveUsableKnowledgeBaseIds?: UsableKnowledgeBaseResolver } = {},
+  ): Promise<FileContentResult[]> {
     await assertContentsNotInRestrictedKnowledgeBase(
       {
         serverDB: this.serverDB,
@@ -240,6 +255,7 @@ export class KnowledgeBaseSearchService {
         workspaceId: this.workspaceId,
       },
       ids,
+      options,
     );
     const scopes = await resolveEnterpriseContentScopes(
       { serverDB: this.serverDB, userId: this.askerId, workspaceId: this.workspaceId },
@@ -278,6 +294,20 @@ export class KnowledgeBaseSearchService {
   }
 
   private async readScopedContents(ids: string[]): Promise<FileContentResult[]> {
+    // A document deleted from every agent it was bound to keeps its row for recovery;
+    // reading it here would hand the removed content straight back. Resolved for the
+    // whole batch up front.
+    const docIds = ids.filter((id) => id.startsWith('docs_'));
+    const deletedAgentDocuments = new Set(
+      docIds.length > 0
+        ? await new AgentDocumentModel(
+            this.serverDB,
+            this.userId,
+            this.workspaceId,
+          ).listRevokedFromAllAgents(docIds)
+        : [],
+    );
+
     return pMap(
       ids,
       async (id) => {
@@ -285,7 +315,7 @@ export class KnowledgeBaseSearchService {
         // KB inline documents (custom/document) have no S3 file.
         if (id.startsWith('docs_')) {
           const doc = await this.documentModel.findById(id);
-          if (!doc) {
+          if (!doc || deletedAgentDocuments.has(id)) {
             return {
               content: '',
               error: 'Document not found',

@@ -45,20 +45,19 @@ import type { AgentTextBlock } from './types';
  *
  * - **Credentials.** The cloud sandbox is handed a user-scoped JWT, and a
  *   desktop client-mode run is handed the app's own sign-in as
- *   `LOBEHUB_JWT_FILE` (older desktops left it to the machine's `lh login`,
- *   which `lh` now names as the fix when it is missing). The
- *   device-dispatch paths (desktop gateway, `lh connect`) put the run's narrow
- *   `hetero-operation` token in `LOBEHUB_JWT`, which `oidcAuth` refuses on every
- *   user-scoped endpoint. `lh topic view` reads through an operation route
- *   instead, as the run's own principal, limited to this conversation and the
- *   ones the user names in it (`topic.getTopicTranscriptOperation`) — so the
- *   most common request needs no other credential. For the rest, `lh` retries
- *   those refusals with the machine's stored login itself when that login is
- *   the same account
- *   (`apps/cli/src/api/operationTokenFallback.ts`), so the guide no longer
- *   teaches the agent to clear the variable — which also borrowed the login of
- *   whoever enrolled a shared workspace device, and was applied to errors it
- *   did not fit.
+ *   `LOBEHUB_JWT_FILE` (older desktops passed none). The device-dispatch
+ *   paths (desktop gateway, `lh connect`) put the run's `hetero-operation`
+ *   token in `LOBEHUB_JWT`. Minted with `caller:act`, it acts as the user who
+ *   started the run, only in the run's workspace, only while the run lasts and
+ *   only within `HETERO_CALLER_SCOPES` (tasks, documents, files, acceptance,
+ *   bot messages, the device list, traces);
+ *   `oidcAuth` refuses a token without it there. `lh topic view` reads through
+ *   an operation route first, as the run's own principal, limited to this
+ *   conversation and the ones the user names in it
+ *   (`topic.getTopicTranscriptOperation`). Inside a run `lh` never uses the
+ *   machine's own login or API key (`getValidToken`, `readCliApiKeyEnv`): on a
+ *   shared workspace device they belong to whoever enrolled it. So the guide
+ *   does not teach the agent to clear the variable or log in.
  * - **`LOBEHUB_AGENT_ID`.** Desktop client mode sets it through
  *   `buildLobeHubSessionEnv`. CLI/Desktop dispatch launchers, including
  *   OpenClaw/Hermes, clear inherited identity and inject the current dispatch's
@@ -79,7 +78,7 @@ export const LOBEHUB_CLI_GUIDE_CONTEXT = 'lobehub-cli-guide';
  * deliberately, says what is not one.
  */
 export const lobeHubCliSkillDescription =
-  "Reach the user's LobeHub — the app this conversation runs in — through the preinstalled `lh` CLI. Use when the request concerns LobeHub itself: its documents, knowledge bases, files, memory, earlier conversations (topic ids start with `tpc_`, or a `<refer_topic>` tag), agents and your own agent configuration, tasks, projects, widgets, bots, models, providers, plugins or skills, or generating images, video or speech there. Not needed for ordinary work on local files or other tools.";
+  "Reach the user's LobeHub — the app this conversation runs in — through the preinstalled `lh` CLI. Use when the request concerns LobeHub itself: its documents, knowledge bases, files, memory, earlier conversations (topic ids start with `tpc_`, or a `<refer_topic>` tag), agents and your own agent configuration, tasks, projects, artboards, widgets, bots, models, providers, plugins or skills, or generating images, video or speech there. Not needed for ordinary work on local files or other tools.";
 
 const lobeHubCliGuideBody = [
   "You are running inside a LobeHub conversation, on a machine where the `lh` CLI is already installed and the run normally carries the user's credentials in its environment. Never install, upgrade or replace `lh` globally — that binary may be the one running `lh connect`, which is executing you — and never run `lh login`.",
@@ -87,10 +86,10 @@ const lobeHubCliGuideBody = [
   '- **When to use it:** only when the user asks for something that lives in LobeHub rather than in this working directory — saving a document, recalling an earlier conversation, generating an image, or changing your own agent configuration. A request about local files, code or another tool does not need `lh`. Say what you did and where it landed.',
   "- **You already know where you are.** `LOBEHUB_TOPIC_ID` (this conversation) and `LOBEHUB_OPERATION_ID` (this run) are in your environment, and `LOBEHUB_AGENT_ID` (you) and `LOBEHUB_WORKSPACE_ID` (the workspace this conversation belongs to, which scopes every `lh` call) are too whenever the run carries them. They are ordinary environment variables, so every sub-shell, script or tool you spawn inherits them. Pass them straight to commands rather than listing agents or topics to find yourself; if the one you need is empty, say so instead of guessing an id. LobeHub topic ids start with `tpc_` — an id in the user's message without that prefix belongs to something else.",
   '- **Earlier conversations:** read one with `lh topic view <id>`. This run can always read its own conversation and the ones the user names in it (a `tpc_…` id or a `<refer_topic>` tag); for any other, ask the user to name it here.',
-  '- **Talking to another conversation:** `lh topic send <tpc_id> -c "…"` delivers a message to that conversation and has its agent act on it (queued behind its current turn if it is busy). To hand work to a fresh conversation instead, `lh topic send --new -c "…"` opens one for you (or `--agent-id` another agent), optionally on a given machine with `--device <id|local>` and named with `--title`; `lh message send -c "…"` is the same thing spelled message-first: without `--topic-id` it opens a new conversation, with `--topic-id <tpc_id>` it sends to that one. Prefer these over `lh agent run` for handing off work. `lh message create` only writes a row — nobody sees or answers it. A message another agent sent you starts with an `<agent_sender>` header; answer it with `lh message reply <message_id> -c "…"`, which wakes the sender\'s conversation. Your ordinary response is not delivered to that agent.',
+  '- **Talking to another conversation:** `lh topic send <tpc_id> -c "…"` delivers a message to that conversation and has its agent act on it (queued behind its current turn if it is busy). To hand work to a fresh conversation instead, `lh topic send --new -c "…"` opens one for you (or `--agent-id` another agent), optionally on a given machine with `--device <id|local>` and named with `--title`; it is linked to this conversation as its parent (`--parent-topic-id <tpc_id>` names another, `--detach` links none), and `lh topic list --opened-by-me` lists the ones you opened; `lh topic stop <tpc_id>` stops a topic\'s running turn and `lh topic archive <tpc_id>` archives it; `lh message send -c "…"` is the same thing spelled message-first: without `--topic-id` it opens a new conversation, with `--topic-id <tpc_id>` it sends to that one. Prefer these over `lh agent run` for handing off work. `lh message create` only writes a row — nobody sees or answers it. A message another agent sent you starts with an `<agent_sender>` header; answer it with `lh message reply <message_id> -c "…"`, which wakes the sender\'s conversation. Your ordinary response is not delivered to that agent.',
   '- **If `lh` is too old** — `lh man` lacks a command you expect, or `lh` reports an unknown command or option — the shell may have found a stale global install first. When `LOBEHUB_CLI` is set it is the path of the CLI this app ships — run that path instead of `lh` for the rest of the session. Otherwise, or if that one is too old as well, run the latest CLI once without installing it: `pnpm --package @lobehub/cli@latest dlx lh …` (or `npx -y -p @lobehub/cli@latest lh …`). It reads the same environment and saved login as `lh`. If the user asks you to run `lh` this way, do so.',
   '- **Look commands up, do not guess them.** `lh man` lists every command, and `lh man <command>` (e.g. `lh man doc create`) prints the manual for the CLI actually installed here, including exactly which flags that command takes. Many commands offer `--json` for structured output, but not all of them — the manual is what says so, and an invented flag just fails the call.',
-  '- **What it reaches:** `lh kb` knowledge bases · `lh doc` documents · `lh file` files · `lh artifact` artifacts · `lh topic` / `lh message` past conversations · `lh agent` agents · `lh task` / `lh project` work · `lh widget` / `lh dashboard` monitoring widgets and dashboards · `lh search` local resources and the web · `lh recall` past messages, topics, goals and pages in a time window · `lh gen` text/image/video/TTS/ASR generation · `lh memory` user memory · `lh notify` notifications to the user · `lh model` / `lh provider` / `lh legacy-plugin` / `lh skill` platform configuration · `lh bot` chat-platform bots.',
+  '- **What it reaches:** `lh kb` knowledge bases · `lh doc` documents · `lh file` files · `lh artifact` artifacts · `lh topic` / `lh message` past conversations · `lh agent` agents · `lh task` / `lh project` work · `lh artboard` the requirement artboard of a project (boards, flows and choices the user answers on the canvas) · `lh widget` / `lh dashboard` monitoring widgets and dashboards · `lh search` local resources and the web · `lh recall` past messages, topics, goals and pages in a time window · `lh gen` text/image/video/TTS/ASR generation · `lh memory` user memory · `lh notify` notifications to the user · `lh model` / `lh provider` / `lh legacy-plugin` / `lh skill` platform configuration · `lh bot` chat-platform bots.',
   "- **Widgets run code with the user's credentials.** Before `lh widget dry-run` of a draft that declares connector credentials (`manifest.env`) or network hosts (`manifest.network.allow`), show the user that version id, what the script does and which credentials and hosts it uses, and wait for their explicit approval of that exact version before passing `--version <id> --yes`. Never publish (`lh widget publish`) without the user's confirmation.",
   '- **If a command fails with an authentication or permission error**, tell the user what you were trying to do — do not work around it.',
   '- **Leave these alone:** `lh hetero` and `lh connect` run the infrastructure that is executing you. And never change the persistent workspace scope with `lh workspace use` — it silently rewrites the target of every later command on this machine.',

@@ -22,6 +22,7 @@ import { messengerActions, messengerSelectors, useMessengerStore } from '@/store
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import AgentSelect from '../AgentSelect';
 import { type MessengerPlatform, PlatformAvatar } from '../constants';
@@ -49,13 +50,13 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   card: css`
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorder};
     border-radius: ${cssVar.borderRadius};
   `,
   emptyRow: css`
     padding-block: 32px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border: 1px dashed ${cssVar.colorBorder};
     border-radius: ${cssVar.borderRadius};
 
@@ -134,7 +135,7 @@ interface DetailLayoutProps {
   hasConnections: boolean;
   headerAction: ReactNode;
   name: string;
-  onBack: () => void;
+  onBack?: () => void;
   platform: MessengerPlatform;
   sectionTitle?: ReactNode;
 }
@@ -154,14 +155,16 @@ export const DetailLayout = memo<DetailLayoutProps>(
 
     return (
       <Flexbox gap={20}>
-        <Flexbox horizontal align="center" gap={8}>
-          <span className={styles.backButton} onClick={onBack}>
-            <Icon icon={ArrowLeftIcon} size="small" />
-          </span>
-          <Text strong style={{ fontSize: 20 }}>
-            {name}
-          </Text>
-        </Flexbox>
+        {onBack && (
+          <Flexbox horizontal align="center" gap={8}>
+            <span className={styles.backButton} onClick={onBack}>
+              <Icon icon={ArrowLeftIcon} size="small" />
+            </span>
+            <Text strong style={{ fontSize: 20 }}>
+              {name}
+            </Text>
+          </Flexbox>
+        )}
 
         <Block className={styles.card}>
           <Flexbox horizontal align="center" gap={16}>

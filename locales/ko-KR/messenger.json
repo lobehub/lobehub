@@ -220,7 +220,6 @@
   "verify.error.generic": "문제가 발생했습니다. 다시 시도하세요.",
   "verify.error.missingToken": "잘못된 링크입니다. 봇에서 이 페이지를 여세요.",
   "verify.error.title": "링크를 확인할 수 없음",
-  "verify.error.unlinkBeforeRelink": "이 LobeHub 계정은 이미 다른 Telegram 계정에 연결되어 있습니다. 새 계정을 연결하기 전에 설정 → 메신저에서 연결을 해제하세요.",
   "verify.signInCta": "계속하려면 로그인",
   "verify.signInRequired": "LobeHub에 로그인하여 링크를 확인하세요.",
   "verify.success.backToLobeHub": "LobeHub으로 돌아가기",

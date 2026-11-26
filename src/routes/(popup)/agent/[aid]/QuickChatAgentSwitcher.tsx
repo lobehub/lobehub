@@ -20,6 +20,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 const VISIBLE_LIMIT = 5;
 const AVATAR_SIZE = 30;
@@ -68,7 +69,7 @@ const styles = stylex.create({
   popover: { padding: '0' },
   popoverContent: { width: '240px', padding: '8px' },
   popoverEmpty: {
-    paddingBlock: '16px',
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
     paddingInline: '8px',
     color: cssVar.colorTextTertiary,
     textAlign: 'center',
@@ -115,7 +116,10 @@ const useSwitchItems = (): SwitchItem[] => {
       title: agentDisplayName(a, 'Untitled'),
     });
 
-    const isAgent = (a: SidebarAgentItem): boolean => a.type === 'agent';
+    // The inbox leads as its own entry (routed by slug), so its list item —
+    // keyed by the real agent id, which the dedup below would miss — is dropped.
+    const isAgent = (a: SidebarAgentItem): boolean =>
+      a.type === 'agent' && a.slug !== INBOX_SESSION_ID;
 
     const merged = [
       inbox,

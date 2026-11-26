@@ -54,7 +54,23 @@ export const resolveInitialTopicMetadata = (params: {
           }
         : undefined;
 
-  return cwdTopicMetadata || sandboxTopicMetadata
-    ? { ...cwdTopicMetadata, ...sandboxTopicMetadata }
+  // The Claude Code permission mode the new-topic chip showed: the server
+  // starts the topic's first run in it.
+  const permissionModeMetadata =
+    callerTopicMetadata?.heteroPermissionMode ||
+    typeof callerTopicMetadata?.heteroPlanMode === 'boolean'
+      ? {
+          ...(callerTopicMetadata.heteroPermissionMode && {
+            heteroPermissionMode: callerTopicMetadata.heteroPermissionMode,
+          }),
+          // The Codex Plan switch the new-topic composer showed; `false` is a pick too.
+          ...(typeof callerTopicMetadata.heteroPlanMode === 'boolean' && {
+            heteroPlanMode: callerTopicMetadata.heteroPlanMode,
+          }),
+        }
+      : undefined;
+
+  return cwdTopicMetadata || sandboxTopicMetadata || permissionModeMetadata
+    ? { ...cwdTopicMetadata, ...sandboxTopicMetadata, ...permissionModeMetadata }
     : undefined;
 };

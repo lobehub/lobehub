@@ -4,7 +4,7 @@ import type { BuiltinToolManifest } from '@lobechat/types';
 import { systemPrompt } from './systemRole';
 import { MessageApiName, MessageToolIdentifier, MESSENGER_PUSH_CONTENT_MAX_LENGTH } from './types';
 
-const platformEnum = ['discord', 'telegram', 'slack', 'feishu', 'lark', 'qq', 'wechat'];
+const platformEnum = ['discord', 'telegram', 'slack', 'feishu', 'lark', 'qq', 'wechat', 'dingtalk'];
 
 /**
  * Shared schema fragment for the outbound `attachments` array on message-
@@ -1069,7 +1069,7 @@ export const MessageManifest: BuiltinToolManifest = {
       },
     },
     {
-      description: `List the platforms where the user can connect the ${BRANDING_NAME} System Bot. Returns \`appId\` / \`botUsername\` when relevant. Use when guiding the user through \`Settings → Messenger\`; browser OAuth and QR setup flows cannot be initiated from this tool.`,
+      description: `List the platforms where the user can connect the ${BRANDING_NAME} System Bot. Returns \`appId\` / \`botUsername\` when relevant. Use when guiding the user through \`Marketplace → Apps\`; browser OAuth and QR setup flows cannot be initiated from this tool.`,
       name: MessageApiName.listMessengerPlatforms,
       parameters: {
         additionalProperties: false,

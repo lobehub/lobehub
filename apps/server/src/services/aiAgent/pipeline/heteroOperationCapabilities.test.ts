@@ -3,12 +3,23 @@ import { describe, expect, it } from 'vitest';
 import { heteroOperationCapabilities } from './heteroOperationCapabilities';
 
 describe('heteroOperationCapabilities', () => {
-  it('grants history reads only to a Channel dispatch', () => {
-    expect(heteroOperationCapabilities('read the discussion', { channel: true })).toContain(
-      'channel:read',
+  it('grants history reads and Channel messaging only to a Channel dispatch', () => {
+    expect(heteroOperationCapabilities('read the discussion', { channel: true })).toEqual(
+      expect.arrayContaining(['channel:read', 'channel:message']),
     );
     expect(heteroOperationCapabilities('read the discussion')).not.toContain('channel:read');
+    expect(heteroOperationCapabilities('read the discussion')).not.toContain('channel:message');
   });
+  it('keeps Channel messaging out of bot, chat, Task and server-started runs', () => {
+    expect(heteroOperationCapabilities('send tj a message', { userTurn: true })).not.toContain(
+      'channel:message',
+    );
+    expect(
+      heteroOperationCapabilities('send tj a message', { taskId: 'task_1', userTurn: true }),
+    ).not.toContain('channel:message');
+    expect(heteroOperationCapabilities('tell the LobeHub agent')).not.toContain('channel:message');
+  });
+
   it('grants goal management to a /goal run', () => {
     expect(heteroOperationCapabilities('/goal ship the report')).toContain('goal:manage');
   });
@@ -41,9 +52,11 @@ describe('heteroOperationCapabilities', () => {
     // Every hetero run used to carry it, so a server-started run (Task, goal
     // planning, wakeups) could drive `lh goal create` and start uncapped work.
     expect(heteroOperationCapabilities('fix the build')).toEqual([
+      'caller:act',
       'hetero:ingest',
       'hetero:finish',
       'hetero:intervention:read',
+      'work:write',
     ]);
     expect(heteroOperationCapabilities(undefined)).not.toContain('goal:manage');
   });
@@ -58,5 +71,30 @@ describe('heteroOperationCapabilities', () => {
 
   it('keeps acceptance evidence out of a run with no Task', () => {
     expect(heteroOperationCapabilities('fix the build', {})).not.toContain('acceptance:evidence');
+  });
+
+  it.each([
+    ['an ordinary run', {}],
+    ['a Task run', { taskId: 'task_1' }],
+    ['a Channel dispatch', { channel: true }],
+    ['a user turn', { userTurn: true }],
+  ])('lets %s register its own Works', (_, options) => {
+    expect(heteroOperationCapabilities('make the deck', options)).toContain('work:write');
+  });
+});
+
+describe('heteroOperationCapabilities for a share visitor', () => {
+  it.each([
+    ['a /goal prompt', '/goal ship the report', { userTurn: true }],
+    ['a task', 'do the step', { taskId: 'task_1', userTurn: true }],
+    ['a channel', 'read the discussion', { channel: true }],
+    ['a chat turn', 'send tj a message', { userTurn: true }],
+  ])('grants only the run callbacks and its own Works for %s', (_, prompt, options) => {
+    expect(heteroOperationCapabilities(prompt, { ...options, shareVisitor: true })).toEqual([
+      'hetero:ingest',
+      'hetero:finish',
+      'hetero:intervention:read',
+      'work:write',
+    ]);
   });
 });
