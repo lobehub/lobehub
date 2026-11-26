@@ -1,16 +1,19 @@
+import type * as McpElicitation from '@lobechat/mcp-elicitation';
 import { SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MCPClient } from './client';
 
 const connect = vi.hoisted(() => vi.fn());
-vi.mock('@modelcontextprotocol/client', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  Client: class {
-    connect = connect;
-    setNotificationHandler = vi.fn();
-  },
-}));
+vi.mock('@lobechat/mcp-elicitation', async (importOriginal) => {
+  const original = await importOriginal<typeof McpElicitation>();
+  return {
+    ...original,
+    McpProtocolClient: class extends original.McpProtocolClient {
+      connect = connect;
+    },
+  };
+});
 
 const httpError = (status: number, message: string) =>
   new SdkHttpError(SdkErrorCode.ClientHttpNotImplemented, message, { status });

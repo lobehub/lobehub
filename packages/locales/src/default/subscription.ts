@@ -45,6 +45,17 @@ export default {
   'billingRecovery.planLocked':
     'Pay the outstanding invoice or cancel this subscription before changing plans.',
   'billingRecovery.title': 'Renewal payment failed',
+  'blackFriday.badge': 'Black Friday deal',
+  'blackFriday.claim': 'Claim offer',
+  'blackFriday.countdown.days': 'Days',
+  'blackFriday.countdown.hours': 'Hrs',
+  'blackFriday.countdown.minutes': 'Min',
+  'blackFriday.countdown.seconds': 'Sec',
+  'blackFriday.notStackable':
+    'Black Friday does not stack with your current discount. This change includes 1 year.',
+  'blackFriday.payOnceTwoYears': '2 years (1 free)',
+  'blackFriday.title': 'Black Friday: Pay for 1 year, get 1 free',
+  'blackFriday.twoYears': '{{total}} / 2 years, then {{total}} yearly',
   'crossPlatform.desc':
     'This subscription was purchased through the mobile app and cannot be modified here. Please manage your subscription on your mobile device.',
   'crossPlatform.manageOnMobile': 'Manage on mobile device',
@@ -113,6 +124,10 @@ export default {
   'discount.maxOff': 'Up to {{percent}}% off',
   'discount.off': '{{percent}}% off',
   'discount.save': 'Save',
+  'limitation.autoNotIncluded.cta': 'Switch to the default model and continue',
+  'limitation.autoNotIncluded.ctaSwitchOnly': 'Switch to the default model',
+  'limitation.autoNotIncluded.desc': "Switch to your plan's default model to keep chatting.",
+  'limitation.autoNotIncluded.title': "Your plan doesn't include Auto Model",
   'limitation.insufficientBudget.rescue.overflow.badge': 'Enough for this',
   'limitation.insufficientBudget.rescue.overflow.benefit':
     'Spend your {{credits}} balance once plan limits run out. No extra cost.',
@@ -132,11 +147,12 @@ export default {
   'limitation.insufficientBudget.rescue.upgrade.benefitUltra': 'Higher Ultra model weekly limit',
   'limitation.insufficientBudget.rescue.upgrade.benefitUltraMultiple':
     '{{multiple}}× the Ultra model weekly limit of your current plan',
+  'limitation.insufficientBudget.rescue.switchToAuto.cta': 'Switch to Auto Model and continue',
   'limitation.insufficientBudget.rescue.switchModel.hint':
-    'Or switch to a standard model to keep chatting.',
+    'Or switch to a Plus model to keep chatting.',
   'limitation.insufficientBudget.rescue.wait.hint': "Or wait for the reset and retry, it's free.",
   'limitation.insufficientBudget.rescue.wait.hintUltra':
-    "Or switch to a standard model to keep chatting, or wait for the reset. It's free.",
+    "Or switch to a Plus model to keep chatting, or wait for the reset. It's free.",
   'limitation.insufficientBudget.window.desc': "You've reached your {{rules}}.",
   'limitation.insufficientBudget.window.duration.days': '{{count}} d',
   'limitation.insufficientBudget.window.duration.hours': '{{count}} h',
@@ -146,6 +162,9 @@ export default {
     "This request needs more than the limit allows, so waiting won't help.",
   'limitation.insufficientBudget.window.resetNow': 'It has just reset, so you can retry now.',
   'limitation.insufficientBudget.window.resetsIn': 'Resets in {{duration}} ({{time}}).',
+  'limitation.insufficientBudget.window.rule.auto5h': 'Auto Model 5-hour limit',
+  'limitation.insufficientBudget.window.rule.auto7d': 'Auto Model weekly limit',
+  'limitation.insufficientBudget.window.rule.autoMonth': 'Auto Model monthly limit',
   'limitation.insufficientBudget.window.rule.overflowMonth': 'monthly balance limit',
   'limitation.insufficientBudget.window.rule.plan5h': '5-hour limit',
   'limitation.insufficientBudget.window.rule.plan7d': 'weekly limit',
@@ -153,8 +172,9 @@ export default {
   'limitation.insufficientBudget.window.rule.planUltraWeek': 'Ultra model weekly limit',
   'limitation.insufficientBudget.window.sentenceSeparator': ' ',
   'limitation.insufficientBudget.window.title': 'Usage limit reached',
+  'limitation.insufficientBudget.window.titleRules': '{{rules}} reached',
   'limitation.modelAccess.switchHint': 'Or switch to another model to keep chatting.',
-  'limitation.modelAccess.switchHintUltra': 'Or switch to a standard model to keep chatting.',
+  'limitation.modelAccess.switchHintUltra': 'Or switch to a Plus model to keep chatting.',
   'modelSelection.confirm.continue': 'Continue using',
   'modelSelection.confirm.description':
     '{{model}} can incur higher usage costs. Review its current rates before continuing.',
@@ -430,6 +450,9 @@ export default {
   'limitation.insufficientBudget.approximateDesc':
     'This request may need more balance. Top up or upgrade your plan.',
   'limitation.insufficientBudget.available': 'Available balance',
+  'limitation.insufficientBudget.auto.hint':
+    'Pick another model from the model menu to keep going.',
+  'limitation.insufficientBudget.auto.title': 'Auto Model quota used up',
   'limitation.insufficientBudget.desc':
     'Your balance is not enough to continue. Top up or upgrade your plan.',
   'limitation.insufficientBudget.estimatedDesc':
@@ -593,12 +616,19 @@ export default {
   'plans.compare.noLimit': 'No limit',
   'plans.compare.none': 'None',
   'plans.compare.notIncluded': 'Not included',
+  'plans.compare.modelUsage': 'AI model service',
+  'plans.compare.modelUsage.available': 'Available',
+  'plans.compare.modelUsage.monthly': 'Up to {{amount}} a month',
+  'plans.compare.modelUsage.tooltip': 'Covers LobeHub-hosted model calls and agent run fees.',
   'plans.compare.monthlySpend': 'Monthly limit',
   'plans.compare.monthlySpend.desc': 'Resets at the start of each billing month',
   'plans.compare.monthlySpend.runs': 'About {{runs}} agent tasks',
   'plans.compare.rolling5hSpend': '5-hour limit',
   'plans.compare.rolling7dSpend': 'Weekly limit',
   'plans.compare.sandboxStorage': 'Cloud sandbox storage',
+  'plans.compare.trialCredit': 'Trial credits',
+  'plans.compare.trialCredit.desc': 'Granted once',
+  'plans.compare.trialCredit.runs': 'About {{runs}} agent tasks',
   'plans.compare.ultraWeeklySpend': 'Ultra model weekly limit',
   'plans.compare.ultraWeeklySpend.desc': 'Counts toward the weekly limit and has its own limit',
   'plans.compare.unlimited': 'Unlimited',
@@ -627,9 +657,10 @@ export default {
   'plans.legacy.banner.canceledDesc':
     'Your subscription is canceled and ends with this billing period. You can upgrade to a current plan anytime to keep going.',
   'plans.legacy.banner.desc':
-    'It keeps its current price. You can upgrade to a higher-tier plan anytime, and what you have used this billing period is on us.',
+    'It keeps its current price. You can upgrade to a higher-tier plan anytime: the confirmation compares your current and new quotas side by side, and what you have used this billing period is on us.',
   'plans.legacy.banner.downgrade': 'Switches to {{plan}} when this billing period ends',
   'plans.legacy.banner.title': 'You are on {{plan}}, a legacy plan',
+  'plans.legacy.banner.viewBenefits': 'View current benefits',
   'plans.legacy.upgradeOnly': 'A legacy plan can only be upgraded to a higher-tier plan',
   'plans.limits.agentMemory.unavailable': 'Agent memory',
   'plans.limits.agentMemory.unlimited': 'Agent memory',
@@ -651,8 +682,22 @@ export default {
   'plans.limits.earlyAccess.unlimited': 'Early access to new features',
   'plans.limits.embeddingVectors': '{{value}} vector entries',
   'plans.limits.fileStorage': '{{value}} file storage',
+  'plans.limits.modelUsage': 'Up to {{amount}} of AI model service a month',
   'plans.limits.monthlyCreditGrant': '{{value}} monthly credit',
   'plans.limits.monthlyCreditGrant.runs': 'About {{runs}} agent tasks a month',
+  'plans.limits.autoMonthlySpend.tooltip':
+    'Auto Model usage across your billing month has its own limit, separate from other models.',
+  'plans.limits.autoRolling5hSpend': 'Auto Model 5-hour limit',
+  'plans.limits.autoRolling5hSpend.multiple':
+    'Auto Model 5-hour limit: {{multiple}}× that of {{plan}}',
+  'plans.limits.autoRolling5hSpend.tooltip':
+    'Auto Model usage within a 5-hour window has its own limit.',
+  'plans.limits.autoRolling5hSpend.unavailable': 'No Auto Model 5-hour limit',
+  'plans.limits.autoRolling7dSpend': 'Auto Model weekly limit',
+  'plans.limits.autoRolling7dSpend.multiple': 'Auto Model weekly limit: {{multiple}}× {{plan}}',
+  'plans.limits.autoRolling7dSpend.tooltip':
+    'Auto Model picks a suitable model for each conversation. Its usage has its own limits and does not count toward the limits of other models.',
+  'plans.limits.autoRolling7dSpend.unavailable': 'Auto Model',
   'plans.limits.monthlySpend.tooltip':
     'Usage across your billing month has a limit too. It resets when the next billing month starts.',
   'plans.limits.rolling5hSpend': '5-hour limit',
@@ -672,6 +717,10 @@ export default {
   'plans.limits.ultraWeeklySpend.tooltip':
     'Ultra models are the most capable and most expensive ones. Their usage counts toward your weekly limit and also has a limit of its own; both reset together.',
   'plans.limits.ultraWeeklySpend.unavailable': 'Ultra models',
+  'plans.message.advancedLLM': 'Premium models',
+  'plans.message.autoLLM': 'Auto Model',
+  'plans.message.normalLLM': 'Standard models',
+  'plans.message.plusLLM': 'Plus models',
   'plans.plan.max.desc': 'For power users running agents at scale',
   'plans.plan.plus.desc': 'For everyday AI use',
   'plans.plan.pro.desc': 'For professionals who rely on AI every day',
@@ -717,10 +766,8 @@ export default {
   'plans.llm.messageRequest': 'Unlimited message requests',
   'plans.llm.title': 'Model service',
   'plans.llm.tooltip': 'Add private model Provider API while enjoying cloud sync',
-  'plans.message.advancedLLM': 'Premium models',
   'plans.message.count': 'Approximately {{number}} messages',
   'plans.message.more': 'More models in plan comparison',
-  'plans.message.normalLLM': 'Standard models',
   'plans.message.tooltip': 'Estimated based on average {{number}} tokens per message',
   'plans.messageChannels.monitoring': 'Message monitoring',
   'plans.messageChannels.title': 'Message channels',
@@ -798,13 +845,16 @@ export default {
   'plansModal.artifactDeploymentLimit.desc':
     'Your Artifact hosting capacity has been reached. Upgrade to increase active deployments and per-site size limits.',
   'plansModal.artifactDeploymentLimit.title': 'Increase Artifact hosting capacity',
+  'plansModal.autoModelAccess.desc':
+    "Auto Model picks a suitable model for each conversation and has a limit of its own. Your legacy plan doesn't include it; upgrade to a new plan to use it.",
+  'plansModal.autoModelAccess.title': 'Auto Model comes with the new plans',
   'plansModal.creditLimit.desc':
     'Upgrade your plan to raise your usage limit and keep working without interruption.',
   'plansModal.creditLimit.title': 'You’ve reached your usage limit',
   'plansModal.default.desc': 'Unlock more capacity and advanced features.',
   'plansModal.default.title': 'Upgrade your plan',
   'plansModal.fileStorageLimit.desc':
-    'Your file storage is full. Upgrade to keep uploading, or delete unused files on the <1>Resources page</1> to free up space.',
+    'Your file storage is full. Upgrade to keep uploading, or delete unused files on the <1>Library page</1> to free up space.',
   'plansModal.fileStorageLimit.title': 'Storage limit reached',
   'plansModal.messengerWechat.desc':
     'The WeChat System Bot is available on paid personal plans. Upgrade to connect and use it.',
@@ -825,7 +875,7 @@ export default {
     'Vector storage is not equal to the original size of your uploaded or imported dataset, but is calculated based on the vectorization of pure text content in your files. For example, a 1-page PDF file (1000-1500 characters) may only take up about 1 vector storage entry when extracted and vectorized into pure text. You can view your usage under "{{usage}}".',
   'qa.list.embeddings.q': 'How is vector storage calculated?',
   'qa.list.free.limit.newA':
-    '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, every registered user gets a free monthly usage limit, ready to use without complex configuration. For more usage, subscribe to {{plus}}, {{pro}} or {{max}}.',
+    '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, every registered user gets one-time free usage, ready to use without complex configuration. For more usage, subscribe to {{plus}}, {{pro}} or {{max}}.',
   'qa.list.free.q': 'Can {{name}} be used for free?',
   'qa.list.limit.newA.balance':
     'Keep going with your balance: top up on the <fundsLink>{{funds}}</fundsLink> page, then turn on "{{overflow}}".',
@@ -1030,10 +1080,15 @@ export default {
   'usage.window.overflow.save': 'Save',
   'usage.window.overflow.spent': '{{spent}} used this month',
   'usage.window.resetsIn': 'Resets in {{duration}}',
+  'usage.window.rule.auto5h': 'Auto Model 5-hour limit',
+  'usage.window.rule.auto7d': 'Auto Model weekly limit',
+  'usage.window.rule.autoMonth': 'Auto Model monthly limit',
+  'usage.window.pool.auto': 'Auto Model',
+  'usage.window.pool.other': 'Other models',
   'usage.window.rule.plan5h': '5-hour limit',
   'usage.window.rule.plan7d': 'Weekly limit',
   'usage.window.rule.agentRunMonth': 'Monthly agent task limit',
-  'usage.window.rule.freeMonth': 'Free monthly limit',
+  'usage.window.rule.freeMonth': 'Trial credits',
   'usage.window.rule.planMonth': 'Monthly limit',
   'creditUsageReminder.exhausted': "This billing cycle's subscription usage has run out",
   'creditUsageReminder.window.exhausted': '{{rule}} reached',
@@ -1050,6 +1105,11 @@ export default {
   'credits.budgetPage.allocate.title': 'Shared allowances',
   'credits.budgetPage.limit.desc': 'Cap what each member and externally shared agents can use.',
   'credits.budgetPage.limit.title': 'Spending limits',
+  'credits.budgetPage.tabs.agentShare': 'Shared agents',
+  'credits.budgetPage.tabs.dedicated': 'Dedicated budgets',
+  'credits.budgetPage.tabs.member': 'Member limits',
+  'credits.budgetPage.tabs.models': 'Model access',
+  'credits.budgetPage.tabs.team': 'Team budgets',
   'plans.usageHero.agentRunCredit.desc': 'Run fees, no model usage',
   'plans.usageHero.agentRunCredit.title': '{{runs}}/mo',
   'plans.usageHero.comparedTo5h': '5-hour limit of {{plan}}',
@@ -1059,10 +1119,17 @@ export default {
   'balance.subscriptionQuotaDesc': 'Subscription usage is spent first, then your balance',
   'cancelPlan.failed': "Couldn't cancel the subscription. Check your connection and try again.",
   'compare.monthlyQuota': 'Monthly usage',
-  'plans.quota.freeLimit': 'Monthly limit, resets every month',
+  'plans.quota.freeLimit': 'One-time trial credits',
   'plans.quota.none': 'No built-in usage',
   'plans.quota.title': 'Usage',
   'creditUsageReminder.used': "{{percent}} of this billing cycle's subscription usage is used",
+  'autoModelNudge.action': 'Switch to Auto Model',
+  'autoModelNudge.desc':
+    'This model uses up your plan limits quickly. Auto Model has its own, more generous limits.',
+  'autoModelNudge.title': 'Try Auto Model for everyday tasks',
+  'modelSwitch.auto.badge': 'Own quota',
+  'modelSwitch.auto.description':
+    'Balanced quality and speed with generous usage quota, ideal for daily tasks',
   'creditUsageReminder.window.used': '{{rule}}: {{percent}} used',
   'credits.agentShareBudget.saveFailed':
     "Couldn't save the Agent Share budget. Check your connection and try again.",
@@ -1070,6 +1137,7 @@ export default {
   'creditsChip.rolling.usageTooltip': 'Plan usage toward the nearest limit',
   'creditsChip.usageTitle': 'Usage',
   'creditsChip.usageTooltip': 'Usage in the current billing cycle',
+  'usage.window.spent': 'Used up',
   'usage.window.used': '{{percent}}% used',
   'credits.autoTopUp.adjust': 'Adjust',
   'credits.autoTopUp.collapse': 'Collapse',
@@ -1180,6 +1248,8 @@ export default {
   'credits.modelPolicy.tiers.desc': 'Each tier includes every model of the tiers below it.',
   'credits.modelPolicy.tiers.empty': 'No models in this tier yet',
   'credits.modelPolicy.tiers.included': 'Included models',
+  'credits.modelPolicy.tiers.showAll': 'Show all · {{count}} more',
+  'credits.modelPolicy.tiers.showLess': 'Show less',
   'credits.modelPolicy.tiers.title': 'Models by tier',
   'credits.modelPolicy.tiers.unavailable': 'Not available',
 };

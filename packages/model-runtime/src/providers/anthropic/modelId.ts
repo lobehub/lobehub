@@ -104,13 +104,23 @@ const inlineToolModels = new Set([
   'claude-mythos-5-2',
 ]);
 
+/**
+ * Matches on the parsed family and version rather than the raw id, so a relay's own
+ * naming still resolves to the model it serves: a namespace the parser does not know
+ * (`<relay>/claude-opus-4-8`) or a trailing backend tag (`anthropic/claude-opus-4-8-aws`).
+ * The route still opts in explicitly through the inline-tools beta header, which is the
+ * operator's statement that this relay accepts the blocks. Bedrock ids stay excluded.
+ */
 export const supportsClaudeInlineToolChanges = (model: string): boolean => {
-  const parsed = parseClaudeModelId(model);
-  return (
-    !!parsed &&
-    parsed.source !== 'bedrock' &&
-    inlineToolModels.has(parsed.normalizedModelId.replace(/-\d{8}$/, '').replaceAll('.', '-'))
-  );
+  const parsed =
+    parseClaudeModelId(model) ?? parseClaudeModelId(model.trim().split('/').at(-1) ?? '');
+  if (!parsed || parsed.source === 'bedrock') return false;
+
+  const version =
+    parsed.minorVersion === undefined
+      ? `${parsed.majorVersion}`
+      : `${parsed.majorVersion}-${parsed.minorVersion}`;
+  return inlineToolModels.has(`claude-${parsed.family}-${version}`);
 };
 
 export const isContextCachingModel = (model: string): boolean => {

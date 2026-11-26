@@ -330,6 +330,17 @@ describe('requiredApiKeyScopeForTrpc', () => {
     });
   });
 
+  it.each(['pending', 'resolve', 'beginProducer', 'producerResult', 'legacyRequest'])(
+    'keeps MCP human interaction %s unavailable to restricted keys',
+    (procedure) => {
+      expect(
+        requiredApiKeyScopeForTrpc(
+          `mcpElicitation.${procedure}`,
+          procedure === 'pending' ? 'query' : 'mutation',
+        ),
+      ).toEqual({ blocked: true });
+    },
+  );
   it('categorizes credential-backed webhook management as blocked for restricted keys', () => {
     for (const [procedure, type] of [
       ['list', 'query'],

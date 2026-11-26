@@ -45,6 +45,56 @@ describe('ChannelRepository.postAgentMessage', () => {
     ]);
   });
 
+  it('stores cards like a published reply, and allows a card-only post', async () => {
+    const { asOwner, channel } = await fixture.createTeamChannel();
+    const secretary = await fixture.addAgent(channel.id, 'Secretary');
+    const surface = {
+      catalogId: 'https://lobehub.com/a2ui/catalog/v1',
+      fallback: 'Inbox · 3 need you',
+      operations: [{ createSurface: { surfaceId: 'inbox' }, version: '1.0' }],
+      surfaceId: 'inbox',
+      version: '1.0',
+    };
+
+    const carded = await asOwner.postAgentMessage(channel.id, {
+      agentId: secretary.agentId!,
+      content: '  Today:  ',
+      metadata: { source: 'agent-inbox' },
+      requestKey: 'carded',
+      surfaces: [surface],
+    });
+    expect(carded).toMatchObject({
+      content: 'Today:\n\n[Card] Inbox · 3 need you',
+      metadata: { source: 'agent-inbox', surfaces: [surface], surfacesBodyLength: 6 },
+    });
+
+    const cardOnly = await asOwner.postAgentMessage(channel.id, {
+      agentId: secretary.agentId!,
+      content: '',
+      requestKey: 'card-only',
+      surfaces: [surface],
+    });
+    expect(cardOnly).toMatchObject({
+      content: '[Card] Inbox · 3 need you',
+      metadata: { surfaces: [surface], surfacesBodyLength: 0 },
+    });
+
+    // The view shows the body and draws the cards.
+    const { messages } = await asOwner.detail(channel.id);
+    expect(messages.find((item) => item.id === carded.id)).toMatchObject({
+      surfaces: [surface],
+      surfacesBodyLength: 6,
+    });
+
+    await expect(
+      asOwner.postAgentMessage(channel.id, {
+        agentId: secretary.agentId!,
+        content: '  ',
+        requestKey: 'empty',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
   it('refuses an Agent that is not an active member, and a caller who is not one', async () => {
     const { asOwner, channel } = await fixture.createTeamChannel();
     const secretary = await fixture.addAgent(channel.id, 'Secretary');

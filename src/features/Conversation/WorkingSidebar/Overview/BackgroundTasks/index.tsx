@@ -32,10 +32,10 @@ interface BackgroundTasksSectionProps {
 const locate = ({ toolCallId }: BackgroundTaskItem) => {
   const state = useChatStore.getState();
   const location = locateToolCall(displayMessageSelectors.mainDisplayChats(state), toolCallId);
-  const scrollToIndex = state.mainConversationScrollToIndex;
-  if (!location || !scrollToIndex) return;
+  const scrollToMessage = state.mainConversationScrollToMessage;
+  if (!location || !scrollToMessage) return;
   requestAnimationFrame(() => {
-    scrollToIndex(location.index, { align: 'center', smooth: true });
+    scrollToMessage(location.elementId, { align: 'center', smooth: true });
     highlightMessageWhenScrollSettles(location.elementId);
   });
 };

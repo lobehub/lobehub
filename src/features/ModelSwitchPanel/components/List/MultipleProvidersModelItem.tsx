@@ -40,7 +40,7 @@ interface MultipleProvidersModelItemProps {
   onBeforeModelSelect?: (modelId: string, providerId: string) => boolean | Promise<boolean>;
   onClose: () => void;
   onModelChange: (modelId: string, providerId: string) => void;
-  onRestrictedModelClick?: () => void;
+  onRestrictedModelClick?: (modelId: string, providerId: string) => void;
 }
 
 export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
@@ -95,8 +95,8 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
             isActive && styles.menuItemActive,
           )}
           onClick={() => {
-            if (defaultProviderRestricted) {
-              onRestrictedModelClick?.();
+            if (defaultProviderRestricted && defaultProvider) {
+              onRestrictedModelClick?.(data.model.id, defaultProvider.id);
               onClose();
               return;
             }
@@ -141,7 +141,7 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
                       key={key}
                       onClick={() => {
                         if (providerRestricted) {
-                          onRestrictedModelClick?.();
+                          onRestrictedModelClick?.(data.model.id, p.id);
                           onClose();
                           return;
                         }

@@ -23,6 +23,7 @@ import { UserModel } from '@/database/models/user';
 import { router } from '@/libs/trpc/lambda';
 import { probeAgentRunRuntimes } from '@/server/services/aiAgent/pipeline/codexDeviceRuntime';
 import { type DeviceAttachment, deviceGateway } from '@/server/services/deviceGateway';
+import { recordDevicesSeen } from '@/server/services/deviceGateway/lastSeen';
 import { filterAuthorizedDevicePresence } from '@/server/services/deviceGateway/scopedDevicePresence';
 
 import { loadAgentDeviceBindings, loadDeviceBoundAgents } from '../deviceBoundAgents';
@@ -409,10 +410,19 @@ export const registryRouter = router({
     // and their ghosts have to be merged first, then ordered as one list.
     // Consumers (settings list, picker) filter this down to a single scope, and
     // filtering preserves order, so one pass serves every surface.
-    return sortDevicesByActivity([
-      ...buildItems(personalRows, personalOnline, 'personal', personalPhases),
-      ...buildItems(workspaceRows, workspaceOnline, 'workspace', workspacePhases),
+    const personalItems = buildItems(personalRows, personalOnline, 'personal', personalPhases);
+    const workspaceItems = buildItems(workspaceRows, workspaceOnline, 'workspace', workspacePhases);
+
+    // Record what each pool's gateway reports online, so an offline row's
+    // `lastSeen` is when it was last alive rather than when it registered.
+    const onlineRegistered = (items: DeviceListItem[]) =>
+      new Set(items.filter((item) => item.registered && item.online).map((item) => item.deviceId));
+    await Promise.all([
+      recordDevicesSeen(ctx.deviceModel, personalRows, onlineRegistered(personalItems)),
+      recordDevicesSeen(ctx.deviceModel, workspaceRows, onlineRegistered(workspaceItems)),
     ]);
+
+    return sortDevicesByActivity([...personalItems, ...workspaceItems]);
   }),
 
   // ─── Tunnel links ───

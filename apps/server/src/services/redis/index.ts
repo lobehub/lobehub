@@ -3,6 +3,7 @@ import { agentDocumentIndex } from './agentDocumentIndex';
 import { agentIdentity } from './agentIdentity';
 import { agentRunSlots } from './agentRunSlots';
 import { agentSignal } from './agentSignal';
+import { agentToolResults } from './agentToolResults';
 import { botDeferred } from './botDeferred';
 import { botReply } from './botReply';
 import { botWake } from './botWake';
@@ -16,6 +17,7 @@ import { linear } from './linear';
 import { openapi } from './openapi';
 import { pageCollab } from './pageCollab';
 import { qqPassive } from './qqPassive';
+import { skillIndex } from './skillIndex';
 import { skillTools } from './skillTools';
 import { steerQueue } from './steerQueue';
 import { taskRunDelivery } from './taskRunDelivery';
@@ -28,6 +30,7 @@ export const redisService = {
   agentDocumentIndex,
   agentIdentity,
   agentRunSlots,
+  agentToolResults,
   agentSignal,
   botDeferred,
   botReply,
@@ -42,6 +45,7 @@ export const redisService = {
   openapi,
   pageCollab,
   qqPassive,
+  skillIndex,
   skillTools,
   steerQueue,
   taskRunDelivery,

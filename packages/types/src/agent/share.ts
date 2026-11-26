@@ -12,12 +12,13 @@ export type AgentShareVisibility = ShareVisibility | 'card';
 export const isLiveAgentShareVisibility = (visibility: string | null | undefined) =>
   visibility === 'link' || visibility === 'card';
 
-/** Where an Agent share grant came from: the owner's card message the grantee added it from. */
-export interface AgentShareGrantSource {
-  channelId: string;
-  messageId: string;
-  type: 'card';
-}
+/**
+ * Where an Agent share grant came from: the owner's card message the grantee added it from, or
+ * the owner approving the grantee's request to use the Agent (`channel_agent_grants` row).
+ */
+export type AgentShareGrantSource =
+  | { channelId: string; messageId: string; type: 'card' }
+  | { channelId: string; grantId: string; type: 'request' };
 
 /** A person the owner granted a `card` share to, for the owner's share settings. */
 export interface AgentShareGrantItem {

@@ -25,6 +25,7 @@ import { projectConversationStage } from './projectConversationStage';
 import { useMarkProjectTopicRead } from './useMarkProjectTopicRead';
 import { useProjectDraftStaging } from './useProjectDraftStaging';
 import { useRevalidateWhileUnlisted } from './useRevalidateWhileUnlisted';
+import { useSyncDraftRoute } from './useSyncDraftRoute';
 
 const loading = (
   <Center height="100%" width="100%">
@@ -58,6 +59,8 @@ export const useProjectConversation = () => {
   const [searchParams] = useSearchParams();
   const draftAgentParam = topicId ? null : searchParams.get('agent');
   const draftDirectoryParam = topicId ? null : searchParams.get('dir');
+  // Auto rides in the route too, so a reloaded draft keeps following the order.
+  const draftAuto = !topicId && searchParams.get('auto') === '1';
   const directoriesRequest = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectRefId);
   const directories = useProjectDirectories(projectRefId);
   const directoryIds = useMemo(() => new Set(directories.map((d) => d.id)), [directories]);
@@ -66,14 +69,18 @@ export const useProjectConversation = () => {
   const draftProjectId = projectConfirmed ? projectRefId : undefined;
   const draft = useMemo<PendingNewTopicDirectory | undefined>(() => {
     if (!draftAgentParam) return;
+    const auto = draftAuto ? { auto: true } : {};
     if (draftDirectoryParam)
       return directoryIds.has(draftDirectoryParam)
-        ? { agentId: draftAgentParam, projectWorkingDirectoryId: draftDirectoryParam }
+        ? { agentId: draftAgentParam, projectWorkingDirectoryId: draftDirectoryParam, ...auto }
         : undefined;
-    return draftProjectId ? { agentId: draftAgentParam, projectId: draftProjectId } : undefined;
-  }, [draftAgentParam, draftDirectoryParam, directoryIds, draftProjectId]);
+    return draftProjectId
+      ? { agentId: draftAgentParam, projectId: draftProjectId, ...auto }
+      : undefined;
+  }, [draftAgentParam, draftAuto, draftDirectoryParam, directoryIds, draftProjectId]);
   const draftAgentId = draft?.agentId;
-  const restageDraft = useProjectDraftStaging(draft, directoryIds);
+  const restageDraft = useProjectDraftStaging(draft, directoryIds, draftProjectId);
+  useSyncDraftRoute({ directoryIds, draft, projectId: draftProjectId });
   const chatAgentId = useChatStore((s) => s.activeAgentId);
   // Keep the conversation on its agent instead of flashing "not found" while
   // the project list catches up with a topic the first send just created.

@@ -7,6 +7,7 @@ import {
   type TaskDetailData,
   type TaskDetailSubtask,
   type TaskDetailWorkspaceNode,
+  type TaskItem,
   type TaskStatus,
   type TaskTopicHandoff,
   type WorkspaceData,
@@ -75,8 +76,12 @@ export class TaskDetailService {
     this.taskTopicModel = new TaskTopicModel(db, userId, workspaceId);
   }
 
-  async getTaskDetail(taskId: string): Promise<TaskDetailData | null> {
-    let task = await this.taskModel.findById(taskId);
+  /**
+   * @param preloaded The task row the caller already read for `taskId` (the
+   * router resolves the reference first), so assembly does not read it again.
+   */
+  async getTaskDetail(taskId: string, preloaded?: TaskItem): Promise<TaskDetailData | null> {
+    let task = preloaded?.id === taskId ? preloaded : await this.taskModel.findById(taskId);
     if (!task) return null;
 
     // Auto-detect heartbeat timeout for running tasks before assembling detail.
@@ -100,6 +105,19 @@ export class TaskDetailService {
     // brief-type activities — the UI converges on Task Run. Briefs are therefore
     // not fetched/enriched here (see the omitted brief spread below). The brief
     // lifecycle, model and data are untouched; revert this to bring them back.
+    //
+    // Every read below hangs off the task row itself or off one read that does
+    // (descendants, dependencies, comments), and each dependent read is chained
+    // onto the one it needs rather than waiting for the whole first batch. The
+    // detail page blocks its first paint on this request and polls it while a
+    // run is in flight, so a strictly staged waterfall here — one round trip
+    // per stage — is what the user waits for. One `Promise.all` awaits every
+    // chain, so none of them can reject unobserved.
+    const extractCtx = { db: this.db, userId: this.userId, workspaceId: this.workspaceId };
+    const descendantsPromise = this.taskModel.findAllDescendants(task.id);
+    const dependenciesPromise = this.taskModel.getDependencies(task.id);
+    const commentsPromise = this.taskModel.getComments(task.id).catch(() => []);
+
     const [
       allDescendants,
       dependencies,
@@ -110,11 +128,16 @@ export class TaskDetailService {
       acceptance,
       goal,
       labels,
+      descendantReads,
+      depTasks,
+      parentTask,
+      taskFileIds,
+      commentFileIdLists,
     ] = await Promise.all([
-      this.taskModel.findAllDescendants(task.id),
-      this.taskModel.getDependencies(task.id),
+      descendantsPromise,
+      dependenciesPromise,
       this.taskTopicModel.findWithHandoff(task.id, TASK_DETAIL_DIRECT_TOPIC_LIMIT).catch(() => []),
-      this.taskModel.getComments(task.id).catch(() => []),
+      commentsPromise,
       this.taskModel.getActivities(task.id, TASK_DETAIL_ACTIVITY_LIMIT).catch(() => []),
       this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
       resolveTaskAcceptance(this.db, this.userId, task.id, this.workspaceId).catch(() => undefined),
@@ -123,7 +146,25 @@ export class TaskDetailService {
         .findGoalByTaskId(task.id)
         .catch(() => undefined),
       new TaskLabelModel(this.db, this.userId, this.workspaceId).getTaskLabels(task.id),
+      descendantsPromise.then((descendants) => this.loadDescendantReads(descendants)),
+      dependenciesPromise.then((deps) =>
+        this.taskModel.findByIds([...new Set(deps.map((d) => d.dependsOnId))]),
+      ),
+      task.parentTaskId ? this.taskModel.findById(task.parentTaskId) : null,
+      // Derive fileIds from persisted editor_data (single source of truth).
+      extractFileIdsFromEditorData(task.editorData, extractCtx),
+      commentsPromise.then((rows) =>
+        pMap(rows, (c) => extractFileIdsFromEditorData(c.editorData, extractCtx), {
+          concurrency: 10,
+        }),
+      ),
     ]);
+    const {
+      descendantDeps: allDescendantDeps,
+      descendantTopics,
+      runningTopics: allDescendantTopics,
+      subtaskAgents,
+    } = descendantReads;
 
     // What the reader is shown, not what was written: a burst of edits to one
     // property by one person folds into a single "from A to C", and a value
@@ -131,14 +172,7 @@ export class TaskDetailService {
     // stay append-only.
     const shownLogs = collapseActivityLog(activityLogs);
 
-    const allDescendantIds = allDescendants.map((s) => s.id);
     const descendantTaskMap = new Map(allDescendants.map((s) => [s.id, s]));
-    const descendantTopics =
-      allDescendantIds.length > 0
-        ? await this.taskTopicModel
-            .findWithHandoffByTaskIds(allDescendantIds, TASK_DETAIL_DESCENDANT_TOPIC_LIMIT)
-            .catch(() => [])
-        : [];
 
     const topics: TaskTopicActivityRow[] = [
       ...directTopics,
@@ -155,37 +189,12 @@ export class TaskDetailService {
       }),
     ];
 
-    // Derive fileIds from persisted editor_data (single source of truth).
-    const extractCtx = { db: this.db, userId: this.userId, workspaceId: this.workspaceId };
-    const [taskFileIds, commentFileIdLists] = await Promise.all([
-      extractFileIdsFromEditorData(task.editorData, extractCtx),
-      pMap(comments, (c) => extractFileIdsFromEditorData(c.editorData, extractCtx), {
-        concurrency: 10,
-      }),
-    ]);
     const commentFileIdsMap: Record<string, string[]> = {};
     comments.forEach((c, i) => {
       const ids = commentFileIdLists[i];
       if (ids.length > 0) commentFileIdsMap[c.id] = ids;
     });
-
     const allFileIds = [...taskFileIds, ...Object.values(commentFileIdsMap).flat()];
-    const allFileMetadata = await resolveAttachmentMetadata({
-      db: this.db,
-      fileIds: allFileIds,
-      userId: this.userId,
-      workspaceId: this.workspaceId,
-    });
-    const fileById = new Map(allFileMetadata.map((f) => [f.id, f]));
-    const taskFiles = taskFileIds.map((id) => fileById.get(id)).filter((f) => !!f);
-
-    const [allDescendantDeps, allDescendantTopics] =
-      allDescendantIds.length > 0
-        ? await Promise.all([
-            this.taskModel.getDependenciesByTaskIds(allDescendantIds).catch(() => []),
-            this.taskTopicModel.findRunningByTaskIds(allDescendantIds).catch(() => []),
-          ])
-        : [[], []];
 
     // Build dependency map for all descendants
     const idToIdentifier = new Map(allDescendants.map((s) => [s.id, s.identifier]));
@@ -208,17 +217,6 @@ export class TaskDetailService {
       childrenMap.get(parentId)!.push(t);
     }
 
-    // Resolve subtask assignee agents in batch so the UI can render avatars
-    // without depending on client-side agent store state.
-    const subtaskAssigneeIds = [
-      ...new Set(
-        allDescendants.map((s) => s.assigneeAgentId).filter((id): id is string => Boolean(id)),
-      ),
-    ];
-    const subtaskAgents =
-      subtaskAssigneeIds.length > 0
-        ? await this.agentModel.getAgentAvatarsByIds(subtaskAssigneeIds)
-        : [];
     const subtaskAgentMap = new Map(subtaskAgents.map((a) => [a.id, a]));
 
     const buildSubtaskTree = (parentId: string): TaskDetailSubtask[] | undefined => {
@@ -272,8 +270,6 @@ export class TaskDetailService {
     const subtasks = buildSubtaskTree(task.id) ?? [];
 
     // Resolve dependency task identifiers
-    const depTaskIds = [...new Set(dependencies.map((d) => d.dependsOnId))];
-    const depTasks = await this.taskModel.findByIds(depTaskIds);
     const depIdToInfo = new Map(
       depTasks.map((t) => [t.id, { identifier: t.identifier, name: t.name }]),
     );
@@ -285,16 +281,13 @@ export class TaskDetailService {
       identifier: string;
       name: string | null;
     } | null = null;
-    if (task.parentTaskId) {
-      const parentTask = await this.taskModel.findById(task.parentTaskId);
-      if (parentTask) {
-        parent = {
-          id: parentTask.id,
-          agentId: parentTask.assigneeAgentId,
-          identifier: parentTask.identifier,
-          name: parentTask.name,
-        };
-      }
+    if (parentTask) {
+      parent = {
+        id: parentTask.id,
+        agentId: parentTask.assigneeAgentId,
+        identifier: parentTask.identifier,
+        name: parentTask.name,
+      };
     }
 
     // Build workspace tree (recursive)
@@ -351,14 +344,27 @@ export class TaskDetailService {
       for (const id of [log.payload?.fromId, log.payload?.toId]) if (id) target.add(id);
     }
 
-    const authorMap = await this.resolveAuthors(agentIds, userIds);
-
-    // Every run row answers "and did it pass?" on its own (with counts). Without this the
-    // activity feed lists rounds that all look alike, and the only way to learn
-    // a round's verdict is to leave for the acceptance page.
-    const verifyByOperation = await new VerifyRunModel(this.db, this.userId, this.workspaceId)
-      .findByOperations(topics.map((t) => t.operationId).filter((id): id is string => Boolean(id)))
-      .catch(() => new Map());
+    // Authors, attachments and run verdicts only need what was read above, so
+    // they share the last round trip instead of taking one each.
+    const [authorMap, allFileMetadata, verifyByOperation] = await Promise.all([
+      this.resolveAuthors(agentIds, userIds),
+      resolveAttachmentMetadata({
+        db: this.db,
+        fileIds: allFileIds,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      }),
+      // Every run row answers "and did it pass?" on its own (with counts). Without this the
+      // activity feed lists rounds that all look alike, and the only way to learn
+      // a round's verdict is to leave for the acceptance page.
+      new VerifyRunModel(this.db, this.userId, this.workspaceId)
+        .findByOperations(
+          topics.map((t) => t.operationId).filter((id): id is string => Boolean(id)),
+        )
+        .catch(() => new Map()),
+    ]);
+    const fileById = new Map(allFileMetadata.map((f) => [f.id, f]));
+    const taskFiles = taskFileIds.map((id) => fileById.get(id)).filter((f) => !!f);
 
     const creatorId = task.createdByAgentId ?? task.createdByUserId;
     const createdActivity: TaskDetailActivity | null =
@@ -546,6 +552,40 @@ export class TaskDetailService {
       workspace: workspaceFolders.length > 0 ? workspaceFolders : undefined,
       workspaceId: task.workspaceId ?? null,
     };
+  }
+
+  /**
+   * Everything the subtask tree and the descendants' run rows need, read in
+   * one round trip once the descendants are known.
+   */
+  private async loadDescendantReads(descendants: TaskItem[]) {
+    if (descendants.length === 0) {
+      return {
+        descendantDeps: [] as Awaited<ReturnType<TaskModel['getDependenciesByTaskIds']>>,
+        descendantTopics: [] as DescendantTaskTopicActivityRow[],
+        runningTopics: [] as Awaited<ReturnType<TaskTopicModel['findRunningByTaskIds']>>,
+        subtaskAgents: [] as Awaited<ReturnType<AgentModel['getAgentAvatarsByIds']>>,
+      };
+    }
+
+    const ids = descendants.map((s) => s.id);
+    // Resolve subtask assignee agents in batch so the UI can render avatars
+    // without depending on client-side agent store state.
+    const assigneeIds = [
+      ...new Set(
+        descendants.map((s) => s.assigneeAgentId).filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const [descendantTopics, descendantDeps, runningTopics, subtaskAgents] = await Promise.all([
+      this.taskTopicModel
+        .findWithHandoffByTaskIds(ids, TASK_DETAIL_DESCENDANT_TOPIC_LIMIT)
+        .catch(() => []),
+      this.taskModel.getDependenciesByTaskIds(ids).catch(() => []),
+      this.taskTopicModel.findRunningByTaskIds(ids).catch(() => []),
+      assigneeIds.length > 0 ? this.agentModel.getAgentAvatarsByIds(assigneeIds) : [],
+    ]);
+
+    return { descendantDeps, descendantTopics, runningTopics, subtaskAgents };
   }
 
   /**

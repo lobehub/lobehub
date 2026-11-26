@@ -1,6 +1,7 @@
 import { hasCallableMcpEndpoint, isMarketplaceInstallRunnable } from '@lobechat/const';
 import { getMcpServerFingerprint, isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
 import type { LobeChatDatabase } from '@lobechat/database';
+import type { McpElicitationCall } from '@lobechat/mcp-elicitation/types';
 import {
   connectorIdentifierCandidates,
   getDisabledPluginIds,
@@ -33,6 +34,7 @@ import {
   isMcpAuthorizationError,
 } from '@/server/services/toolExecution/mcpAuthError';
 
+import type { McpElicitationService } from '../mcp/elicitation/McpElicitationService';
 import { ConnectorLinkSelectionError, resolveLinkedCall } from './links';
 import {
   buildLastSyncedAtMap,
@@ -218,6 +220,7 @@ export const callConnectorToolById = async (
   params: {
     agentId?: string;
     args?: string;
+    elicitation?: McpElicitationCall;
     /** An MCP App view's `tools/call`: only tools visible to the app run. */
     fromApp?: boolean;
     fromEntrypoint?: boolean;
@@ -233,8 +236,17 @@ export const callConnectorToolById = async (
      */
     topicId?: string;
   },
-  ctx: ConnectorExecContext,
+  ctx: ConnectorExecContext & { mcpElicitationService?: McpElicitationService },
 ): Promise<unknown> => {
+  const elicitation = params.elicitation;
+  if (elicitation && ctx.mcpElicitationService) {
+    if (
+      elicitation.identity.identifier !== params.identifier ||
+      elicitation.identity.apiName !== params.toolName
+    )
+      throw new ConnectorToolCallError('FORBIDDEN', 'MCP interaction identity mismatch');
+    await ctx.mcpElicitationService.assertIdentity(elicitation.identity);
+  }
   const [connector] = await resolveConnectorForRun(params, ctx);
   // The agent's configuration names the connector, not the row's tool prefix
   if (
@@ -454,12 +466,13 @@ const resolveCallAccount = async (
 const runConnectorTool = async (
   connector: DecryptedConnector,
   params: ConnectorCallAccount & {
+    elicitation?: McpElicitationCall;
     fromEntrypoint?: boolean;
     /** The caller's `mcp_apps` flag, as the call's checks read it. */
     mcpApps: boolean;
     toolName: string;
   },
-  ctx: ConnectorExecContext,
+  ctx: ConnectorExecContext & { mcpElicitationService?: McpElicitationService },
 ): Promise<unknown> => {
   // A market-hosted stdio server: no session to open, the market's cloud
   // gateway runs the tool by identifier.
@@ -482,8 +495,24 @@ const runConnectorTool = async (
   // A view's call gets its blocks back as they are (`mcpService.callTool`)
   const fileService = params.fromApp ? undefined : ctx.resolveFileService?.();
 
+  const elicitation = params.elicitation;
+  const deadline = elicitation && Math.min(elicitation.deadline, Date.now() + 120_000);
+  const service = ctx.mcpElicitationService;
+  const host =
+    elicitation && service && deadline
+      ? service.createLegacyHost(elicitation.identity, deadline)
+      : undefined;
   try {
     return await mcpService.callTool({
+      ...(host &&
+        deadline && {
+          elicitation: {
+            host,
+            interactive: true,
+            timeoutMs: Math.max(1, deadline - Date.now()),
+            scope: JSON.stringify([service?.userId, service?.workspaceId]),
+          },
+        }),
       argsStr: account.argsStr,
       clientParams: buildConnectorMcpParams(account.fresh),
       fromApp: params.fromApp,

@@ -12,7 +12,7 @@ import {
   toAuvToolOutput,
 } from '@lobechat/device-control/computer-use';
 
-import { CLI_CONFIG_DIR_NAME } from '../constants/identity';
+import { resolveCliDirName } from '../constants/identity';
 
 const execFileAsync = promisify(execFile);
 
@@ -53,7 +53,7 @@ export const resolveComputerUseDevice = async (
 
   return {
     binaryPath,
-    storeRoot: path.join(os.homedir(), CLI_CONFIG_DIR_NAME, 'auv', 'runs'),
+    storeRoot: path.join(os.homedir(), resolveCliDirName(), 'auv', 'runs'),
   };
 };
 

@@ -8,11 +8,11 @@ interface TaskItemSkeletonProps {
 }
 
 const TaskItemSkeleton = memo<TaskItemSkeletonProps>(({ variant = 'default' }) => {
-  const { listRowHeight } = useDensityTokens();
+  const { cardPadding, listRowHeight } = useDensityTokens();
 
   if (variant === 'compact') {
     return (
-      <Block gap={8} padding={12} variant={'borderless'}>
+      <Block gap={8} padding={cardPadding} variant={'borderless'}>
         <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
           <Skeleton height={14} style={{ minWidth: 60 }} width={60} />
           <Skeleton.Avatar shape={'circle'} size={'small'} />

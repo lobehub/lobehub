@@ -619,6 +619,24 @@ export const messageRouter = router({
     .input(messagesByCursorInputSchema)
     .query(({ ctx, input }) => readMessagesByCursor(ctx, input)),
 
+  /**
+   * One older page of a compression group's members, for a reader scrolling
+   * up past the slice its `compressedGroup` node carries. Pass the newest id of
+   * the node's (or the previous page's) `compressedOmittedIds` as `untilId`.
+   */
+  getCompressedGroupMembers: messageProcedure
+    .input(z.object({ groupId: z.string(), topicId: z.string(), untilId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      await assertCanUseTopicTargets(guardCtx(ctx), [input.topicId]);
+
+      const page = await ctx.messageModel.queryCompressedGroupMembers(input, {
+        postProcessUrl: (path, file) =>
+          ctx.fileService.getFileAccessUrl({ id: file.id, url: path }),
+      });
+
+      return { ...page, messages: page.messages.map(omitToolWorkRegistration) };
+    }),
+
   getTopicPreviews: messageProcedure
     .input(topicPreviewsInputSchema)
     .query(({ ctx, input }) => readTopicPreviews(ctx, input)),

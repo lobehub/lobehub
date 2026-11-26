@@ -5,6 +5,7 @@ import {
   BrainCircuit,
   ChartColumnBigIcon,
   ChartPieIcon,
+  CodeXmlIcon,
   CreditCard,
   Database,
   EllipsisIcon,
@@ -22,6 +23,7 @@ import {
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useCodingPlansTab } from '@/business/client/hooks/useCodingPlansTab';
 import { type CellProps } from '@/components/Cell';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { SettingsTabs } from '@/store/global/initialState';
@@ -37,6 +39,7 @@ export enum SettingsGroupKey {
   Agent = 'agent',
   Connection = 'connection',
   General = 'general',
+  Resource = 'resource',
   Subscription = 'subscription',
   System = 'system',
 }
@@ -56,6 +59,7 @@ export const useCategory = (): CategoryGroup[] => {
   const { t } = useTranslation(['setting', 'auth', 'subscription']);
   const { hideDocs, showApiKeyManage, showProvider } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+  const codingPlansTab = useCodingPlansTab();
   // Advanced only holds gateway mode on mobile; without it the page is empty.
   const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
@@ -97,7 +101,7 @@ export const useCategory = (): CategoryGroup[] => {
             key: SettingsTabs.Referral,
             label: t('subscription:tab.referral'),
           }),
-        ]
+        ].filter((item): item is CategoryItem => Boolean(item))
       : [];
 
     const agent: CategoryItem[] = [
@@ -115,6 +119,19 @@ export const useCategory = (): CategoryGroup[] => {
       ENABLE_TOOL_CHANNEL_SETTINGS &&
         makeItem({ icon: Wrench, key: SettingsTabs.Tools, label: t('setting:tab.tools') }),
     ].filter((item): item is CategoryItem => Boolean(item));
+
+    // Runtime, as on desktop: the optional business tab, listed only where its
+    // slot supplies a label (the other Runtime pages have no mobile version).
+    const resource: CategoryItem[] =
+      enableBusinessFeatures && codingPlansTab
+        ? [
+            makeItem({
+              icon: CodeXmlIcon,
+              key: SettingsTabs.CodingPlans,
+              label: codingPlansTab.label,
+            }),
+          ]
+        : [];
 
     const connection: CategoryItem[] = [
       makeItem({ icon: KeyRound, key: SettingsTabs.Creds, label: t('setting:tab.creds') }),
@@ -147,12 +164,14 @@ export const useCategory = (): CategoryGroup[] => {
         title: t('setting:group.subscription'),
       },
       { items: agent, key: SettingsGroupKey.Agent, title: t('setting:group.aiConfig') },
+      { items: resource, key: SettingsGroupKey.Resource, title: t('setting:group.resource') },
       { items: connection, key: SettingsGroupKey.Connection, title: t('setting:group.connection') },
       { items: system, key: SettingsGroupKey.System, title: t('setting:group.systemDeveloper') },
     ].filter((group) => group.items.length > 0);
   }, [
     t,
     enableBusinessFeatures,
+    codingPlansTab,
     hideDocs,
     showApiKeyManage,
     showProvider,

@@ -21,8 +21,15 @@ interface ComposerDraftBusState {
    * after what the user already typed instead of replacing it. A draft with a
    * `target` waits until the conversation has settled on that agent's new
    * topic, so the topic switch that follows a navigation cannot wipe it.
+   * `editorData` (persisted editor JSON) replaces the document when present so
+   * rich formatting round-trips; `text` still syncs `inputMessage`.
    */
-  draft: { append?: boolean; target?: { agentId: string }; text: string } | null;
+  draft: {
+    append?: boolean;
+    editorData?: Record<string, unknown>;
+    target?: { agentId: string };
+    text: string;
+  } | null;
 }
 
 export const useComposerDraftBus = createWithEqualityFn<ComposerDraftBusState>()(() => ({
@@ -49,6 +56,10 @@ export const draftToMainComposer = (
  * Leave a draft for a new topic of `agentId`, for a surface that navigates
  * into that conversation right after posting.
  */
-export const queueDraftForMainComposer = (text: string, target: { agentId: string }) => {
-  useComposerDraftBus.setState({ draft: { target, text } });
+export const queueDraftForMainComposer = (
+  text: string,
+  target: { agentId: string },
+  { append, editorData }: { append?: boolean; editorData?: Record<string, unknown> } = {},
+) => {
+  useComposerDraftBus.setState({ draft: { append, editorData, target, text } });
 };

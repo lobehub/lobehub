@@ -54,7 +54,13 @@ vi.mock('./useChannelMenu', () => ({
   ],
 }));
 
-const cook = { agentId: 'agt_cook', id: 'mem_cook', name: 'Cook', status: 'active' };
+const cook = {
+  agentId: 'agt_cook',
+  canOpenAgent: true,
+  id: 'mem_cook',
+  name: 'Cook',
+  status: 'active',
+};
 const detail = (channel: Record<string, unknown> = {}, member: Record<string, unknown> = {}) =>
   ({
     channel: {
@@ -79,6 +85,24 @@ describe('MemberStatus in a direct conversation', () => {
     expect(menuKeys()).toEqual(['openAgent', 'environment', 'copyId']);
     fireEvent.click(screen.getByText('environment'));
     expect(openEnvironment).toHaveBeenCalledWith('chn_cook', expect.objectContaining(cook));
+  });
+
+  // A workspace colleague's private Agent: the viewer may chat with it, not open its page.
+  it('offers no way to open an Agent the viewer cannot see', () => {
+    render(createElement(MemberStatus, { detail: detail({}, { canOpenAgent: false }) }));
+
+    expect(menuKeys()).toEqual(['environment', 'copyId']);
+  });
+
+  it('leaves no stray divider when the Agent has no actions for the viewer', () => {
+    menus.length = 0;
+    render(
+      createElement(MemberStatus, {
+        detail: detail({ canDelete: false }, { canOpenAgent: false }),
+      }),
+    );
+
+    expect(menus.at(-1)?.[0]).toEqual({ key: 'copyId' });
   });
 
   it('offers no environment setup once the conversation is archived', () => {

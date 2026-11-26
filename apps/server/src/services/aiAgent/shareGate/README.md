@@ -77,6 +77,9 @@ tool does not ship):
   (personal contacts, or the workspace's members and external contacts),
   including people added later; `allowlist` admits only visitors named in
   `deviceAllowUserIds`, and only while they are still in that address book.
+  A listed visitor the owner admitted by approving their request to use the
+  Agent (a live `request` share grant) is admitted outside the book, under
+  either setting, until the grant is revoked.
   `everyone` admits every signed-in visitor holding the link, set only
   after the creator confirms that it reaches strangers; a legacy stored `all`
   stays denied. The explicit creator choice is resolved once per gate by `resolveShareVisitorDeviceAccess` into

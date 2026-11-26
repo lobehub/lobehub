@@ -1,6 +1,6 @@
 'use client';
 
-import { getLobehubSkillProviderById } from '@lobechat/const';
+import { getLobehubSkillProviderById, hasCallableMcpEndpoint } from '@lobechat/const';
 import { agentDisplayName, type ConnectorVisibility } from '@lobechat/types';
 import { Avatar, Button, confirmModal, Markdown, Skeleton, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -14,6 +14,7 @@ import useSWR from 'swr';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { ConnectorDetail, CustomConnectorModal } from '@/features/Connectors';
+import { asLegacyMigrationPlugin } from '@/features/Connectors/legacyMigrationPlugin';
 import { type ConnectorPageId, hasConnectorPage } from '@/features/Integrations/connectorPage';
 import { useSkillConnect } from '@/features/SkillStore/SkillList/LobeHub/useSkillConnect';
 import { usePermission } from '@/hooks/usePermission';
@@ -249,9 +250,14 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete, visibi
   // connector. Such a row has no `user_connectors` entry, so the panel falls
   // into the "no configurable permissions" empty state. We offer to upgrade it
   // in place via the connector migration flow instead of leaving a dead end.
-  const legacyPlugin = useToolStore(pluginSelectors.getCustomPluginById(identifier), isEqual);
-  const canMigrateLegacy =
-    (type === 'mcp-connector' || type === 'plugin') && Boolean(legacyPlugin?.customParams?.mcp);
+  const legacyPluginRow = useToolStore(pluginSelectors.getInstalledPluginById(identifier), isEqual);
+  const legacyPlugin = asLegacyMigrationPlugin(legacyPluginRow);
+  const canMigrateLegacy = (type === 'mcp-connector' || type === 'plugin') && Boolean(legacyPlugin);
+  // `syncPluginTools` can leave an endpointless marketplace connector that only
+  // projects the legacy row's tools. It is not a migrated connector yet, so the
+  // detail must still offer the upgrade instead of Refresh/Uninstall.
+  const isLegacyEndpointlessProjection =
+    canMigrateLegacy && !!connector && !hasCallableMcpEndpoint(connector);
 
   // For lobehub-connector: get the server's tool list from the store
   const lobehubServer = useToolStore(lobehubSkillStoreSelectors.getServerByIdentifier(identifier));
@@ -480,7 +486,7 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete, visibi
     );
   }
 
-  if (noManifest || !connector) {
+  if (noManifest || !connector || isLegacyEndpointlessProjection) {
     return (
       <div {...stylex.props(styles.noPermissions)}>
         <div {...stylex.props(styles.noPermissionsHeader)}>

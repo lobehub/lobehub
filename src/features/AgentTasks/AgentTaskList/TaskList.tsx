@@ -16,7 +16,7 @@ import {
 import * as stylex from '@stylexjs/stylex';
 import { ClipboardCheckIcon, Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Components } from 'react-virtuoso';
 import { Virtuoso } from 'react-virtuoso';
@@ -27,11 +27,12 @@ import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import { COMPLETE_TASK_LIST_MAX_ITEMS } from '@/store/task/slices/list/action';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
-import { useInterfaceDensity } from '@/styles/density';
+import { DENSITY_TOKENS, useInterfaceDensity } from '@/styles/density';
 
 import { createTaskModal } from '../CreateTaskModal';
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
+import AccordionArrowIcon from '../shared/AccordionArrowIcon';
 import {
   getKanbanCreateTaskModalProps,
   getTaskGroupCreateDefaults,
@@ -55,6 +56,7 @@ import type { TaskListGroupEntry, TaskListVirtualItem } from './taskListVirtualM
 import { flattenTaskListEntries } from './taskListVirtualModel';
 import TaskRowIndent from './TaskRowIndent';
 import { useClosestScrollParent } from './useClosestScrollParent';
+import { useTaskListGroupCollapse } from './useTaskListGroupCollapse';
 
 /** Space above a non-first top-level group header; Compact stacks them like Linear. */
 const GROUP_GAP = { compact: 4, loose: 16 } as const;
@@ -66,6 +68,11 @@ export interface TaskListCreateScope {
 }
 
 interface TaskListProps {
+  /**
+   * The view this list renders (`taskListCollapseScopeKey`). Folded groups are
+   * remembered per view, so another tab or page does not inherit them.
+   */
+  collapseScope: string;
   /**
    * Offers a create entry on group headers (like the board's column headers),
    * pinning the group's field on the new task. Omit where creating is not
@@ -133,6 +140,7 @@ const CREATE_ENTRY_GUTTER = 28;
 const renderGroupTitle = (
   group: TaskGroupMeta,
   count: number,
+  fontSize: number,
   sub?: boolean,
   withCreateEntry?: boolean,
 ) => (
@@ -143,8 +151,9 @@ const renderGroupTitle = (
     justify={'space-between'}
     style={withCreateEntry ? { marginInlineEnd: CREATE_ENTRY_GUTTER } : undefined}
   >
-    <TaskGroupLabel group={group} />
-    <Text fontSize={12} type={'secondary'}>
+    <TaskGroupLabel listHeader group={group} />
+    {/* Same size as the title, muted by color only (like Linear). */}
+    <Text fontSize={fontSize} type={'secondary'}>
       {count}
     </Text>
     {sub ? <Divider style={{ borderColor: cssVar.colorBorder, flex: 1 }} /> : <Flexbox flex={1} />}
@@ -163,6 +172,7 @@ const TaskGroupHeader = memo<{
 }>(({ createScope, item, onToggle }) => {
   const { t } = useTranslation('chat');
   const density = useInterfaceDensity();
+  const { fontSize } = DENSITY_TOKENS[density];
   const sub = item.kind === 'subGroup';
   const createDefaults = !createScope
     ? undefined
@@ -177,16 +187,27 @@ const TaskGroupHeader = memo<{
   return (
     <div style={{ paddingTop: item.first ? 0 : sub ? 6 : GROUP_GAP[density] }}>
       <div {...stylex.props(styles.header)}>
+        {/* The built-in chevron is hidden for the small filled triangle the task
+            detail sections and the sidebar use (like Linear). */}
         <AccordionRoot
-          indicatorPlacement={'start'}
+          hideIndicator
           value={item.collapsed ? [] : [item.key]}
           variant={sub ? 'borderless' : 'filled'}
           onValueChange={() => onToggle(item.key)}
         >
           <AccordionItem value={item.key}>
             <AccordionHeader>
-              <AccordionTrigger style={{ paddingBlock: sub ? 6 : 8, paddingInline: 14 }}>
-                {renderGroupTitle(item.meta, item.count, sub, !!createDefaults)}
+              <AccordionTrigger style={{ paddingBlock: sub ? 6 : 8, paddingInline: 10 }}>
+                <Flexbox horizontal align={'center'} flex={1} gap={6}>
+                  <AccordionArrowIcon
+                    isOpen={!item.collapsed}
+                    size={16}
+                    style={{ color: cssVar.colorTextDescription }}
+                  />
+                  <Flexbox flex={1}>
+                    {renderGroupTitle(item.meta, item.count, fontSize, sub, !!createDefaults)}
+                  </Flexbox>
+                </Flexbox>
               </AccordionTrigger>
             </AccordionHeader>
           </AccordionItem>
@@ -223,6 +244,7 @@ const VIRTUAL_LIST_COMPONENTS: Components<TaskListVirtualItem, TaskListVirtualCo
 
 const TaskList = memo<TaskListProps>((props) => {
   const {
+    collapseScope,
     createScope,
     data,
     error,
@@ -311,16 +333,14 @@ const TaskList = memo<TaskListProps>((props) => {
 
   // Collapse state lives here (not in the Accordion) because headers and rows
   // are flattened into one virtual list; a collapsed key simply drops its rows
-  // from that list. Keys survive a re-group only when the group keys do.
-  const [collapsedKeys, setCollapsedKeys] = useState<ReadonlySet<string>>(() => new Set());
-  const toggleCollapsed = useCallback((key: string) => {
-    setCollapsedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }, []);
+  // from that list. It is persisted per view and grouping, so a folded group
+  // stays folded across navigation and reloads, and comes back when its
+  // grouping does.
+  const { collapsedKeys, toggleCollapsed } = useTaskListGroupCollapse(
+    collapseScope,
+    groupBy,
+    effectiveSubGroupBy,
+  );
 
   // Selectable rows in display order, collapsed groups included (⌘A selects
   // every task the current view shows, not only the expanded ones). Grey

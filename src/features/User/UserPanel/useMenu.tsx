@@ -68,9 +68,9 @@ export const useMenu = () => {
       icon: <Icon icon={Settings2} />,
       key: 'setting',
       label: <NewVersionBadge showBadge={hasNewVersion}>{t('userPanel.setting')}</NewVersionBadge>,
-      // Lands on account settings, under the active space's prefix so a
-      // workspace stays active; the sidebar card switches to the space's own.
-      onClick: () => navigate('/settings/profile'),
+      // Lands on the active space's own settings (a workspace's General, the
+      // personal space's first tab); the sidebar card opens account settings.
+      onClick: () => navigate('/settings'),
     },
     ...(userPanel.showMemory
       ? [

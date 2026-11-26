@@ -133,10 +133,28 @@ export default {
   'document_mentioned_title': 'You were mentioned in a document',
   'document_liked': '{{actorLabel}} liked your document "{{documentTitle}}".',
   'document_liked_title': 'Someone liked your document',
-  'subscription_one_time_expired':
-    'Your one-time {{plan}} plan has ended and your account is now on the Free plan. Renew {{plan}} to get your benefits back.',
   'subscription_one_time_expired_action': 'Renew {{plan}}',
+  'subscription_one_time_expired_detail':
+    'Your one-time {{plan}} plan has ended and your account is now on the Free plan, with lower usage limits and {{freeStorage}} of file storage instead of {{planStorage}}. Renew {{plan}} to get your benefits back.',
+  'subscription_one_time_expired_discontinued':
+    'Your one-time {{plan}} plan has ended and your account is now on the Free plan, with lower usage limits and {{freeStorage}} of file storage instead of {{planStorage}}. {{plan}} is no longer offered; see the plans page for the plans on sale.',
+  'subscription_one_time_expired_discontinued_action': 'View plans',
+  'subscription_one_time_expired_discontinued_title': 'Your {{plan}} plan has ended',
+  'subscription_one_time_expiring_discontinued':
+    'When your one-time {{plan}} plan ends, your account moves to the Free plan, with lower usage limits and {{freeStorage}} of file storage instead of {{planStorage}}. {{plan}} is no longer offered; once it ends, see the plans page for the plans on sale.',
+  'subscription_one_time_expired_legacy':
+    'Your one-time {{plan}} plan has ended and your account is now on the Free plan, with lower usage limits and {{freeStorage}} of file storage instead of {{planStorage}}. {{plan}} is no longer offered; {{successor}} is the plan that replaces it.',
+  'subscription_one_time_expired_legacy_action': 'View {{successor}}',
+  'subscription_one_time_expired_legacy_title': 'Your {{plan}} plan has ended',
   'subscription_one_time_expired_title': 'Your {{plan}} plan has ended',
+  'subscription_one_time_expiring':
+    'When your one-time {{plan}} plan ends, your account moves to the Free plan, with lower usage limits and {{freeStorage}} of file storage instead of {{planStorage}}. Renew {{plan}} on the plans page once it ends to get these benefits back.',
+  'subscription_one_time_expiring_action': 'View plans',
+  'subscription_one_time_expiring_final_action': 'View plans',
+  'subscription_one_time_expiring_final_title': 'Your {{plan}} plan ends within 24 hours',
+  'subscription_one_time_expiring_legacy':
+    'When your one-time {{plan}} plan ends, your account moves to the Free plan, with lower usage limits and {{freeStorage}} of file storage instead of {{planStorage}}. {{plan}} is no longer offered; once it ends, {{successor}} is the plan that replaces it.',
+  'subscription_one_time_expiring_title': 'Your {{plan}} plan ends in {{days}} days',
   'subscription_payment_failed':
     'Your subscription renewal payment failed. Please update your payment method to keep your subscription active.',
   'subscription_payment_failed_action': 'Update payment method',

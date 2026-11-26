@@ -136,7 +136,12 @@ const methodFor = (att: BotMessageAttachment): TelegramMediaMethod => {
 const dispatch = async (
   api: TelegramApi,
   method: TelegramMediaMethod,
-  params: { caption?: string; chatId: string | number; source: TelegramMediaSource },
+  params: {
+    caption?: string;
+    chatId: string | number;
+    messageThreadId?: number;
+    source: TelegramMediaSource;
+  },
 ): Promise<void> => {
   switch (method) {
     case 'sendPhoto': {
@@ -166,13 +171,18 @@ const dispatch = async (
  *
  * Callers use `delivered === 0` to decide whether to fall back to a plain
  * `sendMessage` for the text leg.
+ *
+ * `messageThreadId` keeps every item inside the forum topic the conversation
+ * lives in; without it Telegram posts to the General topic.
  */
 export const sendTelegramAttachments = async (
   api: TelegramApi,
   chatId: string | number,
   attachments: BotMessageAttachment[],
   caption?: string,
+  messageThreadId?: number,
 ): Promise<AttachmentSendResult> => {
+  const topic = typeof messageThreadId === 'number' ? { messageThreadId } : {};
   let delivered = 0;
   const failures: AttachmentFailure[] = [];
   const fail = (att: BotMessageAttachment, reason: AttachmentFailure['reason'], detail?: string) =>
@@ -191,7 +201,7 @@ export const sendTelegramAttachments = async (
     const method = methodFor(att);
     let firstError: unknown;
     try {
-      await dispatch(api, method, { caption: attemptCaption, chatId, source });
+      await dispatch(api, method, { caption: attemptCaption, chatId, source, ...topic });
       delivered += 1;
       continue;
     } catch (error) {
@@ -221,7 +231,12 @@ export const sendTelegramAttachments = async (
       continue;
     }
     try {
-      await api.sendDocument({ caption: attemptCaption, chatId, source: bytes.source });
+      await api.sendDocument({
+        caption: attemptCaption,
+        chatId,
+        source: bytes.source,
+        ...topic,
+      });
       delivered += 1;
     } catch (error) {
       log('sendTelegramAttachments: document fallback failed for "%s": %O', att.name, error);

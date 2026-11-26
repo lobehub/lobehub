@@ -3,7 +3,7 @@ import {
   AGENT_SHARE_DEVICE_ALLOW_USERS_LIMIT,
 } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import pMap from 'p-map';
 import { z } from 'zod';
 
@@ -17,12 +17,13 @@ import { AgentShareProfileModel } from '@/database/models/agentShareProfile';
 import { FileModel } from '@/database/models/file';
 import { RbacModel } from '@/database/models/rbac';
 import { TopicModel } from '@/database/models/topic';
-import { agents } from '@/database/schemas';
+import { agents, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentService } from '@/server/services/agent';
 import { listShareGrantableSkills } from '@/server/services/agentShare/grantableSkills';
+import { buildSharedAgentData } from '@/server/services/agentShare/sharedAgentData';
 import { isChannelEnabled } from '@/server/services/channel/featureGate';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
@@ -361,6 +362,24 @@ export const agentShareRouter = router({
   }),
 
   /**
+   * The visitor landing page as its settings preview shows it. Authorized as a
+   * share manager rather than through `share.getSharedAgent`: that visitor read
+   * treats only the Agent's creator as the owner, so a Workspace manager
+   * previewing a colleague's Agent would count a page view on a link share and
+   * be refused on a paused one. A preview never counts a view.
+   */
+  getProfilePreview: agentShareProcedure.input(agentIdInput).query(async ({ input, ctx }) => {
+    await assertCanManageAgentShare(ctx, input.agentId);
+    const status = await ctx.agentShareModel.getByAgentId(input.agentId);
+    const share = status && (await AgentShareModel.findByShareId(ctx.serverDB, status.id));
+    if (!share) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent share not found' });
+    }
+
+    return buildSharedAgentData(ctx.serverDB, share, { isOwner: share.ownerId === ctx.userId });
+  }),
+
+  /**
    * Administrator emergency stop for any share in the active Workspace,
    * including private Agents the administrator cannot otherwise configure.
    */
@@ -459,13 +478,35 @@ export const agentShareRouter = router({
       const { book, enabled } = await shareAddressBook(ctx, input.agentId);
       const people = enabled ? await book.listAddressBookPeople() : [];
       const inBook = new Set(people.map((person) => person.id));
-      const unlisted = await pMap(
-        (share.shareConfig.deviceAllowUserIds ?? []).filter((id) => !inBook.has(id)),
-        (id) => book.findUser(id),
-        { concurrency: 5 },
+      const outside = (share.shareConfig.deviceAllowUserIds ?? []).filter((id) => !inBook.has(id));
+      // Approved by request: authorized outside the book, so listed as people, not as unlisted.
+      const approvedIds = new Set(
+        await AgentShareModel.requestGrantedUserIds(ctx.serverDB, share.id, outside),
       );
+      const [unlisted, approved] = await Promise.all([
+        pMap(
+          outside.filter((id) => !approvedIds.has(id)),
+          (id) => book.findUser(id),
+          { concurrency: 5 },
+        ),
+        approvedIds.size
+          ? ctx.serverDB
+              .select({
+                avatar: users.avatar,
+                fullName: users.fullName,
+                id: users.id,
+                username: users.username,
+              })
+              .from(users)
+              .where(inArray(users.id, [...approvedIds]))
+          : [],
+      ]);
 
-      return { enabled, people, unlisted: unlisted.filter((user) => !!user) };
+      return {
+        enabled,
+        people: [...people, ...approved],
+        unlisted: unlisted.filter((user) => !!user),
+      };
     }),
 
   updateShareConfig: agentShareProcedure
@@ -497,7 +538,16 @@ export const agentShareRouter = router({
         const inBook = new Set(
           deviceAllowUserIds?.length ? await book.filterAddressBookPeople(deviceAllowUserIds) : [],
         );
-        if (deviceAllowUserIds?.some((id) => !inBook.has(id)))
+        // People the owner let in by approving their request to use the Agent stay listable
+        // outside the book: their request grant admits them (`resolveShareVisitorDeviceAccess`).
+        const outside = deviceAllowUserIds?.filter((id) => !inBook.has(id)) ?? [];
+        const share = outside.length
+          ? await ctx.agentShareModel.getByAgentId(input.agentId)
+          : undefined;
+        const approved = new Set(
+          share ? await AgentShareModel.requestGrantedUserIds(ctx.serverDB, share.id, outside) : [],
+        );
+        if (outside.some((id) => !approved.has(id)))
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: 'Device access can only be granted to people in your contacts',

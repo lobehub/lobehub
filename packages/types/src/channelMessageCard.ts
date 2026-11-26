@@ -1,3 +1,6 @@
+import { surfacesToText, toSurfaceRecords } from '@lobehub/a2ui/records';
+import type { A2uiSurfaceRecord } from '@lobehub/a2ui/types';
+
 import type { ChannelMemberGrantStatus, ChannelMessageMetadata } from './channel';
 
 /**
@@ -146,4 +149,54 @@ export interface ChannelConnectorRequestResult {
   messageId: string;
   name: string;
   source: ChannelConnectorSource;
+}
+
+/**
+ * A card an Agent drew in its reply, stored in `metadata.surfaces` and drawn by `@lobehub/a2ui`:
+ * its stored record, with `state` set once a person acted on it.
+ */
+export type ChannelMessageSurface = A2uiSurfaceRecord;
+
+/** `metadata.surfaces` of an Agent's reply, keeping only well-formed entries. */
+export const channelMessageSurfaces = (
+  metadata: ChannelMessageMetadata | null | undefined,
+): ChannelMessageSurface[] => toSurfaceRecords(metadata?.surfaces);
+
+/** A reply's cards as text, for where cards can't be drawn: history an Agent reads, previews. */
+export const channelSurfacesText = (surfaces: ChannelMessageSurface[]) => surfacesToText(surfaces);
+
+/**
+ * A message the running Agent posts as itself (`lobe-channel.postMessage`): on the main timeline
+ * or a Thread of its current Channel, or of another Channel where it is an active member.
+ */
+export interface ChannelPostMessageParams {
+  /** Another Channel the Agent is a member of; omit for the Channel it is answering in. */
+  channelId?: string;
+  /** The post's own words; may be empty when it carries cards. */
+  content?: string;
+  /**
+   * Carry the cards this run drew (`lobe-a2ui.renderUI`) and has not posted yet. Default true;
+   * false posts none.
+   */
+  includeCards?: boolean;
+  /**
+   * The cards to carry instead, by `surfaceId`: each one's latest drawing, even one already posted.
+   */
+  surfaceIds?: string[];
+  /** A Thread of that Channel; omit for its main timeline. */
+  threadId?: string;
+}
+
+/** Where a `postMessage` landed. */
+export interface ChannelPostedMessage {
+  /** How many cards went out with it. */
+  cards: number;
+  channelId: string;
+  channelTitle: string;
+  messageId: string;
+  /** The cards it carried; neither a later post nor the run's own answer carries them again. */
+  surfaceIds?: string[];
+  /** The Thread it is in; null on the main timeline. */
+  threadId: string | null;
+  url: string;
 }

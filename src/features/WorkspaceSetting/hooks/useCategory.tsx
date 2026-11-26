@@ -8,6 +8,7 @@ import {
   Building2,
   ChartColumnBigIcon,
   ChartPieIcon,
+  CodeXmlIcon,
   Coins,
   ContainerIcon,
   CreditCard,
@@ -38,6 +39,7 @@ import {
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useCodingPlansTab } from '@/business/client/hooks/useCodingPlansTab';
 import { type SettingsScope } from '@/features/SettingsSwitch/settingsScope';
 import { usePermission } from '@/hooks/usePermission';
 import { useElectronStore } from '@/store/electron';
@@ -108,6 +110,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   const { hideDocs } = useServerConfigStore(featureFlagsSelectors);
   const enableWebhook = useServerConfigStore(serverConfigSelectors.enableWebhook);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+  const codingPlansTab = useCodingPlansTab();
   const [avatar, username] = useUserStore((s) => [
     userProfileSelectors.userAvatar(s),
     userProfileSelectors.nickName(s),
@@ -280,6 +283,42 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           scope: 'space',
           title: t('workspaceSetting.group.agent'),
         },
+        // What the workspace's agents run on and spend: machines, coding-agent
+        // subscriptions, code environments and the drive. Each item keeps its
+        // own gate; the group only puts the shared capacity in one place.
+        {
+          items: [
+            {
+              icon: MonitorSmartphoneIcon,
+              key: WorkspaceSettingsTabs.Devices,
+              label: t('tab.devices'),
+            },
+            // The coding-agent accounts are shared capacity every agent routes
+            // onto, so taking one in or out of rotation is an admin decision.
+            canManageWorkspace && {
+              icon: GaugeIcon,
+              key: WorkspaceSettingsTabs.SubscriptionAccounts,
+              label: t('tab.subscriptionAccounts'),
+            },
+            // An optional business tab: listed only where its slot supplies a label.
+            codingPlansTab && {
+              icon: CodeXmlIcon,
+              key: WorkspaceSettingsTabs.CodingPlans,
+              label: codingPlansTab.label,
+            },
+            // Environments & Vault, always there: what a run starts from and
+            // the secrets it reads, in one place. An environment is a definition,
+            // written down before anything runs it, so it needs no drive.
+            {
+              icon: ContainerIcon,
+              key: WorkspaceSettingsTabs.Environments,
+              label: t('tab.environmentsAndCreds'),
+            },
+          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
+          key: WorkspaceSettingsGroupKey.Resource,
+          scope: 'space',
+          title: t('group.resource'),
+        },
         enableWebhook && {
           items: [
             // Every member sees the workspace's event subscriptions, so it is
@@ -299,36 +338,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           key: WorkspaceSettingsGroupKey.Connection,
           scope: 'space',
           title: t('group.connection'),
-        },
-        // What the workspace's agents run on and spend: machines, coding-agent
-        // subscriptions, code environments and the drive. Each item keeps its
-        // own gate; the group only puts the shared capacity in one place.
-        {
-          items: [
-            {
-              icon: MonitorSmartphoneIcon,
-              key: WorkspaceSettingsTabs.Devices,
-              label: t('tab.devices'),
-            },
-            // The coding-agent accounts are shared capacity every agent routes
-            // onto, so taking one in or out of rotation is an admin decision.
-            canManageWorkspace && {
-              icon: GaugeIcon,
-              key: WorkspaceSettingsTabs.SubscriptionAccounts,
-              label: t('tab.subscriptionAccounts'),
-            },
-            // Environments & Vault, always there: what a run starts from and
-            // the secrets it reads, in one place. An environment is a definition,
-            // written down before anything runs it, so it needs no drive.
-            {
-              icon: ContainerIcon,
-              key: WorkspaceSettingsTabs.Environments,
-              label: t('tab.environmentsAndCreds'),
-            },
-          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
-          key: WorkspaceSettingsGroupKey.Resource,
-          scope: 'space',
-          title: t('group.resource'),
         },
         // The Admin group is available to Admin and Owner.
         canManageWorkspace && {
@@ -423,6 +432,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
       hideDocs,
       enableWebhook,
       enableBusinessFeatures,
+      codingPlansTab,
       avatarUrl,
       username,
     ],

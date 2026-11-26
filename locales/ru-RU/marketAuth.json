@@ -27,6 +27,7 @@
   "claimResources.claim": "Получить выбранное",
   "claimResources.description": "Мы нашли ресурсы, связанные с вашим аккаунтом, которые вы можете получить:",
   "claimResources.error": "Не удалось получить ресурсы. Пожалуйста, попробуйте снова.",
+  "claimResources.failedRetry": "Не удалось получить эти ресурсы. Проверьте сеть и попробуйте снова.",
   "claimResources.mcpSection": "Серверы MCP",
   "claimResources.selectedCount": "{{count}} элемент(ов) выбран",
   "claimResources.skillSection": "Навыки",

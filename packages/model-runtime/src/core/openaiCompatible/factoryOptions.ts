@@ -216,6 +216,8 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
       baseURL?: string;
       /** Upstream model id, after `modelIdMapping`. */
       model: string;
+      /** Options the runtime was constructed with, including per-channel overrides. */
+      options: ConstructorOptions<T>;
     }) => ResponsesToolAnchoringMode | undefined;
   };
   videoGenerationCapabilities?:

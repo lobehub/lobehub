@@ -1,5 +1,6 @@
 import { type LobeToolManifest } from '@lobechat/context-engine';
 import { type LobeChatDatabase } from '@lobechat/database';
+import type { McpElicitationContinuation } from '@lobechat/mcp-elicitation';
 import {
   type AgentShareVisitorContext,
   type CancelVirtualSubAgentResult,
@@ -163,6 +164,7 @@ export interface ServerAgentMemberRunner {
 }
 
 export interface ToolExecutionContext {
+  abortSignal?: AbortSignal;
   /**
    * Skills activated so far in the conversation (activateSkill /
    * activateTools tool results), extracted by the runtime executors from the
@@ -319,6 +321,7 @@ export interface ToolExecutionContext {
    * {@link localSandbox}.
    */
   localSandboxNetwork?: boolean;
+  mcpContinuation?: McpElicitationContinuation;
   memoryEffort?: string;
   memoryEmbeddingRuntime?: ToolExecutionMemoryEmbeddingRuntime;
   /** Memory tool permission from agent chat config */
@@ -375,6 +378,12 @@ export interface ToolExecutionContext {
   taskId?: string;
   /** Current thread ID for thread-scoped conversations */
   threadId?: string | null;
+  /**
+   * Todo-mutating calls made right before this one with no other tool call in
+   * between, counted by the runtime executors. The lobe-agent todo APIs pause
+   * once it reaches their limit.
+   */
+  todoCallStreak?: number;
   /** Stable LLM tool call ID for structured tool outcome identity. */
   toolCallId?: string;
   toolManifestMap: Record<string, LobeToolManifest>;

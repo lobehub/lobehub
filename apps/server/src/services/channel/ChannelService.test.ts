@@ -5,6 +5,8 @@ import { ChannelService } from './ChannelService';
 
 const {
   archiveThread,
+  createNamedThread,
+  write,
   onThreadArchived,
   remove,
   removeThread,
@@ -16,6 +18,8 @@ const {
   routing,
 } = vi.hoisted(() => ({
   archiveThread: vi.fn(),
+  createNamedThread: vi.fn(),
+  write: vi.fn(),
   onThreadArchived: vi.fn(),
   remove: vi.fn(),
   send: vi.fn(),
@@ -30,11 +34,13 @@ vi.mock('@/database/repositories/channel', async (original) => ({
   ...(await original<object>()),
   ChannelRepository: class {
     archiveThread = archiveThread;
+    write = write;
     remove = remove;
     send = send;
     removeThread = removeThread;
   },
 }));
+vi.mock('@/database/repositories/channel/namedThread', () => ({ createNamedThread }));
 vi.mock('@/database/models/device', () => ({ DeviceModel: class {} }));
 vi.mock('@/server/services/agent', () => ({ AgentService: class {} }));
 vi.mock('@/server/services/file', () => ({ FileService: class {} }));
@@ -45,6 +51,33 @@ vi.mock('./notify', () => ({ notifyChannel: notify }));
 vi.mock('./routingConfig', () => ({ resolveChannelRoutingConfig: routing }));
 vi.mock('./queue', () => ({ wakeChannel: wake }));
 vi.mock('@/business/server/channel/onThreadArchived', () => ({ onThreadArchived }));
+
+describe('Channel named thread', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    notify.mockResolvedValue(undefined);
+  });
+  const service = () => new ChannelService({} as never, 'owner', 'workspace');
+
+  it('refreshes members without waking any Agent', async () => {
+    write.mockImplementation((_channelId, run, options) => {
+      expect(options).toEqual({ joinOpen: true });
+      return run('tx', 'access');
+    });
+    createNamedThread.mockResolvedValue({ id: 'thread' });
+    await expect(
+      service().createThread('channel', { requestKey: 'key', title: 'Name' }),
+    ).resolves.toEqual({ id: 'thread' });
+    expect(createNamedThread).toHaveBeenCalledWith(
+      'tx',
+      'access',
+      { requestKey: 'key', title: 'Name' },
+      expect.anything(),
+    );
+    expect(notify).toHaveBeenCalled();
+    expect(wake).not.toHaveBeenCalled();
+  });
+});
 
 describe('Channel thread archive', () => {
   beforeEach(() => {

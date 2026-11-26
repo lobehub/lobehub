@@ -1,6 +1,7 @@
 import type { BuiltinInterventionProps } from '@lobechat/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import type { AskUserPrimaryAction } from './draft';
 import {
   AUTO_SUBMIT_LEAD_MS,
   buildSubmitPayload,
@@ -8,6 +9,7 @@ import {
   FREEFORM_PAYLOAD_KEY,
   isQuestionAnswered,
   readDraft,
+  resolvePrimaryAction,
   SUBMIT_SETTLE_FALLBACK_MS,
   SUPPLEMENT_PAYLOAD_KEY,
 } from './draft';
@@ -33,6 +35,11 @@ export interface UseAskUserFormParams {
   deadlineAt?: number;
   /** Preserve the form but disable every action while a remote submit awaits producer ACK. */
   disabled?: boolean;
+  /**
+   * Never answer with option 1 when the countdown ends: the clock only closes the question.
+   * For a question the person may answer elsewhere (a Channel), where a default is not theirs.
+   */
+  noAnswerOnTimeout?: boolean;
   onInteractionAction?: BuiltinInterventionProps<AskUserQuestionArgs>['onInteractionAction'];
   /** Raw persisted draft blob read from the host's store (coerced internally). */
   persistedDraft: unknown;
@@ -49,6 +56,7 @@ export interface UseAskUserFormParams {
 export interface AskUserFormApi {
   activeQuestion?: AskUserQuestionItem;
   activeTab: string;
+  answeredCount: number;
   /** Whether this form can supply fallback answers when the countdown ends. */
   autoSubmitOnTimeout: boolean;
   /**
@@ -58,11 +66,10 @@ export interface AskUserFormApi {
    */
   autoSubmitted: boolean;
   custom: Record<string, string>;
-  escapeActive: boolean;
-  escapeText: string;
   expired: boolean;
   handleCustomChange: (q: AskUserQuestionItem, value: string) => void;
-  handleEscapeTextChange: (value: string) => void;
+  handlePrimary: () => void;
+  handleRemoveNote: () => void;
   handleSkip: () => void;
   handleSubmit: () => void;
   handleSupplementTextChange: (value: string) => void;
@@ -79,12 +86,12 @@ export interface AskUserFormApi {
       submitOnComplete?: boolean;
     },
   ) => void;
-  isMulti: boolean;
+  hasDraft: boolean;
   isSubmitDisabled: boolean;
   picks: Record<string, string | string[]>;
+  primary: { action: AskUserPrimaryAction; enabled: boolean };
   questions: AskUserQuestionItem[];
   remainingMs: number;
-  setEscapeMode: (next: boolean) => void;
   setQuestionMode: (key: string) => void;
   setSupplementMode: (next: boolean) => void;
   submissionFailed: boolean;
@@ -106,6 +113,7 @@ export const useAskUserForm = ({
   countdownMs,
   deadlineAt,
   disabled = false,
+  noAnswerOnTimeout = false,
   onInteractionAction,
   persistedDraft,
   requireAllAnswered = true,
@@ -119,12 +127,8 @@ export const useAskUserForm = ({
 
   const [picks, setPicks] = useState<Record<string, string | string[]>>(() => initial.picks);
   const [custom, setCustom] = useState<Record<string, string>>(() => initial.custom);
-  const [escapeText, setEscapeText] = useState<string>(() => initial.escapeText);
-  const [escapeActive, setEscapeActive] = useState<boolean>(() => initial.escapeActive);
   const [supplementText, setSupplementText] = useState<string>(() => initial.supplementText);
-  const [supplementActive, setSupplementActive] = useState<boolean>(
-    () => initial.supplementActive && !initial.escapeActive,
-  );
+  const [supplementActive, setSupplementActive] = useState<boolean>(() => initial.supplementActive);
   const [submitting, setSubmitting] = useState(false);
   const [submissionFailed, setSubmissionFailed] = useState(false);
   const inFlight = useRef(false);
@@ -168,7 +172,7 @@ export const useAskUserForm = ({
   const hasProviderOwnedOptionIds = questions.some((question) =>
     question.options.some((option) => !!option.id),
   );
-  const autoSubmitOnTimeout = countdownEnabled && !hasProviderOwnedOptionIds;
+  const autoSubmitOnTimeout = countdownEnabled && !hasProviderOwnedOptionIds && !noAnswerOnTimeout;
 
   // A resolved `onInteractionAction` means the answer was published, not that
   // the producer consumed it — the card stays disabled until the host settles
@@ -237,8 +241,8 @@ export const useAskUserForm = ({
       if (nextCustom !== custom) setCustom(nextCustom);
       writeDraft({
         custom: nextCustom,
-        escapeActive,
-        escapeText,
+        escapeActive: false,
+        escapeText: '',
         picks: nextPicks,
         supplementActive,
         supplementText,
@@ -273,18 +277,7 @@ export const useAskUserForm = ({
         }
       }
     },
-    [
-      picks,
-      custom,
-      disabled,
-      escapeActive,
-      escapeText,
-      questions,
-      submitWith,
-      supplementActive,
-      supplementText,
-      writeDraft,
-    ],
+    [picks, custom, disabled, questions, submitWith, supplementActive, supplementText, writeDraft],
   );
 
   const handleCustomChange = useCallback(
@@ -304,31 +297,14 @@ export const useAskUserForm = ({
       if (nextPicks !== picks) setPicks(nextPicks);
       writeDraft({
         custom: nextCustom,
-        escapeActive,
-        escapeText,
+        escapeActive: false,
+        escapeText: '',
         picks: nextPicks,
         supplementActive,
         supplementText,
       });
     },
-    [picks, custom, escapeActive, escapeText, supplementActive, supplementText, writeDraft],
-  );
-
-  const handleEscapeTextChange = useCallback(
-    (value: string) => {
-      setEscapeText(value);
-      // Persist freeform text alongside the (hidden) picks so a refresh resumes
-      // here; the picks survive a toggle back to the form.
-      writeDraft({
-        custom,
-        escapeActive: true,
-        escapeText: value,
-        picks,
-        supplementActive: false,
-        supplementText,
-      });
-    },
-    [custom, picks, supplementText, writeDraft],
+    [picks, custom, supplementActive, supplementText, writeDraft],
   );
 
   const handleSupplementTextChange = useCallback(
@@ -337,100 +313,62 @@ export const useAskUserForm = ({
       writeDraft({
         custom,
         escapeActive: false,
-        escapeText,
+        escapeText: '',
         picks,
         supplementActive: true,
         supplementText: value,
       });
     },
-    [custom, escapeText, picks, writeDraft],
-  );
-
-  const setEscapeMode = useCallback(
-    (next: boolean) => {
-      setEscapeActive(next);
-      if (next) setSupplementActive(false);
-      writeDraft({
-        custom,
-        escapeActive: next,
-        escapeText,
-        picks,
-        supplementActive: next ? false : supplementActive,
-        supplementText,
-      });
-    },
-    [custom, escapeText, picks, supplementActive, supplementText, writeDraft],
+    [custom, picks, writeDraft],
   );
 
   const setSupplementMode = useCallback(
     (next: boolean) => {
       setSupplementActive(next);
-      if (next) setEscapeActive(false);
       writeDraft({
         custom,
-        escapeActive: next ? false : escapeActive,
-        escapeText,
+        escapeActive: false,
+        escapeText: '',
         picks,
         supplementActive: next,
         supplementText,
       });
     },
-    [custom, escapeActive, escapeText, picks, supplementText, writeDraft],
+    [custom, picks, supplementText, writeDraft],
   );
 
-  // Returning to a question clears both whole-form modes and persists one
-  // coherent snapshot. Calling the two mode setters back-to-back would let the
-  // second stale closure restore the mode the first setter just cleared.
-  const setQuestionMode = useCallback(
-    (key: string) => {
-      setActiveTab(key);
-      setEscapeActive(false);
-      setSupplementActive(false);
-      writeDraft({
-        custom,
-        escapeActive: false,
-        escapeText,
-        picks,
-        supplementActive: false,
-        supplementText,
-      });
-    },
-    [custom, escapeText, picks, supplementText, writeDraft],
+  const handleRemoveNote = useCallback(() => {
+    setSupplementActive(false);
+    setSupplementText('');
+    writeDraft({
+      custom,
+      escapeActive: false,
+      escapeText: '',
+      picks,
+      supplementActive: false,
+      supplementText: '',
+    });
+  }, [custom, picks, writeDraft]);
+
+  const setQuestionMode = useCallback((key: string) => setActiveTab(key), []);
+
+  const answeredCount = useMemo(
+    () => questions.filter((q) => isQuestionAnswered(q, picks, custom)).length,
+    [custom, picks, questions],
   );
+  const noteOnly = answeredCount === 0 && !!supplementText.trim();
 
-  // Whole-form freeform only makes sense with more than one question — with a
-  // single question the per-question custom box already IS the full custom
-  // answer, so escape is redundant there and never offered.
-  const escapeAvailable = questions.length > 1;
-  const supplementAvailable = questions.length > 0;
-  const inEscape = escapeActive && escapeAvailable;
-  const inSupplement = supplementActive && supplementAvailable;
-
+  // With nothing picked, the note is the whole answer and goes out verbatim
+  // under `__freeform__`; next to picks it rides along as additional context.
   const handleSubmit = useCallback(() => {
-    if (escapeActive && escapeAvailable) {
-      // Escape mode is mutually exclusive with picks — send the text alone
-      // under `__freeform__`. Bridge formatter forwards it verbatim.
-      void submitWith({ [FREEFORM_PAYLOAD_KEY]: escapeText.trim() });
-    } else {
-      const payload = buildSubmitPayload(questions, picks, custom);
-      // Additional notes are a saved form value, not a tab-local value. Once
-      // entered, keep them on an explicit submit even after the user returns
-      // to a question to review or change an answer. Replace-all remains the
-      // only mutually exclusive submission mode.
-      if (supplementText.trim()) payload[SUPPLEMENT_PAYLOAD_KEY] = supplementText.trim();
-      void submitWith(payload);
+    if (noteOnly) {
+      void submitWith({ [FREEFORM_PAYLOAD_KEY]: supplementText.trim() });
+      return;
     }
-  }, [
-    custom,
-    escapeActive,
-    escapeAvailable,
-    escapeText,
-    inSupplement,
-    picks,
-    questions,
-    submitWith,
-    supplementText,
-  ]);
+    const payload = buildSubmitPayload(questions, picks, custom);
+    if (supplementText.trim()) payload[SUPPLEMENT_PAYLOAD_KEY] = supplementText.trim();
+    void submitWith(payload);
+  }, [custom, noteOnly, picks, questions, submitWith, supplementText]);
 
   const handleSkip = useCallback(async () => {
     if (!onInteractionAction || inFlight.current || disabled) return;
@@ -448,14 +386,6 @@ export const useAskUserForm = ({
     }
   }, [awaitProducerAck, disabled, onInteractionAction, submitting]);
 
-  const allAnswered = useMemo(
-    () =>
-      requireAllAnswered
-        ? questions.every((q) => isQuestionAnswered(q, picks, custom))
-        : questions.some((q) => isQuestionAnswered(q, picks, custom)),
-    [picks, custom, questions, requireAllAnswered],
-  );
-
   // Timeout fallback for legacy question forms: shortly BEFORE the deadline,
   // if the user hasn't submitted, fill option 1 of each unanswered question and
   // submit. Beats letting the bridge time out into a `cancelled` isError — the
@@ -463,8 +393,8 @@ export const useAskUserForm = ({
   // `autoSubmitted`, and never fired once `expired`, because an answer the
   // producer can no longer receive only strands the card.
   //
-  // Escape-mode special case: if the user is in escape mode with non-empty text
-  // when the clock hits zero, submit that text as-is rather than discarding it.
+  // A note written with nothing picked is the user's own answer: submit it
+  // as-is rather than backfilling options they never chose.
   useEffect(() => {
     if (!autoSubmitDue || autoSubmitted || submitting || disabled || questions.length === 0) return;
     // A stable id means this is a provider-owned choice (permission/plan or a
@@ -472,8 +402,8 @@ export const useAskUserForm = ({
     // let the producer timeout/cancel fail closed.
     if (!autoSubmitOnTimeout) return;
     setAutoSubmitted(true);
-    if (escapeActive && escapeAvailable && escapeText.trim().length > 0) {
-      void submitWith({ [FREEFORM_PAYLOAD_KEY]: escapeText.trim() });
+    if (noteOnly) {
+      void submitWith({ [FREEFORM_PAYLOAD_KEY]: supplementText.trim() });
       return;
     }
     // Start from whatever the user picked / typed, then backfill option 1 for
@@ -497,9 +427,7 @@ export const useAskUserForm = ({
     submitting,
     disabled,
     questions,
-    escapeActive,
-    escapeAvailable,
-    escapeText,
+    noteOnly,
     picks,
     custom,
     supplementText,
@@ -508,41 +436,61 @@ export const useAskUserForm = ({
   ]);
 
   const activeQuestion = questions[Number(activeTab)] ?? questions[0];
+  const primary = useMemo(
+    () =>
+      resolvePrimaryAction({
+        activeIndex: Math.max(0, questions.indexOf(activeQuestion as AskUserQuestionItem)),
+        custom,
+        noteText: supplementText,
+        picks,
+        questions,
+        requireAllAnswered,
+      }),
+    [activeQuestion, custom, picks, questions, requireAllAnswered, supplementText],
+  );
   const isSubmitDisabled =
-    disabled ||
-    questions.length === 0 ||
-    (inEscape
-      ? !escapeText.trim() || submitting || expired
-      : inSupplement
-        ? !allAnswered || !supplementText.trim() || submitting || expired
-        : !allAnswered || expired || submitting);
+    disabled || questions.length === 0 || !primary.enabled || submitting || expired;
+
+  const handlePrimary = useCallback(() => {
+    if (isSubmitDisabled) return;
+    if (primary.action.kind === 'next') {
+      setActiveTab(String(primary.action.index));
+      return;
+    }
+    handleSubmit();
+  }, [handleSubmit, isSubmitDisabled, primary]);
+
+  const hasDraft =
+    answeredCount > 0 ||
+    Object.values(custom).some((text) => !!text.trim()) ||
+    !!supplementText.trim();
 
   return {
     activeQuestion,
     activeTab,
+    answeredCount,
     autoSubmitOnTimeout,
     autoSubmitted,
     custom,
-    escapeActive: inEscape,
-    escapeText,
     expired,
     handleCustomChange,
-    handleEscapeTextChange,
+    handlePrimary,
+    handleRemoveNote,
     handleSkip,
     handleSubmit,
     handleSupplementTextChange,
     handleToggle,
-    isMulti: escapeAvailable,
+    hasDraft,
     isSubmitDisabled,
     picks,
+    primary,
     questions,
     remainingMs: deadline - now,
-    setEscapeMode,
     setQuestionMode,
     setSupplementMode,
     submitting: submitting || disabled,
     submissionFailed,
-    supplementActive: inSupplement,
+    supplementActive,
     supplementText,
   };
 };

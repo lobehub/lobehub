@@ -380,7 +380,6 @@
   "src/features/LocalFile/LocalFolder.tsx",
   "src/features/MCP/MCPInstallProgress/MCPConfigForm.tsx",
   "src/features/MCP/MCPInstallProgress/MCPDependenciesGuide.tsx",
-  "src/features/MCP/MCPSettings/index.tsx",
   "src/features/MCP/Scores.tsx",
   "src/features/MCPPluginDetail/CollapseDesc.tsx",
   "src/features/MCPPluginDetail/Deployment/Platform/index.tsx",

@@ -1,3 +1,4 @@
+import { Tag } from '@lobehub/ui';
 import { type AiModelForSelect } from 'model-bank';
 import { memo } from 'react';
 
@@ -12,28 +13,52 @@ interface ModelRowRenderProps {
    * per-model default because a topic can pin its own effort for that model.
    */
   activeEffortLabel?: string;
+  /** Tag after the name, e.g. what sets a featured model apart. */
+  badge?: string;
   isActive?: boolean;
   model: AiModelForSelect;
   newLabel: string;
+  /** Text for the price column when the model has no price to compare, e.g. a featured model. */
+  pricePlaceholder?: string;
   proBadgeLabel?: string;
   provider: string;
 }
 
 /** One model row of the switch panel: name, reasoning effort and comparison meta. */
 export const ModelRowRender = memo<ModelRowRenderProps>(
-  ({ activeEffortLabel, isActive, model, newLabel, proBadgeLabel, provider }) => {
+  ({
+    activeEffortLabel,
+    badge,
+    isActive,
+    model,
+    newLabel,
+    pricePlaceholder,
+    proBadgeLabel,
+    provider,
+  }) => {
     const effortLabel = useModelEffortLabel(model.id, provider);
 
     return (
       <ModelItemRender
         {...model}
         {...model.abilities}
-        extra={<ModelRowMeta model={model} provider={provider} />}
-        nameSuffix={model.abilities?.imageOutput && <ImageOutputMark />}
         newBadgeLabel={newLabel}
         proBadgeLabel={proBadgeLabel}
         provider={provider}
         secondaryText={(isActive && activeEffortLabel) || effortLabel}
+        extra={
+          <ModelRowMeta model={model} pricePlaceholder={pricePlaceholder} provider={provider} />
+        }
+        nameSuffix={
+          <>
+            {model.abilities?.imageOutput && <ImageOutputMark />}
+            {badge && (
+              <Tag color="green" size="small" style={{ flex: 'none' }}>
+                {badge}
+              </Tag>
+            )}
+          </>
+        }
       />
     );
   },

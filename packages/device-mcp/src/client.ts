@@ -7,10 +7,16 @@ import {
   isMcpToolVisibleTo,
   resolveMcpUiToolMeta,
 } from '@lobechat/const/mcpApp';
-import { toRecord } from '@lobechat/utils/object';
-import type { Progress, Transport } from '@modelcontextprotocol/client';
 import {
-  Client,
+  McpElicitationClient,
+  type McpElicitationContinuation,
+  type McpElicitationHost,
+  McpInputRequiredError,
+  McpProtocolClient,
+} from '@lobechat/mcp-elicitation';
+import { toRecord } from '@lobechat/utils/object';
+import type { Client, Progress, Transport } from '@modelcontextprotocol/client';
+import {
   ProtocolError,
   ProtocolErrorCode,
   SdkError,
@@ -349,6 +355,7 @@ export function describeStdioSpawnFailure(input: StdioSpawnFailureInput): string
 export interface MCPClientOptions {
   /** `clientInfo.name` announced to the server. */
   clientName?: string;
+  elicitationEnabled?: boolean;
   /**
    * Announce MCP Apps (SEP-1865), so servers expose their interactive views.
    * Only for users with the `mcp_apps` flag: a server may answer an
@@ -369,6 +376,7 @@ export class MCPClient {
   private static readonly STDERR_LOG_LIMIT = 200;
 
   private readonly mcp: Client;
+  private readonly elicitation: McpElicitationClient;
 
   private transport: Transport;
   private stderrLogs: string[] = [];
@@ -399,12 +407,13 @@ export class MCPClient {
     {
       clientName = 'lobehub-device-mcp-client',
       mcpApps = false,
+      elicitationEnabled = false,
       toolTimeoutMs,
     }: MCPClientOptions = {},
   ) {
     this.mcpApps = mcpApps;
     this.toolTimeoutMs = toolTimeoutMs;
-    this.mcp = new Client(
+    this.mcp = new McpProtocolClient(
       { name: clientName, version: '1.0.0' },
       {
         ...(mcpApps && {
@@ -428,6 +437,10 @@ export class MCPClient {
       this.modelHiddenTools = undefined;
       this.toolListingFailedAt = undefined;
     });
+
+    this.elicitation = new McpElicitationClient(this.mcp, elicitationEnabled, () =>
+      this.disconnect(),
+    );
 
     switch (params.type) {
       case 'http': {
@@ -911,34 +924,51 @@ export class MCPClient {
     };
   }
 
-  /**
-   * `timeoutMs` overrides the client-wide `toolTimeoutMs` for one call: a
-   * tunneled call carries the caller's own deadline. Without either the SDK
-   * default applies.
-   */
   async callTool(
     toolName: string,
     args: any,
-    { timeoutMs }: { timeoutMs?: number } = {},
+    options: {
+      host?: McpElicitationHost;
+      continuation?: McpElicitationContinuation;
+      signal?: AbortSignal;
+      timeoutMs?: number;
+    } = {},
   ): Promise<ToolCallResult> {
-    const timeout = timeoutMs ?? this.toolTimeoutMs;
+    const invoke = options.host
+      ? () =>
+          this.elicitation.callToolInteractively(
+            { arguments: args, name: toolName },
+            {
+              timeout: options.timeoutMs ?? this.toolTimeoutMs,
+              signal: options.signal,
+            },
+            options.host!,
+          )
+      : () =>
+          this.elicitation.callTool(
+            { arguments: args, name: toolName },
+            {
+              timeout: options.timeoutMs ?? this.toolTimeoutMs,
+              signal: options.signal,
+            },
+            options.host,
+            options.continuation,
+          );
     try {
-      const result = await this.mcp.callTool(
-        { arguments: args, name: toolName },
-        timeout === undefined ? undefined : { timeout },
-      );
-      return result as ToolCallResult;
+      return (await invoke()) as ToolCallResult;
     } catch (error) {
       if (
-        SdkError.isInstance(error) &&
-        error.code === SdkErrorCode.UnsupportedResultType &&
-        toRecord(error.data)?.resultType === 'input_required'
+        !options.host &&
+        (error instanceof McpInputRequiredError ||
+          (SdkError.isInstance(error) &&
+            error.code === SdkErrorCode.UnsupportedResultType &&
+            toRecord(error.data)?.resultType === 'input_required'))
       ) {
         return {
           content: [
             {
-              type: 'text',
               text: 'This MCP tool requires user input that LobeHub does not support yet. Use a tool that does not require additional input.',
+              type: 'text',
             },
           ],
           isError: true,

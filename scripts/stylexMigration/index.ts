@@ -11,7 +11,7 @@
  * legacyFiles.json is the ESLint allowlist for emotion style imports. It only
  * shrinks: pruning keeps files that still use them and never adds new ones.
  */
-import { execFileSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -32,11 +32,16 @@ const areaOf = (file: string) => {
 };
 
 export const scanRepo = (root = repoRoot): FileReport[] => {
-  const files = execFileSync('git', ['ls-files', '--', '*.ts', '*.tsx'], {
+  const grep = spawnSync('git', ['grep', '-l', '-F', '@lobehub/ui', '--', '*.ts', '*.tsx'], {
     cwd: root,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
-  })
+  });
+  if (grep.error) throw grep.error;
+  if (grep.status !== 0 && grep.status !== 1)
+    throw new Error(`git grep failed with ${grep.status}: ${grep.stderr}`);
+
+  const files = grep.stdout
     .split('\n')
     // This directory's own test fixtures contain emotion imports as strings.
     .filter((file) => file && !file.startsWith('scripts/stylexMigration/'));
@@ -49,7 +54,6 @@ export const scanRepo = (root = repoRoot): FileReport[] => {
     } catch {
       continue; // deleted in the working tree but still in the index
     }
-    if (!source.includes('@lobehub/ui')) continue;
     const report = classifySource(source);
     if (report.legacyImports.length === 0) continue;
     reports.push({ ...report, area: areaOf(file), file });

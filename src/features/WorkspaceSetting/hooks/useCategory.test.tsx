@@ -21,6 +21,7 @@ vi.hoisted(() => {
 });
 
 const mocks = vi.hoisted(() => ({
+  codingPlans: false,
   canCreateContent: true,
   canManageWorkspace: true,
   canViewBilling: true,
@@ -30,6 +31,10 @@ const permissionFlags: Record<string, () => boolean> = {
   create_content: () => mocks.canCreateContent,
   view_billing: () => mocks.canViewBilling,
 };
+
+vi.mock('@/business/client/hooks/useCodingPlansTab', () => ({
+  useCodingPlansTab: () => (mocks.codingPlans ? { label: 'Business tab' } : null),
+}));
 
 vi.mock('@/hooks/usePermission', () => ({
   usePermission: (action: string) => ({
@@ -61,6 +66,7 @@ const getItemKeys = () => {
 };
 
 beforeEach(() => {
+  mocks.codingPlans = false;
   mocks.canCreateContent = true;
   mocks.canManageWorkspace = true;
   mocks.canViewBilling = true;
@@ -138,8 +144,12 @@ describe('workspace settings useCategory', () => {
       wrapper: wrapperWithMcpEvents,
     });
     const orderedKeys = withConnection.current.map((group) => group.key);
+    // Runtime sits right under the Agent group that uses it, before Connection.
     expect(orderedKeys.indexOf(WorkspaceSettingsGroupKey.Resource)).toBe(
-      orderedKeys.indexOf(WorkspaceSettingsGroupKey.Connection) + 1,
+      orderedKeys.indexOf(WorkspaceSettingsGroupKey.Agent) + 1,
+    );
+    expect(orderedKeys.indexOf(WorkspaceSettingsGroupKey.Connection)).toBe(
+      orderedKeys.indexOf(WorkspaceSettingsGroupKey.Resource) + 1,
     );
     expect(resourceGroup?.items.map((item) => item.key)).toEqual([
       WorkspaceSettingsTabs.Devices,
@@ -271,6 +281,31 @@ describe('workspace settings useCategory', () => {
     expect(itemKeys).not.toContain(WorkspaceSettingsTabs.Billing);
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Plans);
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Usage);
+  });
+
+  it('lists Coding Plans under Runtime only where the business slot supplies it, for every role', () => {
+    expect(getItemKeys()).not.toContain(WorkspaceSettingsTabs.CodingPlans);
+
+    mocks.codingPlans = true;
+    const resourceKeys = () =>
+      renderHook(() => useWorkspaceSettingCategory(), { wrapper })
+        .result.current.find((group) => group.key === WorkspaceSettingsGroupKey.Resource)
+        ?.items.map((item) => item.key);
+    expect(resourceKeys()).toEqual([
+      WorkspaceSettingsTabs.Devices,
+      WorkspaceSettingsTabs.SubscriptionAccounts,
+      WorkspaceSettingsTabs.CodingPlans,
+      WorkspaceSettingsTabs.Environments,
+    ]);
+
+    // A member without admin rights still sees it; Subscription Accounts is admin-only.
+    mocks.canViewBilling = false;
+    mocks.canManageWorkspace = false;
+    expect(resourceKeys()).toEqual([
+      WorkspaceSettingsTabs.Devices,
+      WorkspaceSettingsTabs.CodingPlans,
+      WorkspaceSettingsTabs.Environments,
+    ]);
   });
 });
 

@@ -85,6 +85,40 @@ describe('Channel dispatch reservation', () => {
     });
   });
 
+  it('reports the offline Channel device with the member who picked it', async () => {
+    const { asOwner, channel } = await fixture.createTeamChannel();
+    await fixture.addAgent(
+      channel.id,
+      'Device agent',
+      deviceConfig('/repo', 'device-1', fixture.ownerId),
+    );
+    const message = await asOwner.send(channel.id, {
+      content: 'Wake the cloud device',
+      requestKey: 'offline-picked-callback',
+      routing: 'fallback',
+    });
+    const [job] = await jobsOf(db, message.id);
+    const onPickedDeviceOffline = vi.fn();
+
+    await executions.claim(channel.id, job.id, {
+      ...lease,
+      onPickedDeviceOffline,
+      onlineDeviceIds: [],
+    });
+    expect(onPickedDeviceOffline).toHaveBeenCalledExactlyOnceWith({
+      deviceId: 'device-1',
+      ownerId: fixture.ownerId,
+    });
+
+    onPickedDeviceOffline.mockClear();
+    await executions.claim(channel.id, job.id, {
+      ...lease,
+      onPickedDeviceOffline,
+      onlineDeviceIds: ['device-1'],
+    });
+    expect(onPickedDeviceOffline).not.toHaveBeenCalled();
+  });
+
   it('keeps a job queued while the device the Agent itself routes to is offline', async () => {
     const { asOwner, channel } = await fixture.createTeamChannel();
     // No device picked in the Channel: the Agent's own settings route the run.

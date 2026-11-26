@@ -8,6 +8,9 @@
  * token, which the CLI prefers over the fresh `LOBEHUB_JWT` the launcher injects.
  */
 export const INHERITED_RUN_IDENTITY_ENV_KEYS = [
+  // The credential-run lease dir (`@lobechat/device-control` agentCredentials):
+  // only a run spawned on the installed credential may hold that lease.
+  'LOBEHUB_AGENT_CREDENTIAL_RUN_DIR',
   'LOBEHUB_AGENT_ID',
   'LOBEHUB_ASSISTANT_MESSAGE_ID',
   'LOBEHUB_JWT_FILE',

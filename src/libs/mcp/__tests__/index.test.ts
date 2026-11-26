@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
+import path from 'node:path';
 import { inspect } from 'node:util';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,9 +11,9 @@ const debugLog = vi.hoisted(() => vi.fn());
 vi.mock('debug', () => ({ default: () => debugLog }));
 
 const require = createRequire(import.meta.url);
-const mcpHelloWorldRoot = dirname(require.resolve('mcp-hello-world/package.json'));
+const mcpHelloWorldRoot = path.dirname(require.resolve('mcp-hello-world/package.json'));
 /** Local stdio entry (see mcp-hello-world `bin`); avoids `npx` so npm never reads this repo's overrides. */
-const mcpHelloWorldStdio = join(mcpHelloWorldRoot, 'build', 'stdio.js');
+const mcpHelloWorldStdio = path.join(mcpHelloWorldRoot, 'build', 'stdio.js');
 
 describe('MCPClient', () => {
   // --- Updated Stdio Transport tests ---
@@ -38,8 +38,7 @@ describe('MCPClient', () => {
     }, TIMEOUT);
 
     afterEach(async () => {
-      // Assume SDK client/transport handles process termination gracefully
-      // If processes leak, more explicit cleanup might be needed here
+      await mcpClient?.disconnect();
     }, TIMEOUT);
 
     it(
@@ -205,8 +204,8 @@ describe('MCPClient', () => {
         type: 'http',
         url: 'https://example.com/mcp',
       });
-      // Replace the underlying SDK client with a stub that simulates an expired session
-      (client as any).mcp = { getProtocolEra: vi.fn().mockReturnValue('legacy'), ...mcp };
+      // The elicitation adapter holds this same SDK instance; stub its methods in place.
+      Object.assign(client['mcp'], { getProtocolEra: vi.fn().mockReturnValue('legacy'), ...mcp });
       return client;
     };
 
@@ -229,10 +228,10 @@ describe('MCPClient', () => {
       await expect(client.listTools()).rejects.toThrow('NoValidSessionId');
     });
 
-    it('listTools should return [] for non-session errors', async () => {
+    it('listTools should preserve non-session errors', async () => {
       const client = buildClient({ listTools: vi.fn().mockRejectedValue(new Error('boom')) });
 
-      await expect(client.listTools()).resolves.toEqual([]);
+      await expect(client.listTools()).rejects.toThrow('boom');
     });
 
     it('listResources should normalize an expired-session error into NoValidSessionId', async () => {
@@ -283,7 +282,7 @@ describe('MCPClient', () => {
 
     const buildClient = (mcp: Record<string, unknown>) => {
       const client = new MCPClient(sensitiveConnection);
-      (client as any).mcp = { getProtocolEra: vi.fn().mockReturnValue('legacy'), ...mcp };
+      Object.assign(client['mcp'], { getProtocolEra: vi.fn().mockReturnValue('legacy'), ...mcp });
       return client;
     };
 
@@ -335,11 +334,10 @@ describe('MCPClient', () => {
       },
     ])('redacts remote errors from $method logs', async ({ invoke, method }) => {
       const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const client = buildClient({
-        [method]: vi.fn().mockRejectedValue(new Error(remoteErrorSecret)),
-      });
+      const error = new Error(remoteErrorSecret);
+      const client = buildClient({ [method]: vi.fn().mockRejectedValue(error) });
 
-      await expect(invoke(client)).resolves.toEqual([]);
+      await expect(invoke(client)).rejects.toBe(error);
 
       expectLogsToBeRedacted(consoleError);
     });

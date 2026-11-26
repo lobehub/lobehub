@@ -282,7 +282,12 @@ describe('AiAgentService.execAgent - external agent run fee', () => {
     expect(result.success).toBe(true);
     expect(mockDispatchAgentRun).toHaveBeenCalled();
     const [{ holderId }] = fees.holdAgentRunFee.mock.calls[0];
-    expect(fees.holdAgentRunFee).toHaveBeenCalledWith({ holderId, userId: 'test-user-id' });
+    expect(fees.holdAgentRunFee).toHaveBeenCalledWith({
+      holderId,
+      model: 'claude-code',
+      provider: 'anthropic',
+      userId: 'test-user-id',
+    });
     expect(fees.rebindAgentRunFee).toHaveBeenCalledWith(
       'test-user-id',
       holderId,

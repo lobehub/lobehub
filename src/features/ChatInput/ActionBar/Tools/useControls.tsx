@@ -30,8 +30,8 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { buildAgentProfileTabPath } from '@/features/AgentProfileTabs/tabOptions';
+import { openLegacyPluginMigrationModal } from '@/features/Connectors/CustomConnectorModal/imperative';
 import { useConnectorConfigure } from '@/features/Connectors/CustomConnectorModal/useConnectorConfigure';
-import { openPluginEditModal } from '@/features/PluginDevModal/imperative';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { usePermission } from '@/hooks/usePermission';
@@ -454,7 +454,7 @@ export const useControls = ({
           </>
         }
         trailing={
-          enabledOnly || (!badge && !action) ? undefined : (
+          (enabledOnly && !action) || (!badge && !action) ? undefined : (
             <>
               {badge && <span {...stylex.props(styles.typeTag)}>{badge}</span>}
               {action}
@@ -465,7 +465,7 @@ export const useControls = ({
           stylex.props(styles.toolTrailing, policyOpenId === id && styles.toolTrailingVisible)
             .className
         }
-        onContextMenu={enabledOnly ? undefined : () => openSkillPolicyMenu(id)}
+        onContextMenu={enabledOnly && !action ? undefined : () => openSkillPolicyMenu(id)}
       />
     ),
     [detailPlacement, enabledOnly, openSkillPolicyMenu, policyOpenId],
@@ -500,8 +500,22 @@ export const useControls = ({
       searchText?: string;
       supportedModes?: SkillPolicyMode[];
       title: ReactNode;
-    }): SkillMenuItem =>
-      ({
+    }): SkillMenuItem => {
+      // The enabled-only sidebar is not activation UI, but a configurable row
+      // still needs its repair/manage path. Its menu omits the activation modes.
+      const action =
+        enabledOnly && !configureConfig
+          ? undefined
+          : renderPolicyMenu(id, {
+              configureConfig,
+              defaultMode,
+              deleteConfig,
+              deleteOnly: enabledOnly,
+              modeOverride,
+              panelExtra,
+              supportedModes,
+            });
+      return {
         optionTitle: title,
         optionIcon: icon,
         detailContent: popoverContent,
@@ -511,23 +525,15 @@ export const useControls = ({
         label: renderToolLabel(
           id,
           title,
-          enabledOnly
-            ? undefined
-            : renderPolicyMenu(id, {
-                configureConfig,
-                defaultMode,
-                deleteConfig,
-                modeOverride,
-                panelExtra,
-                supportedModes,
-              }),
+          action,
           enabledOnly ? undefined : badge,
           icon,
           enabledOnly ? undefined : extraTag,
           popoverContent,
         ),
         searchText: searchText || String(title || id),
-      }) as SkillMenuItem,
+      } as SkillMenuItem;
+    },
     [enabledOnly, renderPolicyMenu, renderToolLabel],
   );
 
@@ -977,7 +983,7 @@ export const useControls = ({
     return createManagedSkillItem({
       badge: isMcp ? <Icon icon={McpIcon} size={12} /> : undefined,
       configureConfig: isCustom
-        ? { onConfigure: () => openPluginEditModal(item.identifier) }
+        ? { onConfigure: () => openLegacyPluginMigrationModal(item.identifier) }
         : undefined,
       deleteConfig: {
         displayName: title,

@@ -37,7 +37,6 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import ExposeMainEditor from './ExposeMainEditor';
 import HeterogeneousChatInput from './HeterogeneousChatInput';
-import LocateMessageFromUrl from './LocateMessageFromUrl';
 import MainChatInput from './MainChatInput';
 import MessageFromUrl from './MainChatInput/MessageFromUrl';
 import ThreadHydration from './ThreadHydration';
@@ -213,7 +212,6 @@ const Conversation = memo(() => {
       <ThreadHydration />
       <ChatMiniMap />
       <ForwardMessageDispatcher />
-      <LocateMessageFromUrl />
       {/* Held back while the topic is still migrating: the composer above is
           already disabled, and letting `?message=` through would send into the
           not-yet-migrated history this screen is waiting for. The param stays

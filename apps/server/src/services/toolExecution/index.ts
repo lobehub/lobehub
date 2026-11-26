@@ -1,4 +1,5 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
+import { McpInputRequiredError } from '@lobechat/mcp-elicitation';
 import { DEFAULT_TOOL_RESULT_MAX_LENGTH, truncateToolResult } from '@lobechat/prompts/toolResult';
 import {
   type ChatToolPayload,
@@ -6,10 +7,12 @@ import {
   type DeviceClient,
 } from '@lobechat/types';
 import { isDeviceOnlyMcpEndpoint, shouldConnectViaDevice } from '@lobechat/utils/mcpEndpoint';
+import type { ElicitRequestParams } from '@modelcontextprotocol/client';
 import debug from 'debug';
 
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
+import { MessageModel } from '@/database/models/message';
 import { ConnectorToolPermission } from '@/database/schemas';
 import { type CloudMCPParams, type HttpMCPClientParams, type StdioMCPParams } from '@/libs/mcp';
 import {
@@ -18,6 +21,7 @@ import {
 } from '@/libs/mcp/connectorPermissionCheck';
 import { isMCPSSRFBlockedError } from '@/libs/mcp/ssrf';
 import { createMCPError } from '@/libs/mcp/types';
+import { signMcpDeviceGrant } from '@/libs/trpc/utils/internalJwt';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { resolveLinkedCall } from '@/server/services/connector/links';
 import { buildConnectorMcpParams } from '@/server/services/connector/sync';
@@ -38,6 +42,13 @@ import {
   resolveBoundMcpDevice,
   toGatewayMcpParams,
 } from '../mcp/deviceTunnel';
+import { mcpConnectionBinding } from '../mcp/elicitation/binding';
+import {
+  type McpCallIdentity,
+  type McpElicitationExpiry,
+  McpElicitationService,
+} from '../mcp/elicitation/McpElicitationService';
+import type { McpElicitationRuntime } from '../mcp/elicitation/resume';
 import { type BuiltinToolsExecutor } from './builtin';
 import { classifyToolError, getToolAccessDeniedError } from './errorClassification';
 import { buildMcpAuthorizationErrorContent, isMcpAuthorizationError } from './mcpAuthError';
@@ -60,7 +71,9 @@ interface McpTunnelTarget {
 
 interface ToolExecutionServiceDeps {
   builtinToolsExecutor: BuiltinToolsExecutor;
+  mcpRuntime?: McpElicitationRuntime;
   mcpService: MCPService;
+  onMcpElicitationExpired?: McpElicitationExpiry;
 }
 
 /**
@@ -166,10 +179,19 @@ const toModelContent = (result: any): string => {
 export class ToolExecutionService {
   private builtinToolsExecutor: BuiltinToolsExecutor;
   private mcpService: MCPService;
+  private onMcpElicitationExpired?: McpElicitationExpiry;
+  private mcpRuntime?: McpElicitationRuntime;
 
-  constructor({ mcpService, builtinToolsExecutor }: ToolExecutionServiceDeps) {
+  constructor({
+    mcpService,
+    builtinToolsExecutor,
+    onMcpElicitationExpired,
+    mcpRuntime,
+  }: ToolExecutionServiceDeps) {
     this.builtinToolsExecutor = builtinToolsExecutor;
     this.mcpService = mcpService;
+    this.onMcpElicitationExpired = onMcpElicitationExpired;
+    this.mcpRuntime = mcpRuntime;
   }
 
   async executeTool(
@@ -213,7 +235,6 @@ export class ToolExecutionService {
           break;
         }
 
-        case 'builtin':
         default: {
           data = await this.builtinToolsExecutor.execute(payload, context);
           break;
@@ -306,6 +327,7 @@ export class ToolExecutionService {
     // Extract MCP params from manifest (stored in customParams.mcp in LobeTool)
     let mcpParams = (manifest as any).mcpParams;
     let linkName: string | undefined;
+    let mcpConnectorAccount: { connectorId: string; linkId?: string } | undefined;
     if (!mcpParams) {
       log('MCP configuration not found in manifest for: %s ', identifier);
       return {
@@ -343,6 +365,28 @@ export class ToolExecutionService {
       };
     }
 
+    const elicitationService =
+      context.serverDB && context.userId && context.operationId && context.assistantMessageId
+        ? new McpElicitationService(
+            context.serverDB,
+            context.userId,
+            context.workspaceId,
+            this.onMcpElicitationExpired,
+            this.mcpRuntime,
+          )
+        : undefined;
+    const identity: McpCallIdentity | undefined = elicitationService
+      ? {
+          apiName,
+          assistantMessageId: context.assistantMessageId!,
+          identifier,
+          operationId: context.operationId!,
+          toolCallId: payload.id,
+          toolMessageId: context.toolMessageId,
+        }
+      : undefined;
+    const deadline = Date.now() + (context.executionTimeoutMs ?? 60_000);
+    let toolMessageId = context.toolMessageId;
     try {
       if (
         (manifest as { connectorReauthorizationRequired?: boolean })
@@ -424,12 +468,22 @@ export class ToolExecutionService {
           args = resolved.argsStr;
           payload = { ...payload, arguments: args };
           linkName = resolved.linkName;
+          if (resolved.linkId)
+            mcpConnectorAccount = { connectorId: connector.id, linkId: resolved.linkId };
           mcpParams = buildConnectorMcpParams(resolved.connector);
         }
       }
       // Check if this is a cloud MCP endpoint
       if (mcpParams.type === 'cloud') {
         return await this.executeCloudMCPTool(payload, context, mcpParams);
+      }
+
+      if (elicitationService && identity) {
+        const ensuredMessageId = await elicitationService.ensureToolMessage(identity);
+        toolMessageId = ensuredMessageId;
+        await elicitationService.messages.updatePluginState(ensuredMessageId, {
+          mcpInvocationDeadline: deadline,
+        });
       }
 
       // Stdio must run on the user's own device. Without a configured gateway or a
@@ -444,6 +498,7 @@ export class ToolExecutionService {
           const message = `MCP server '${identifier}' uses stdio and must run on your own device, not in the cloud, but this server's device gateway is not configured. Configure a device gateway on the server, then open the ${BRANDING_NAME} desktop app or run \`lh connect\` on the machine that hosts this MCP server, and retry.`;
           return {
             content: message,
+            toolMessageId,
             error: { code: 'MCP_GATEWAY_NOT_CONFIGURED', message },
             success: false,
           };
@@ -458,11 +513,18 @@ export class ToolExecutionService {
             log('Bound MCP %s:%s cannot run on its device — %s', identifier, apiName, bound.error);
             return {
               content: bound.error,
+              toolMessageId,
               error: { code: MCP_BOUND_DEVICE_UNAVAILABLE, message: bound.error },
               success: false,
             };
           }
-          return await this.executeMcpViaDevice(payload, context, mcpParams, bound);
+          const result = await this.executeMcpViaDevice(
+            payload,
+            { ...context, toolMessageId },
+            mcpParams,
+            bound,
+          );
+          return { ...result, toolMessageId: result.toolMessageId ?? toolMessageId };
         }
 
         const tunnelTarget = context.userId
@@ -473,11 +535,18 @@ export class ToolExecutionService {
           const message = mcpDeviceUnavailableMessage(identifier);
           return {
             content: message,
+            toolMessageId,
             error: { code: MCP_DEVICE_UNAVAILABLE, message },
             success: false,
           };
         }
-        const result = await this.executeMcpViaDevice(payload, context, mcpParams, tunnelTarget);
+        const result = await this.executeMcpViaDevice(
+          payload,
+          { ...context, toolMessageId },
+          mcpParams,
+          tunnelTarget,
+        );
+        result.toolMessageId ??= toolMessageId;
         if (!result.success && linkName) {
           // Device transports may serialize a provider error to plain text.
           // Preserve its meaning while retaining the selected account boundary.
@@ -495,6 +564,27 @@ export class ToolExecutionService {
         clientParams: mcpParams,
         mcpApps: await isMcpAppsEnabled(context.userId),
         toolName: apiName,
+        elicitation: {
+          scope: JSON.stringify([context.userId, context.workspaceId]),
+          signal: context.abortSignal
+            ? AbortSignal.any([
+                context.abortSignal,
+                AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+              ])
+            : AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+          timeoutMs: Math.max(1, deadline - Date.now()),
+          continuation: context.mcpContinuation,
+          host:
+            elicitationService && identity
+              ? {
+                  request: async (request, requestContext) => {
+                    return elicitationService
+                      .createLegacyHost({ ...identity, toolMessageId }, deadline)
+                      .request(request, requestContext);
+                  },
+                }
+              : undefined,
+        },
       });
 
       log('MCP tool execution completed for: %s:%s', identifier, apiName);
@@ -502,13 +592,48 @@ export class ToolExecutionService {
       return {
         content: typeof result === 'string' ? result : toModelContent(result),
         ...(result?.success === false
-          ? { error: { code: 'MCP_TOOL_ERROR', message: result.error?.message ?? result.content } }
+          ? {
+              error: {
+                code: 'MCP_TOOL_ERROR',
+                kind: 'stop',
+                message: result.error?.message ?? result.content,
+              },
+            }
           : {}),
         state: typeof result === 'object' ? result : undefined,
+        ...(toolMessageId && { toolMessageId }),
         success: result?.success !== false,
       };
     } catch (error) {
+      if (error instanceof McpInputRequiredError && elicitationService && identity) {
+        const entries = Object.entries(error.checkpoint.inputRequired.inputRequests ?? {});
+        const requests: Record<string, ElicitRequestParams> = Object.fromEntries(
+          entries.map(([key, request]) => [key, request.params as ElicitRequestParams]),
+        );
+        const pending = await elicitationService.open(identity, {
+          checkpoint: error.checkpoint,
+          connectionBinding: mcpConnectionBinding(mcpParams, mcpConnectorAccount),
+          deadline,
+          legacy: false,
+          requests,
+        });
+        return {
+          content: '',
+          deferred: true,
+          state: { status: 'pending', toolMessageId: pending.toolMessageId },
+          success: true,
+          toolMessageId: pending.toolMessageId,
+        };
+      }
       log('MCP tool execution failed for %s:%s: %O', identifier, apiName, error);
+      const existingMessageId =
+        toolMessageId ??
+        (elicitationService && identity
+          ? await elicitationService.messages.findToolMessageIdByToolCallId(
+              identity.toolCallId,
+              identity.assistantMessageId,
+            )
+          : undefined);
       if (isMcpAuthorizationError(error)) {
         const content = buildMcpAuthorizationErrorContent(identifier, {
           isShareVisitor: !!context.agentShareVisitor,
@@ -516,6 +641,7 @@ export class ToolExecutionService {
         });
         return {
           content,
+          toolMessageId: existingMessageId ?? undefined,
           error: { code: 'UNAUTHORIZED', message: (error as Error).message },
           success: false,
         };
@@ -526,14 +652,17 @@ export class ToolExecutionService {
         const message = (error as Error).message;
         return {
           content: message,
-          error: { code: 'MCP_SSRF_BLOCKED', message },
+          error: { code: 'MCP_SSRF_BLOCKED', kind: 'stop', message },
+          toolMessageId: existingMessageId ?? undefined,
           success: false,
         };
       }
       return {
         content: (error as Error).message,
+        ...(existingMessageId && { toolMessageId: existingMessageId }),
         error: {
           code: 'MCP_EXECUTION_ERROR',
+          kind: 'stop',
           message: (error as Error).message,
         },
         success: false,
@@ -664,6 +793,30 @@ export class ToolExecutionService {
       target.workspaceId ?? 'personal',
     );
 
+    const deadline = Date.now() + (context.executionTimeoutMs ?? 60_000);
+    const identity =
+      context.operationId && context.assistantMessageId
+        ? {
+            apiName,
+            assistantMessageId: context.assistantMessageId,
+            identifier,
+            operationId: context.operationId,
+            toolCallId: payload.id,
+            toolMessageId: context.toolMessageId,
+          }
+        : undefined;
+    const delegation =
+      identity && target.workspaceId
+        ? await signMcpDeviceGrant(
+            {
+              ...identity,
+              userId: context.userId!,
+              workspaceId: target.workspaceId,
+              deviceId: target.deviceId,
+            },
+            deadline,
+          )
+        : undefined;
     const result = await deviceGateway.executeMcpCall(
       {
         apiName,
@@ -671,7 +824,18 @@ export class ToolExecutionService {
         deviceId: target.deviceId,
         identifier,
         // Only the token fields of the auth travel to the device
-        params: toGatewayMcpParams(mcpParams),
+        params: {
+          ...toGatewayMcpParams(mcpParams),
+          ...(identity && {
+            elicitation: {
+              delegation,
+              identity,
+              deadline,
+              workspaceId: context.workspaceId ?? target.workspaceId,
+              continuation: context.mcpContinuation,
+            },
+          }),
+        },
         // Pin the client resolved for this device, so the call never lands on
         // one of its clients that cannot run it.
         clientKinds: target.clientKinds,
@@ -684,6 +848,14 @@ export class ToolExecutionService {
       context.executionTimeoutMs,
     );
 
+    const existingToolMessageId =
+      context.serverDB && context.userId && context.assistantMessageId
+        ? await new MessageModel(
+            context.serverDB,
+            context.userId,
+            context.workspaceId,
+          ).findToolMessageIdByToolCallId(payload.id, context.assistantMessageId)
+        : undefined;
     if (!result.success) {
       // The device may already be running the call, so never let the retry
       // classifier replay it (see withoutDeviceReplay).
@@ -694,6 +866,7 @@ export class ToolExecutionService {
           message: result.error || result.content,
         },
         errorData: result.errorData,
+        toolMessageId: existingToolMessageId ?? undefined,
         success: false,
       });
     }
@@ -706,6 +879,7 @@ export class ToolExecutionService {
     return {
       content: result.content,
       state: result.state ? state : undefined,
+      toolMessageId: existingToolMessageId ?? undefined,
       success: true,
     };
   }

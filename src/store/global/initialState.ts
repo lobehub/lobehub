@@ -81,6 +81,8 @@ export enum SettingsTabs {
   Billing = 'billing',
   /** @deprecated Use Conversation instead */
   ChatAppearance = 'chat-appearance',
+  /** Optional business tab; listed only where `useCodingPlansTab` supplies it. */
+  CodingPlans = 'coding-plans',
   /** @deprecated Use Appearance instead */
   Common = 'common',
   Connector = 'connector',
@@ -265,6 +267,11 @@ export interface SystemStatus {
    * Order of the sidebar Channel sections. Device-local view setting.
    */
   channelListSort?: ChannelListSort;
+  /**
+   * Channels whose sidebar thread list is folded, keyed by Channel id. Nested booleans for the
+   * same lodash `merge` reason as `assigneeAgentSelectorCollapsedGroups`. Device-local.
+   */
+  channelThreadsCollapsed?: Record<string, boolean>;
   chatInputHeight?: number;
   /**
    * Which topicGroups are collapsed, bucketed by group mode. We persist the
@@ -510,6 +517,13 @@ export interface SystemStatus {
    * Whether the right-side "Hidden columns" panel on the Kanban board is collapsed.
    */
   taskKanbanHiddenPanelCollapsed?: boolean;
+  /**
+   * Folded group / sub-group headers of the task list view, one entry per view
+   * (`taskListCollapseScopeKey`), so a folded group stays folded across
+   * navigation and reloads, as Linear keeps them per view. An array for the
+   * same reason as `taskListFilters`; see `useTaskListGroupCollapse`.
+   */
+  taskListCollapsedGroups?: { keys: string[]; scope: string }[];
   /**
    * Tasks page filters, one entry per list scope (workspace + global / agent /
    * project page). An array, not a map: status is deep-merged on write, which

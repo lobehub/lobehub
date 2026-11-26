@@ -12,7 +12,9 @@ import { memo } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
 
+import { isPendingMcpToolResult } from '../toolResultBody';
 import ExecutionTime from './ExecutionTime';
+import { isAnsweredAskUserQuestion } from './isAnsweredAskUserQuestion';
 import StatusIndicator from './StatusIndicator';
 import ToolTitle from './ToolTitle';
 
@@ -58,7 +60,7 @@ const Inspectors = memo<InspectorProps>(
     toolCallId,
     toolCallStartTime,
   }) => {
-    const isPending = intervention?.status === 'pending';
+    const isPending = intervention?.status === 'pending' || isPendingMcpToolResult(result);
     const isAborted = intervention?.status === 'aborted';
     const isRejected = intervention?.status === 'rejected';
 
@@ -117,8 +119,11 @@ const Inspectors = memo<InspectorProps>(
       (apiName === LocalSystemApiName.readFile || apiName === 'readLocalFile') &&
       ((typeof readPath === 'string' && getFilePathDisplayInfo(readPath).isImage) ||
         (Array.isArray(result?.state?.images) && result.state.images.length > 0));
+    // An answered question keeps its answer on the row: "what did I pick?" is
+    // the detail people come back for, and a bare tool name hides it.
+    const isAnsweredQuestion = isAnsweredAskUserQuestion(apiName, args, result);
     const CustomInspector =
-      isExpanded || isComputerUse || isImageRead
+      isExpanded || isComputerUse || isImageRead || isAnsweredQuestion
         ? getBuiltinInspector(identifier, apiName)
         : undefined;
 

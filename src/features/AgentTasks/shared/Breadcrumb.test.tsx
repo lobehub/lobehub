@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Breadcrumb from './Breadcrumb';
 
 const mocks = vi.hoisted(() => ({
+  activeWorkspaceId: null as string | null,
+  activeWorkspaceSlug: null as string | null,
   agentMeta: undefined as any,
   params: {} as { aid?: string },
   taskState: {} as any,
@@ -27,6 +29,14 @@ vi.mock('react-router', async (importOriginal) => ({
 // the raw task paths (no workspace-slug prefix, no real router context).
 vi.mock('@/features/Workspace/WorkspaceLink', () => ({
   default: ({ children, to }: { children: ReactNode; to: string }) => <a href={to}>{children}</a>,
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  useActiveWorkspaceId: () => mocks.activeWorkspaceId,
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
+  useActiveWorkspaceSlug: () => mocks.activeWorkspaceSlug,
 }));
 
 vi.mock('./useAgentDisplayMeta', () => ({
@@ -50,6 +60,8 @@ const renderAt = (ui: ReactNode, state?: unknown) =>
 
 describe('Breadcrumb', () => {
   beforeEach(() => {
+    mocks.activeWorkspaceId = null;
+    mocks.activeWorkspaceSlug = null;
     mocks.agentMeta = undefined;
     mocks.params = {};
     mocks.taskState = createState({
@@ -158,6 +170,60 @@ describe('Breadcrumb', () => {
         'href',
         '/agent/a1/tasks?collection=mine&scope=created',
       );
+    });
+
+    describe('in a workspace, where "My tasks" owns the bare list URL', () => {
+      beforeEach(() => {
+        mocks.activeWorkspaceId = 'ws_acme';
+        mocks.activeWorkspaceSlug = 'acme';
+      });
+
+      it('names the root crumb after "My tasks" and returns to its assigned view', () => {
+        renderAt(<Breadcrumb taskId="T-child" />, { taskListOrigin: '/acme/tasks' });
+
+        expect(screen.getByRole('link', { name: 'taskList.mine.title' })).toHaveAttribute(
+          'href',
+          '/acme/tasks',
+        );
+        expect(screen.queryByText('taskList.all')).not.toBeInTheDocument();
+      });
+
+      it('keeps the "My tasks" sub-view and filters on the way back', () => {
+        renderAt(<Breadcrumb taskId="T-child" />, {
+          taskListOrigin: '/acme/tasks?scope=created&status=running',
+        });
+
+        expect(screen.getByRole('link', { name: 'taskList.mine.title' })).toHaveAttribute(
+          'href',
+          '/acme/tasks?scope=created&status=running',
+        );
+      });
+
+      it('names the root crumb after the scheduled and all-tasks tabs it came from', () => {
+        renderAt(<Breadcrumb taskId="T-child" />, {
+          taskListOrigin: '/acme/tasks?collection=scheduled',
+        });
+        expect(screen.getByRole('link', { name: 'tab.scheduled' })).toHaveAttribute(
+          'href',
+          '/acme/tasks?collection=scheduled',
+        );
+        cleanup();
+
+        renderAt(<Breadcrumb taskId="T-child" />, { taskListOrigin: '/acme/tasks?collection=all' });
+        expect(screen.getByRole('link', { name: 'taskList.all' })).toHaveAttribute(
+          'href',
+          '/acme/tasks?collection=all',
+        );
+      });
+
+      it('opens "All tasks", not the "My tasks" landing tab, without a carried origin', () => {
+        renderAt(<Breadcrumb taskId="T-child" />);
+
+        expect(screen.getByRole('link', { name: 'taskList.all' })).toHaveAttribute(
+          'href',
+          '/tasks?collection=all',
+        );
+      });
     });
   });
 });

@@ -3,6 +3,12 @@ export const SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS = 'lobehub-default';
 
 const SERVER_DEFAULT_HETEROGENEOUS_MODEL_NAMESPACE = 'lobehub/';
 
+/** Legacy ids a CLI reported for server-default runs, before the `lobehub/` namespace. */
+const LEGACY_SERVER_DEFAULT_HETEROGENEOUS_MODELS = new Set([
+  SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS,
+  'custom:LobeHub-Server-Default-0',
+]);
+
 export const formatServerDefaultHeterogeneousModel = (model: string): string =>
   `${SERVER_DEFAULT_HETEROGENEOUS_MODEL_NAMESPACE}${model}`;
 
@@ -51,6 +57,42 @@ export const isServerDefaultHeterogeneousRelayInvocation = (
 };
 
 /**
+ * Whether a CLI-reported model came from a server-default run. Reads the model stored on the
+ * message, so it stays right after the agent switches to or from server-default.
+ */
+export const isServerDefaultHeterogeneousReportedModel = (reportedModel: string | undefined) =>
+  !!reportedModel &&
+  (LEGACY_SERVER_DEFAULT_HETEROGENEOUS_MODELS.has(reportedModel) ||
+    reportedModel.startsWith(SERVER_DEFAULT_HETEROGENEOUS_MODEL_NAMESPACE));
+
+/** Provider that serves server-default runs; the `lobehub/` model namespace names it. */
+export const SERVER_DEFAULT_HETEROGENEOUS_PROVIDER = 'lobehub';
+
+/**
+ * Rewrite a server-default run's CLI report into what its message stores: the catalog model
+ * and {@link SERVER_DEFAULT_HETEROGENEOUS_PROVIDER} instead of the CLI type. The stored
+ * provider is the run's durable provenance, since the catalog id alone no longer shows the
+ * run was server-default once the agent switches away from it. Returns `undefined` when
+ * nothing changes.
+ */
+export const stampServerDefaultHeterogeneousReport = <
+  T extends { model?: unknown; provider?: unknown },
+>(
+  data: T | undefined,
+  configuredModel: string,
+): T | undefined => {
+  if (!data) return;
+  const model =
+    typeof data.model === 'string'
+      ? unwrapServerDefaultHeterogeneousModel(data.model, configuredModel)
+      : data.model;
+  const provider =
+    typeof data.provider === 'string' ? SERVER_DEFAULT_HETEROGENEOUS_PROVIDER : data.provider;
+  if (model === data.model && provider === data.provider) return;
+  return { ...data, model, provider };
+};
+
+/**
  * Map a CLI-reported server-default model back to the catalog id.
  *
  * Supported CLIs request `lobehub/${catalogId}`. Older Claude Code sessions used
@@ -65,10 +107,7 @@ export const unwrapServerDefaultHeterogeneousModel = (
 
   if (!reportedModel) return configured;
 
-  if (
-    reportedModel === SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS ||
-    reportedModel === 'custom:LobeHub-Server-Default-0'
-  ) {
+  if (LEGACY_SERVER_DEFAULT_HETEROGENEOUS_MODELS.has(reportedModel)) {
     return configured ?? reportedModel;
   }
 

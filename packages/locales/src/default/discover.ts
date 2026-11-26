@@ -21,8 +21,8 @@ export default {
   'assistants.description': 'About this Agent',
   'assistants.detail': 'Details',
   'assistants.details.capabilities.knowledge.desc':
-    'This Agent includes the following Libraries to help answer more questions.',
-  'assistants.details.capabilities.knowledge.title': 'Library',
+    'This Agent includes the following knowledge bases to help answer more questions.',
+  'assistants.details.capabilities.knowledge.title': 'Knowledge Base',
   'assistants.details.capabilities.plugin.desc':
     'This Agent includes the following Skills to help you complete more tasks.',
   'assistants.details.capabilities.plugin.title': 'Built-in Skills',
@@ -85,7 +85,7 @@ export default {
   'assistants.systemRole': 'Agent Profile',
   'assistants.tokenUsage': 'Agent Prompt Token Usage',
   'assistants.try': 'Try',
-  'assistants.withKnowledge': 'This Agent includes Libraries',
+  'assistants.withKnowledge': 'This Agent includes knowledge bases',
   'assistants.withPlugin': 'This Agent includes Skills',
   'back': 'Back to Discovery',
   'apps.addMcp': 'Custom',
@@ -262,7 +262,7 @@ export default {
   'filterBy.other.functionCall': 'Supports Function Calls',
   'filterBy.other.title': 'Other',
   'filterBy.other.vision': 'Supports Visual Recognition',
-  'filterBy.other.withKnowledge': 'Includes Libraries',
+  'filterBy.other.withKnowledge': 'Includes Knowledge Bases',
   'filterBy.other.withTool': 'Includes Skills',
   'filterBy.pricing': 'Model Pricing',
   'filterBy.timePeriod.all': 'All Time',

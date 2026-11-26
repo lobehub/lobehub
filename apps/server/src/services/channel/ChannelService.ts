@@ -33,6 +33,7 @@ import {
 } from '@/database/repositories/channel/displayTitle';
 import type { ChannelDeviceGrantDecision } from '@/database/repositories/channel/grants';
 import { decideDeviceGrant, listDeviceGrants } from '@/database/repositories/channel/grants';
+import { createNamedThread } from '@/database/repositories/channel/namedThread';
 import { findProjectMainChannelId } from '@/database/repositories/channel/projectMainChannel';
 import { frequentReactions, setReaction } from '@/database/repositories/channel/reactions';
 import {
@@ -50,6 +51,7 @@ import { ChannelCoordinator } from './ChannelCoordinator';
 import { channelContacts } from './contacts';
 import { announceDeviceGrants, refreshDeviceGrantCard } from './deviceGrantCard';
 import { notifyChannelDirectMessages } from './directMessage';
+import { answerIntervention } from './interventionAsk';
 import { notifyChannelMentions } from './mention';
 import { notifyChannel } from './notify';
 import { wakeChannel } from './queue';
@@ -518,6 +520,12 @@ export class ChannelService {
     await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
   };
 
+  /** The owner makes a person an admin or a plain member; members see the new mark at once. */
+  setMemberRole = async (channelId: string, memberId: string, role: 'admin' | 'member') => {
+    await this.repository.setMemberRole(channelId, memberId, role);
+    await this.changed(channelId);
+  };
+
   leave = async (channelId: string) => {
     const result = await this.repository.leave(channelId);
     await this.changed(channelId);
@@ -681,6 +689,17 @@ export class ChannelService {
     ]);
   };
 
+  /** A Thread a person opens by name; posting its root wakes no Agent. */
+  createThread = async (channelId: string, input: { requestKey: string; title: string }) => {
+    const thread = await this.repository.write(
+      channelId,
+      (tx, access) => createNamedThread(tx, access, input, channelContacts),
+      { joinOpen: true },
+    );
+    await this.changed(channelId);
+    return thread;
+  };
+
   unarchiveThread = async (channelId: string, threadId: string) => {
     await this.repository.unarchiveThread(channelId, threadId);
     await this.changed(channelId);
@@ -710,13 +729,19 @@ export class ChannelService {
     return message;
   };
 
-  /** Answers an Agent's question as the person it asked; the answer wakes that Agent. */
+  /**
+   * Answers an Agent's question as the person it asked; the answer wakes that Agent, or resumes
+   * the run blocked on it.
+   */
   answerAsk = async (channelId: string, input: ChannelAskAnswerInput) => {
-    const message = await this.repository.write(channelId, (tx, access) =>
+    const { ask, reply } = await this.repository.write(channelId, (tx, access) =>
       answerAsk(tx, access, input, channelContacts),
     );
-    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
-    return message;
+    if (ask.intervention) {
+      await this.changed(channelId);
+      await answerIntervention(this.db, ask);
+    } else await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+    return reply;
   };
 
   retryRouting = async (channelId: string, messageId: string) => {

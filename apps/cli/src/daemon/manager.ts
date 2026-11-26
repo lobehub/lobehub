@@ -5,7 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { x, xSync } from 'tinyexec';
 
-import { CLI_CONFIG_DIR_NAME } from '../constants/identity';
+import { resolveCliDirName } from '../constants/identity';
 import { assertExternalDaemonRestart } from './restartGuard';
 
 const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5MB
@@ -13,8 +13,12 @@ const STARTUP_TIMEOUT_MS = 30_000;
 
 type DaemonStartupMessage = { message: string; type: 'startup-error' } | { type: 'startup-ready' };
 
+/**
+ * Daemon state lives in the same `LOBEHUB_CLI_HOME` as credentials and settings, so a CLI with an
+ * isolated home never reads, signals or overwrites the default home's daemon.
+ */
 function getLobehubDir() {
-  return path.join(os.homedir(), CLI_CONFIG_DIR_NAME);
+  return path.join(os.homedir(), resolveCliDirName());
 }
 
 function getPidPath() {

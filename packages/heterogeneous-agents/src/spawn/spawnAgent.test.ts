@@ -383,10 +383,10 @@ describe('spawnAgent', () => {
     expect(call.args.filter((a) => a === 'stream-json')).toHaveLength(2);
     expect(call.args).toContain('-p');
     // These tools are disabled at every spawn site so CC does not stall on
-    // built-in interactive Q&A or wakeup/monitor lifecycle calls.
+    // built-in Q&A or wakeup/monitor calls, nor schedule cron jobs that die with the run.
     const disallowedIdx = call.args.indexOf('--disallowedTools');
     expect(disallowedIdx).toBeGreaterThan(-1);
-    expect(call.args[disallowedIdx + 1]).toBe('AskUserQuestion,Monitor,ScheduleWakeup');
+    expect(call.args[disallowedIdx + 1]).toBe('AskUserQuestion,Monitor,ScheduleWakeup,CronCreate');
     // Partial deltas are opt-in — terminal/sandbox callers want fewer events.
     expect(call.args).not.toContain('--include-partial-messages');
     // Prompt MUST go through stdin as a stream-json user message — never as argv.

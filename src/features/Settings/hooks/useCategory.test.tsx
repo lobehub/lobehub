@@ -9,6 +9,12 @@ import { useUserStore } from '@/store/user';
 
 import { SettingsGroupKey, useCategory } from './useCategory';
 
+const mocks = vi.hoisted(() => ({ codingPlans: false }));
+
+vi.mock('@/business/client/hooks/useCodingPlansTab', () => ({
+  useCodingPlansTab: () => (mocks.codingPlans ? { label: 'Business tab' } : null),
+}));
+
 vi.hoisted(() => {
   Object.defineProperty(globalThis, 'localStorage', {
     configurable: true,
@@ -54,6 +60,7 @@ const initialUserStoreState = useUserStore.getState();
 
 afterEach(() => {
   cleanup();
+  mocks.codingPlans = false;
   useUserStore.setState(initialUserStoreState, true);
 });
 
@@ -122,6 +129,27 @@ describe('settings useCategory', () => {
     // from and the secrets it reads.
     expect(keys).not.toContain(SettingsTabs.Creds);
     expect(keys).not.toContain('drive');
+  });
+
+  it('lists the business tab under Runtime, labelled by its slot, only where the slot supplies it', () => {
+    const resourceItems = () =>
+      renderHook(() => useCategory(), { wrapper: createWrapper(true, true) }).result.current.find(
+        (group) => group.key === SettingsGroupKey.Resource,
+      )?.items;
+
+    expect(resourceItems()?.map((item) => item.key)).not.toContain(SettingsTabs.CodingPlans);
+
+    mocks.codingPlans = true;
+    const items = resourceItems();
+    expect(items?.map((item) => item.key)).toEqual([
+      SettingsTabs.Devices,
+      SettingsTabs.SubscriptionAccounts,
+      SettingsTabs.CodingPlans,
+      SettingsTabs.Environments,
+    ]);
+    expect(items?.find((item) => item.key === SettingsTabs.CodingPlans)?.label).toBe(
+      'Business tab',
+    );
   });
 
   it('keeps Provider and hides Messenger and OAuth Apps by default', () => {
@@ -231,6 +259,28 @@ describe('settings useCategory automations', () => {
       .find((group) => group.key === SettingsGroupKey.Connection)
       ?.items.map((item) => item.key);
   };
+
+  it('puts Runtime right under Agent, before Connection', () => {
+    const Wrapper = ({ children }: { children: ReactNode }) => (
+      <Provider
+        createStore={() =>
+          initServerConfigStore({
+            featureFlags: { ...mapFeatureFlagsEnvToState({}), enableWebhook: true },
+            serverConfig: { aiProvider: {}, telemetry: {} },
+          })
+        }
+      >
+        {children}
+      </Provider>
+    );
+    const keys = renderHook(() => useCategory(), { wrapper: Wrapper }).result.current.map(
+      (group) => group.key,
+    );
+    expect(keys.indexOf(SettingsGroupKey.Resource)).toBe(keys.indexOf(SettingsGroupKey.Agent) + 1);
+    expect(keys.indexOf(SettingsGroupKey.Connection)).toBe(
+      keys.indexOf(SettingsGroupKey.Resource) + 1,
+    );
+  });
 
   // Unreleased: the tab follows the `webhook` flag (LOBE-UX-015).
   it('hides Automations while MCP Events is off', () => {

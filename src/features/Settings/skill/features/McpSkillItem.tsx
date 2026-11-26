@@ -26,6 +26,8 @@ interface McpSkillItemProps {
   /** Feedback line under the title (list row only). */
   description?: ReactNode;
   identifier: string;
+  /** A legacy user_installed_plugins row, not a connector projection of the same identifier. */
+  isLegacyPlugin?: boolean;
   isSelected?: boolean;
   onSelect?: () => void;
   runtimeType?: string;
@@ -34,7 +36,18 @@ interface McpSkillItemProps {
 }
 
 const McpSkillItem = memo<McpSkillItemProps>(
-  ({ identifier, title, avatar, description, type, runtimeType, author, isSelected, onSelect }) => {
+  ({
+    identifier,
+    title,
+    avatar,
+    description,
+    type,
+    runtimeType,
+    author,
+    isLegacyPlugin,
+    isSelected,
+    onSelect,
+  }) => {
     const { t } = useTranslation('plugin');
     const isPage = useSkillListVariant() === 'page';
     const iconSize = isPage ? 20 : 18;
@@ -73,9 +86,17 @@ const McpSkillItem = memo<McpSkillItemProps>(
         <SkillListRow
           active={isSelected}
           description={description}
-          extra={isPage ? <RowMoreMenu onOpenDetail={onSelect} /> : undefined}
           summary={isPage ? author : undefined}
           title={title}
+          extra={
+            isPage ? (
+              isLegacyPlugin ? (
+                <Actions identifier={identifier} isMCP={isMCP} type={type} />
+              ) : (
+                <RowMoreMenu onOpenDetail={onSelect} />
+              )
+            ) : undefined
+          }
           icon={() =>
             avatar && avatar !== 'MCP_AVATAR' ? (
               <Avatar avatar={avatar} shape="square" size={iconSize} />

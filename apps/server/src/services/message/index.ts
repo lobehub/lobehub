@@ -560,14 +560,21 @@ export class MessageService {
       this.getQueryOptions(),
     );
 
-    const messagesToSummarize = allMessages.filter((msg) => messageIds.includes(msg.id));
+    // A thread page also shows the main-conversation rows it branched from. Those
+    // belong to the main conversation, so compressing them from the thread would
+    // hide them there too: only the thread's own rows go into its group.
+    const threadId = options?.threadId;
+    const messagesToSummarize = allMessages.filter(
+      (msg) => messageIds.includes(msg.id) && (!threadId || msg.threadId === threadId),
+    );
+    const scopedMessageIds = threadId ? messagesToSummarize.map((msg) => msg.id) : messageIds;
 
     // 2. Create compression group with placeholder content
     const messageGroupId = await this.compressionRepository.createCompressionGroup({
       content: '...', // Placeholder content
-      messageIds,
+      messageIds: scopedMessageIds,
       metadata: {
-        originalMessageCount: messageIds.length,
+        originalMessageCount: scopedMessageIds.length,
       },
       topicId,
     });
@@ -611,6 +618,7 @@ export class MessageService {
       content,
       groupId: messageGroupId,
       sourceGroupIds,
+      threadId: threadId ?? null,
       topicId,
     });
 

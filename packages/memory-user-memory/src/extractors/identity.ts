@@ -1,5 +1,3 @@
-import { renderPlaceholderTemplate } from '@lobechat/context-engine';
-
 import { identityPrompt } from '../prompts';
 import type { IdentityActions } from '../schemas';
 import { IdentityActionsSchema } from '../schemas';
@@ -50,11 +48,10 @@ export class IdentityExtractor extends BaseMemoryExtractor<
     };
   }
 
-  protected buildUserPrompt(options: IdentityExtractorOptions): string {
-    if (!this.promptTemplate) {
-      throw new Error('Prompt template not loaded');
-    }
-
-    return renderPlaceholderTemplate(this.promptTemplate!, this.getTemplateProps(options));
+  buildUserPrompt(): string {
+    return this.buildTaskPrompt(
+      'identity',
+      'Return empty `add` / `update` / `remove` arrays when nothing changes.',
+    );
   }
 }

@@ -1,3 +1,4 @@
+import { A2uiInspectors, A2uiManifest, A2uiRenders } from '@lobechat/builtin-tool-a2ui/client';
 import {
   LobeActivatorInspectors,
   LobeActivatorManifest,
@@ -136,6 +137,7 @@ import {
   PageAgentRenders,
   PageAgentStreamings,
 } from '@lobechat/builtin-tool-page-agent/client';
+import { ProjectInspectors, ProjectManifest } from '@lobechat/builtin-tool-project/client';
 import {
   RemoteDeviceInspectors,
   RemoteDeviceManifest,
@@ -285,6 +287,7 @@ export const registerBuiltinToolSurfaces = (): void => {
   if (builtinToolSurfacesRegistered) return;
 
   registerBuiltinRenders({
+    [A2uiManifest.identifier]: A2uiRenders as Record<string, BuiltinRender>,
     [ChannelManifest.identifier]: ChannelRenders as Record<string, BuiltinRender>,
     [AgentBuilderManifest.identifier]: AgentBuilderRenders as Record<string, BuiltinRender>,
     [AgentDocumentsManifest.identifier]: AgentDocumentsRenders as Record<string, BuiltinRender>,
@@ -353,6 +356,7 @@ export const registerBuiltinToolSurfaces = (): void => {
   });
 
   registerBuiltinInspectors({
+    [A2uiManifest.identifier]: A2uiInspectors as Record<string, BuiltinInspector>,
     [ChannelManifest.identifier]: ChannelInspectors as Record<string, BuiltinInspector>,
     [AuvIdentifier]: AuvInspectors as Record<string, BuiltinInspector>,
     // Read-only alias for messages recorded by the original private desktop PR.
@@ -425,6 +429,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [SkillStoreManifest.identifier]: SkillStoreInspectors as Record<string, BuiltinInspector>,
     [SkillsManifest.identifier]: SkillsInspectors as Record<string, BuiltinInspector>,
     [ArtboardManifest.identifier]: ArtboardInspectors,
+    [ProjectManifest.identifier]: ProjectInspectors,
     [CanvasManifest.identifier]: CanvasInspectors,
     [DashboardManifest.identifier]: DashboardInspectors as Record<string, BuiltinInspector>,
     // Dashboard tool calls persisted before the rename to `builtin-dashboard`.

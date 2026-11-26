@@ -75,8 +75,8 @@ export const validateSendInput = (input: ChannelSendInput) => {
     throw new ChannelError('BAD_REQUEST', 'Choose a reply or a thread root, not both');
   if (input.rootMessageId && input.threadId)
     throw new ChannelError('BAD_REQUEST', 'Choose a thread or a root message, not both');
-  if (input.silent && (input.replyToId || input.mentions?.length))
-    throw new ChannelError('BAD_REQUEST', 'A message for the record neither replies nor mentions');
+  if (input.silent && input.mentions?.length)
+    throw new ChannelError('BAD_REQUEST', 'A message for the record mentions no one');
   const fileIds = [...new Set(input.fileIds ?? [])];
   if (input.card && fileIds.length)
     throw new ChannelError('BAD_REQUEST', 'A card goes without attachments');
@@ -201,19 +201,18 @@ export const sendMessage = async (
       peerOf(channel, member.userId)!,
     );
 
-  // Another person's shared Agent runs as its owner, who cannot read the sender's files. The test
-  // is the one the Channel list uses, so a workspace conversation with a shared Agent is treated
-  // like a personal one, while a colleague's public workspace Agent (the workspace's own) is not.
-  // The share's limits (prompt length, messages per visitor, monthly spend) never refuse the send:
-  // the reply fails with the limit's type when dispatched (`ChannelCoordinator.shareGate`).
-  if (channel.agentId && fileIds.length && (await sharedAgentOwner(tx, channel, member.userId!)))
-    throw new ChannelError('BAD_REQUEST', 'Attachments cannot be sent to a shared Agent');
-
+  // A visitor attaches their own files to another person's shared Agent like anywhere else. The
+  // share's limits (prompt length, messages per visitor, attachment size and storage, monthly
+  // spend) never refuse the send: the reply fails with the limit's type when dispatched
+  // (`ChannelCoordinator.shareGate`), which also copies the files into the share for the run.
   if (fileIds.length) {
     // A workspace's public files are its members'. An external contact talking in it attaches
-    // only files they uploaded themselves, never one of the workspace's by its id.
-    const external =
-      !!channel.workspaceId && !(await isWorkspaceMember(tx, channel.workspaceId, member.userId!));
+    // only files they uploaded themselves, never one of the workspace's by its id. So does a
+    // visitor of a shared Agent: the share copies only the visitor's own files for its run.
+    const ownOnly =
+      (!!channel.workspaceId &&
+        !(await isWorkspaceMember(tx, channel.workspaceId, member.userId!))) ||
+      (!!channel.agentId && !!(await sharedAgentOwner(tx, channel, member.userId!)));
     // Lock in a stable order so concurrent sends and file cleanup cannot deadlock.
     const accessible = await tx
       .select({ id: files.id })
@@ -221,7 +220,7 @@ export const sendMessage = async (
       .where(
         and(
           inArray(files.id, fileIds),
-          external
+          ownOnly
             ? eq(files.userId, member.userId!)
             : buildWorkspaceWhere(
                 { userId: member.userId!, workspaceId: channel.workspaceId ?? undefined },

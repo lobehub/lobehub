@@ -105,6 +105,7 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
     // --- tools + skills ---
     selectedSkills: tools?.selectedSkills,
     selectedTools: tools?.selectedTools,
+    ...(tools?.skillChanges && { skillChanges: tools.skillChanges }),
     toolDiscoveryConfig: tools?.toolDiscoveryConfig,
     toolsConfig: {
       // Custom provider IDs use the OpenAI-compatible runtime. Defer the final

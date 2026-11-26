@@ -16,6 +16,7 @@ const facts = (
   deviceId: 'device-1',
   job: {
     acceptedAt: new Date(),
+    blockedCode: null,
     id: 'job',
     messageId: 'msg',
     operationId: 'op',
@@ -37,6 +38,49 @@ const facts = (
   request: 'Why did the deploy fail?',
   requesterUserId: 'user',
   ...overrides,
+});
+
+describe('reply error cards for a requester who may not use the Agent', () => {
+  // A visitor DMing a link-shared Claude Code Agent without its device grant got "the reply could
+  // not start" and a Retry that could never succeed.
+  it('asks the owner for access when a shared local CLI Agent refuses the visitor', () => {
+    const refused = facts(
+      {
+        error: {
+          message: 'This shared Agent cannot run for visitors in its current setup',
+          type: 'ShareHeterogeneousAgentUnsupported',
+        },
+      },
+      { share: { showErrorDetails: false } },
+      { acceptedAt: null },
+    );
+    expect(classifyReplyFailure(refused)).toBe('access_required');
+    expect(ruleBasedReplyError(refused, 'zh-CN', NOW)).toMatchObject({
+      actions: ['request_access'],
+      kind: 'access_required',
+      summary: 'Coder 需要主人授权后才能使用。申请后，主人同意即可继续。',
+    });
+    expect(ruleBasedReplyError(refused, 'en-US', NOW).summary).toBe(
+      "Coder needs its owner's permission before you can use it. Ask for access; it continues once they allow it.",
+    );
+  });
+
+  it('says the owner declined, with asking again as the only step', () => {
+    const declined = facts(
+      null,
+      {},
+      { acceptedAt: null, blockedCode: 'access_denied', operationId: null, topicId: null },
+    );
+    expect(classifyReplyFailure(declined)).toBe('access_denied');
+    expect(ruleBasedReplyError(declined, 'zh-CN', NOW)).toMatchObject({
+      actions: ['request_access'],
+      deviceId: null,
+      errorMessage: null,
+      errorType: null,
+      kind: 'access_denied',
+      summary: 'Coder 的主人拒绝了你的使用申请，这次没有回复。可以再次申请。',
+    });
+  });
 });
 
 describe('rule-based reply error cards', () => {

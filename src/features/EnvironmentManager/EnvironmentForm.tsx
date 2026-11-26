@@ -24,7 +24,7 @@ import {
   TerminalIcon,
   Trash2Icon,
 } from 'lucide-react';
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, type ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
@@ -66,6 +66,8 @@ interface EnvironmentFormProps {
    */
   collapseSetup?: boolean;
   environment: EnvironmentFormValue;
+  /** A note under the variables' description, for something true of this page only. */
+  envNotice?: ReactNode;
   /**
    * Hides the name and description: a project's environment is named after
    * the project and edited as part of it.
@@ -293,7 +295,7 @@ BranchField.displayName = 'EnvironmentBranchField';
  * tab switch before anyone scrolled down to it.
  */
 const EnvironmentForm = memo<EnvironmentFormProps>(
-  ({ collapseSetup, environment, hideBasics, hideRepositoryHints, onSave }) => {
+  ({ collapseSetup, environment, envNotice, hideBasics, hideRepositoryHints, onSave }) => {
     const { t } = useTranslation('setting');
     const [setupOpen, setSetupOpen] = useState(false);
     const configuration = (environment.configuration ?? {}) as SandboxEnvironmentSpecification;
@@ -477,7 +479,11 @@ const EnvironmentForm = memo<EnvironmentFormProps>(
 
         {/* Said plainly because the shape cannot enforce it: a text field
             cannot tell a region from a token. */}
-        <PanelSection desc={t('environments.form.envHint')} title={t('environments.form.env')}>
+        <PanelSection
+          desc={t('environments.form.envHint')}
+          notice={envNotice}
+          title={t('environments.form.env')}
+        >
           <EnvironmentVariables
             entries={Object.entries(configuration.env ?? {})}
             onSave={(entries) => saveConfiguration({ env: Object.fromEntries(entries) })}

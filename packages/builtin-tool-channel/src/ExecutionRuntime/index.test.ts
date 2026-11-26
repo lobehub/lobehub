@@ -148,6 +148,42 @@ describe('Channel messaging', () => {
   });
 });
 
+describe('Channel postMessage', () => {
+  const history = { readMessage: vi.fn(), readMessages: vi.fn() };
+
+  it('posts through the posting service and returns where it landed', async () => {
+    const posted = {
+      cards: 1,
+      channelId: 'channel-lobehub',
+      channelTitle: 'General',
+      messageId: 'message-posted',
+      threadId: null,
+      url: 'https://example.com/channels/channel-lobehub',
+    };
+    const postMessage = vi.fn().mockResolvedValue(posted);
+    const runtime = new ChannelExecutionRuntime(history, undefined, undefined, { postMessage });
+
+    const result = await runtime.postMessage({ content: 'Summary' });
+    expect(postMessage).toHaveBeenCalledWith({ content: 'Summary' });
+    expect(result).toMatchObject({ state: posted, success: true });
+    expect(JSON.parse(result.content!)).toEqual(posted);
+  });
+
+  it('reports a refused post, and a run that cannot post', async () => {
+    const refused = new ChannelExecutionRuntime(history, undefined, undefined, {
+      postMessage: vi.fn().mockRejectedValue(new Error('The Agent is muted in this Channel')),
+    });
+    expect(await refused.postMessage({ content: 'Hi' })).toMatchObject({
+      content: 'The Agent is muted in this Channel',
+      error: { type: 'ChannelPostError' },
+      success: false,
+    });
+    expect(await new ChannelExecutionRuntime(history).postMessage({ content: 'Hi' })).toMatchObject(
+      { error: { type: 'ChannelPostError' }, success: false },
+    );
+  });
+});
+
 describe('Channel askUser', () => {
   const questions = [{ options: [{ label: 'A' }, { label: 'B' }], question: 'Which?' }];
 

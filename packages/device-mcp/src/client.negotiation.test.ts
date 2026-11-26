@@ -33,8 +33,8 @@ describe('desktop transport protocol policy', () => {
       });
       if (era === 'modern') {
         await expect(client.callTool('needs_input', {})).resolves.toMatchObject({
+          content: [{ text: expect.stringContaining('requires user input') }],
           isError: true,
-          content: [{ type: 'text', text: expect.stringContaining('requires user input') }],
         });
       }
     } finally {

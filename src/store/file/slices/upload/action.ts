@@ -5,7 +5,7 @@ import { t } from 'i18next';
 import { handleFileUploadError } from '@/business/client/handleFileUploadError';
 import { fileService } from '@/services/file';
 import { hashFile } from '@/services/hashFile';
-import { uploadService } from '@/services/upload';
+import { type SignedUpload, uploadService } from '@/services/upload';
 import type { StoreSetter } from '@/store/types';
 import type { UploadFileItem } from '@/types/files';
 import { getAudioDuration } from '@/utils/client/audioDuration';
@@ -169,6 +169,8 @@ export class FileUploadActionImpl {
   }: UploadWithProgressParams): Promise<UploadWithProgressResult | undefined> => {
     const statusId = uploadId ?? file.name;
     let uploadedPathname: string | undefined;
+    /** Signed ahead and not yet handed to the upload, which then owns its cleanup. */
+    let signed: SignedUpload | undefined;
 
     try {
       const { detectedMimeType, file: normalizedFile } = await normalizeUploadedFileType(file);
@@ -178,8 +180,12 @@ export class FileUploadActionImpl {
           ? getAudioDuration(normalizedFile).catch(() => undefined)
           : undefined;
 
+      // Each step below is a round trip or a decode; none needs another's result, so they
+      // overlap instead of queueing. Signing is speculative and released if the file exists.
+      signed = uploadService.signUpload(normalizedFile, workspaceId);
+
       // 1. extract image dimensions and the blurred placeholder if applicable
-      const [dimensions, thumbhash] = await Promise.all([
+      const imageMetadata = Promise.all([
         getImageDimensions(normalizedFile),
         getImageThumbhash(normalizedFile),
       ]);
@@ -193,11 +199,16 @@ export class FileUploadActionImpl {
         });
       });
 
-      const checkStatus = await fileService.checkFileHash(hash, workspaceId);
+      const [checkStatus, [dimensions, thumbhash]] = await Promise.all([
+        fileService.checkFileHash(hash, workspaceId),
+        imageMetadata,
+      ]);
       let metadata: ExistingFileMetadata;
 
       // 3. if file exist, just skip upload
       if (checkStatus.isExist) {
+        if (signed) void uploadService.releaseSignedUpload(signed);
+        signed = undefined;
         metadata = normalizeExistingFileMetadata(checkStatus.metadata);
         onStatusUpdate?.({
           id: statusId,
@@ -207,8 +218,11 @@ export class FileUploadActionImpl {
       }
       // 3. if file don't exist, need upload files
       else {
+        const handedOver = signed;
+        signed = undefined;
         const { data, success } = await uploadService.uploadFileToS3(normalizedFile, {
           abortController,
+          signed: handedOver,
           onNotSupported: () => {
             onStatusUpdate?.({ id: statusId, type: 'removeFile' });
             toast.info({
@@ -292,6 +306,7 @@ export class FileUploadActionImpl {
 
       return { ...data, dimensions, filename: normalizedFile.name };
     } catch (error) {
+      if (signed) void uploadService.releaseSignedUpload(signed);
       if (uploadedPathname) await uploadService.releaseUpload(uploadedPathname, workspaceId);
       if (abortController?.signal.aborted) {
         onStatusUpdate?.({

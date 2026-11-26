@@ -11,10 +11,18 @@ export const getProjectTopicPath = (projectId: string, topicId?: string) =>
  * lives in the route so it stays with its own pane (and survives a reload);
  * nothing is created until its first message.
  */
-export const getProjectDraftPath = (projectId: string, agentId: string, directoryId?: string) =>
-  `${getProjectTopicPath(projectId)}?${new URLSearchParams(
-    directoryId ? { agent: agentId, dir: directoryId } : { agent: agentId },
-  )}`;
+/** `auto`: the draft follows the project's runner order (see `useBlankProjectAuto`). */
+export const getProjectDraftPath = (
+  projectId: string,
+  agentId: string,
+  directoryId?: string,
+  auto?: boolean,
+) =>
+  `${getProjectTopicPath(projectId)}?${new URLSearchParams({
+    agent: agentId,
+    ...(directoryId && { dir: directoryId }),
+    ...(auto && { auto: '1' }),
+  })}`;
 
 export const getProjectLibraryPath = (projectId: string, libraryId: string) =>
   `/project/${projectId}/library/${libraryId}`;
@@ -28,7 +36,20 @@ export const getProjectDashboardPath = (projectId: string, dashboardId?: string)
     ? `/project/${projectId}/dashboard/${dashboardId}`
     : `/project/${projectId}/dashboard`;
 
-export type ProjectSettingsSection = 'environments' | 'general' | 'knowledge' | 'members' | 'sites';
+export type ProjectSettingsSection =
+  'advanced' | 'environment' | 'environments' | 'general' | 'knowledge' | 'members';
+
+/**
+ * Settings tabs that were folded into another tab. An old link keeps opening
+ * where that content now lives instead of falling back to General.
+ */
+const LEGACY_PROJECT_SETTINGS_SECTIONS: Record<string, ProjectSettingsSection> = {
+  directories: 'environments',
+  sites: 'advanced',
+};
+
+export const resolveProjectSettingsSection = (section: string) =>
+  LEGACY_PROJECT_SETTINGS_SECTIONS[section] ?? section;
 
 export const getProjectSettingsPath = (projectId: string, section: ProjectSettingsSection) =>
   `/project/${projectId}/settings/${section}`;

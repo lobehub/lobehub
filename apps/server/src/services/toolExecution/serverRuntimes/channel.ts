@@ -3,6 +3,7 @@ import { ChannelExecutionRuntime } from '@lobechat/builtin-tool-channel/executio
 
 import { ChannelHistoryService } from '@/server/services/channel/ChannelHistoryService';
 import { ChannelMessagingService } from '@/server/services/channel/ChannelMessagingService';
+import { ChannelPostService } from '@/server/services/channel/ChannelPostService';
 import { ChannelThreadService } from '@/server/services/channel/ChannelThreadService';
 
 import type { ServerRuntimeRegistration } from './types';
@@ -38,11 +39,6 @@ export const channelRuntime: ServerRuntimeRegistration = {
       },
       {
         listChannels: messaging.listChannels,
-        listPeople: messaging.listPeople,
-        messagePerson: (params) => {
-          if (!toolCallId) throw new Error('Messaging a person requires a tool call id');
-          return messaging.messagePerson(params, toolCallId);
-        },
         sendMessage: (params) => {
           // The tool call id keys the post, so a retried call returns what it already sent.
           if (!toolCallId) throw new Error('Sending a Channel message requires a tool call id');
@@ -68,6 +64,21 @@ export const channelRuntime: ServerRuntimeRegistration = {
           stopThread: threads.stopThread,
           unwatchThreads: threads.unwatchThreads,
           watchThreads: (params) => threads.watchThreads(params, keyed()),
+        };
+      })(),
+      (() => {
+        const posts = new ChannelPostService(
+          context.serverDB,
+          context.userId,
+          context.operationId,
+          context.workspaceId,
+        );
+        return {
+          postMessage: (params) => {
+            // The tool call id keys the post, so a retried call returns what it already posted.
+            if (!toolCallId) throw new Error('Posting a Channel message requires a tool call id');
+            return posts.postMessage(params, toolCallId);
+          },
         };
       })(),
     );

@@ -71,6 +71,7 @@ import {
   SelectedSkillInjector,
   selectToolPromptManifests,
   SKILL_STORE_TOOL_ID,
+  SkillChangesInjector,
   SkillContextProvider,
   SkillImportRouteInjector,
   SystemDateProvider,
@@ -204,6 +205,7 @@ export class MessagesEngine {
       agentGroup,
       agentDocuments,
       agentDocumentChanges,
+      skillChanges,
       revokedDocumentReads,
       planTodo,
       userMemory,
@@ -478,6 +480,16 @@ export class MessagesEngine {
       new AgentDocumentChangesInjector({
         changes: agentDocumentChanges,
         enabled: isAgentMode && !!agentDocumentChanges,
+      }),
+      // Skill-index change notes → the user message each belongs to (the
+      // `<available_skills>` block renders a snapshot; these say what changed
+      // since). Not gated on `skillsConfig.enabledSkills`: a snapshot taken
+      // before the first skill has no rows, and the notes are then the only
+      // place newly installed or enabled skills appear.
+      new SkillChangesInjector({
+        canActivateSkill,
+        changes: skillChanges,
+        enabled: isAgentMode && !!skillChanges,
       }),
       // Active topic document → last user message, for continuing document work outside page scope
       new ActiveTopicDocumentContextInjector({

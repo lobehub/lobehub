@@ -230,6 +230,7 @@ export interface BotWakeRecorderOptions {
    * from the person who set it up. Called lazily; the loader is expected to cache.
    */
   identity?: () => Promise<{
+    agentDescription?: string;
     agentName?: string;
     agentTitle?: string;
     ownerNames?: readonly string[];
@@ -543,6 +544,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
         : undefined,
     ]);
     const hasIdentity = !!(
+      identity.agentDescription ||
       identity.agentName ||
       identity.agentTitle ||
       identity.ownerNames?.length
@@ -573,8 +575,12 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
 
     return {
       agent:
-        identity.agentName || identity.agentTitle
-          ? { name: identity.agentName, title: identity.agentTitle }
+        identity.agentName || identity.agentTitle || identity.agentDescription
+          ? {
+              description: identity.agentDescription,
+              name: identity.agentName,
+              title: identity.agentTitle,
+            }
           : undefined,
       botNames: [...botNames],
       lastBotMessage: lastBotLine?.text,

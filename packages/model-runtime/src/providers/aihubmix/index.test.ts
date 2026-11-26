@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as modelParse from '../../utils/modelParse';
 import { LobeAiHubMixAI, params } from './index';
@@ -41,11 +41,50 @@ describe('LobeAiHubMixAI', () => {
     it('should initialize with correct provider', () => {
       expect(instance).toBeDefined();
     });
+  });
 
-    it('should set APP-Code header', () => {
-      // The RouterRuntime-based providers have different structure
-      // We just verify the instance is created correctly
-      expect(instance).toBeInstanceOf(LobeAiHubMixAI);
+  /**
+   * AiHubMix attributes requests (and applies its APP-Code discount) only when
+   * the `APP-Code` header reaches the upstream, so assert the real outgoing
+   * request of every route type rather than the runtime's construction.
+   * See https://docs.aihubmix.com/cn/api/App-code
+   */
+  describe('APP-Code header', () => {
+    const modelOf = (apiType: string) =>
+      resolveRouters().find((router) => router.apiType === apiType)?.models?.[0];
+
+    // The first routed chat lazily imports every provider SDK, which takes ~4s
+    // and would otherwise eat the first case's 5s default timeout.
+    beforeAll(async () => {
+      await import('../../core/RouterRuntime/baseRuntimeMap');
+    }, 30_000);
+
+    it.each([
+      ['anthropic', modelOf('anthropic')],
+      ['google', modelOf('google')],
+      ['xai', modelOf('xai')],
+      ['deepseek', 'deepseek-chat'],
+      ['openai', 'gpt-4o-mini'],
+    ])('should send APP-Code on %s chat requests (%s)', async (_apiType, model) => {
+      mockFetch.mockImplementation(
+        async () =>
+          new Response(JSON.stringify({ error: { message: 'stop' } }), {
+            headers: { 'content-type': 'application/json' },
+            status: 400,
+          }),
+      );
+
+      await instance
+        .chat({ messages: [{ content: 'hi', role: 'user' }], model: model!, temperature: 0 })
+        .catch(() => {});
+
+      expect(mockFetch).toHaveBeenCalled();
+      for (const [input, init] of mockFetch.mock.calls) {
+        const headers = new Headers(
+          init?.headers ?? (input instanceof Request ? input.headers : undefined),
+        );
+        expect(headers.get('APP-Code')).toBe('LobeHub');
+      }
     });
   });
 

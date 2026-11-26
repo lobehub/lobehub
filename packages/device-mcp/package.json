@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@lobechat/const": "workspace:*",
+    "@lobechat/mcp-elicitation": "workspace:*",
     "@lobechat/utils": "workspace:*",
     "@modelcontextprotocol/client": "~2.4.0"
   },
