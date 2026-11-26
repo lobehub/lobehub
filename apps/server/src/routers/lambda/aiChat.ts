@@ -37,6 +37,7 @@ import {
 import { resolveContext } from '@/server/routers/lambda/_helpers/resolveContext';
 import { toRuntimeErrorCause } from '@/server/routers/lambda/_helpers/runtimeErrorCause';
 import { resolveAgentReference } from '@/server/services/agent/resolveReference';
+import { agentDefaultConversationMode } from '@/server/services/aiAgent/pipeline/agentDefaultConversationMode';
 import { AiChatService } from '@/server/services/aiChat';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 import { FileService } from '@/server/services/file';
@@ -274,11 +275,6 @@ export const aiChatRouter = router({
   sendMessageInServer: aiChatWriteProcedure
     .input(AiSendMessageServerSchema)
     .mutation(async ({ input: rawInput, ctx }) => {
-      if (!rawInput.conversationMode)
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message: 'Update this client to continue with the conversation mode contract.',
-        });
       const context = await resolveContext(
         rawInput,
         ctx.serverDB,
@@ -396,12 +392,20 @@ export const aiChatRouter = router({
         }
       }
 
+      const requestedMode = input.conversationMode;
       const conversationMode = await new TopicModel(
         ctx.serverDB,
         ctx.userId,
         ctx.workspaceId ?? undefined,
-      ).resolveConversationMode(topicId, input.conversationMode!);
-      if (conversationMode !== input.conversationMode)
+      ).resolveConversationMode(
+        topicId,
+        requestedMode ??
+          (await agentDefaultConversationMode(
+            { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+            input.agentId,
+          )),
+      );
+      if (requestedMode && conversationMode !== requestedMode)
         throw new TRPCError({
           code: 'CONFLICT',
           message: 'Conversation mode is locked. Reload the conversation before sending.',

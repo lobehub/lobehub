@@ -3,15 +3,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { aiChatRouter } from './aiChat';
 
-const { resolveMode, savePair, getMessages, createTopic, useTopic } = vi.hoisted(() => ({
-  useTopic: vi.fn(),
-  createTopic: vi.fn(),
-  getMessages: vi.fn(),
-  resolveMode: vi.fn(),
-  savePair: vi.fn(),
-}));
+const { resolveMode, savePair, getMessages, createTopic, useTopic, agentPolicy } = vi.hoisted(
+  () => ({
+    agentPolicy: vi.fn(),
+    useTopic: vi.fn(),
+    createTopic: vi.fn(),
+    getMessages: vi.fn(),
+    resolveMode: vi.fn(),
+    savePair: vi.fn(),
+  }),
+);
 
-vi.mock('@/database/models/agent');
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: class {
+    getAgentToolPolicy = agentPolicy;
+    touchUpdatedAt = vi.fn();
+  },
+}));
 vi.mock('@/database/models/message', () => ({
   MessageModel: class {
     createUserAndAssistantMessages = savePair;
@@ -84,12 +92,26 @@ describe('local execution conversation mode contract', () => {
     });
     expect(createTopic.mock.calls[0][0].metadata).toEqual({ boundDeviceId: 'device' });
   });
-  it('rejects a legacy sender without committing a message', async () => {
+  it("starts a legacy sender's topic in the agent's default mode", async () => {
     const { conversationMode: _mode, ...legacy } = input();
-    await expect(caller().sendMessageInServer(legacy)).rejects.toMatchObject({
-      code: 'PRECONDITION_FAILED',
-    });
-    expect(savePair).not.toHaveBeenCalled();
+    agentPolicy.mockResolvedValue({ chatConfig: { enableAgentMode: false }, userId: 'mode-user' });
+    resolveMode.mockImplementation(async (_topicId: string, fallback: string) => fallback);
+
+    const result = await caller().sendMessageInServer({ ...legacy, agentId: 'agent-1' });
+
+    expect(result.conversationMode).toBe('chat');
+    expect(savePair.mock.calls[0][0].userMessage.metadata.conversationMode).toBe('chat');
+  });
+
+  it("continues a legacy sender in the topic's locked mode", async () => {
+    const { conversationMode: _mode, ...legacy } = input();
+    agentPolicy.mockResolvedValue({ chatConfig: { enableAgentMode: false }, userId: 'mode-user' });
+    resolveMode.mockResolvedValue('agent');
+
+    const result = await caller().sendMessageInServer({ ...legacy, agentId: 'agent-1' });
+
+    expect(result.conversationMode).toBe('agent');
+    expect(savePair.mock.calls[0][0].userMessage.metadata.conversationMode).toBe('agent');
   });
 
   it('rejects a stale conflicting mode before committing a message', async () => {

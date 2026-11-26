@@ -1,9 +1,22 @@
-import type { LobeAgentChatConfig } from '@lobechat/types';
+import type { ConversationMode, LobeAgentChatConfig } from '@lobechat/types';
 import { resolveToolMode } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
 import type { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
+
+export const preferredConversationMode = ({
+  canManage = true,
+  chatConfig,
+  memberMode,
+}: {
+  canManage?: boolean;
+  chatConfig?: LobeAgentChatConfig | null;
+  memberMode?: boolean;
+}): ConversationMode => {
+  if (!canManage && memberMode !== undefined) return memberMode ? 'agent' : 'chat';
+  return resolveToolMode(chatConfig) === 'chat' ? 'chat' : 'agent';
+};
 
 export const userTurnConversationMode = async (input: {
   chatConfig?: LobeAgentChatConfig;
@@ -14,8 +27,7 @@ export const userTurnConversationMode = async (input: {
   userId: string;
   workspaceId?: string;
 }) => {
-  const fallback =
-    resolveToolMode(input.chatConfig) === 'chat' ? ('chat' as const) : ('agent' as const);
+  const fallback = preferredConversationMode({ chatConfig: input.chatConfig });
   if (!input.threadId) return fallback;
   const topic = await input.topicModel.findById(input.topicId);
   if (!topic) throw new Error('Host topic is unavailable');
@@ -27,6 +39,6 @@ export const userTurnConversationMode = async (input: {
     ));
   return input.topicModel.resolveConversationMode(
     input.topicId,
-    resolveToolMode(host ? host.chatConfig : undefined) === 'chat' ? 'chat' : 'agent',
+    preferredConversationMode({ chatConfig: host ? host.chatConfig : undefined }),
   );
 };

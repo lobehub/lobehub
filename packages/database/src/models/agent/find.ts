@@ -320,6 +320,9 @@ export const getAgentToolPolicy = async (ctx: AgentModelContext, id: string) => 
       plugins: agents.plugins,
       chatConfig: agents.chatConfig,
       agencyConfig: agents.agencyConfig,
+      userId: agents.userId,
+      visibility: agents.visibility,
+      workspaceId: agents.workspaceId,
     })
     .from(agents)
     .where(and(eq(agents.id, id), ctx.ownership()))

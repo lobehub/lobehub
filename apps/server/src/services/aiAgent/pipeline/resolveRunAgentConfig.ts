@@ -10,7 +10,6 @@ import {
   getPinnedPluginIds,
   resolveAgentAgencyConfig,
   resolveHeterogeneousModelOverride,
-  resolveToolMode,
   withConversationMode,
 } from '@lobechat/types';
 import debug from 'debug';
@@ -23,6 +22,7 @@ import { isResourceAuthorOrAdmin } from '@/server/services/resourcePermission';
 import { isSandboxAvailableForUser } from '@/server/services/sandbox/availability';
 
 import type { InternalExecAgentParams } from '../types';
+import { preferredConversationMode } from './userTurnConversationMode';
 
 const log = debug('lobe-server:ai-agent-service');
 
@@ -234,13 +234,11 @@ export const resolveRunAgentConfig = async (
 
   const preferredMode =
     toolModeOverride ??
-    (!canManageAgent && overrides.mode !== undefined
-      ? overrides.mode
-        ? 'agent'
-        : 'chat'
-      : resolveToolMode(row.chatConfig) === 'chat'
-        ? 'chat'
-        : 'agent');
+    preferredConversationMode({
+      canManage: canManageAgent,
+      chatConfig: row.chatConfig,
+      memberMode: overrides.mode,
+    });
   const conversationMode =
     appContext?.topicId && !appContext.isSubAgent
       ? await new TopicModel(deps.db, deps.userId, deps.workspaceId, undefined, {
