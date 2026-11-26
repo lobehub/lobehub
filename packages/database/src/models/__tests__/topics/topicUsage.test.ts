@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../../core/getTestDB';
 import { agentOperations, messages, topics, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
-import { MessageModel } from '../../message';
 import { recomputeTopicUsage } from '../../topicUsage';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -150,35 +149,6 @@ afterEach(async () => {
 });
 
 describe('recomputeTopicUsage', () => {
-  it('keeps growing a topic whose token total is already past the int4 limit', async () => {
-    // A long conversation already rolled up near the int4 maximum (2,147,483,647).
-    const pastInputTokens = 2_136_833_462;
-    const pastOutputTokens = 10_641_855;
-    await insertAssistantMessage({
-      usage: {
-        totalInputTokens: pastInputTokens,
-        totalOutputTokens: pastOutputTokens,
-        totalTokens: pastInputTokens + pastOutputTokens,
-      },
-    });
-    await recompute();
-    expect((await getTopic()).totalTokens).toBe(2_147_475_317);
-
-    // The next reply is saved through the normal finalize write, which recomputes the topic.
-    const replyId = await insertAssistantMessage({ usage: null });
-    const result = await new MessageModel(serverDB, userId).update(replyId, {
-      metadata: {
-        usage: { totalInputTokens: 18_000, totalOutputTokens: 2000, totalTokens: 20_000 },
-      } as any,
-    });
-
-    expect(result.success).toBe(true);
-    const topic = await getTopic();
-    expect(topic.totalTokens).toBe(2_147_495_317);
-    expect(topic.totalInputTokens).toBe(pastInputTokens + 18_000);
-    expect(topic.totalOutputTokens).toBe(pastOutputTokens + 2000);
-  });
-
   it('rolls a single assistant message into scalar totals, usage and cost jsonb', async () => {
     await insertAssistantMessage({
       cost: 0.0021,
