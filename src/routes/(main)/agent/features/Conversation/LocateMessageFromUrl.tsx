@@ -22,14 +22,14 @@ const LocateMessageFromUrl = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const messageId = searchParams.get(PARAM);
   const messagesInit = useConversationStore((s) => s.messagesInit);
-  const [loaded, index, elementId, scrollToIndex] = useChatStore((s) => {
+  const [loaded, index, elementId, scrollToMessage] = useChatStore((s) => {
     const chats = displayMessageSelectors.mainDisplayChats(s);
     const location = resolveTopicCommentMessageLocation(chats, messageId);
     return [
       chats.length > 0,
       location?.index ?? -1,
       location?.elementId,
-      s.mainConversationScrollToIndex,
+      s.mainConversationScrollToMessage,
     ] as const;
   });
 
@@ -37,11 +37,11 @@ const LocateMessageFromUrl = () => {
     // The conversation store can report ready a beat before the display list fills.
     if (!messageId || !messagesInit || !loaded) return;
     // Found but the list has not mounted its scroller yet: wait for it.
-    if (index >= 0 && !scrollToIndex) return;
+    if (index >= 0 && !scrollToMessage) return;
 
-    if (index >= 0 && elementId && scrollToIndex) {
+    if (index >= 0 && elementId && scrollToMessage) {
       requestAnimationFrame(() => {
-        scrollToIndex(index, { align: 'center', smooth: false });
+        scrollToMessage(elementId, { align: 'center', smooth: false });
         highlightMessageWhenScrollSettles(elementId);
       });
     }
@@ -53,7 +53,7 @@ const LocateMessageFromUrl = () => {
       },
       { replace: true },
     );
-  }, [elementId, index, loaded, messageId, messagesInit, scrollToIndex, setSearchParams]);
+  }, [elementId, index, loaded, messageId, messagesInit, scrollToMessage, setSearchParams]);
 
   return null;
 };

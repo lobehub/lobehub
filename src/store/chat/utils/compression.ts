@@ -33,6 +33,7 @@ export const createPendingCompressedGroup = ({
   content = '...',
   groupId,
   id,
+  keepPosition,
   threadId,
   topicId,
 }: {
@@ -40,11 +41,15 @@ export const createPendingCompressedGroup = ({
   content?: string;
   groupId?: string | null;
   id: string;
+  /** See {@link CompressionGroupMetadata.keepPosition}. */
+  keepPosition?: boolean;
   threadId?: string | null;
   topicId?: string | null;
 }): UIChatMessage => {
   const now = Date.now();
-  const metadata: CompressionGroupMetadata = { expanded: true };
+  const metadata: CompressionGroupMetadata = keepPosition
+    ? { expanded: true, keepPosition }
+    : { expanded: true };
 
   return {
     agentId,

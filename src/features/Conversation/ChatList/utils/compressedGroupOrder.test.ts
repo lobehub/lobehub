@@ -40,6 +40,13 @@ describe('hoistCompressedGroups', () => {
     expect(ids(hoistCompressedGroups(messages))).toEqual(['c1', 'u1', 'a1', 'c2', 'u2', 'a2']);
   });
 
+  it('keeps a pending /compact group after the turn it follows', () => {
+    const pending = { ...msg('c1', 'compressedGroup'), metadata: { keepPosition: true } } as any;
+    const messages = [msg('u1', 'user'), msg('a1', 'assistantGroup'), pending];
+
+    expect(ids(hoistCompressedGroups(messages))).toEqual(['u1', 'a1', 'c1']);
+  });
+
   it('keeps the group at the tail when there is no user message to anchor it to', () => {
     const messages = [msg('a1', 'assistantGroup'), msg('c1', 'compressedGroup')];
 

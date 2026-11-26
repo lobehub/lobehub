@@ -1,4 +1,4 @@
-import type { UIChatMessage } from '@lobechat/types';
+import type { CompressionGroupMetadata, UIChatMessage } from '@lobechat/types';
 
 const isCompressedGroup = (message: UIChatMessage) => message.role === 'compressedGroup';
 
@@ -19,7 +19,8 @@ const findLastUserIndex = (messages: UIChatMessage[]) => {
  *
  * Place the group where its content belongs: directly above the user message
  * that follows the compressed history, so the answer stays attached to the
- * question. Groups that have no user message above them keep their position.
+ * question. Groups that have no user message above them, or are marked
+ * `keepPosition`, keep their position.
  */
 export const hoistCompressedGroups = (messages: UIChatMessage[]): UIChatMessage[] => {
   if (!messages.some(isCompressedGroup)) return messages;
@@ -32,7 +33,8 @@ export const hoistCompressedGroups = (messages: UIChatMessage[]): UIChatMessage[
       continue;
     }
 
-    const anchor = findLastUserIndex(result);
+    const keepPosition = (message.metadata as CompressionGroupMetadata | undefined)?.keepPosition;
+    const anchor = keepPosition ? -1 : findLastUserIndex(result);
 
     if (anchor === -1) {
       result.push(message);
