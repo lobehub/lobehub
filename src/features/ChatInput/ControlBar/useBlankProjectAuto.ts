@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 
-import { useSelectExecutionTarget } from '@/features/ChatInput/hooks/useSelectExecutionTarget';
 import { canStageDraftOn } from '@/features/Projects/WorkingDirectories/startProjectTopicDraft';
 import { useAgentFixedDeviceId } from '@/features/Projects/WorkingDirectories/useAgentFixedDeviceId';
 import {
@@ -24,7 +23,6 @@ export const useBlankProjectAuto = (agentId: string, projectId: string | undefin
   const { ordered } = useProjectExecutionEnvironments(projectId, !!projectId);
   const { data: devices } = useDeviceList();
   const fixedDeviceId = useAgentFixedDeviceId(agentId);
-  const selectExecutionTarget = useSelectExecutionTarget(agentId);
   // The staged draft is global; only this project's draft is this composer's
   // to drive, or split panes on two projects would restage each other.
   const pending = useChatStore((s) => s.pendingNewTopicDirectory);
@@ -49,15 +47,6 @@ export const useBlankProjectAuto = (agentId: string, projectId: string | undefin
         )
       : undefined;
 
-  // The agent is sent to the sandbox once per stay there, whether Auto moved
-  // the draft there or found it there (a "+" that resolved to the sandbox).
-  const sandboxTargetedRef = useRef(false);
-  const targetSandbox = () => {
-    sandboxTargetedRef.current = true;
-    // Same as picking the sandbox by hand: the first send must not land on a device.
-    void selectExecutionTarget('sandbox');
-  };
-
   const stage = () => {
     if (!projectId || !resolved) return;
     const { setPendingNewTopicDirectory } = useChatStore.getState();
@@ -65,16 +54,14 @@ export const useBlankProjectAuto = (agentId: string, projectId: string | undefin
       setPendingNewTopicDirectory({ agentId, auto: true, projectWorkingDirectoryId: resolved.id });
       return;
     }
+    // The send runs an Auto sandbox draft in the sandbox for that send only
+    // (`resolveProjectDirectoryRun`); the agent's own target is left alone.
     setPendingNewTopicDirectory({ agentId, auto: true, projectId });
-    targetSandbox();
   };
 
   // While automatic, the draft follows the order as runners come and go.
   useEffect(() => {
-    if (staged !== 'sandbox') sandboxTargetedRef.current = false;
-    if (!active || !resolved) return;
-    if (staged !== resolved.id) stage();
-    else if (staged === 'sandbox' && !sandboxTargetedRef.current) targetSandbox();
+    if (active && resolved && staged !== resolved.id) stage();
   }, [active, resolved?.id, staged]);
 
   return projectId && resolved ? { active, onSelect: stage } : undefined;

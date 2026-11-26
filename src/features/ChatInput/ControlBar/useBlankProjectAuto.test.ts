@@ -7,7 +7,6 @@ import { useBlankProjectAuto } from './useBlankProjectAuto';
 
 const env = vi.hoisted(() => ({
   online: new Set<string>(['dev-a', 'dev-b']),
-  selectExecutionTarget: vi.fn(),
 }));
 
 const directory = (id: string, deviceId: string) => ({
@@ -31,16 +30,12 @@ vi.mock('@/features/Projects/WorkingDirectories/useProjectExecutionEnvironments'
 vi.mock('@/features/Projects/WorkingDirectories/useAgentFixedDeviceId', () => ({
   useAgentFixedDeviceId: () => undefined,
 }));
-vi.mock('@/features/ChatInput/hooks/useSelectExecutionTarget', () => ({
-  useSelectExecutionTarget: () => env.selectExecutionTarget,
-}));
 vi.mock('@/store/device', () => ({ useDeviceList: () => ({ data: [] }) }));
 
 const pending = () => useChatStore.getState().pendingNewTopicDirectory;
 
 beforeEach(() => {
   env.online = new Set(['dev-a', 'dev-b']);
-  env.selectExecutionTarget.mockReset();
   act(() =>
     useChatStore
       .getState()
@@ -70,7 +65,6 @@ describe('useBlankProjectAuto', () => {
     env.online = new Set();
     rerender();
     expect(pending()).toEqual({ agentId: 'agt', auto: true, projectId: 'prj' });
-    expect(env.selectExecutionTarget).toHaveBeenCalledWith('sandbox');
   });
 
   it('leaves a hand-picked runner alone', () => {
@@ -82,23 +76,6 @@ describe('useBlankProjectAuto', () => {
   });
 
   // Review: split panes on two projects of the same agent restaged each other.
-  // Review: a "+" that resolved straight to the sandbox never moved the agent
-  // there, so the first message could run on its previous device.
-  it('sends the agent to the sandbox when Auto starts there', () => {
-    env.online = new Set();
-    act(() =>
-      useChatStore
-        .getState()
-        .setPendingNewTopicDirectory({ agentId: 'agt', auto: true, projectId: 'prj' }),
-    );
-
-    const { rerender } = renderHook(() => useBlankProjectAuto('agt', 'prj'));
-    rerender();
-
-    expect(env.selectExecutionTarget).toHaveBeenCalledTimes(1);
-    expect(env.selectExecutionTarget).toHaveBeenCalledWith('sandbox');
-  });
-
   it("does not drive another project's staged draft", () => {
     act(() =>
       useChatStore

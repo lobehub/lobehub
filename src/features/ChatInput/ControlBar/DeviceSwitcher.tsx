@@ -100,6 +100,7 @@ const ProjectSandboxSwitcher = ({
 }) => {
   useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
   const directories = useProjectDirectories(projectId);
+  const selectExecutionTarget = useSelectExecutionTarget(agentId);
   // Only a blank conversation can still let the project's order decide.
   const auto = useBlankProjectAuto(agentId, started ? undefined : projectId);
 
@@ -111,9 +112,14 @@ const ProjectSandboxSwitcher = ({
       projectId={projectId}
       sandbox={{
         active: true,
-        // Leaving the automatic choice for the sandbox it already sits in.
+        // Leaving the automatic choice for the sandbox it already sits in is a
+        // hand pick like any other: it sets the agent's target, as picking the
+        // sandbox from a folder draft does.
         onSelect: auto
-          ? () => useChatStore.getState().setPendingNewTopicDirectory({ agentId, projectId })
+          ? () => {
+              useChatStore.getState().setPendingNewTopicDirectory({ agentId, projectId });
+              void selectExecutionTarget('sandbox');
+            }
           : undefined,
       }}
       onSelect={

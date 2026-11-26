@@ -25,6 +25,7 @@ import { projectConversationStage } from './projectConversationStage';
 import { useMarkProjectTopicRead } from './useMarkProjectTopicRead';
 import { useProjectDraftStaging } from './useProjectDraftStaging';
 import { useRevalidateWhileUnlisted } from './useRevalidateWhileUnlisted';
+import { useSyncDraftRoute } from './useSyncDraftRoute';
 
 const loading = (
   <Center height="100%" width="100%">
@@ -79,6 +80,7 @@ export const useProjectConversation = () => {
   }, [draftAgentParam, draftAuto, draftDirectoryParam, directoryIds, draftProjectId]);
   const draftAgentId = draft?.agentId;
   const restageDraft = useProjectDraftStaging(draft, directoryIds, draftProjectId);
+  useSyncDraftRoute({ directoryIds, draft, projectId: draftProjectId });
   const chatAgentId = useChatStore((s) => s.activeAgentId);
   // Keep the conversation on its agent instead of flashing "not found" while
   // the project list catches up with a topic the first send just created.
