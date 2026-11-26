@@ -14,9 +14,9 @@ vi.mock('@/business/server/workspaceByok', () => ({
 }));
 
 vi.mock('@/database/models/aiProvider', () => ({
-  AiProviderModel: vi.fn().mockImplementation(() => ({
-    getAiProviderById: mocks.getAiProviderById,
-  })),
+  AiProviderModel: vi.fn(function (this: any) {
+    this.getAiProviderById = mocks.getAiProviderById;
+  }),
 }));
 
 vi.mock('@/server/services/llmGenerationTracing/hook', () => ({
