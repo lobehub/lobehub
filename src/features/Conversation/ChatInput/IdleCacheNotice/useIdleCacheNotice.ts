@@ -11,6 +11,7 @@ import { useEffectiveConversationModelConfig } from '../../store/utils/effective
 import { isMainComposer } from './isMainComposer';
 import type { NextReplyCostEstimate, PromptCacheSnapshot } from './promptCacheState';
 import {
+  collectDisplayedMessageIds,
   estimateNextReplyCost,
   getPromptCacheSnapshot,
   isIdleCacheNoticeworthy,
@@ -38,9 +39,13 @@ export interface PromptCacheState {
  */
 export const usePromptCacheState = (): PromptCacheState | undefined => {
   const dbMessages = useConversationStore(dataSelectors.dbMessages);
+  const displayMessages = useConversationStore(dataSelectors.displayMessages);
   const context = useConversationStore((s) => s.context);
   const { model, provider } = useEffectiveConversationModelConfig(context);
-  const snapshot = useMemo(() => getPromptCacheSnapshot(dbMessages), [dbMessages]);
+  const snapshot = useMemo(
+    () => getPromptCacheSnapshot(dbMessages, collectDisplayedMessageIds(displayMessages)),
+    [dbMessages, displayMessages],
+  );
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {

@@ -37,13 +37,30 @@ export interface PromptCacheSnapshot {
 const getUsage = (message: UIChatMessage) => message.usage ?? message.metadata?.usage;
 
 /**
+ * Ids of the DB messages on the branch the conversation shows: the rendered rows plus the
+ * messages folded into them (assistant group blocks, group members). Inactive branches are absent.
+ */
+export const collectDisplayedMessageIds = (displayMessages: UIChatMessage[]): Set<string> => {
+  const ids = new Set<string>();
+  const visit = (message: UIChatMessage) => {
+    ids.add(message.id);
+    for (const child of message.children ?? []) ids.add(child.id);
+    for (const member of (message as { members?: UIChatMessage[] }).members ?? []) visit(member);
+  };
+  for (const message of displayMessages) visit(message);
+  return ids;
+};
+
+/**
  * Reads the prompt cache the conversation's latest reply left.
  *
  * Use when:
  * - Deciding whether the next reply re-reads the whole conversation at the cache-write price.
  *
  * Expects:
- * - `messages` are the conversation's flat DB messages in send order.
+ * - `messages` are the conversation's flat DB messages in send order. They include replies on
+ *   branches the user switched away from, so `activeIds` (see {@link collectDisplayedMessageIds})
+ *   limits the scan to the branch the next reply continues.
  *
  * Returns:
  * - The snapshot of the latest assistant message with recorded usage. User or tool messages and
@@ -53,10 +70,11 @@ const getUsage = (message: UIChatMessage) => message.usage ?? message.metadata?.
  */
 export const getPromptCacheSnapshot = (
   messages: UIChatMessage[],
+  activeIds: ReadonlySet<string>,
 ): PromptCacheSnapshot | undefined => {
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index];
-    if (message.role !== 'assistant') continue;
+    if (message.role !== 'assistant' || !activeIds.has(message.id)) continue;
 
     const usage = getUsage(message);
     const inputTokens = usage?.totalInputTokens;
