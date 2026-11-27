@@ -43,7 +43,7 @@ export const mergeArrayById = <T extends MergeableItem>(defaultItems: T[], userI
         mergedItem[key] = value;
       }
 
-      if (typeof value === 'object' && !isEmpty(value)) {
+      if (typeof value === 'object' && !Array.isArray(value) && !isEmpty(value)) {
         // @ts-expect-error
         mergedItem[key] = merge(defaultItem[key], value);
       }
