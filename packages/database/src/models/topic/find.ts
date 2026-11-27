@@ -27,6 +27,7 @@ import { sanitizeBm25Query } from '../../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../../utils/genWhere';
 import { inJsonStringArray } from '../../utils/inJsonStringArray';
 import { searchableMessage } from '../../utils/searchableMessage';
+import { topicActivityAtColumn } from '../../utils/topicLastMessageAt';
 import { notChannelTopic } from '../../utils/topicVisibility';
 import { nonNull } from '../utils/rows';
 import type { TopicModelContext } from './context';
@@ -417,16 +418,9 @@ export const rank = async (
  * - For inbox: includes topics with slug='inbox'
  */
 export const queryRecent = async (ctx: TopicModelContext, limit: number = 12) => {
-  const latestMessageAtSubquery = ctx.db
-    .select({ value: messages.updatedAt })
-    .from(messages)
-    .where(and(eq(messages.topicId, topics.id), ctx.messageOwnership()))
-    .orderBy(desc(messages.updatedAt))
-    .limit(1);
-  const topicActivityAt =
-    sql<Date>`COALESCE((${latestMessageAtSubquery}), ${topics.updatedAt})`.mapWith(
-      topics.updatedAt,
-    );
+  // Latest message activity, denormalized onto the topic row (see
+  // `topics.lastMessageAt`) so ordering a page never scans `messages`.
+  const topicActivityAt = topicActivityAtColumn();
 
   const result = await ctx.db
     .select({

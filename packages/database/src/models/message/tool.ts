@@ -5,6 +5,7 @@ import { merge } from '@/utils/merge';
 import { sanitizeNullBytes } from '@/utils/sanitizeNullBytes';
 
 import { messagePlugins, messages } from '../../schemas';
+import { bumpTopicLastMessageAt } from '../../utils/topicLastMessageAt';
 import { MessageScope } from './scope';
 
 export class MessageToolMutations extends MessageScope {
@@ -120,9 +121,14 @@ export class MessageToolMutations extends MessageScope {
             .update(messages)
             .set(messageUpdateData)
             .where(and(eq(messages.id, id), this.ownership()))
-            .returning({ id: messages.id });
+            .returning({
+              id: messages.id,
+              topicId: messages.topicId,
+              updatedAt: messages.updatedAt,
+            });
 
           matchedRow = !!updated;
+          if (updated) await bumpTopicLastMessageAt(trx, [updated]);
         }
 
         // Update messagePlugins table (pluginState, pluginError)

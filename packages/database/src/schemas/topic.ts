@@ -67,6 +67,19 @@ export const topics = pgTable(
       ],
     }),
     completedAt: timestamptz('completed_at'),
+    /**
+     * Denormalized "latest message activity": the newest `updated_at` among the
+     * topic's live messages, bumped forward (never backward) by every message
+     * write path. Topic lists sort by `COALESCE(last_message_at, updated_at)`
+     * instead of a per-topic correlated subquery over `messages`.
+     *
+     * NULL means "no message written since the column shipped" — legacy rows
+     * not yet backfilled, or topics without messages — and falls back to
+     * `updated_at`. Deleting a message does not move it backward.
+     *
+     * @example 2026-11-27T08:30:12.345Z — the assistant reply's last persisted write
+     */
+    lastMessageAt: timestamptz('last_message_at'),
 
     // ---- Usage & cost aggregates (denormalized roll-up of the topic's operations) ----
     // Kept nullable: NULL means "not measured yet" so in-flight / legacy topics
@@ -116,6 +129,17 @@ export const topics = pgTable(
     index('topics_user_id_completed_at_idx').on(t.userId, t.completedAt),
     index('topics_sender_id_idx').on(t.senderId),
     index('topics_workspace_id_idx').on(t.workspaceId),
+    // Topic list (`TopicModel.query` agent branch): equality on scope + agent,
+    // then the `favorite DESC, activity DESC` ORDER BY read straight off the
+    // index, so a LIMIT stops after one page instead of sorting every topic.
+    // Personal and workspace scopes get one partial index each, matching the
+    // `buildWorkspaceWhere` predicate shapes.
+    index('topics_user_id_agent_id_activity_idx')
+      .on(t.userId, t.agentId, t.favorite, sql`COALESCE(${t.lastMessageAt}, ${t.updatedAt})`)
+      .where(sql`${t.workspaceId} IS NULL AND ${t.isDeleted} IS NOT TRUE`),
+    index('topics_workspace_id_agent_id_activity_idx')
+      .on(t.workspaceId, t.agentId, t.favorite, sql`COALESCE(${t.lastMessageAt}, ${t.updatedAt})`)
+      .where(sql`${t.workspaceId} IS NOT NULL AND ${t.isDeleted} IS NOT TRUE`),
     index('topics_extract_status_gin_idx').using(
       'gin',
       sql`(metadata->'userMemoryExtractStatus') jsonb_path_ops`,

@@ -177,28 +177,20 @@ describe('TopicModel - Query', () => {
 
     it('should order by latest message activity by default (no sortBy)', async () => {
       await serverDB.insert(topics).values([
+        // `lastMessageAt` is what the message write paths keep on the row.
         {
           id: 'waiting',
+          lastMessageAt: new Date('2023-06-01'),
           sessionId,
           status: 'waitingForHuman',
           updatedAt: new Date('2023-01-01'),
           userId,
         },
-        { id: 'active', sessionId, updatedAt: new Date('2023-05-01'), userId },
-      ]);
-      await serverDB.insert(messages).values([
         {
-          id: 'waiting-latest-message',
-          role: 'user',
-          topicId: 'waiting',
-          updatedAt: new Date('2023-06-01'),
-          userId,
-        },
-        {
-          id: 'active-older-message',
-          role: 'user',
-          topicId: 'active',
-          updatedAt: new Date('2023-04-01'),
+          id: 'active',
+          lastMessageAt: new Date('2023-04-01'),
+          sessionId,
+          updatedAt: new Date('2023-05-01'),
           userId,
         },
       ]);
@@ -215,18 +207,15 @@ describe('TopicModel - Query', () => {
       // sorts disagree and the list jumps. `updatedAt` stays the raw row value so
       // rename/favorite edits still show a real edit time.
       await serverDB.insert(topics).values([
-        { id: 'has-msg', sessionId, updatedAt: new Date('2023-01-01'), userId },
-        { id: 'no-msg', sessionId, updatedAt: new Date('2023-03-01'), userId },
-      ]);
-      // An assistant message (any role counts) that is newer than the row.
-      await serverDB.insert(messages).values([
+        // A message write (any role) newer than the row, as kept in `lastMessageAt`.
         {
-          id: 'has-msg-latest',
-          role: 'assistant',
-          topicId: 'has-msg',
-          updatedAt: new Date('2023-06-01'),
+          id: 'has-msg',
+          lastMessageAt: new Date('2023-06-01'),
+          sessionId,
+          updatedAt: new Date('2023-01-01'),
           userId,
         },
+        { id: 'no-msg', sessionId, updatedAt: new Date('2023-03-01'), userId },
       ]);
 
       const result = await topicModel.query({ containerId: sessionId });
@@ -2029,6 +2018,8 @@ describe('TopicModel - Query', () => {
           {
             agentId: 'activity-agent',
             id: 'activity-topic-old-topic-row',
+            // Kept by the message write paths (latest message at 2023-06).
+            lastMessageAt: new Date('2023-06-01'),
             title: 'Older topic row',
             updatedAt: new Date('2023-01-01'),
             userId,
@@ -2041,13 +2032,6 @@ describe('TopicModel - Query', () => {
             userId,
           },
         ]);
-        await tx.insert(messages).values({
-          id: 'activity-topic-latest-message',
-          role: 'user',
-          topicId: 'activity-topic-old-topic-row',
-          updatedAt: new Date('2023-06-01'),
-          userId,
-        });
       });
 
       const result = await topicModel.queryRecent();

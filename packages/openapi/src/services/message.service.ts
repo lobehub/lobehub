@@ -4,6 +4,7 @@ import type { FileItem, SessionItem, TopicItem } from '@/database/schemas';
 import { messages, messagesFiles } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator } from '@/database/utils/idGenerator';
+import { bumpTopicLastMessageAt } from '@/database/utils/topicLastMessageAt';
 import { FileService as CoreFileService } from '@/server/services/file';
 
 import { BaseService } from '../common/base.service';
@@ -468,7 +469,11 @@ export class MessageService extends BaseService {
         })
         .returning({
           id: messages.id,
+          topicId: messages.topicId,
+          updatedAt: messages.updatedAt,
         });
+
+      await bumpTopicLastMessageAt(this.db, [newMessage]);
 
       // Handle file attachments
       if (messageData.files && messageData.files.length > 0) {
