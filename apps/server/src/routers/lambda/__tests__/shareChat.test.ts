@@ -318,32 +318,32 @@ describe('shareChatRouter', () => {
 
     // The spend gate runs before ANY row is created, so a rejected run leaves
     // no orphan topic / placeholder assistant message behind.
-    it('rejects the run when the spend gate vetoes it, before any topic lookup', async () => {
-      mockSpendGate.mockResolvedValue({ allowed: false });
+    it('rejects the run with the spend gate refusal, before any topic lookup', async () => {
+      mockSpendGate.mockResolvedValueOnce({ allowed: false });
+      mockSpendGate.mockResolvedValueOnce({ allowed: false, errorType: 'ShareFundingExhausted' });
       const caller = await createCaller();
+      const run = () => caller.execAgent({ prompt: 'hi', shareId: 'share-1' });
+      const refused = (message: string) => ({ code: 'TOO_MANY_REQUESTS', message });
 
-      await expect(caller.execAgent({ prompt: 'hi', shareId: 'share-1' })).rejects.toMatchObject({
-        code: 'TOO_MANY_REQUESTS',
-        message: 'ShareSpendLimitExceeded',
-      });
+      await expect(run()).rejects.toMatchObject(refused('ShareSpendLimitExceeded'));
+      await expect(run()).rejects.toMatchObject(refused('ShareFundingExhausted'));
       expect(mockCountMessagesBySender).not.toHaveBeenCalled();
       expect(mockExecAgent).not.toHaveBeenCalled();
     });
 
-    it('passes the creator, share and configured cap to the spend gate', async () => {
+    it('passes the creator, share, configured cap and tipping setting to the spend gate', async () => {
       mockAccessCheck.mockResolvedValue({
         ...share,
-        shareConfig: { ...share.shareConfig, monthlySpendLimit: 25 },
+        shareConfig: { ...share.shareConfig, monthlySpendLimit: 25, tipsEnabled: false },
       });
-      const caller = await createCaller();
-
-      await caller.execAgent({ prompt: 'hi', shareId: 'share-1' });
+      await (await createCaller()).execAgent({ prompt: 'hi', shareId: 'share-1' });
 
       expect(mockSpendGate).toHaveBeenCalledWith({
         agentId: share.agentId,
         monthlySpendLimit: 25,
         ownerUserId: OWNER,
         shareId: 'share-1',
+        tipsEnabled: false,
         visitorUserId: VISITOR,
       });
     });
