@@ -7,7 +7,11 @@ export function parseJSON(content: string, options?: ParseOptions): ParseResult 
     throw new Error('JSON file must contain an array of objects');
   }
 
-  const headers = Object.keys(data[0] || {});
+  const columns = new Set<string>();
+  for (const row of data) {
+    for (const column of Object.keys(row ?? {})) columns.add(column);
+  }
+  const headers = [...columns];
   const rows = options?.preview ? data.slice(0, options.preview) : data;
 
   return {

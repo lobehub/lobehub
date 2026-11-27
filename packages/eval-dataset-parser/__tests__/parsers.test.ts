@@ -95,13 +95,13 @@ describe('parseJSON', () => {
     expect(result.rows).toHaveLength(0);
   });
 
-  it('should extract headers from first object only', () => {
+  it('should include headers from all objects', () => {
     const json = JSON.stringify([
       { a: 1, b: 2 },
       { a: 3, c: 4 }, // 'c' is extra
     ]);
     const result = parseJSON(json);
-    expect(result.headers).toEqual(['a', 'b']);
+    expect(result.headers).toEqual(['a', 'b', 'c']);
   });
 });
 

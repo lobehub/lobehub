@@ -17,7 +17,11 @@ export function parseJSONL(content: string, options?: ParseOptions): ParseResult
     }
   });
 
-  const headers = Object.keys(rows[0] || {});
+  const columns = new Set<string>();
+  for (const row of rows) {
+    for (const column of Object.keys(row ?? {})) columns.add(column);
+  }
+  const headers = [...columns];
 
   return {
     format: 'jsonl',
