@@ -133,6 +133,19 @@ describe('useDeviceTerminalSession', () => {
     expect(mocks.dispose).toHaveBeenCalled();
   });
 
+  it('shows the exit of a shell that ended before opening finished', async () => {
+    // The first read can report the exit before `open` resolves.
+    mocks.open.mockImplementationOnce(async () => {
+      for (const listener of mocks.exitListeners) listener('term_1', 0);
+      return fakeSession('term_1');
+    });
+    const { result, unmount } = renderHook(() => useDeviceTerminalSession(params));
+
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'exited' }));
+    unmount();
+    expect(mocks.close).not.toHaveBeenCalled();
+  });
+
   it('reports a client that cannot host a terminal', async () => {
     mocks.open.mockRejectedValueOnce(new Error('This device client does not support a terminal'));
     const { result } = renderHook(() => useDeviceTerminalSession(params));

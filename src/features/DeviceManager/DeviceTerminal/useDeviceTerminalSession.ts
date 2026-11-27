@@ -52,8 +52,15 @@ export const useDeviceTerminalSession = ({
     let session: DeviceTerminalSession | undefined;
     setState({ status: 'opening' });
 
+    // A shell that exits at once can report it from the first read, before
+    // `open` resolves and names the session; remember those exits.
+    const exitedEarly = new Set<string>();
     const offExit = xtermManager.onSessionExit((sessionId) => {
-      if (sessionId !== session?.sessionId) return;
+      if (!session) {
+        exitedEarly.add(sessionId);
+        return;
+      }
+      if (sessionId !== session.sessionId) return;
       exited = true;
       setState({ status: 'exited' });
     });
@@ -82,6 +89,11 @@ export const useDeviceTerminalSession = ({
         // the answer raced the unload): end it the same way.
         if (hidden) {
           opened.disposeOnUnload();
+          return;
+        }
+        if (exitedEarly.has(opened.sessionId)) {
+          exited = true;
+          setState({ status: 'exited' });
           return;
         }
         setState({ sessionId: opened.sessionId, status: 'open' });
