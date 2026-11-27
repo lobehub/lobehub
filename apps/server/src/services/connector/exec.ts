@@ -281,7 +281,7 @@ const resolveConnectorDevice = async (
   if (!binding && viewDevice?.workspaceId && viewDevice.workspaceId !== ctx.workspaceId) {
     throw new ConnectorToolCallError(
       'FORBIDDEN',
-      "This view came from a device outside this conversation's workspace",
+      "This view came from a device outside your own devices and this workspace's",
     );
   }
   const { serverDB, userId } = ctx;
