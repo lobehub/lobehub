@@ -351,7 +351,7 @@ export const channelRouter = router({
     })),
   /**
    * The caller's direct conversation with an Agent, opened on first use for Agents that predate
-   * direct Channels; a project's main Agent opens in its project's Channel instead. Null when the
+   * direct Channels; an Agent made for one project opens in that project's Channel instead. Null when the
    * Agent cannot answer in a Channel (no reachable device).
    */
   openDirect: channelProcedure
