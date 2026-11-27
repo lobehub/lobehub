@@ -1,4 +1,4 @@
-import { type ChatFileChunk } from '@lobechat/types';
+import { type ChatFileChunk, type InterfaceDensity } from '@lobechat/types';
 import { Flexbox, Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -12,15 +12,20 @@ import { densityTokens } from '@/styles/density.stylex';
 
 import ChunkItem from './ChunkItem';
 
+const PADDING_BLOCK = { compact: 4, loose: 8 } as const satisfies Record<InterfaceDensity, number>;
+
 const styles = stylex.create({
   container: {
     cursor: 'pointer',
-    paddingBlock: '8px',
+    paddingBlock: `${PADDING_BLOCK.loose}px`,
     paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: densityTokens['--lobe-density-radius'],
     color: cssVar.colorText,
   },
-  containerCompact: { paddingBlock: '4px', fontSize: '13px' },
+  containerCompact: {
+    paddingBlock: `${PADDING_BLOCK.compact}px`,
+    fontSize: densityTokens['--lobe-density-font-size'],
+  },
   containerDark: {
     backgroundColor: cssVar.colorFillTertiary,
     backgroundImage: 'none',

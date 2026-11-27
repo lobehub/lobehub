@@ -23,7 +23,7 @@ const MessageContent = memo<UIChatMessage>(
     const isCreating = useConversationStore(messageStateSelectors.isMessageCreating(id));
     const isCollapsed = useConversationStore(messageStateSelectors.isMessageCollapsed(id));
     const isReasoning = useConversationStore(messageStateSelectors.isMessageInReasoning(id));
-    const { compact } = useDensity();
+    const { tokens } = useDensity();
 
     const isLoading = generating || isCreating;
     const isToolCallGenerating = isLoading && (content === LOADING_FLAT || !content) && !!tools;
@@ -47,7 +47,7 @@ const MessageContent = memo<UIChatMessage>(
     if (isCollapsed) return <CollapsedMessage content={content} id={id} />;
 
     return (
-      <Flexbox gap={compact ? 6 : 8} id={id}>
+      <Flexbox gap={tokens.blockGap} id={id}>
         {drawer}
         {showSearch && (
           <SearchGrounding

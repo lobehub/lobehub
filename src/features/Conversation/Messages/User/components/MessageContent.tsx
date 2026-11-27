@@ -26,7 +26,7 @@ const UserMessageContent = memo<UIChatMessage>(
   ({ id, content, editorData, imageList, videoList, audioList, fileList, metadata }) => {
     const markdownProps = useMarkdown(id);
     const startTopicConversation = useStartTopicConversation();
-    const { compact } = useDensity();
+    const { tokens } = useDensity();
     const selections = metadata?.contextSelections?.length
       ? metadata.contextSelections
       : metadata?.pageSelections;
@@ -57,7 +57,7 @@ const UserMessageContent = memo<UIChatMessage>(
     );
 
     return (
-      <Flexbox gap={compact ? 6 : 8} id={id}>
+      <Flexbox gap={tokens.blockGap} id={id}>
         {selections && selections.length > 0 && <PageSelections selections={selections} />}
         {reference && <ReferencedMessage reference={reference} />}
         {textBody && <CollapsibleContent>{textBody}</CollapsibleContent>}

@@ -1,5 +1,6 @@
 'use client';
 
+import type { InterfaceDensity } from '@lobechat/types';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
@@ -21,6 +22,16 @@ const FADE_RATIO = 0.2;
 // handful of extra pixels.
 const OVERFLOW_THRESHOLD = 32;
 
+const TOGGLE_HEIGHT = { compact: 20, loose: 24 } as const satisfies Record<
+  InterfaceDensity,
+  number
+>;
+const TOGGLE_PADDING_INLINE = { compact: 8, loose: 10 } as const satisfies Record<
+  InterfaceDensity,
+  number
+>;
+const TOGGLE_OFFSET = { compact: 4, loose: 6 } as const satisfies Record<InterfaceDensity, number>;
+
 const styles = stylex.create({
   container: { position: 'relative', width: '100%' },
   contentCollapsed: {
@@ -33,8 +44,8 @@ const styles = stylex.create({
     display: 'inline-flex',
     gap: '4px',
     alignItems: 'center',
-    blockSize: '24px',
-    paddingInline: '10px',
+    blockSize: `${TOGGLE_HEIGHT.loose}px`,
+    paddingInline: `${TOGGLE_PADDING_INLINE.loose}px`,
     borderStyle: 'none',
     borderRadius: '12px',
     fontSize: '12px',
@@ -44,9 +55,16 @@ const styles = stylex.create({
     transition: `color 150ms ${cssVar.motionEaseOut},
       background 150ms ${cssVar.motionEaseOut}`,
   },
-  toggleButtonCompact: { blockSize: '20px', paddingInline: '8px' },
-  toggleWrapper: { display: 'flex', justifyContent: 'center', marginBlockStart: '6px' },
-  toggleWrapperCompact: { marginBlockStart: '4px' },
+  toggleButtonCompact: {
+    blockSize: `${TOGGLE_HEIGHT.compact}px`,
+    paddingInline: `${TOGGLE_PADDING_INLINE.compact}px`,
+  },
+  toggleWrapper: {
+    display: 'flex',
+    justifyContent: 'center',
+    marginBlockStart: `${TOGGLE_OFFSET.loose}px`,
+  },
+  toggleWrapperCompact: { marginBlockStart: `${TOGGLE_OFFSET.compact}px` },
 });
 
 interface CollapsibleContentProps {

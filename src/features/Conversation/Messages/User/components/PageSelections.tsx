@@ -1,3 +1,4 @@
+import { type InterfaceDensity } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -9,6 +10,11 @@ import { densityTokens } from '@/styles/density.stylex';
 import type { ContextSelection, ElementContextSelection, PageSelection } from '@/types/index';
 
 type UserContextSelection = ContextSelection | PageSelection;
+
+const QUOTE_FONT_SIZE = { compact: 20, loose: 28 } as const satisfies Record<
+  InterfaceDensity,
+  number
+>;
 
 const styles = stylex.create({
   codeContainer: {
@@ -98,11 +104,11 @@ const styles = stylex.create({
     insetBlockStart: '2px',
     insetInlineStart: 0,
     fontFamily: 'Georgia, serif',
-    fontSize: '28px',
+    fontSize: `${QUOTE_FONT_SIZE.loose}px`,
     lineHeight: 1,
     color: cssVar.colorTextQuaternary,
   },
-  quoteCompact: { fontSize: '20px' },
+  quoteCompact: { fontSize: `${QUOTE_FONT_SIZE.compact}px` },
 });
 
 interface PageSelectionsProps {

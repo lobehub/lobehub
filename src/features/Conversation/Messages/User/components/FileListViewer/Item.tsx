@@ -1,3 +1,4 @@
+import { type InterfaceDensity } from '@lobechat/types';
 import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { FileLock2Icon } from 'lucide-react';
 import { memo } from 'react';
@@ -9,6 +10,11 @@ import { useDensity } from '@/styles/density';
 import { type ChatFileItem } from '@/types/index';
 import { formatSize } from '@/utils/format';
 
+const FILE_ICON_SIZE = { compact: 28, loose: 32 } as const satisfies Record<
+  InterfaceDensity,
+  number
+>;
+
 /**
  * Tombstone card for a file the viewer lost access to (its owner switched it
  * back to private, or it was deleted). The server strips name/size/url, so
@@ -16,18 +22,18 @@ import { formatSize } from '@/utils/format';
  */
 const InaccessibleFileItem = memo(() => {
   const { t } = useTranslation('chat');
-  const { compact } = useDensity();
+  const { density, tokens } = useDensity();
 
   return (
     <Block
       horizontal
       align={'center'}
-      gap={compact ? 8 : 12}
-      paddingBlock={compact ? 6 : 8}
-      paddingInline={compact ? '8px 12px' : '12px 16px'}
+      gap={tokens.contentGap}
+      paddingBlock={tokens.cardHeaderPaddingBlock}
+      paddingInline={`${tokens.contentGap}px ${tokens.cardPadding}px`}
       variant={'outlined'}
     >
-      <Icon icon={FileLock2Icon} size={compact ? 28 : 32} style={{ opacity: 0.45 }} />
+      <Icon icon={FileLock2Icon} size={FILE_ICON_SIZE[density]} style={{ opacity: 0.45 }} />
       <Flexbox style={{ overflow: 'hidden' }}>
         <Text ellipsis type={'secondary'}>
           {t('inaccessibleFile.name')}
@@ -43,7 +49,7 @@ const InaccessibleFileItem = memo(() => {
 const FileItem = memo<ChatFileItem & { onClick?: () => void }>(
   ({ id, fileType, size, name, inaccessible, onClick }) => {
     const openFilePreview = useChatStore((s) => s.openFilePreview);
-    const { compact } = useDensity();
+    const { density, tokens } = useDensity();
 
     if (inaccessible) return <InaccessibleFileItem />;
 
@@ -52,17 +58,17 @@ const FileItem = memo<ChatFileItem & { onClick?: () => void }>(
         clickable
         horizontal
         align={'center'}
-        gap={compact ? 8 : 12}
+        gap={tokens.contentGap}
         key={id}
-        paddingBlock={compact ? 6 : 8}
-        paddingInline={compact ? '8px 12px' : '12px 16px'}
+        paddingBlock={tokens.cardHeaderPaddingBlock}
+        paddingInline={`${tokens.contentGap}px ${tokens.cardPadding}px`}
         variant={'outlined'}
         onClick={() => {
           if (onClick) onClick();
           else openFilePreview({ fileId: id });
         }}
       >
-        <FileIcon fileName={name} fileType={fileType} size={compact ? 28 : 32} />
+        <FileIcon fileName={name} fileType={fileType} size={FILE_ICON_SIZE[density]} />
         <Flexbox style={{ overflow: 'hidden' }}>
           <Text ellipsis>{name}</Text>
           <Text fontSize={12} type={'secondary'}>

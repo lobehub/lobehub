@@ -1,3 +1,4 @@
+import { type InterfaceDensity } from '@lobechat/types';
 import { Flexbox, Icon, SearchResultCards, Tag } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -10,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useIsDark } from '@/hooks/useIsDark';
 import Image from '@/libs/next/Image';
 import { useDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 import { type GroundingSearch } from '@/types/search';
 
 // Resolve the favicon host defensively: some providers (e.g. OpenRouter built-in
@@ -36,19 +38,20 @@ const stripHtml = (html: string) =>
     .replaceAll('&#39;', "'")
     .replaceAll('&nbsp;', ' ');
 
+const PADDING_INLINE = { compact: 6, loose: 8 } as const satisfies Record<InterfaceDensity, number>;
+
 const styles = stylex.create({
   container: {
     width: 'fit-content',
-    paddingBlock: '4px',
-    paddingInline: '8px',
+    paddingBlock: densityTokens['--lobe-density-inline-row-padding-block'],
+    paddingInline: `${PADDING_INLINE.loose}px`,
     borderRadius: '6px',
     color: cssVar.colorTextTertiary,
   },
   containerCompact: {
-    paddingBlock: '2px',
-    paddingInline: '6px',
-    fontSize: '13px',
-    lineHeight: '20px',
+    paddingInline: `${PADDING_INLINE.compact}px`,
+    fontSize: densityTokens['--lobe-density-font-size'],
+    lineHeight: densityTokens['--lobe-density-line-height'],
   },
   containerDark: {
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },

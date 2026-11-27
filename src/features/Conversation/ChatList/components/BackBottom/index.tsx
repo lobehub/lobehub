@@ -30,8 +30,7 @@ const BackBottom = memo<BackBottomProps>(
   ({ visible, atBottom, bottomOffset = 0, onScrollToBottom }) => {
     const { t } = useTranslation('chat');
     const devDockMounted = useDevDockMounted();
-    const { compact } = useDensity();
-    const buttonSize = compact ? 32 : 36;
+    const { tokens } = useDensity();
 
     return (
       <>
@@ -49,9 +48,9 @@ const BackBottom = memo<BackBottomProps>(
           title={t('backToBottom')}
           variant={'outlined'}
           size={{
-            blockSize: buttonSize,
-            borderRadius: buttonSize,
-            size: compact ? 16 : 18,
+            blockSize: tokens.rowHeight,
+            borderRadius: tokens.rowHeight,
+            size: tokens.iconSize,
           }}
           onClick={onScrollToBottom}
         />

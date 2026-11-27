@@ -13,10 +13,10 @@ interface FileListViewerProps {
 }
 
 const FileListViewer = memo<FileListViewerProps>(({ items, onOpenFile }) => {
-  const { compact } = useDensity();
+  const { tokens } = useDensity();
 
   return (
-    <Flexbox gap={compact ? 6 : 8}>
+    <Flexbox gap={tokens.blockGap}>
       {items.map((item) => (
         <FileItem
           key={item.id}
