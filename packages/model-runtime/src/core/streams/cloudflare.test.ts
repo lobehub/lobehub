@@ -163,6 +163,37 @@ describe('cloudflareHelpers', () => {
         expect(transformer['buffer']).toBe('');
       });
     });
+
+    describe('utf-8 chunk boundaries', () => {
+      it('preserves multi-byte UTF-8 content split across chunks', async () => {
+        // A response frame whose multi-byte code points (CJK + emoji) arrive as raw network
+        // bytes, split in the middle of a UTF-8 sequence across two chunks.
+        const chunks: string[] = [];
+        const controller = Object.create(TransformStreamDefaultController.prototype);
+        vi.spyOn(controller, 'enqueue').mockImplementation((chunk) => {
+          chunks.push(chunk as string);
+        });
+
+        const frame = 'data: {"response":"你好世界🌍"}\n\n';
+        const bytes = new TextEncoder().encode(frame);
+        // Split at a UTF-8 continuation byte (0x80-0xBF) so a character straddles the boundary.
+        let splitAt = -1;
+        for (let i = 1; i < bytes.length; i++) {
+          if (bytes[i] >= 0x80 && bytes[i] < 0xc0) {
+            splitAt = i;
+            break;
+          }
+        }
+        expect(splitAt).toBeGreaterThan(0);
+
+        await transformer.transform(bytes.slice(0, splitAt), controller);
+        await transformer.transform(bytes.slice(splitAt), controller);
+
+        const data = chunks.find((c) => c.startsWith('data: '));
+        expect(data).toBe('data: "你好世界🌍"\n\n');
+        expect(data).not.toContain('�');
+      });
+    });
   });
 
   describe('fillUrl', () => {
