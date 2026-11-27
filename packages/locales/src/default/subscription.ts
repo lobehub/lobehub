@@ -46,7 +46,7 @@ export default {
     'Pay the outstanding invoice or cancel this subscription before changing plans.',
   'billingRecovery.title': 'Renewal payment failed',
   'blackFriday.badge': 'Black Friday deal',
-  'blackFriday.bannerTitle': 'Black Friday: buy 1 year, get 1 free',
+  'blackFriday.bannerTitle': 'Black Friday: 1 year free',
   'blackFriday.claim': 'Claim offer',
   'blackFriday.countdown.days': 'Days',
   'blackFriday.countdown.hours': 'Hrs',
