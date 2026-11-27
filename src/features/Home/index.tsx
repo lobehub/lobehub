@@ -523,6 +523,10 @@ const Home = memo(() => {
       </Flexbox>
 
       {isLogin && (
+        // An empty rail collapses with the main column: the widened column runs
+        // under this aside, which would otherwise sit on top (z-index 1) as an
+        // invisible layer swallowing clicks on the column's right-hand buttons.
+        // The inbox stays mounted so it can report new cards and reopen the rail.
         <aside
           aria-hidden={contentCollapsed}
           className={cx(styles.rail, styles.railSurface)}
