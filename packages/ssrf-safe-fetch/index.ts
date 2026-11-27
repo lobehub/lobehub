@@ -57,7 +57,7 @@ const toErrorLog = (error: unknown) => {
   };
 };
 
-const toFetchError = (error: unknown): Error => {
+const toFetchError = (error: unknown, silent?: boolean): Error => {
   if (error instanceof SSRFBlockedError) return error;
 
   const errorMessage = error instanceof Error ? error.message : String(error);
@@ -65,7 +65,7 @@ const toFetchError = (error: unknown): Error => {
   const isSSRFBlock = errorMessage.includes('is not allowed');
 
   if (isSSRFBlock) {
-    console.error('SSRF protection blocked request:', toErrorLog(error));
+    if (!silent) console.error('SSRF protection blocked request:', toErrorLog(error));
     return new SSRFBlockedError(`${SSRF_BLOCKED_PREFIX}: ${errorMessage}. See: ${SSRF_DOCS_URL}`, {
       cause: error,
     });
@@ -187,7 +187,7 @@ export const ssrfSafeFetch = async (
 
     return webResponse;
   } catch (error) {
-    throw toFetchError(error);
+    throw toFetchError(error, ssrfOptions?.silent);
   }
 };
 
