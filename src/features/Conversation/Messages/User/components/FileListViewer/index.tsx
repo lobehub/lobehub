@@ -1,6 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
+import { useDensity } from '@/styles/density';
 import { type ChatFileItem } from '@/types/index';
 
 import FileItem from './Item';
@@ -12,8 +13,10 @@ interface FileListViewerProps {
 }
 
 const FileListViewer = memo<FileListViewerProps>(({ items, onOpenFile }) => {
+  const { tokens } = useDensity();
+
   return (
-    <Flexbox gap={8}>
+    <Flexbox gap={tokens.blockGap}>
       {items.map((item) => (
         <FileItem
           key={item.id}

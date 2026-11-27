@@ -1,12 +1,20 @@
+import { type InterfaceDensity } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { Code2Icon, SquareDashedMousePointer } from 'lucide-react';
 import { memo } from 'react';
 
+import { useDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 import type { ContextSelection, ElementContextSelection, PageSelection } from '@/types/index';
 
 type UserContextSelection = ContextSelection | PageSelection;
+
+const QUOTE_FONT_SIZE = { compact: 20, loose: 28 } as const satisfies Record<
+  InterfaceDensity,
+  number
+>;
 
 const styles = stylex.create({
   codeContainer: {
@@ -15,7 +23,7 @@ const styles = stylex.create({
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
-    borderRadius: '8px',
+    borderRadius: densityTokens['--lobe-density-radius'],
     backgroundColor: { 'default': cssVar.colorFillQuaternary, ':hover': cssVar.colorFillTertiary },
     backgroundImage: 'none',
   },
@@ -53,7 +61,7 @@ const styles = stylex.create({
   container: {
     cursor: 'pointer',
     position: 'relative',
-    borderRadius: '8px',
+    borderRadius: densityTokens['--lobe-density-radius'],
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
     backgroundImage: { 'default': null, ':hover': 'none' },
   },
@@ -96,10 +104,11 @@ const styles = stylex.create({
     insetBlockStart: '2px',
     insetInlineStart: 0,
     fontFamily: 'Georgia, serif',
-    fontSize: '28px',
+    fontSize: `${QUOTE_FONT_SIZE.loose}px`,
     lineHeight: 1,
     color: cssVar.colorTextQuaternary,
   },
+  quoteCompact: { fontSize: `${QUOTE_FONT_SIZE.compact}px` },
 });
 
 interface PageSelectionsProps {
@@ -162,14 +171,18 @@ const ElementSelection = memo<{ selection: ElementContextSelection }>(({ selecti
 
 ElementSelection.displayName = 'UserMessageElementSelection';
 
-const QuoteSelection = memo<{ selection: UserContextSelection }>(({ selection }) => (
-  <Flexbox className={stylex.props(styles.container).className}>
-    <Flexbox horizontal gap={4} padding={4}>
-      <span {...stylex.props(styles.quote)}>"</span>
-      <div {...stylex.props(styles.content)}>{selection.content}</div>
+const QuoteSelection = memo<{ selection: UserContextSelection }>(({ selection }) => {
+  const { compact } = useDensity();
+
+  return (
+    <Flexbox className={stylex.props(styles.container).className}>
+      <Flexbox horizontal gap={4} padding={4}>
+        <span {...stylex.props(styles.quote, compact && styles.quoteCompact)}>"</span>
+        <div {...stylex.props(styles.content)}>{selection.content}</div>
+      </Flexbox>
     </Flexbox>
-  </Flexbox>
-));
+  );
+});
 
 QuoteSelection.displayName = 'UserMessageQuoteSelection';
 
