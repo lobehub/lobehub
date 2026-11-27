@@ -85,6 +85,7 @@ import VertexAIProvider from './vertexai';
 import VLLMProvider from './vllm';
 import VolcengineProvider from './volcengine';
 import VolcengineCodingPlanProvider from './volcengineCodingPlan';
+import WattProvider from './watt';
 import WenxinProvider from './wenxin';
 import XAIProvider from './xai';
 import XiaomiMiMoProvider from './xiaomimimo';
@@ -234,6 +235,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   VercelAIGatewayProvider,
   CerebrasProvider,
   ZenMuxProvider,
+  WattProvider,
   OpenCodeZenProvider,
   OpenCodeCodingPlanProvider,
   StraicoProvider,
@@ -394,6 +396,7 @@ export { default as VertexAIProviderCard } from './vertexai';
 export { default as VLLMProviderCard } from './vllm';
 export { default as VolcengineProviderCard } from './volcengine';
 export { default as VolcengineCodingPlanProviderCard } from './volcengineCodingPlan';
+export { default as WattProviderCard } from './watt';
 export { default as WenxinProviderCard } from './wenxin';
 export { default as XAIProviderCard } from './xai';
 export { default as XiaomiMiMoProviderCard } from './xiaomimimo';
