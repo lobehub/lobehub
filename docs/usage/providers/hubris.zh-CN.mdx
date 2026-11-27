@@ -9,16 +9,16 @@ tags:
 
 # Hubris 提供商配置
 
-[Hubris](https://hubris.pw) 是一个兼容 OpenAI 接口的模型网关，通过单个 API 密钥提供 Anthropic、OpenAI、Google、DeepSeek、Moonshot、xAI、Z.ai、Qwen 等厂商的模型。该服务面向俄罗斯用户，以俄罗斯卢布计费。
+[Hubris](https://hubris.pro) 是一个兼容 OpenAI 接口的模型网关，通过单个 API 密钥提供 Anthropic、OpenAI、Google、DeepSeek、Moonshot、xAI、Z.ai、Qwen 等厂商的模型。该服务面向俄罗斯用户，以俄罗斯卢布计费。
 
 ## 前置条件
 
 1. **创建 Hubris 账户**
-   - 前往 [hubris.pw](https://hubris.pw/sign-in) 注册。
+   - 前往 [hubris.pro](https://hubris.pro/sign-in) 注册。
    - 账户余额以卢布充值，按 token 用量实时扣费，无需订阅。
 
 2. **获取 API 密钥**
-   - 打开 [hubris.pw/keys](https://hubris.pw/keys) 创建密钥。
+   - 打开 [hubris.pro/keys](https://hubris.pro/keys) 创建密钥。
    - 完整密钥（`sk-gw-…`）只在创建时显示一次，请当场复制保存。
 
 ## 配置
@@ -40,7 +40,7 @@ HUBRIS_API_KEY=sk-gw-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 ## 模型
 
-模型 ID 采用 `厂商/模型` 的形式，例如 `anthropic/claude-sonnet-5`、`openai/gpt-6-astra`、`google/gemini-3.8-flash`、`deepseek/deepseek-v4-pro`。内置模型卡片收录了十余个常用模型；完整目录（500 多个条目）通过模型列表拉取功能获得，数据来自 `GET https://api.hubris.pw/v1/models`。
+模型 ID 采用 `厂商/模型` 的形式，例如 `anthropic/claude-sonnet-5`、`openai/gpt-6-astra`、`google/gemini-3.8-flash`、`deepseek/deepseek-v4-pro`。内置模型卡片收录了十余个常用模型；完整目录（500 多个条目）通过模型列表拉取功能获得，数据来自 `GET https://api.hubris.pro/v1/models`。
 
 该接口无需密钥即可访问，可以直接浏览模型目录、上下文长度与支持的参数。
 
@@ -53,16 +53,16 @@ HUBRIS_API_KEY=sk-gw-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 ### 价格
 
-Hubris 的所有价格以俄罗斯卢布标注，而 LobeHub 的模型卡片只支持美元与人民币。与其写入一个会随汇率漂移的换算值，内置卡片索性不带价格，因此该提供商的费用一栏为空。当前价格请查看 [模型目录](https://hubris.pw/models)，或 `GET /v1/models` 返回中的 `pricing` 字段。
+Hubris 的所有价格以俄罗斯卢布标注，而 LobeHub 的模型卡片只支持美元与人民币。与其写入一个会随汇率漂移的换算值，内置卡片索性不带价格，因此该提供商的费用一栏为空。当前价格请查看 [模型目录](https://hubris.pro/models)，或 `GET /v1/models` 返回中的 `pricing` 字段。
 
 ## 常见问题
 
-- **401** — 密钥错误或已被吊销，请在 [hubris.pw/keys](https://hubris.pw/keys) 重新创建。
-- **402** — 账户余额不足，请在 [hubris.pw/billing](https://hubris.pw/billing) 充值。
+- **401** — 密钥错误或已被吊销，请在 [hubris.pro/keys](https://hubris.pro/keys) 重新创建。
+- **402** — 账户余额不足，请在 [hubris.pro/billing](https://hubris.pro/billing) 充值。
 - **模型 ID 返回 404** — Hubris 按完整 ID 精确匹配，不做别名解析。请从 `GET /v1/models` 或模型目录页复制 ID，不要自行简写。
 
 ## 支持
 
-- [文档](https://hubris.pw/docs)
-- [模型目录](https://hubris.pw/models)
-- [服务状态](https://hubris.pw/status)
+- [文档](https://hubris.pro/docs)
+- [模型目录](https://hubris.pro/models)
+- [服务状态](https://hubris.pro/status)

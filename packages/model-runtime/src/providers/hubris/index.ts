@@ -35,7 +35,7 @@ const stripVendorPrefix = (displayName?: string) => {
 };
 
 export const params = {
-  baseURL: 'https://api.hubris.pw/v1',
+  baseURL: 'https://api.hubris.pro/v1',
   chatCompletion: {
     handlePayload: (payload) => {
       const { reasoning_effort, thinking, reasoning: _reasoning, ...rest } = payload;

@@ -9,16 +9,16 @@ tags:
 
 # Hubris Provider Configuration
 
-[Hubris](https://hubris.pw) is an OpenAI-compatible gateway that serves models from Anthropic, OpenAI, Google, DeepSeek, Moonshot, xAI, Z.ai, Qwen and others behind a single API key. It is aimed at users in Russia and bills in Russian roubles.
+[Hubris](https://hubris.pro) is an OpenAI-compatible gateway that serves models from Anthropic, OpenAI, Google, DeepSeek, Moonshot, xAI, Z.ai, Qwen and others behind a single API key. It is aimed at users in Russia and bills in Russian roubles.
 
 ## Prerequisites
 
 1. **Create a Hubris account**
-   - Sign up at [hubris.pw](https://hubris.pw/sign-in).
+   - Sign up at [hubris.pro](https://hubris.pro/sign-in).
    - The account balance is topped up in roubles; usage is charged per token as you go, with no subscription.
 
 2. **Create an API key**
-   - Open [hubris.pw/keys](https://hubris.pw/keys) and create a key.
+   - Open [hubris.pro/keys](https://hubris.pro/keys) and create a key.
    - The full key (`sk-gw-…`) is shown once, at creation time. Copy it then.
 
 ## Configuration
@@ -40,7 +40,7 @@ Setting `HUBRIS_API_KEY` enables the provider on the server side. `HUBRIS_MODEL_
 
 ## Models
 
-Model IDs use the `vendor/model` form, for example `anthropic/claude-sonnet-5`, `openai/gpt-6-astra`, `google/gemini-3.8-flash`, `deepseek/deepseek-v4-pro`. A dozen widely used models ship as built-in cards; the full catalogue (500+ entries) arrives through the model fetcher, which reads `GET https://api.hubris.pw/v1/models`.
+Model IDs use the `vendor/model` form, for example `anthropic/claude-sonnet-5`, `openai/gpt-6-astra`, `google/gemini-3.8-flash`, `deepseek/deepseek-v4-pro`. A dozen widely used models ship as built-in cards; the full catalogue (500+ entries) arrives through the model fetcher, which reads `GET https://api.hubris.pro/v1/models`.
 
 That endpoint is public — you can browse the catalogue, its context windows and its supported parameters without a key.
 
@@ -53,16 +53,16 @@ That endpoint is public — you can browse the catalogue, its context windows an
 
 ### Pricing
 
-Hubris publishes every price in Russian roubles, and LobeHub's model cards only carry USD and CNY. Rather than ship a converted number that would drift as the exchange rate moves, the built-in cards carry no price at all — the cost line stays empty for this provider. Current prices are on the [model catalogue](https://hubris.pw/models) and in the `pricing` block of `GET /v1/models`.
+Hubris publishes every price in Russian roubles, and LobeHub's model cards only carry USD and CNY. Rather than ship a converted number that would drift as the exchange rate moves, the built-in cards carry no price at all — the cost line stays empty for this provider. Current prices are on the [model catalogue](https://hubris.pro/models) and in the `pricing` block of `GET /v1/models`.
 
 ## Troubleshooting
 
-- **401** — the key is wrong, or it was revoked. Create a new one at [hubris.pw/keys](https://hubris.pw/keys).
-- **402** — the account balance is exhausted. Top it up at [hubris.pw/billing](https://hubris.pw/billing).
+- **401** — the key is wrong, or it was revoked. Create a new one at [hubris.pro/keys](https://hubris.pro/keys).
+- **402** — the account balance is exhausted. Top it up at [hubris.pro/billing](https://hubris.pro/billing).
 - **404 on a model ID** — Hubris resolves IDs exactly, with no aliasing. Copy the ID from `GET /v1/models` or from the catalogue page rather than guessing a short name.
 
 ## Support
 
-- [Documentation](https://hubris.pw/docs)
-- [Model catalogue](https://hubris.pw/models)
-- [Status page](https://hubris.pw/status)
+- [Documentation](https://hubris.pro/docs)
+- [Model catalogue](https://hubris.pro/models)
+- [Status page](https://hubris.pro/status)

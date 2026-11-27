@@ -19,7 +19,7 @@ testProvider({
   Runtime: LobeHubrisAI,
   chatDebugEnv: 'DEBUG_HUBRIS_CHAT_COMPLETION',
   chatModel: 'anthropic/claude-sonnet-5',
-  defaultBaseURL: 'https://api.hubris.pw/v1',
+  defaultBaseURL: 'https://api.hubris.pro/v1',
   provider: ModelProvider.Hubris,
   test: {
     skipAPICall: true,
