@@ -314,4 +314,145 @@ describe('Responses tool anchoring', () => {
       expect(declared).not.toHaveLength(0);
     }
   });
+
+  // https://github.com/lobehub/lobehub/issues/23975
+  describe('union schemas activated mid-run', () => {
+    const listDocuments = fn('lobe-agent-documents____listDocuments');
+    const modifyNodes: ChatCompletionTool = {
+      function: {
+        description: 'Perform LiteXML node operations on an agent document by ID.',
+        name: 'lobe-agent-documents____modifyNodes',
+        parameters: {
+          properties: {
+            id: { type: 'string' },
+            operations: {
+              items: {
+                oneOf: [
+                  {
+                    properties: {
+                      action: { const: 'remove', type: 'string' },
+                      id: { type: 'string' },
+                    },
+                    required: ['action', 'id'],
+                    type: 'object',
+                  },
+                  {
+                    properties: {
+                      action: { const: 'modify', type: 'string' },
+                      litexml: {
+                        oneOf: [{ type: 'string' }, { items: { type: 'string' }, type: 'array' }],
+                      },
+                    },
+                    required: ['action', 'litexml'],
+                    type: 'object',
+                  },
+                ],
+              },
+              type: 'array',
+            },
+          },
+          required: ['id', 'operations'],
+          type: 'object',
+        },
+      },
+      type: 'function',
+    };
+
+    /** Activate Agent Documents, list them, then a plain-text turn and an edit turn. */
+    const documentsRun = () => {
+      const activated: OpenAIChatMessage[] = [
+        { content: 'You are a helpful assistant.', role: 'system' },
+        { content: 'Activate Agent Documents and list my documents.', role: 'user' },
+        {
+          content: '',
+          role: 'assistant',
+          tool_calls: [
+            {
+              function: {
+                arguments: '{"tools":["lobe-agent-documents"]}',
+                name: activator.function.name,
+              },
+              id: 'call_activate_documents',
+              type: 'function',
+            },
+          ],
+        },
+        {
+          content: 'Successfully activated tools: lobe-agent-documents.',
+          role: 'tool',
+          tool_call_id: 'call_activate_documents',
+          toolsAdded: [listDocuments.function.name, modifyNodes.function.name],
+        },
+      ];
+      const textTurn: OpenAIChatMessage[] = [
+        ...activated,
+        { content: 'You have one document: Notes.', role: 'assistant' },
+        { content: 'Thanks, just say hi.', role: 'user' },
+      ];
+      const editTurn: OpenAIChatMessage[] = [
+        ...textTurn,
+        { content: 'Hi!', role: 'assistant' },
+        { content: 'Remove the first paragraph of Notes.', role: 'user' },
+        {
+          content: '',
+          role: 'assistant',
+          tool_calls: [
+            {
+              function: {
+                arguments: '{"id":"doc_1","operations":[{"action":"remove","id":"p1"}]}',
+                name: modifyNodes.function.name,
+              },
+              id: 'call_modify',
+              type: 'function',
+            },
+          ],
+        },
+        { content: 'Removed p1.', role: 'tool', tool_call_id: 'call_modify' },
+      ];
+      const tools = [activator, listDocuments, modifyNodes];
+      return [activated, textTurn, editTurn].map((messages) => ({ messages, tools }));
+    };
+
+    const anchoredDefinitions = (request: ResponsesRequest) =>
+      request.input
+        .filter((item) => item.type === 'additional_tools')
+        .flatMap((item) => (item as OpenAI.Responses.ResponseInputItem.AdditionalTools).tools)
+        .filter((tool) => (tool as { name?: string }).name === modifyNodes.function.name);
+
+    it.each(['gpt-6.2-sol', 'gpt-5.6-sol'])(
+      'replays modifyNodes non-strict on every later %s turn, as declared at the top level',
+      async (model) => {
+        const runtime = new LobeChatGPTAI({ apiKey: 'test', chatgptAccountId: 'test' });
+        const create = vi
+          .spyOn((runtime as any).client.responses, 'create')
+          .mockImplementation(async () => closedStream() as never);
+        for (const step of documentsRun()) {
+          const response = await runtime.chat({ ...step, model, stream: true } as any);
+          await response.text();
+        }
+        const requests = create.mock.calls.map(([request]) => request as ResponsesRequest);
+
+        expectGrowingPrefix(requests);
+        for (const request of requests) {
+          const definitions = anchoredDefinitions(request);
+          expect(definitions).toHaveLength(1);
+          expect(definitions[0]).toMatchObject({ strict: false });
+        }
+
+        // The top-level list declares the same tool byte for byte when it is not anchored.
+        vi.stubEnv('OPENAI_RESPONSES_TOOL_ANCHORING', '0');
+        const openai = new LobeOpenAI({ apiKey: 'test' });
+        const openaiCreate = vi
+          .spyOn((openai as any).client.responses, 'create')
+          .mockImplementation(async () => closedStream() as never);
+        const [, textTurn] = documentsRun();
+        await (await openai.chat({ ...textTurn, model, stream: true } as any)).text();
+        const topLevel = (openaiCreate.mock.calls[0][0] as ResponsesRequest).tools?.find(
+          (tool) => (tool as { name?: string }).name === modifyNodes.function.name,
+        );
+
+        expect(topLevel).toEqual(anchoredDefinitions(requests.at(-1)!)[0]);
+      },
+    );
+  });
 });

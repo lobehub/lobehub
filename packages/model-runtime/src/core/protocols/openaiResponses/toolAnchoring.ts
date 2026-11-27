@@ -182,6 +182,8 @@ export const buildAnchoredToolItems = (
   tools: ChatCompletionTool[],
   anchorId: string,
 ): OpenAI.Responses.ResponseInputItem[] => {
+  // The converter the top-level list uses, so an anchored definition matches its top-level
+  // form exactly, `strict: false` on union schemas included (these items reject them).
   const responseTools = tools.map(convertChatCompletionToolToResponseTool);
 
   if (mode === 'additional_tools') {
