@@ -30,6 +30,7 @@ import {
   type AnthropicGenerateObjectConfig,
   createAnthropicGenerateObject,
 } from '../protocols/anthropicMessages/generateObject';
+import type { ResolveInlineToolChanges } from '../protocols/anthropicMessages/inlineToolChanges';
 import {
   buildDefaultAnthropicPayload,
   resolveDefaultAnthropicPricingOptions,
@@ -100,6 +101,12 @@ export interface AnthropicCompatibleFactoryOptions<T extends Record<string, any>
         payload,
       }: { callbacks?: ChatStreamCallbacks; inputStartAt?: number; payload?: ChatStreamPayload },
     ) => ReadableStream;
+    /**
+     * How this endpoint declares tools that became available mid-conversation, for the
+     * model the request targets. Unset keeps Claude's inline-tools gating; return
+     * `undefined` to keep every tool in the top-level list.
+     */
+    inlineToolChanges?: ResolveInlineToolChanges;
   };
   constructorOptions?: ConstructorOptions<T>;
   customClient?: CustomClientOptions<T>;

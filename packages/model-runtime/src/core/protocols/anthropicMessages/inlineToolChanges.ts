@@ -4,10 +4,42 @@ import debug from 'debug';
 
 import { supportsClaudeInlineToolChanges } from '../../../providers/anthropic/modelId';
 import type { ChatMethodOptions, ChatStreamPayload } from '../../../types';
+import type { ConstructorOptions } from '../../anthropicCompatible';
 import type { AnthropicCompatibleRuntimeContext } from '../../anthropicCompatible/context';
 
 const inlineToolsBeta = 'inline-tools-2026-09-15';
 const log = debug('lobe-model-runtime:anthropic:tools');
+
+/**
+ * How a Messages-API endpoint declares a tool that became available mid-conversation.
+ *
+ * - `tool_definition`: Claude's inline-tools beta. The activated schema leaves the
+ *   top-level `tools` list and travels by value inside a `tool_addition` block.
+ * - `tool_reference`: DeepSeek's deferred tool loading. The activated schema stays in the
+ *   top-level list flagged `defer_loading: true`, which keeps it out of the opening
+ *   prompt, and a `tool_addition` block loads it by name where the activation happened.
+ *
+ * Either way the request only grows at the activation point, so the cached prefix
+ * survives the activation.
+ *
+ * @see https://platform.claude.com/docs/en/build-with-claude/mid-conversation-system-messages
+ * @see https://api-docs.deepseek.com/guides/tool_calls#deferred-tool-loading
+ */
+export type InlineToolChangesMode = 'tool_definition' | 'tool_reference';
+
+export interface InlineToolChangesResolverContext {
+  /** Endpoint the request is sent to. */
+  baseURL: string;
+  /** Upstream model id, after `modelIdMapping`. */
+  model: string;
+  /** Options the runtime was constructed with, including per-channel overrides. */
+  options: ConstructorOptions;
+}
+
+/** Picks the mode for one endpoint and model, or `undefined` to keep the ordinary payload. */
+export type ResolveInlineToolChanges = (
+  context: InlineToolChangesResolverContext,
+) => InlineToolChangesMode | undefined;
 
 function betaHeader(headers?: object | null) {
   const entry = Object.entries(headers ?? {}).find(
@@ -16,18 +48,55 @@ function betaHeader(headers?: object | null) {
   return typeof entry?.[1] === 'string' ? entry[1] : undefined;
 }
 
+const hasInlineToolsBeta = (configured?: string) =>
+  configured?.split(',').some((token) => token.trim() === inlineToolsBeta) ?? false;
+
+/**
+ * Claude's inline tools stay opt-in while the beta lasts: the env enables them, and a
+ * relay must also carry the beta header as the operator's statement that it accepts the
+ * blocks.
+ */
+const resolveClaudeInlineToolChanges: ResolveInlineToolChanges = ({ baseURL, model, options }) => {
+  if (process.env.ANTHROPIC_ENABLE_INLINE_TOOLS !== '1') return;
+  if (!supportsClaudeInlineToolChanges(model)) return;
+  if (
+    baseURL.replace(/\/$/, '') !== 'https://api.anthropic.com' &&
+    !hasInlineToolsBeta(betaHeader(options.defaultHeaders))
+  )
+    return;
+  return 'tool_definition';
+};
+
+type ToolAdditionBlock = {
+  tool:
+    | { definition: Anthropic.Tool; type: 'tool_definition' }
+    | { name: string; type: 'tool_reference' };
+  type: 'tool_addition';
+};
+
 type WireUpdate = {
-  content: ((
-    | { text: string; type: 'text' }
-    | {
-        tool: { definition: Anthropic.Tool; type: 'tool_definition' };
-        type: 'tool_addition';
-      }
-  ) & { cache_control?: Anthropic.CacheControlEphemeral })[];
+  content: (({ text: string; type: 'text' } | ToolAdditionBlock) & {
+    cache_control?: Anthropic.CacheControlEphemeral;
+  })[];
   role: 'system';
 };
 
-function anchorAdditions(body: Anthropic.MessageCreateParams, context: ToolActivationContext) {
+const toToolAddition = (
+  mode: InlineToolChangesMode,
+  { cache_control: _marker, ...definition }: Anthropic.Tool,
+): ToolAdditionBlock => ({
+  tool:
+    mode === 'tool_definition'
+      ? { definition, type: 'tool_definition' }
+      : { name: definition.name, type: 'tool_reference' },
+  type: 'tool_addition',
+});
+
+function anchorAdditions(
+  body: Anthropic.MessageCreateParams,
+  context: ToolActivationContext,
+  mode: InlineToolChangesMode,
+) {
   const tools = body.tools ?? [];
   if (!tools.length || tools.some((tool) => tool.type)) return;
   const definitions = new Map((tools as Anthropic.Tool[]).map((tool) => [tool.name, tool]));
@@ -55,8 +124,7 @@ function anchorAdditions(body: Anthropic.MessageCreateParams, context: ToolActiv
     for (const name of addition.names) {
       const tool = definitions.get(name);
       if (!tool || later.has(name)) return;
-      const { cache_control: _marker, ...definition } = tool;
-      update.content.push({ type: 'tool_addition', tool: { type: 'tool_definition', definition } });
+      update.content.push(toToolAddition(mode, tool));
       later.add(name);
     }
     updates.set(index, update);
@@ -65,11 +133,23 @@ function anchorAdditions(body: Anthropic.MessageCreateParams, context: ToolActiv
   const initial = (tools as Anthropic.Tool[])
     .filter((tool) => !later.has(tool.name))
     .map(({ cache_control: _marker, ...tool }) => tool);
+  // Both endpoints require at least one tool that is available from the start.
   if (!initial.length) return;
   const marker = tools.find((tool) => tool.cache_control)?.cache_control;
   const initialTools = initial.map((tool, i) =>
     marker && i === initial.length - 1 ? { ...tool, cache_control: marker } : tool,
   );
+  // A referenced tool must stay declared in the top-level list, deferred. Deferred
+  // definitions do not enter the opening prompt, so appending them keeps the prefix.
+  const deferredTools =
+    mode === 'tool_reference'
+      ? (tools as Anthropic.Tool[])
+          .filter((tool) => later.has(tool.name))
+          .map(
+            ({ cache_control: _marker, ...tool }) =>
+              ({ ...tool, defer_loading: true }) as Anthropic.Tool,
+          )
+      : [];
   const messages: (Anthropic.MessageParam | WireUpdate)[] = [];
   for (const [index, message] of body.messages.entries()) {
     const update = updates.get(index);
@@ -96,12 +176,12 @@ function anchorAdditions(body: Anthropic.MessageCreateParams, context: ToolActiv
       messages.push(message, update);
     }
   }
-  // The stable SDK's MessageParam predates beta system messages. The REST endpoint
-  // accepts these typed blocks under the inline-tools beta.
+  // The stable SDK's MessageParam predates mid-conversation system messages. The REST
+  // endpoints accept these typed blocks (Claude under the inline-tools beta).
   return {
     ...body,
     messages: messages as Anthropic.MessageParam[],
-    tools: initialTools,
+    tools: [...initialTools, ...deferredTools],
   };
 }
 
@@ -112,12 +192,12 @@ export async function prepareAnthropicToolChanges(
   build: (
     payload: ChatStreamPayload,
   ) => Promise<Anthropic.MessageCreateParams> | Anthropic.MessageCreateParams,
+  resolveMode: ResolveInlineToolChanges = resolveClaudeInlineToolChanges,
 ) {
   // Build the canonical body once. In particular, resolving an image URL can perform I/O.
   const body = await build(payload);
   const ordinary = { body, headers: options?.requestHeaders };
   if (
-    process.env.ANTHROPIC_ENABLE_INLINE_TOOLS !== '1' ||
     !options?.getToolActivationContext ||
     !payload.tools?.length ||
     payload.enabledContextCaching === false ||
@@ -126,13 +206,12 @@ export async function prepareAnthropicToolChanges(
     return ordinary;
 
   const actualModel = runtime.withMappedRequestModel({ model: payload.model }, payload.model).model;
-  const configured = betaHeader(runtime._options.defaultHeaders);
-  if (
-    !supportsClaudeInlineToolChanges(actualModel) ||
-    (runtime.baseURL.replace(/\/$/, '') !== 'https://api.anthropic.com' &&
-      !configured?.split(',').some((token) => token.trim() === inlineToolsBeta))
-  )
-    return ordinary;
+  const mode = resolveMode({
+    baseURL: runtime.baseURL,
+    model: actualModel,
+    options: runtime._options,
+  });
+  if (!mode) return ordinary;
 
   const context = await options.getToolActivationContext().catch((error: unknown) => {
     log(
@@ -151,7 +230,7 @@ export async function prepareAnthropicToolChanges(
     );
     return ordinary;
   }
-  const projected = anchorAdditions(body, context);
+  const projected = anchorAdditions(body, context, mode);
   if (!projected) {
     log(
       'Ordinary request: incompatible tools or history, model=%s operation=%s',
@@ -180,14 +259,18 @@ export async function prepareAnthropicToolChanges(
   }
 
   log(
-    'Inline tool changes=%d model=%s operation=%s',
+    'Inline tool changes=%d mode=%s model=%s operation=%s',
     context.additions.length,
+    mode,
     actualModel,
     options.metadata?.operationId,
   );
+  // Deferred loading is a documented DeepSeek feature and needs no beta header.
+  if (mode === 'tool_reference') return { body: projected, headers: options.requestHeaders };
+
   const betas = new Set(
     [
-      configured,
+      betaHeader(runtime._options.defaultHeaders),
       process.env.ANTHROPIC_BETA_HEADERS,
       betaHeader(options.requestHeaders),
       inlineToolsBeta,

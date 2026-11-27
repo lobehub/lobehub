@@ -45,6 +45,7 @@ export const chatViaMessages = async (
     payload,
     options,
     build,
+    factory.chatCompletion?.inlineToolChanges,
   );
   const shouldStream = postPayload.stream ?? payload.stream ?? true;
   const finalPayload = { ...postPayload, stream: shouldStream };
