@@ -8,14 +8,9 @@ describe('CustomizeSidebarModal', () => {
     expect(getSortableSidebarItemIds(false).has('project')).toBe(true);
   });
 
-  it('offers Dashboards only while the dashboard flag is on, and never in workspace mode', () => {
+  it('no longer offers Dashboards as a sidebar item', () => {
     expect(getSortableSidebarItemIds(false).has('dashboard')).toBe(false);
-    expect(getSortableSidebarItemIds(false, { dashboardEnabled: true }).has('dashboard')).toBe(
-      true,
-    );
-    expect(getSortableSidebarItemIds(true, { dashboardEnabled: true }).has('dashboard')).toBe(
-      false,
-    );
+    expect(getSortableSidebarItemIds(true).has('dashboard')).toBe(false);
   });
 
   it.each([false, true])('offers one combined Tasks entry (workspace: %s)', (workspace) => {
