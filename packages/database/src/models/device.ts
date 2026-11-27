@@ -424,6 +424,10 @@ export class DeviceModel {
   /**
    * Remove a PERSONAL device. Workspace devices the user enrolled keep their
    * rows; they go through `deleteWorkspaceDevice`. Returns the removed rows.
+   *
+   * Device row only: agents that picked the device are another aggregate.
+   * Callers removing a device for the user go through
+   * `DeviceRemovalRepository`, which unbinds them in the same transaction.
    */
   delete = async (deviceId: string): Promise<DeviceItem[]> => {
     return this.db
@@ -484,6 +488,9 @@ export class DeviceModel {
    * (workspace owner, or the enroller acting on their own device) is enforced
    * at the router via `canEditWorkspaceDevice`. Returns the removed rows, or
    * `undefined` without a current workspace.
+   *
+   * Device row only; `DeviceRemovalRepository` also unbinds the workspace's
+   * agents from it.
    */
   deleteWorkspaceDevice = async (deviceId: string): Promise<DeviceItem[] | undefined> => {
     if (!this.workspaceId) return;

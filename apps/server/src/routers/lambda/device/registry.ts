@@ -20,6 +20,7 @@ import { z } from 'zod';
 import { managedDeviceProvider } from '@/business/server/managedDevice';
 import { getTopicDeviceId, TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
+import { DeviceRemovalRepository } from '@/database/repositories/deviceRemoval';
 import { router } from '@/libs/trpc/lambda';
 import { probeAgentRunRuntimes } from '@/server/services/aiAgent/pipeline/codexDeviceRuntime';
 import { type DeviceAttachment, deviceGateway } from '@/server/services/deviceGateway';
@@ -463,7 +464,11 @@ export const registryRouter = router({
   removeDevice: deviceProcedure
     .input(z.object({ deviceId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const removed = await ctx.deviceModel.delete(input.deviceId);
+      // Unbinds the caller's agents from the device in the same transaction.
+      const removed = await new DeviceRemovalRepository(
+        ctx.serverDB,
+        ctx.userId,
+      ).removePersonalDevice(input.deviceId);
       await reportManagedDevicesRemoved(removed);
       return { success: true };
     }),

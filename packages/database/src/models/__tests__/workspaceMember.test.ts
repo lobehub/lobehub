@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
+  agents,
   devices,
   messengerAccountLinks,
   resourcePermissions,
@@ -472,6 +473,63 @@ describe('WorkspaceMemberModel', () => {
         .map((d) => d.deviceId)
         .sort();
       expect(remaining).toEqual(['dep-personal', 'other-ws-private', 'team-box']);
+    });
+
+    it('unbinds workspace agents from the devices dropped with the member', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ userId: memberId, workspaceId });
+      await serverDB.insert(devices).values([
+        {
+          deviceId: 'dep-shared',
+          identitySource: 'machine-id',
+          sharedFromDeviceId: 'dep-personal',
+          userId: memberId,
+          visibility: 'public',
+          workspaceId,
+        },
+        {
+          deviceId: 'team-box',
+          identitySource: 'machine-id',
+          userId: memberId,
+          visibility: 'public',
+          workspaceId,
+        },
+      ]);
+      await serverDB.insert(agents).values([
+        {
+          agencyConfig: {
+            boundDeviceId: 'dep-shared',
+            executionTarget: 'device',
+            executionTargetSelectionPolicy: 'fixed',
+            workingDirByDevice: { 'dep-shared': '/repo', 'team-box': '/team' },
+          },
+          id: 'wm-agent-dep',
+          userId: inviterId,
+          visibility: 'public',
+          workspaceId,
+        },
+        {
+          agencyConfig: { boundDeviceId: 'team-box' },
+          id: 'wm-agent-team',
+          userId: inviterId,
+          workspaceId,
+        },
+      ]);
+
+      await model.removeMember(workspaceId, memberId);
+
+      const configs = Object.fromEntries(
+        (await serverDB.select({ agencyConfig: agents.agencyConfig, id: agents.id }).from(agents))
+          .filter((a) => a.id.startsWith('wm-agent-'))
+          .map((a) => [a.id, a.agencyConfig]),
+      );
+      expect(configs).toEqual({
+        'wm-agent-dep': {
+          executionTargetSelectionPolicy: 'member',
+          workingDirByDevice: { 'team-box': '/team' },
+        },
+        'wm-agent-team': { boundDeviceId: 'team-box' },
+      });
     });
 
     it('revokes the departing member grants, so a re-invite does not restore them', async () => {

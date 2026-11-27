@@ -247,6 +247,43 @@ describe('AgentModel workspace device binding', () => {
         }),
       ).resolves.toBeDefined();
     });
+
+    it('removes a workingDirByDevice key patched to null (JSON patch from lh agent edit)', async () => {
+      const personalModel = new AgentModel(serverDB, userId);
+      const agent = await personalModel.create({
+        title: 'Personal agent',
+        agencyConfig: {
+          boundDeviceId: 'removed-device',
+          workingDirByDevice: { 'removed-device': '/old', [personalDeviceId]: '/kept' },
+        },
+      });
+
+      await personalModel.updateConfig(agent.id, {
+        agencyConfig: JSON.parse(
+          '{"boundDeviceId":null,"workingDirByDevice":{"removed-device":null}}',
+        ),
+      });
+
+      const [row] = await serverDB
+        .select({ agencyConfig: agents.agencyConfig })
+        .from(agents)
+        .where(eq(agents.id, agent.id));
+      expect(row.agencyConfig?.boundDeviceId).toBeNull();
+      expect(row.agencyConfig?.workingDirByDevice).toEqual({ [personalDeviceId]: '/kept' });
+    });
+
+    it('allows clearing a workingDirByDevice entry on a workspace agent (null value)', async () => {
+      const wsModel = new AgentModel(serverDB, userId, wsId);
+      const agent = await wsModel.create({
+        title: 'WS agent',
+        agencyConfig: { boundDeviceId: workspaceDeviceId },
+      });
+      await expect(
+        wsModel.updateConfig(agent.id, {
+          agencyConfig: JSON.parse(`{"workingDirByDevice":{"${personalDeviceId}":null}}`),
+        }),
+      ).resolves.toBeDefined();
+    });
   });
 
   describe('private fixed agent (T-14315)', () => {
