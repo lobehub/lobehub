@@ -2,7 +2,7 @@ import { AGENT_SHARE_DEVICE_ALLOW_USERS_LIMIT } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { AgentAccessDecision } from '@lobechat/types';
 import { isLiveAgentShareVisibility } from '@lobechat/types';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { AgentShareModel } from '@/database/models/agentShare';
 import { ChannelError } from '@/database/repositories/channel';
@@ -13,10 +13,15 @@ import {
   findAgentAccessRequest,
 } from '@/database/repositories/channel/agentAccess';
 import { retryJob } from '@/database/repositories/channel/retry';
+import { stopScope } from '@/database/repositories/channel/stop';
 import { withChannelLock } from '@/database/repositories/channel/transaction';
+import { OPEN_JOB_STATUSES } from '@/database/repositories/channel/writer';
+import type { ChannelJobItem } from '@/database/schemas';
 import { channelJobs, channelMembers } from '@/database/schemas';
+import type { Transaction } from '@/database/type';
 import { AgentService } from '@/server/services/agent';
 
+import { ChannelCoordinator } from '../ChannelCoordinator';
 import { notifyChannel } from '../notify';
 import { wakeChannel } from '../queue';
 import { announceAgentAccessRequests, refreshAgentAccessCard } from './card';
@@ -104,63 +109,116 @@ export class AgentAccessService {
    * {@link grantAgentAccess}); then either answer runs the replies it holds again: queued ones
    * wake with the Channel, failed ones it named go back to the queue, where an approved requester
    * runs and a declined one settles with the owner's refusal on its card. Revoking an approval
-   * first takes back what it granted ({@link revokeAgentAccess}); the requester's next reply asks
-   * the owner again, and a run already admitted stops at its next step (`isRunStillAuthorized`).
+   * first takes back what it granted ({@link revokeAgentAccess}) and, in a group, stops the
+   * requester's replies from the Agent that are queued or running there, since they ran on the
+   * approval; the requester's next reply asks the owner again.
+   *
+   * Everything runs under the request's Channel lock, reading the request again inside it, so
+   * decisions on one request are serialized: an approval that read `approved` just before a
+   * revoke cannot grant the share again after the revoke took it back.
    */
   decide = async (grantId: string, decision: AgentAccessDecision) => {
-    const row = await findAgentAccessRequest(this.db, grantId);
-    if (!row?.agentId || row.grant.ownerId !== this.userId || row.ownerId !== this.userId)
-      throw new ChannelError('NOT_FOUND', 'Access request not found');
-    if (decision === 'approve' && ['approved', 'pending'].includes(row.grant.status)) {
-      // Fail closed: the approval rests on the Agent being pulled into this Channel and the
-      // requester still being in it, which is what lets it skip the share-creation gate.
-      if (row.agentMemberStatus !== 'active')
-        throw new ChannelError('CONFLICT', 'The Agent is no longer in this Channel');
-      if (!row.requesterUserId || row.requesterStatus !== 'active')
-        throw new ChannelError('CONFLICT', 'The requester is no longer in this Channel');
-      await grantAgentAccess(this.db, {
-        agentId: row.agentId,
-        channelId: row.grant.channelId,
-        grantId,
-        ownerId: this.userId,
-        requesterUserId: row.requesterUserId,
-        workspaceId: row.agentWorkspaceId,
-      });
-    }
+    const found = await findAgentAccessRequest(this.db, grantId);
+    if (!found) throw new ChannelError('NOT_FOUND', 'Access request not found');
 
-    if (decision === 'revoke' && row.grant.status === 'approved' && row.requesterUserId)
-      await revokeAgentAccess(this.db, {
-        agentId: row.agentId,
-        grantId,
-        ownerId: this.userId,
-        requesterUserId: row.requesterUserId,
-        workspaceId: row.agentWorkspaceId,
-      });
-
-    const { changed, grant } = await decideAgentAccessGrant(
+    const { agentId, changed, grant, writers } = await withChannelLock(
       this.db,
-      this.userId,
-      grantId,
-      decision,
+      found.grant.channelId,
+      async (tx, channel) => {
+        // Nested writes run as savepoints of this transaction, under its lock.
+        const db = tx as unknown as LobeChatDatabase;
+        const row = await findAgentAccessRequest(db, grantId);
+        if (!row?.agentId || row.grant.ownerId !== this.userId || row.ownerId !== this.userId)
+          throw new ChannelError('NOT_FOUND', 'Access request not found');
+        if (decision === 'approve' && ['approved', 'pending'].includes(row.grant.status)) {
+          // Fail closed: the approval rests on the Agent being pulled into this Channel and the
+          // requester still being in it, which is what lets it skip the share-creation gate.
+          if (row.agentMemberStatus !== 'active')
+            throw new ChannelError('CONFLICT', 'The Agent is no longer in this Channel');
+          if (!row.requesterUserId || row.requesterStatus !== 'active')
+            throw new ChannelError('CONFLICT', 'The requester is no longer in this Channel');
+          await grantAgentAccess(db, {
+            agentId: row.agentId,
+            channelId: row.grant.channelId,
+            grantId,
+            ownerId: this.userId,
+            requesterUserId: row.requesterUserId,
+            workspaceId: row.agentWorkspaceId,
+          });
+        }
+
+        const writers: ChannelJobItem[] = [];
+        if (decision === 'revoke' && row.grant.status === 'approved') {
+          if (row.requesterUserId)
+            await revokeAgentAccess(db, {
+              agentId: row.agentId,
+              grantId,
+              ownerId: this.userId,
+              requesterUserId: row.requesterUserId,
+              workspaceId: row.agentWorkspaceId,
+            });
+          // In a group the approval is what admitted these replies; a share that still admits
+          // the requester elsewhere (a link share) does not, and the run's per-step share check
+          // would let them go on. Their own conversation with the Agent runs on the share alone.
+          if (channel.agentId !== row.agentId && row.grant.granteeMemberId)
+            writers.push(
+              ...(await stopRequesterReplies(
+                tx,
+                channel.id,
+                row.grant.memberId,
+                row.grant.granteeMemberId,
+              )),
+            );
+        }
+
+        const decided = await decideAgentAccessGrant(db, this.userId, grantId, decision);
+        if (decided.changed && decision !== 'revoke')
+          for (const jobId of accessRequestMetadata(decided.grant).jobIds)
+            await retryJob(tx, channel.id, jobId).catch(() => undefined);
+        return { ...decided, agentId: row.agentId, writers };
+      },
     );
-    if (changed && decision !== 'revoke') {
-      const { jobIds } = accessRequestMetadata(grant);
-      if (jobIds.length)
-        await withChannelLock(this.db, grant.channelId, async (tx) => {
-          for (const jobId of jobIds)
-            await retryJob(tx, grant.channelId, jobId).catch(() => undefined);
-        });
-      await wakeChannel(grant.channelId);
+
+    if (writers.length) await new ChannelCoordinator(this.db).stopWriters(writers);
+    if (changed) {
+      // A decline settles the replies it held, which wake with the Channel; a revoke has none.
+      if (decision !== 'revoke' || writers.length) await wakeChannel(grant.channelId);
       await notifyChannel(this.db, grant.channelId);
-    } else if (changed) await notifyChannel(this.db, grant.channelId);
+    }
     await refreshAgentAccessCard(this.db, {
-      agentId: row.agentId,
+      agentId,
       id: grant.id,
       ownerId: this.userId,
     });
     return { grant: { id: grant.id, status: grant.status } };
   };
 }
+
+/**
+ * Stops the requester's replies from an Agent member that are queued or running in a Channel,
+ * across its Threads. Returns those whose writer is still held, for the coordinator to stop.
+ */
+const stopRequesterReplies = async (
+  tx: Transaction,
+  channelId: string,
+  memberId: string,
+  requesterMemberId: string,
+) => {
+  const open = await tx
+    .select({ id: channelJobs.id })
+    .from(channelJobs)
+    .where(
+      and(
+        eq(channelJobs.channelId, channelId),
+        eq(channelJobs.memberId, memberId),
+        eq(channelJobs.requesterMemberId, requesterMemberId),
+        inArray(channelJobs.status, [...OPEN_JOB_STATUSES]),
+      ),
+    );
+  const writers: ChannelJobItem[] = [];
+  for (const { id } of open) writers.push(...(await stopScope(tx, channelId, { jobId: id })));
+  return writers;
+};
 
 /**
  * The share half of approving a request: what the requester lacked, granted on the Agent's share
