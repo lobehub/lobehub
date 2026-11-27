@@ -6,6 +6,7 @@ import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useDensity } from '@/styles/density';
 import { densityTokens } from '@/styles/density.stylex';
 
 import {
@@ -30,6 +31,7 @@ const PLAN_TITLE_KEYS = {
 } as const satisfies Record<Plans, string>;
 
 const styles = stylex.create({
+  actionCompact: { height: '32px' },
   centered: { textAlign: 'center', textWrap: 'balance' },
   fact: {
     display: 'flex',
@@ -87,6 +89,9 @@ interface PlanLimitCardProps {
  */
 const PlanLimitCard = memo<PlanLimitCardProps>(({ errorBody, errorType, onRetry }) => {
   const { t } = useTranslation('subscription');
+  const { compact } = useDensity();
+  const actionSize = compact ? 'middle' : 'large';
+  const actionClassName = compact ? stylex.props(styles.actionCompact).className : undefined;
 
   const context = getBudgetContextFromErrorBody(errorBody);
   const isInsufficientBudget = errorType === ChatErrorType.InsufficientBudgetForModel;
@@ -123,7 +128,7 @@ const PlanLimitCard = memo<PlanLimitCardProps>(({ errorBody, errorType, onRetry 
 
   return (
     <Center paddingBlock={12} width={'100%'}>
-      <Flexbox className={stylex.props(styles.form).className} gap={16}>
+      <Flexbox className={stylex.props(styles.form).className} gap={compact ? 12 : 16}>
         <Center gap={8}>
           <Avatar animation avatar={'💰'} background={'transparent'} size={40} />
           <Center gap={4}>
@@ -161,16 +166,17 @@ const PlanLimitCard = memo<PlanLimitCardProps>(({ errorBody, errorType, onRetry 
           {BRANDING_URL.subscription && (
             <Button
               block
+              className={actionClassName}
               href={BRANDING_URL.subscription}
               rel={'noopener noreferrer'}
-              size={'large'}
+              size={actionSize}
               target={'_blank'}
               type={'primary'}
             >
               {upgradeLabel}
             </Button>
           )}
-          <Button block size={'large'} onClick={onRetry}>
+          <Button block className={actionClassName} size={actionSize} onClick={onRetry}>
             {t('limitation.insufficientBudget.retry')}
           </Button>
         </Flexbox>

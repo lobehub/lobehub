@@ -2,6 +2,8 @@ import { isDesktop } from '@lobechat/const';
 import { Flexbox, Highlighter, Snippet, Text } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
+import { useDensity } from '@/styles/density';
+
 import GuideActions from '../GuideActions';
 import GuideShell from '../GuideShell';
 import type { HeterogeneousAgentGuideStateProps } from '../types';
@@ -13,6 +15,8 @@ const AuthRequiredState = ({
   variant,
 }: HeterogeneousAgentGuideStateProps) => {
   const { t } = useTranslation('chat');
+  const { compact } = useDensity();
+  const snippetSize = compact ? { height: 32 } : undefined;
   const rawErrorDetails = error?.stderr || error?.message;
   const docsUrl = error?.docsUrl || config.docsUrl;
 
@@ -43,7 +47,9 @@ const AuthRequiredState = ({
           <Text strong style={{ fontSize: 12 }}>
             {t('cliAuthGuide.runCommand')}
           </Text>
-          <Snippet language={'bash'}>{config.signInCommand}</Snippet>
+          <Snippet language={'bash'} {...snippetSize}>
+            {config.signInCommand}
+          </Snippet>
         </Flexbox>
       )}
 

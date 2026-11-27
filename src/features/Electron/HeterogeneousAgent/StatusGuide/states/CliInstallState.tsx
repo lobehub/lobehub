@@ -2,6 +2,8 @@ import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ip
 import { Flexbox, Snippet, Text } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
+import { useDensity } from '@/styles/density';
+
 import GuideActions from '../GuideActions';
 import GuideShell from '../GuideShell';
 import type { HeterogeneousAgentGuideStateProps } from '../types';
@@ -13,6 +15,8 @@ const CliInstallState = ({
   variant,
 }: HeterogeneousAgentGuideStateProps) => {
   const { t } = useTranslation('chat');
+  const { compact } = useDensity();
+  const snippetSize = compact ? { height: 32 } : undefined;
   const translationPrefix = config.translationPrefix;
   const docsUrl = error?.docsUrl || config.docsUrl;
   const installCommands = error?.installCommands?.length
@@ -54,7 +58,9 @@ const CliInstallState = ({
           <Text strong style={{ fontSize: 12 }}>
             {tKey('installWithNpm')}
           </Text>
-          <Snippet language={'bash'}>{recommendedCommand}</Snippet>
+          <Snippet language={'bash'} {...snippetSize}>
+            {recommendedCommand}
+          </Snippet>
         </Flexbox>
       )}
 
@@ -63,7 +69,9 @@ const CliInstallState = ({
           <Text strong style={{ fontSize: 12 }}>
             {tKey('installWithBrew')}
           </Text>
-          <Snippet language={'bash'}>{alternativeCommand}</Snippet>
+          <Snippet language={'bash'} {...snippetSize}>
+            {alternativeCommand}
+          </Snippet>
         </Flexbox>
       )}
 

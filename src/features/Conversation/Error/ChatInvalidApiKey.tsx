@@ -7,6 +7,7 @@ import urlJoin from 'url-join';
 import { ProviderIcon } from '@/components/LobeIcons';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useProviderName } from '@/hooks/useProviderName';
+import { useDensity } from '@/styles/density';
 import { type GlobalLLMProviderKey } from '@/types/user/settings/modelProvider';
 
 import { useConversationStore } from '../store';
@@ -21,10 +22,11 @@ const ChatInvalidAPIKey = memo<ChatInvalidAPIKeyProps>(({ id, provider }) => {
   const navigate = useWorkspaceAwareNavigate();
   const [deleteMessage] = useConversationStore((s) => [s.deleteMessage]);
   const providerName = useProviderName(provider as GlobalLLMProviderKey);
+  const { compact } = useDensity();
 
   return (
     <BaseErrorForm
-      avatar={<ProviderIcon provider={provider} shape={'square'} size={40} />}
+      avatar={<ProviderIcon provider={provider} shape={'square'} size={compact ? 32 : 40} />}
       title={t(`unlock.apiKey.title`, { name: providerName, ns: 'error' })}
       action={
         <Button

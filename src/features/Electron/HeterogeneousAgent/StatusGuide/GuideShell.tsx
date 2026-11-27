@@ -3,6 +3,8 @@ import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useDensity } from '@/styles/density';
+
 import type { HeterogeneousAgentStatusGuideVariant } from './types';
 
 interface GuideShellProps {
@@ -34,35 +36,37 @@ const GuideShell = ({
   variant,
 }: GuideShellProps) => {
   const { t } = useTranslation('common');
+  const { compact: densityCompact } = useDensity();
+  const dense = compact || densityCompact;
   const showHeader = variant !== 'embedded';
   // Compact cards keep actions alongside the status when space permits,
   // wrapping them below it in narrow conversation panes.
   const actionsInHeader = compact && showHeader;
   const content = (
-    <Flexbox gap={compact ? 8 : 12}>
+    <Flexbox gap={dense ? 8 : 12}>
       {showHeader ? (
         <Flexbox
           horizontal
           align="center"
-          gap={compact ? 8 : 12}
+          gap={dense ? 8 : 12}
           justify="space-between"
           style={compact ? { flexWrap: 'wrap' } : undefined}
         >
           <Flexbox
             horizontal
             align="center"
-            gap={compact ? 8 : 12}
+            gap={dense ? 8 : 12}
             style={{ flex: compact ? '1 1 260px' : undefined, minWidth: 0 }}
           >
             <Avatar
               avatar={icon}
               background={cssVar.colorFillQuaternary}
               shape={'square'}
-              size={compact ? 32 : 48}
+              size={dense ? 32 : 48}
               style={{ color: cssVar.colorText }}
             />
             <Flexbox gap={2} style={{ minWidth: 0 }}>
-              <Text style={{ fontSize: compact ? 14 : 16, fontWeight: 600 }}>{title}</Text>
+              <Text style={{ fontSize: dense ? 14 : 16, fontWeight: 600 }}>{title}</Text>
               {headerDescription}
             </Flexbox>
           </Flexbox>
@@ -100,8 +104,8 @@ const GuideShell = ({
 
   return (
     <Block
-      gap={compact ? 12 : 16}
-      padding={compact ? 12 : 16}
+      gap={dense ? 12 : 16}
+      padding={dense ? 12 : 16}
       variant={'outlined'}
       style={{
         background: cssVar.colorBgElevated,
