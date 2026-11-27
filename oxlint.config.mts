@@ -343,6 +343,86 @@ const electronIpcRemoveListenerRestrictedSyntax = {
   selector: "CallExpression > MemberExpression.callee[property.name='removeListener']",
 };
 
+// A density value written as `compact ? 6 : 8` hides a token from the scale and
+// drifts on its own. Use a token from `densityScale.ts` or a named
+// `{ compact, loose }` constant beside the component.
+const densityLiteralMessage =
+  'Do not inline density values as compact ? <number> : <number>. Use a token from src/styles/densityScale.ts, or a named { compact, loose } constant when the value belongs to one component.';
+
+const densityLiteralRestrictedSyntax = [
+  {
+    message: densityLiteralMessage,
+    selector:
+      "ConditionalExpression[test.name=/^(is)?[Cc]ompact$/][consequent.raw=/^(-?[0-9.]+|['\"]-?[0-9.]+px['\"])$/]:matches([alternate.raw=/^(-?[0-9.]+|['\"]-?[0-9.]+px['\"])$/], [alternate.name='undefined'])",
+  },
+];
+
+// Files that predate the rule. This list only shrinks: fix a file's density
+// literals and drop it from here.
+const densityLiteralLegacyFiles = [
+  'src/business/client/features/SandboxStorageUpsell.tsx',
+  'src/components/ListSkeleton/index.tsx',
+  'src/components/LiteTable/index.tsx',
+  'src/components/MemberSelectionModal/MemberSelectionModal.tsx',
+  'src/components/ModelSelect/index.tsx',
+  'src/components/SettingCard/index.tsx',
+  'src/components/Skeleton/AgentViewAll.tsx',
+  'src/components/Skeleton/Goal.tsx',
+  'src/components/Skeleton/NavPanel/List.tsx',
+  'src/components/Skeleton/Settings/Section.tsx',
+  'src/components/Skeleton/Settings/Sections.tsx',
+  'src/components/Skeleton/Settings/tabs/Creds.tsx',
+  'src/components/Skeleton/Settings/tabs/Labels.tsx',
+  'src/components/Skeleton/Settings/tabs/SkillCatalog.tsx',
+  'src/components/Skeleton/Settings/tabs/Stats.tsx',
+  'src/components/Skeleton/SkeletonInput.tsx',
+  'src/features/Acceptance/Viewer/Comments/CommentComposer.tsx',
+  'src/features/AgentDocumentsExplorer/DocumentExplorerToolbar.tsx',
+  'src/features/AgentViewAll/AgentViewAllPage.tsx',
+  'src/features/Artboard/Verify/ReviewActions.tsx',
+  'src/features/Channels/BrowseChannels.tsx',
+  'src/features/Conversation/ChatItem/ChatItem.tsx',
+  'src/features/Conversation/ChatItem/components/MessageContent/index.tsx',
+  'src/features/Conversation/Messages/AssistantGroup/Tools.tsx',
+  'src/features/Conversation/Messages/AssistantGroup/components/ContentBlock.tsx',
+  'src/features/Conversation/Messages/AssistantGroup/components/ContentBlocksScroll.tsx',
+  'src/features/Conversation/Messages/AssistantGroup/components/ProcessFold.tsx',
+  'src/features/Conversation/components/StepStatusBox.tsx',
+  'src/features/EnvironmentManager/EnvironmentItem.tsx',
+  'src/features/FileViewer/Renderer/Image/Tools/Resize/index.tsx',
+  'src/features/Home/AgentSelect/AgentList.tsx',
+  'src/features/Home/AgentSelect/index.tsx',
+  'src/features/HomeInbox/TopicRow.tsx',
+  'src/features/HomeSidebar/Header/components/InboxModal/NotificationItem.tsx',
+  'src/features/HomeSidebar/Header/components/User.tsx',
+  'src/features/HomeTeamBoard/ActivityPanel.tsx',
+  'src/features/HomeTeamBoard/AttentionList.tsx',
+  'src/features/HomeTeamBoard/Timeline.tsx',
+  'src/features/HomeTeamBoard/index.tsx',
+  'src/features/LibraryModal/AssignKnowledgeBase/Item/index.tsx',
+  'src/features/ModelSwitchPanel/components/Toolbar.tsx',
+  'src/features/NavPanel/density.ts',
+  'src/features/PageEditor/DocumentComments/CommentCard.tsx',
+  'src/features/PageEditor/DocumentComments/DocumentCommentEditor.tsx',
+  'src/features/PageEditor/DocumentComments/Thread.tsx',
+  'src/features/Portal/TopicComments/TopicCommentEditor.tsx',
+  'src/features/Projects/KnowledgeBases/index.tsx',
+  'src/features/Projects/LinearSync/IssueList.tsx',
+  'src/features/Projects/Members/index.tsx',
+  'src/features/Projects/ProjectCreator/index.tsx',
+  'src/features/Projects/Review/MemberRow.tsx',
+  'src/features/RecommendTaskTemplates/DailyBriefRecommendationsView.tsx',
+  'src/features/Recommendations/index.tsx',
+  'src/features/Setting/SettingContainer.tsx',
+  'src/features/Settings/creds/features/CredItem.tsx',
+  'src/features/Settings/features/SettingHeader.tsx',
+  'src/features/Settings/provider/features/ModelList/ModelItem.tsx',
+  'src/features/Settings/provider/features/ModelList/SkeletonList.tsx',
+  'src/features/Settings/provider/features/ProviderConfig/index.tsx',
+  'src/features/Settings/skill/features/SkillListRow.tsx',
+  'src/features/WorkspaceSetting/Labels/index.tsx',
+];
+
 const CORE = ['eslint-core'] satisfies UserOverride['jsPlugins'];
 
 const restrictImports = (
@@ -802,6 +882,17 @@ export default defineConfig(
       electronIpcRemoveListenerRestrictedSyntax,
     ],
     ['src/hooks/usePWAInstall.ts'],
+  ),
+  restrictSyntax(
+    ['src/**/*.{ts,tsx}'],
+    [
+      ...useRefLazyInitRestrictedSyntax,
+      ...uppercaseRestrictedSyntax,
+      ...stylexCallRestrictedSyntax,
+      electronIpcRemoveListenerRestrictedSyntax,
+      ...densityLiteralRestrictedSyntax,
+    ],
+    ['src/hooks/usePWAInstall.ts', '**/*.test.{ts,tsx}', ...densityLiteralLegacyFiles],
   ),
   // Store/image and types/generation - disable sorting
   {
