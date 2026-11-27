@@ -1,5 +1,4 @@
-import { constants } from 'node:fs';
-import { access, mkdir, rename } from 'node:fs/promises';
+import { lstat, mkdir, rename } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { MoveFileResultItem, MoveFilesParams } from '../types';
@@ -32,9 +31,9 @@ export async function moveLocalFiles({
     }
 
     try {
-      // Check if source exists
+      // Move the directory entry itself, including a symlink whose target is absent.
       try {
-        await access(sourcePath, constants.F_OK);
+        await lstat(sourcePath);
       } catch (accessError: any) {
         if (accessError.code === 'ENOENT') {
           throw new Error(`Source path not found: ${sourcePath}`, { cause: accessError });
