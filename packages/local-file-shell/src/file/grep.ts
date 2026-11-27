@@ -33,7 +33,7 @@ export async function grepContent({
       args.push('--line-number', '--column');
     }
     if (filePattern) args.push('--glob', filePattern);
-    args.push(pattern, '.');
+    args.push('--', pattern, '.');
 
     const child = spawn('rg', args, {
       cwd: expandTilde(cwd) || process.cwd(),
