@@ -7,16 +7,33 @@ import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
 import { build } from 'vite';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 
-import { createShareRrConfig } from './vite.config.shared.mjs';
+import { createAuthRrConfig } from '../../../apps/auth/vite.config.shared.mjs';
+import { createShareRrConfig } from '../../../apps/share/vite.config.shared.mjs';
+import workbenchConfig from '../../../apps/workbench/vite.config.rr.mjs';
 
-it('initializes editor plugins before a shared chunk consumes them', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'share-chunk-order-'));
+// These deployment plugins are not used by the fixture build. Workbench's
+// standalone toolchain is not installed in every host workspace.
+vi.mock('@cloudflare/vite-plugin', () => ({ cloudflare: () => ({ name: 'cloudflare-test' }) }));
+vi.mock('@react-router/dev/vite', () => ({ reactRouter: () => ({ name: 'react-router-test' }) }));
+
+const repoRoot = path.resolve(import.meta.dirname, '../../..');
+const authConfig = createAuthRrConfig({ appRoot: path.join(repoRoot, 'apps/auth'), repoRoot });
+
+it.each([
+  { config: authConfig({ command: 'build', mode: 'production' }), name: 'Auth' },
+  {
+    config: createShareRrConfig({ appRoot: path.join(repoRoot, 'apps/share'), repoRoot }),
+    name: 'Share',
+  },
+  { config: workbenchConfig, name: 'Workbench' },
+])('$name initializes editor plugins before a shared chunk consumes them', async ({ config }) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'micro-app-chunk-order-'));
 
   try {
     // The source graph is acyclic: entry -> editor -> plugins -> tag. Chunking
-    // editor and tag together introduces the same cycle as the Share bundle.
+    // editor and tag together introduces the same cycle as the Share incident.
     await Promise.all([
       writeFile(
         path.join(root, 'entry.js'),
@@ -33,10 +50,6 @@ it('initializes editor plugins before a shared chunk consumes them', async () =>
       writeFile(path.join(root, 'tag.js'), "export const tag = 'reference-tag';"),
     ]);
 
-    const config = createShareRrConfig({
-      appRoot: import.meta.dirname,
-      repoRoot: path.resolve(import.meta.dirname, '../..'),
-    });
     const clientBuild = config.environments?.client?.build;
 
     await build({
@@ -70,7 +83,7 @@ it('initializes editor plugins before a shared chunk consumes them', async () =>
       root,
     });
 
-    // The conversation is loaded independently by the Share route. Evaluate it
+    // The conversation is loaded independently by a route. Evaluate it
     // first, as the browser does, rather than relying on the entry's import order.
     const entryUrl = pathToFileURL(path.join(root, 'dist/entry.mjs')).href;
     const conversationUrl = pathToFileURL(path.join(root, 'dist/conversation.mjs')).href;

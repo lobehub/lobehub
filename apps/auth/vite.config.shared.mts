@@ -9,6 +9,7 @@ import { viteMarkdownImport } from '../../plugins/vite/markdownImport';
 import { viteNodeModuleStub } from '../../plugins/vite/nodeModuleStub';
 import { vitePlatformResolve } from '../../plugins/vite/platformResolve';
 import {
+  sharedRendererClientBuild,
   sharedRendererDedupe,
   sharedRendererDefine,
 } from '../../plugins/vite/sharedRendererConfig';
@@ -148,7 +149,7 @@ export const createAuthRrConfig = ({ appRoot, repoRoot, resolvePlugins }: AuthRr
   return defineConfig(({ command }) => ({
     base: command === 'serve' ? '/' : process.env.VITE_CDN_BASE || '/',
     environments: {
-      client: { define },
+      client: { build: sharedRendererClientBuild, define },
       ssr: {
         define: prerenderDefine,
         // The prerender pass runs the built server bundle through plain Node,
