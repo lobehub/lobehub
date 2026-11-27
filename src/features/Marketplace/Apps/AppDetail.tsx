@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Flexbox, Icon, Segmented, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Segmented, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
@@ -92,12 +92,13 @@ const ConnectButton = memo<{
   const location = useLocation();
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
-  const allowed = canCreate && canEdit;
-  const { handleConnect, isConnecting } = useSkillConnect({
+  const { canManage, handleConnect, isConnecting, manageReason } = useSkillConnect({
     identifier: app.id,
     serverName: app.name,
     type: app.tool.type,
   });
+  // Connecting a workspace's LobeHub Skill is for its admins (`canManage`).
+  const allowed = canCreate && canEdit && canManage;
   const started = useRef(false);
 
   useEffect(() => {
@@ -111,7 +112,7 @@ const ConnectButton = memo<{
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return (
+  const button = (
     <Button
       disabled={!allowed}
       icon={<Icon icon={PlusIcon} />}
@@ -121,6 +122,14 @@ const ConnectButton = memo<{
     >
       {t('apps.connect')}
     </Button>
+  );
+  // A disabled button swallows hover, so the reason needs an anchor around it.
+  return manageReason ? (
+    <Tooltip title={manageReason}>
+      <span style={{ display: 'inline-flex' }}>{button}</span>
+    </Tooltip>
+  ) : (
+    button
   );
 });
 

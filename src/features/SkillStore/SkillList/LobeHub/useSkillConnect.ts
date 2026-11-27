@@ -4,6 +4,7 @@ import { COMPOSIO_APP_TYPES, getLobehubSkillProviderById } from '@lobechat/const
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { isAuthorizedForScope } from '@/features/Settings/skill/features/connectorRowState';
+import { useLobehubSkillScope } from '@/features/Settings/skill/features/useLobehubSkillScope';
 import { useToolStore } from '@/store/tool';
 import { composioStoreSelectors, lobehubSkillStoreSelectors } from '@/store/tool/selectors';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
@@ -34,6 +35,14 @@ export const useSkillConnect = ({ identifier, serverName, type }: UseSkillConnec
   const revokeLobehubConnect = useToolStore((s) => s.revokeLobehubSkill);
   const getAuthorizeUrl = useToolStore((s) => s.getLobehubSkillAuthorizeUrl);
   const lobehubServer = useToolStore(lobehubSkillStoreSelectors.getServerByIdentifier(identifier));
+  // A workspace's LobeHub Skill connection serves every member, so only its
+  // admins may connect, replace or disconnect it; callers disable their
+  // controls with `canManage` and this hook refuses on its own as well.
+  const scope = useLobehubSkillScope(
+    type === 'lobehub' ? lobehubServer : undefined,
+    serverName ?? identifier,
+  );
+  const canManage = type !== 'lobehub' || scope.canManage;
 
   // Composio hooks
   const userId = useUserStore(userProfileSelectors.userId);
@@ -173,6 +182,7 @@ export const useSkillConnect = ({ identifier, serverName, type }: UseSkillConnec
 
   // Handle connect for LobeHub
   const handleLobehubConnect = useCallback(async () => {
+    if (!canManage) return;
     // A borrowed personal authorization is replaced by authorizing the
     // workspace itself; any other connected row has nothing to connect.
     if (lobehubServer?.isConnected && !lobehubServer.reference) return;
@@ -197,6 +207,7 @@ export const useSkillConnect = ({ identifier, serverName, type }: UseSkillConnec
     identifier,
     lobehubServer?.isConnected,
     lobehubServer?.reference,
+    canManage,
     getAuthorizeUrl,
     openOAuthWindow,
   ]);
@@ -241,6 +252,7 @@ export const useSkillConnect = ({ identifier, serverName, type }: UseSkillConnec
   const handleConnect = type === 'lobehub' ? handleLobehubConnect : handleComposioConnect;
 
   const handleDisconnect = useCallback(async () => {
+    if (type === 'lobehub' && !canManage) return false;
     if (type === 'lobehub' && lobehubServer) {
       const provider = lobehubServer.identifier;
       await revokeLobehubConnect(provider);
@@ -264,7 +276,14 @@ export const useSkillConnect = ({ identifier, serverName, type }: UseSkillConnec
     }
 
     return true;
-  }, [type, lobehubServer, composioServer, revokeLobehubConnect, removeComposioConnection]);
+  }, [
+    type,
+    canManage,
+    lobehubServer,
+    composioServer,
+    revokeLobehubConnect,
+    removeComposioConnection,
+  ]);
 
   const isConnected =
     type === 'lobehub'
@@ -272,9 +291,11 @@ export const useSkillConnect = ({ identifier, serverName, type }: UseSkillConnec
       : composioServer?.status === ComposioServerStatus.ACTIVE;
 
   return {
+    canManage,
     handleConnect,
     handleDisconnect,
     isConnected,
     isConnecting: isConnecting || isWaitingAuth,
+    manageReason: canManage ? undefined : scope.manageReason,
   };
 };
