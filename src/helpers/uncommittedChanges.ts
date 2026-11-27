@@ -3,6 +3,9 @@ import type {
   DeviceGitWorkingTreeStatus,
   WorkingDirConfig,
 } from '@lobechat/types';
+import debug from 'debug';
+
+const log = debug('lobe-hetero:uncommitted-changes');
 
 /** How long a send waits for the working tree to be read; a slower answer gets no hint. */
 export const UNCOMMITTED_PROBE_TIMEOUT_MS = 3000;
@@ -19,7 +22,9 @@ export interface UncommittedChanges {
  * — on the agent's own device, in the agent's own working directory, which may
  * be a checkout the person is working in. Not when the run already works in a
  * worktree: one the first send created (DraftGit / `prepareSend`), or one
- * selected on the conversation.
+ * selected on the conversation. Callers check it once per CLI session — on a
+ * fresh session, not a resumed one: the session keeps the hint, and the
+ * changes a later turn finds are the agent's own.
  */
 export const shouldCheckUncommittedChanges = ({
   cwdConfig,
@@ -55,12 +60,20 @@ export const readUncommittedChanges = async (
   });
   try {
     const result = await Promise.race([Promise.all([read.branch(), read.status()]), timeout]);
-    if (!result) return;
+    if (!result) {
+      log('no answer within %dms for %s: no hint', timeoutMs, path);
+      return;
+    }
     const [branch, status] = result;
     // The working-tree read answers "clean" for a non-repository: the branch tells.
-    if (!branch?.branch || !status || status.clean || status.total <= 0) return;
+    if (!branch?.branch || !status || status.clean || status.total <= 0) {
+      log('%s: %s', path, branch?.branch ? 'clean' : 'not a git repository');
+      return;
+    }
+    log('%s: %d uncommitted changes, hinting a worktree', path, status.total);
     return { count: status.total, path };
-  } catch {
+  } catch (error) {
+    log('read failed for %s: %O', path, error);
     return;
   } finally {
     clearTimeout(timer);
@@ -74,5 +87,8 @@ export const readUncommittedChanges = async (
  * prompt; the LobeHub plugin skill is a fixed file read on demand, so it cannot
  * carry a per-turn warning.
  */
-export const formatUncommittedChangesContext = ({ count, path }: UncommittedChanges) =>
-  `<uncommitted_changes>\nThe working directory ${path} is a git repository with ${count} uncommitted change${count === 1 ? '' : 's'} that may be someone's work in progress. Before you change any file, create a separate worktree for this task (for example \`git worktree add ../<task-name> -b <task-branch>\`) and do all reading, editing and git work there. Leave the existing changes in ${path} untouched.\n</uncommitted_changes>`;
+export const formatUncommittedChangesContext = ({ count, path: rawPath }: UncommittedChanges) => {
+  // A path is the person's own configuration, but it must not break the block.
+  const path = `\`${rawPath.replaceAll(/[\n\r<>`]/g, '')}\``;
+  return `<uncommitted_changes>\nThe working directory ${path} is a git repository with ${count} uncommitted change${count === 1 ? '' : 's'} that may be someone's work in progress. Before you change any file, create a separate worktree for this task (for example \`git worktree add ../<task-name> -b <task-branch>\`) and do all reading, editing and git work there. Leave the existing changes in ${path} untouched.\n</uncommitted_changes>`;
+};

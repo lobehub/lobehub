@@ -2317,7 +2317,7 @@ export const executeHeterogeneousAgent = async (
         getTopicMetadataById(get(), context.topicId ?? undefined)?.editedFrom
           ? buildEditedTopicPreviousConversation(replaySource, assistantMessageId)
           : undefined,
-      uncommittedChanges: await readUncommitted(get(), context, workingDirectoryConfig),
+      uncommittedChanges: await readUncommitted(get(), params),
     });
 
     // When resuming, hand main the prior turns so it can rebuild a Claude Code

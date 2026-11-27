@@ -286,10 +286,13 @@ export const dispatchToCliDevice = async (
   // (which describes an ephemeral /workspace + pre-cloned repos and would mislead
   // the agent). The spawned CLI already receives deviceCwd as its actual cwd.
   // A project conversation in the agent's own working directory may be on top
-  // of someone's uncommitted work: the agent is told to take a worktree first.
+  // of someone's uncommitted work: a fresh CLI session is told to take a
+  // worktree first (a resumed one already was, and now finds its own changes).
   const probe = { deviceId: dispatchDeviceId, path: deviceCwd ?? '', userId: deps.userId };
   const uncommittedChanges =
-    deviceCwd && shouldCheckUncommittedChanges({ cwdConfig: deviceCwdConfig, topic })
+    deviceCwd &&
+    !resumeSessionId &&
+    shouldCheckUncommittedChanges({ cwdConfig: deviceCwdConfig, topic })
       ? await traceHeteroStage('device uncommitted_changes', () =>
           readUncommittedChanges(
             {

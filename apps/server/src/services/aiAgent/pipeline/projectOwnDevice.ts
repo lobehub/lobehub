@@ -86,9 +86,12 @@ export const withProjectSandboxFallback = async (
   const topic = await deps.topicModel.findById(turn.topicId);
   const metadata = topic?.metadata as ChatTopicMetadata | null | undefined;
   if (metadata?.projectSandboxFallback) return sandboxed;
-  // It already ran on a machine: it stays there.
+  // It already ran on a machine: it stays there. (The turn's pin is not taken
+  // from a topic another agent owns, so the row itself is checked too.)
   if (metadata?.boundDeviceId) return agencyConfig;
 
+  // Decided at turn setup: a device that drops before the dispatch fails this
+  // run (as any device run would) rather than falling back mid-send.
   const deviceId = getAgentOwnDevice(agencyConfig)!.deviceId;
   const online = await getScopedOnlineDevices(deps.db, deps.userId, deps.workspaceId)
     .then((devices) => devices.some((device) => device.deviceId === deviceId && device.online))
