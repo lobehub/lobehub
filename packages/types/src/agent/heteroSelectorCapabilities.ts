@@ -108,6 +108,25 @@ export type QoderReasoningEffort = (typeof QODER_REASONING_EFFORT_LEVELS)[number
 export const QODER_REASONING_EFFORT_FLAG = '--reasoning-effort';
 
 /**
+ * Doubao CLI reasoning-effort levels, mirrored 1:1 with the CLI's
+ * `--effort <level>` flag (see `doubao --help`). The model catalog exposes the
+ * levels each model actually supports; these are the values the flag accepts.
+ */
+const DOUBAO_REASONING_EFFORT_LEVELS = [
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const;
+
+export type DoubaoReasoningEffort = (typeof DOUBAO_REASONING_EFFORT_LEVELS)[number];
+
+export const DOUBAO_REASONING_EFFORT_FLAG = '--effort';
+
+/**
  * GitHub Copilot CLI reasoning-effort levels, mirrored 1:1 with the CLI's
  * `--reasoning-effort <level>` flag and ACP `reasoning_effort` config option.
  */
@@ -121,6 +140,7 @@ export type HeterogeneousReasoningEffortLevel =
   | ClaudeCodeReasoningEffort
   | CodexReasoningEffort
   | CopilotReasoningEffort
+  | DoubaoReasoningEffort
   | GrokBuildReasoningEffort
   | QoderReasoningEffort;
 
@@ -167,6 +187,11 @@ export const isGrokBuildReasoningEffort = (
 
 export const isQoderReasoningEffort = (value: string | undefined): value is QoderReasoningEffort =>
   !!value && QODER_REASONING_EFFORT_LEVELS.includes(value as QoderReasoningEffort);
+
+export const isDoubaoReasoningEffort = (
+  value: string | undefined,
+): value is DoubaoReasoningEffort =>
+  !!value && DOUBAO_REASONING_EFFORT_LEVELS.includes(value as DoubaoReasoningEffort);
 
 export const isCopilotReasoningEffort = (
   value: string | undefined,
@@ -289,6 +314,15 @@ const resolveQoderReasoningEffort = (
     getCliFlagValue(source?.args, QODER_REASONING_EFFORT_FLAG) ?? source?.effort
   )?.trim();
   return isQoderReasoningEffort(effort) ? effort : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+};
+
+const resolveDoubaoReasoningEffort = (
+  source: HeteroSelectionSource | null | undefined,
+): DoubaoReasoningEffort | HeterogeneousAgentDefaultSelection => {
+  const effort = (
+    getCliFlagValue(source?.args, DOUBAO_REASONING_EFFORT_FLAG) ?? source?.effort
+  )?.trim();
+  return isDoubaoReasoningEffort(effort) ? effort : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 };
 
 const resolveCopilotReasoningEffort = (
@@ -533,6 +567,14 @@ export const HETERO_SELECTOR_CAPABILITIES = {
     },
     model: { encodings: [MODEL_FLAGS_ENCODING], resolve: resolvePersistedModel, source: 'catalog' },
   },
+  'doubao': {
+    effort: {
+      encodings: [{ flags: [DOUBAO_REASONING_EFFORT_FLAG], kind: 'flag' }],
+      levels: () => DOUBAO_REASONING_EFFORT_LEVELS,
+      resolve: resolveDoubaoReasoningEffort,
+    },
+    model: { encodings: [MODEL_FLAGS_ENCODING], resolve: resolvePersistedModel, source: 'catalog' },
+  },
   'trae': {
     model: { encodings: [], resolve: resolvePersistedModel, source: 'catalog' },
   },
@@ -645,7 +687,7 @@ export interface HeteroSpawnSelectionProvider extends HeteroSelectionSource {
 const HETERO_EXEC_AGENT_ARG_FLAG = '--agent-arg';
 
 const modelFlagsOf = (
-  type: 'codex' | 'copilot' | 'grok-build' | 'kimi-code' | 'opencode' | 'pi' | 'qoder',
+  type: 'codex' | 'copilot' | 'doubao' | 'grok-build' | 'kimi-code' | 'opencode' | 'pi' | 'qoder',
 ): readonly string[] =>
   HETERO_SELECTOR_CAPABILITIES[type].model.encodings.flatMap((encoding: HeteroCliEncoding) =>
     encoding.kind === 'flag' ? encoding.flags : [],
@@ -657,6 +699,7 @@ const GROK_BUILD_MODEL_FLAGS = modelFlagsOf('grok-build');
 const KIMI_CODE_MODEL_FLAGS = modelFlagsOf('kimi-code');
 const OPENCODE_MODEL_FLAGS = modelFlagsOf('opencode');
 const PI_MODEL_FLAGS = modelFlagsOf('pi');
+const DOUBAO_MODEL_FLAGS = modelFlagsOf('doubao');
 const QODER_MODEL_FLAGS = modelFlagsOf('qoder');
 
 const getExplicitAmpAgentMode = (
@@ -713,6 +756,13 @@ const getExplicitQoderReasoningEffort = (
 ): QoderReasoningEffort | undefined => {
   const effort = source?.effort?.trim();
   return isQoderReasoningEffort(effort) ? effort : undefined;
+};
+
+const getExplicitDoubaoReasoningEffort = (
+  source: HeteroSelectionSource | null | undefined,
+): DoubaoReasoningEffort | undefined => {
+  const effort = source?.effort?.trim();
+  return isDoubaoReasoningEffort(effort) ? effort : undefined;
 };
 
 const getExplicitCodexSpeedMode = (
@@ -858,6 +908,21 @@ export const buildHeteroSpawnArgs = (
     const effort = getExplicitQoderReasoningEffort(provider);
     if (effort && !hasCliFlag(baseArgs, QODER_REASONING_EFFORT_FLAG)) {
       extraArgs.push(QODER_REASONING_EFFORT_FLAG, effort);
+    }
+  }
+
+  if (provider.type === 'doubao') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, DOUBAO_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+    const effort = getExplicitDoubaoReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, DOUBAO_REASONING_EFFORT_FLAG)) {
+      extraArgs.push(DOUBAO_REASONING_EFFORT_FLAG, effort);
     }
   }
 
@@ -1020,6 +1085,21 @@ export const buildHeteroExecArgs = (
     const effort = getExplicitQoderReasoningEffort(provider);
     if (effort && !hasCliFlag(baseArgs, QODER_REASONING_EFFORT_FLAG)) {
       selectorArgs.push('--effort', effort);
+    }
+  }
+
+  if (provider.type === 'doubao') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, DOUBAO_MODEL_FLAGS)
+    ) {
+      selectorArgs.push('--model', model);
+    }
+    const effort = getExplicitDoubaoReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, DOUBAO_REASONING_EFFORT_FLAG)) {
+      selectorArgs.push(DOUBAO_REASONING_EFFORT_FLAG, effort);
     }
   }
 

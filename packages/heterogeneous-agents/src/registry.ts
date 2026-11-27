@@ -16,6 +16,7 @@ import {
   CursorAcpAdapter,
   CursorAdapter,
   DevinAcpAdapter,
+  DoubaoAdapter,
   DroidAcpAdapter,
   DshAcpAdapter,
   GrokBuildAdapter,
@@ -71,6 +72,9 @@ const localAgentRegistry = {
   },
   'pi': {
     createAdapter: () => new PiAdapter(),
+  },
+  'doubao': {
+    createAdapter: () => new DoubaoAdapter(),
   },
   'qoder': {
     createAdapter: () => new QoderAdapter(),
