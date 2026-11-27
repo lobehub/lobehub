@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -61,6 +61,34 @@ describe('independent CLI maintenance worker', () => {
     expect(await readFile(config.receiptPath, 'utf8')).toBe(
       await readFile(config.statePath, 'utf8'),
     );
+  });
+
+  it('installs under the shared install lock and releases it', async () => {
+    const lock = path.join(directory, 'auto-update.lock');
+    const seen = path.join(directory, 'lock-seen');
+    config.installLock = { path: lock, staleMs: 60_000 };
+    config.install = {
+      command: process.execPath,
+      args: ['-e', `require('fs').copyFileSync(${JSON.stringify(lock)}, ${JSON.stringify(seen)})`],
+    };
+    config.restartArgs = undefined;
+    config.parentPid = 2 ** 22 + 12_345;
+    await runMaintenanceWorker(config, vi.fn());
+    await expect(access(seen)).resolves.toBeUndefined();
+    await expect(access(lock)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('does not install while another installer holds the lock, and takes over a stale one', async () => {
+    const lock = path.join(directory, 'auto-update.lock');
+    config.installLock = { path: lock, staleMs: 60_000 };
+    config.install = { command: process.execPath, args: ['-e', 'process.exit(7)'] };
+    await writeFile(lock, '123');
+    await expect(runMaintenanceWorker(config, vi.fn())).rejects.toThrow('Another CLI update');
+    expect(await readFile(lock, 'utf8')).toBe('123');
+
+    const old = new Date(Date.now() - 120_000);
+    await utimes(lock, old, old);
+    await expect(runMaintenanceWorker(config, vi.fn())).rejects.toThrow('failed (7)');
   });
 
   it('does not stop the daemon if the installed entry reports the wrong version', async () => {

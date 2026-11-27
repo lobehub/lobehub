@@ -14,7 +14,7 @@ import { loadSettings } from '../settings';
 /** Ordinary commands look for a new release at most this often. */
 export const COMMAND_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 /** A background install that has not released its lock by then is assumed dead. */
-const INSTALL_LOCK_STALE_MS = 10 * 60 * 1000;
+export const INSTALL_LOCK_STALE_MS = 10 * 60 * 1000;
 
 /** Hidden command the background updater runs in a detached child. */
 export const AUTO_UPDATE_WORKER_COMMAND = 'auto-update-worker';
@@ -34,7 +34,7 @@ const SKIPPED_COMMANDS = new Set([
 
 const stateDir = () => path.join(os.homedir(), resolveCliDirName());
 const statePath = () => path.join(stateDir(), 'auto-update.json');
-const lockPath = () => path.join(stateDir(), 'auto-update.lock');
+export const installLockPath = () => path.join(stateDir(), 'auto-update.lock');
 
 /**
  * Whether the running entry belongs to a package-manager global install of this CLI, the only
@@ -95,15 +95,15 @@ function writeAutoUpdateState(state: AutoUpdateState) {
 export function acquireInstallLock(now = Date.now()): boolean {
   fs.mkdirSync(stateDir(), { mode: 0o700, recursive: true });
   try {
-    fs.writeFileSync(lockPath(), String(process.pid), { flag: 'wx', mode: 0o600 });
+    fs.writeFileSync(installLockPath(), String(process.pid), { flag: 'wx', mode: 0o600 });
     return true;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') return false;
   }
   try {
-    if (now - fs.statSync(lockPath()).mtimeMs < INSTALL_LOCK_STALE_MS) return false;
-    fs.rmSync(lockPath(), { force: true });
-    fs.writeFileSync(lockPath(), String(process.pid), { flag: 'wx', mode: 0o600 });
+    if (now - fs.statSync(installLockPath()).mtimeMs < INSTALL_LOCK_STALE_MS) return false;
+    fs.rmSync(installLockPath(), { force: true });
+    fs.writeFileSync(installLockPath(), String(process.pid), { flag: 'wx', mode: 0o600 });
     return true;
   } catch {
     return false;
@@ -113,7 +113,7 @@ export function acquireInstallLock(now = Date.now()): boolean {
 /** Whether a live installer holds the lock, without taking it. */
 export function isInstallLockHeld(now = Date.now()): boolean {
   try {
-    return now - fs.statSync(lockPath()).mtimeMs < INSTALL_LOCK_STALE_MS;
+    return now - fs.statSync(installLockPath()).mtimeMs < INSTALL_LOCK_STALE_MS;
   } catch {
     return false;
   }
@@ -135,7 +135,7 @@ export function isDaemonInstallRunning(now = Date.now()): boolean {
 }
 
 export function releaseInstallLock() {
-  fs.rmSync(lockPath(), { force: true });
+  fs.rmSync(installLockPath(), { force: true });
 }
 
 /** The top-level command name in `argv` (after the executable and entry), if any. */

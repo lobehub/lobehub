@@ -1,5 +1,7 @@
 import { execFile, spawn } from 'node:child_process';
 import { realpathSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 import type { Command } from 'commander';
 import pc from 'picocolors';
@@ -95,6 +97,9 @@ export function isNewerVersion(latest: string, current: string): boolean {
   return semver.gt(latestParsed, currentParsed);
 }
 
+/** npm dist-tags and versions. Anything else is rejected before it reaches a Windows shell. */
+const DIST_TAG_PATTERN = /^[\w.-]+$/;
+
 async function fetchRegistryVersion(name: string, tag: string): Promise<string> {
   const url = `https://registry.npmjs.org/${name}/${encodeURIComponent(tag)}`;
   const res = await fetch(url, { headers: { accept: 'application/json' } });
@@ -139,6 +144,7 @@ export async function fetchLatestVersion(
   tag: string,
   { npmTimeoutMs = 30_000 }: { npmTimeoutMs?: number } = {},
 ): Promise<string> {
+  if (!DIST_TAG_PATTERN.test(tag)) throw new Error(`Invalid dist-tag "${tag}"`);
   try {
     return await fetchRegistryVersion(name, tag);
   } catch (error) {
@@ -147,6 +153,54 @@ export async function fetchLatestVersion(
     } catch {
       throw error;
     }
+  }
+}
+
+function execText(command: string, args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      command,
+      args,
+      { encoding: 'utf8', shell: process.platform === 'win32', timeout: 30_000 },
+      (error, stdout) => (error ? reject(error) : resolve(stdout.trim())),
+    );
+  });
+}
+
+/** Directory holding the packages `pm` installs globally. */
+async function globalPackageRoot(pm: PackageManager): Promise<string> {
+  switch (pm) {
+    case 'pnpm': {
+      return execText('pnpm', ['root', '-g']);
+    }
+    case 'yarn': {
+      return path.join(await execText('yarn', ['global', 'dir']), 'node_modules');
+    }
+    case 'bun': {
+      const home = process.env.BUN_INSTALL || path.join(os.homedir(), '.bun');
+      return path.join(home, 'install', 'global', 'node_modules');
+    }
+    default: {
+      return execText('npm', ['root', '-g']);
+    }
+  }
+}
+
+/**
+ * Whether `entry` lives in the global package directory of `pm`, the only copy a global
+ * install replaces. A project-local install or an `npx` cache also sits in a `node_modules`,
+ * and updating the global CLI would leave the version actually running unchanged.
+ */
+export async function isGlobalInstall(
+  entry = process.argv[1],
+  pm: PackageManager = detectPackageManager(),
+): Promise<boolean> {
+  try {
+    const root = realpathSync(await globalPackageRoot(pm));
+    const relative = path.relative(root, realpathSync(entry ?? ''));
+    return !!relative && !relative.startsWith('..') && !path.isAbsolute(relative);
+  } catch {
+    return false;
   }
 }
 
@@ -213,10 +267,9 @@ export async function runAutoUpdateWorker(): Promise<void> {
     // Nobody waits on this process, so give a slow registry connection more time.
     const latest = await fetchLatestVersion(cliPackageName, 'latest', { npmTimeoutMs: 120_000 });
     if (!semver.valid(latest) || !isNewerVersion(latest, cliVersion)) return;
-    const { args, command } = buildInstallCommand(
-      detectPackageManager(),
-      `${cliPackageName}@${latest}`,
-    );
+    const pm = detectPackageManager();
+    if (!(await isGlobalInstall(process.argv[1], pm))) return;
+    const { args, command } = buildInstallCommand(pm, `${cliPackageName}@${latest}`);
     await runInstall(command, args, true);
   } catch (error) {
     log.debug(`Automatic update failed: ${(error as Error).message}`);

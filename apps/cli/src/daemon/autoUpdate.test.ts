@@ -1,6 +1,7 @@
 import type { DeviceCliUpdateState } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as update from '../commands/update';
 import * as autoUpdate from '../utils/autoUpdate';
 import {
   DAEMON_UPDATE_CHECK_INTERVAL_MS,
@@ -45,6 +46,7 @@ const setup = (initial: Partial<DeviceCliUpdateState> = {}, busy = false) => {
 beforeEach(() => {
   vi.spyOn(autoUpdate, 'isAutoUpdateEnabled').mockReturnValue(true);
   vi.spyOn(autoUpdate, 'isInstallLockHeld').mockReturnValue(false);
+  vi.spyOn(update, 'isGlobalInstall').mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -153,6 +155,14 @@ describe('DaemonAutoUpdater', () => {
     const disabled = setup();
     await disabled.updater.tick();
     expect(disabled.maintenance.getState).not.toHaveBeenCalled();
+  });
+
+  it('never updates a project-local or npx copy', async () => {
+    vi.mocked(update.isGlobalInstall).mockResolvedValue(false);
+    const { maintenance, updater } = setup();
+    await updater.tick();
+    expect(maintenance.check).not.toHaveBeenCalled();
+    expect(maintenance.restart).not.toHaveBeenCalled();
   });
 
   it('logs and survives a registry failure', async () => {

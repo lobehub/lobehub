@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { isGlobalInstall } from '../commands/update';
 import {
   isAutoUpdatableInstall,
   isAutoUpdateEnabled,
@@ -25,6 +26,8 @@ export class DaemonAutoUpdater {
   private lastCheckAt?: number;
   private lastAttemptAt?: number;
   private running = false;
+  /** Resolved once: whether this entry is the global copy an update replaces. */
+  private global?: boolean;
 
   constructor(
     private readonly options: {
@@ -58,6 +61,8 @@ export class DaemonAutoUpdater {
     try {
       // Read on every tick so `lh update --auto off` reaches a running daemon.
       if (!isAutoUpdateEnabled()) return;
+      this.global ??= await isGlobalInstall();
+      if (!this.global) return;
       const now = (this.options.now ?? Date.now)();
       // A failed install (for example a global prefix this user cannot write) is retried at the
       // check interval, not every few minutes.

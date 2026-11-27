@@ -1,5 +1,8 @@
 import type * as ChildProcessModule from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,6 +10,7 @@ import { printConnectStatus } from './connectStatus';
 import {
   buildInstallCommand,
   fetchLatestVersion,
+  isGlobalInstall,
   isNewerVersion,
   reportInstalledConnectStatus,
 } from './update';
@@ -176,5 +180,59 @@ describe('fetchLatestVersion', () => {
       callback(new Error('npm missing'), ''),
     );
     await expect(fetchLatestVersion('@lobehub/cli', 'latest')).rejects.toThrow('fetch failed');
+  });
+
+  it('rejects a tag a Windows shell would interpret', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    await expect(fetchLatestVersion('@lobehub/cli', 'latest&calc')).rejects.toThrow(
+      'Invalid dist-tag',
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(execFile).not.toHaveBeenCalled();
+  });
+});
+
+describe('isGlobalInstall', () => {
+  let directory: string;
+  const entryIn = (root: string) => {
+    const file = path.join(root, '@lobehub', 'cli', 'dist', 'index.js');
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, '');
+    return file;
+  };
+
+  beforeEach(() => {
+    directory = mkdtempSync(path.join(os.tmpdir(), 'cli-global-'));
+  });
+  afterEach(() => {
+    rmSync(directory, { force: true, recursive: true });
+    execFile.mockReset();
+  });
+
+  it('accepts only an entry inside the package manager global root', async () => {
+    const globalRoot = path.join(directory, 'prefix', 'lib', 'node_modules');
+    const globalEntry = entryIn(globalRoot);
+    const projectEntry = entryIn(path.join(directory, 'project', 'node_modules'));
+    const npxEntry = entryIn(path.join(directory, '.npm', '_npx', 'abc', 'node_modules'));
+    execFile.mockImplementation((_command, _args, _options, callback) =>
+      callback(null, `${globalRoot}\n`),
+    );
+
+    await expect(isGlobalInstall(globalEntry, 'npm')).resolves.toBe(true);
+    await expect(isGlobalInstall(projectEntry, 'npm')).resolves.toBe(false);
+    await expect(isGlobalInstall(npxEntry, 'npm')).resolves.toBe(false);
+    expect(execFile).toHaveBeenCalledWith(
+      'npm',
+      ['root', '-g'],
+      expect.any(Object),
+      expect.any(Function),
+    );
+  });
+
+  it('treats an unknown global root as not global', async () => {
+    execFile.mockImplementation((_command, _args, _options, callback) =>
+      callback(new Error('pnpm missing'), ''),
+    );
+    await expect(isGlobalInstall(entryIn(directory), 'pnpm')).resolves.toBe(false);
   });
 });
