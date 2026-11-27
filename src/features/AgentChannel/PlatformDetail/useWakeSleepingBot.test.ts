@@ -57,6 +57,39 @@ describe('useWakeSleepingBot', () => {
 
     await waitFor(() => expect(result.current).toBe('failed'));
   });
+
+  it("keeps each bot's wake result to that bot when the user switches bots", async () => {
+    let finishA!: () => void;
+    mockWakeBot
+      .mockImplementationOnce(() => new Promise<void>((resolve) => (finishA = resolve)))
+      .mockRejectedValueOnce(new Error('invalid_auth'));
+
+    const { rerender, result } = renderHook(
+      (props: { applicationId: string; status: string }) =>
+        useWakeSleepingBot({
+          applicationId: props.applicationId,
+          onWoke,
+          platform: 'qq',
+          status: props.status as any,
+        }),
+      { initialProps: { applicationId: 'app-a', status: 'sleeping' } },
+    );
+    expect(result.current).toBe('waking');
+
+    // Bot B fails to wake while A's wake is still in flight.
+    rerender({ applicationId: 'app-b', status: 'sleeping' });
+    await waitFor(() => expect(result.current).toBe('failed'));
+
+    // A's late success must not tell B it is awake.
+    finishA();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(result.current).toBe('failed');
+
+    // A connected bot shows no sleep notice at all.
+    rerender({ applicationId: 'app-c', status: 'connected' });
+    expect(result.current).toBeUndefined();
+  });
 });
 
 describe('supportsWebhookMode', () => {

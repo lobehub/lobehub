@@ -25,6 +25,9 @@ interface UseWakeSleepingBotParams {
  * Opening a bot that fell asleep from disuse wakes it, once per bot. The phase stays set after the
  * refreshed status stops saying `sleeping`, so the page keeps explaining why the bot had stopped.
  * `undefined` means the bot was not asleep when opened.
+ *
+ * The page is reused when the user switches bots, so the phase belongs to the bot it was recorded
+ * for: another bot starts without one, and a wake still in flight for the previous bot is ignored.
  */
 export const useWakeSleepingBot = ({
   applicationId,
@@ -32,22 +35,25 @@ export const useWakeSleepingBot = ({
   platform,
   status,
 }: UseWakeSleepingBotParams): SleepWakePhase | undefined => {
-  const [phase, setPhase] = useState<SleepWakePhase>();
+  const [wake, setWake] = useState<{ key: string; phase: SleepWakePhase }>();
   const attempted = useRef<string | undefined>(undefined);
 
   const asleep = status === BOT_RUNTIME_STATUSES.sleeping;
   const key = applicationId ? `${platform}:${applicationId}` : undefined;
 
   useEffect(() => {
-    if (!asleep || !applicationId || attempted.current === key) return;
+    if (!asleep || !applicationId || !key || attempted.current === key) return;
     attempted.current = key;
-    setPhase('waking');
+    const settle = (phase: SleepWakePhase) => {
+      if (attempted.current === key) setWake({ key, phase });
+    };
+    settle('waking');
     agentBotProviderService
       .wakeBot({ applicationId, platform })
       .then(() => onWoke())
-      .then(() => setPhase('woke'))
-      .catch(() => setPhase('failed'));
+      .then(() => settle('woke'))
+      .catch(() => settle('failed'));
   }, [applicationId, asleep, key, onWoke, platform]);
 
-  return phase;
+  return wake && wake.key === key ? wake.phase : undefined;
 };
