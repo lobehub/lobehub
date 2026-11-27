@@ -34,4 +34,25 @@ describe('MCP device gateway invocation identity', () => {
       else expect(runStdioMcpTool.mock.calls[0][0].elicitation).toBe(elicitation);
     },
   );
+
+  it.each(['http', 'stdio'] as const)(
+    "runs a %s call with the server's MCP Apps options",
+    async (type) => {
+      const mcpCall = { fromApp: true, mcpApps: true };
+      const runHttpMcpTool = vi.fn().mockResolvedValue({ success: true });
+      const runStdioMcpTool = vi.fn().mockResolvedValue({ success: true });
+      const controller = { runHttpMcpTool, runStdioMcpTool } as unknown as McpCtr;
+      await executeMcpGatewayCall(controller, {
+        apiName: 'frame',
+        arguments: '{}',
+        identifier: 'fixture',
+        params:
+          type === 'http'
+            ? { type, name: 'fixture', url: 'http://127.0.0.1:1/mcp', mcpCall }
+            : { type, name: 'fixture', command: 'node', args: [], mcpCall },
+      });
+      if (type === 'http') expect(runHttpMcpTool.mock.calls[0][4]).toEqual(mcpCall);
+      else expect(runStdioMcpTool.mock.calls[0][0]).toMatchObject(mcpCall);
+    },
+  );
 });

@@ -227,6 +227,12 @@ export const connectorRunRouter = router({
         identifier: z.string().min(1),
         /** The account to call as, for a connector holding several. */
         linkId: z.string().optional(),
+        /**
+         * With `fromApp`: the device a view's result was relayed from
+         * (`mcpApp.relayDeviceId`), for a connector run on the user's device.
+         */
+        relayDeviceId: z.string().min(1).optional(),
+        relayWorkspaceId: z.string().min(1).optional(),
         /** With `fromApp`: the server the view came from (`getMcpServerFingerprint`). */
         server: z.string().optional(),
         toolName: z.string().min(1),
@@ -282,6 +288,9 @@ export const connectorRunRouter = router({
         identifier: z.string().min(1),
         /** The account the tool ran as, for a connector holding several. */
         linkId: z.string().optional(),
+        /** The device the result was relayed from (`mcpApp.relayDeviceId`). */
+        relayDeviceId: z.string().min(1).optional(),
+        relayWorkspaceId: z.string().min(1).optional(),
         /** The server the result came from (`getMcpServerFingerprint`). */
         server: z.string().min(1),
         /** The conversation the result belongs to; see `callTool`. */

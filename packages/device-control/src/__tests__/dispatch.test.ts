@@ -428,6 +428,29 @@ describe('executeDeviceRpc', () => {
     ).rejects.toThrow(MCP_UNSUPPORTED_MESSAGE);
   });
 
+  it("routes an MCP App view's resource read to the host MCP client", async () => {
+    const deps = makeDeps();
+    const resource = { contents: [{ text: '<p>view</p>', uri: 'ui://app/view' }] };
+    deps.readMcpUiResource = vi.fn(async () => resource);
+    const params = {
+      params: { args: ['server.mjs'], command: 'node', name: 'app', type: 'stdio' as const },
+      uri: 'ui://app/view',
+    };
+
+    await expect(executeDeviceRpc('readMcpUiResource', params, deps)).resolves.toEqual(resource);
+    expect(deps.readMcpUiResource).toHaveBeenCalledWith(params);
+  });
+
+  it('rejects an MCP App resource read on a client that runs no MCP servers', async () => {
+    await expect(
+      executeDeviceRpc(
+        'readMcpUiResource',
+        { params: { name: 'x', type: 'http', url: 'http://x' }, uri: 'ui://x' },
+        makeDeps(),
+      ),
+    ).rejects.toThrow(MCP_UNSUPPORTED_MESSAGE);
+  });
+
   it('delegates project file and preview methods to injected deps', async () => {
     const deps = makeDeps();
     await executeDeviceRpc('getProjectFileIndex', { scope: root }, deps);

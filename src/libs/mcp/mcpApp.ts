@@ -29,6 +29,15 @@ export interface McpAppToolState {
    */
   deviceId?: string;
   preferredModelDisplayMode?: 'inline' | 'fullscreen';
+  /**
+   * The user's device whose MCP process (stdio, localhost / LAN, through
+   * `lh connect` or a desktop) ran the tool for the server, which relays the
+   * view: any client reads it and runs its calls through the server, back on
+   * that device. Unlike `deviceId`, it never ties the view to one client.
+   */
+  relayDeviceId?: string;
+  /** The device pool `relayDeviceId` is in: a workspace's, or the user's own when absent. */
+  relayWorkspaceId?: string;
   resourceUri: string;
   /**
    * The MCP server that produced the result (`getMcpServerFingerprint`). The
@@ -99,6 +108,8 @@ export const getMcpAppFromState = (state: unknown): McpAppToolState | undefined 
           mcpApp?: {
             deviceId?: unknown;
             preferredModelDisplayMode?: unknown;
+            relayDeviceId?: unknown;
+            relayWorkspaceId?: unknown;
             resourceUri?: unknown;
             server?: unknown;
           };
@@ -114,6 +125,12 @@ export const getMcpAppFromState = (state: unknown): McpAppToolState | undefined 
       mcpApp.preferredModelDisplayMode === 'fullscreen') && {
       preferredModelDisplayMode: mcpApp.preferredModelDisplayMode,
     }),
+    ...(typeof mcpApp.relayDeviceId === 'string' &&
+      mcpApp.relayDeviceId && {
+        relayDeviceId: mcpApp.relayDeviceId,
+        ...(typeof mcpApp.relayWorkspaceId === 'string' &&
+          mcpApp.relayWorkspaceId && { relayWorkspaceId: mcpApp.relayWorkspaceId }),
+      }),
     ...(typeof mcpApp.server === 'string' && { server: mcpApp.server }),
   };
 };
@@ -121,7 +138,8 @@ export const getMcpAppFromState = (state: unknown): McpAppToolState | undefined 
 /**
  * Whether this client can serve a result's view: one from a desktop's local
  * MCP process only on that desktop (`currentDeviceId` is this desktop's
- * stable device id, if any).
+ * stable device id, if any). A view the server relays from a device
+ * (`relayDeviceId`) or reads itself is served on any client.
  */
 export const canServeMcpAppHere = (
   mcpApp: McpAppToolState,

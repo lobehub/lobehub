@@ -9,7 +9,15 @@ vi.mock('../index', () => ({
   },
 }));
 
-const { resolveDeviceClientKind, resolveMcpClientKinds } = await import('../deviceChannels');
+const rememberFeaturesMock = vi.fn(async (_scope: unknown, fetch: () => Promise<unknown>) =>
+  fetch(),
+);
+vi.mock('@/server/services/redis', () => ({
+  redisService: { mcpDeviceRelay: { rememberFeatures: rememberFeaturesMock } },
+}));
+
+const { resolveDeviceClientKind, resolveMcpClientKinds, resolveMcpDeviceFeatures } =
+  await import('../deviceChannels');
 
 const withChannels = (...channels: string[]) => [
   { channels: channels.map((channel) => ({ channel })), deviceId: 'device-1' },
@@ -85,5 +93,37 @@ describe('resolveMcpClientKinds', () => {
     await expect(
       resolveMcpClientKinds('user-1', 'device-1', undefined, 'cli-only'),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('resolveMcpDeviceFeatures', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('reads the MCP features of the client that runs the calls, in its pool', async () => {
+    readDeviceSystemInfoMock.mockResolvedValueOnce({
+      ok: true,
+      systemInfo: { supportedMcpFeatures: ['apps'], supportedToolCallTypes: ['tool', 'mcp'] },
+    });
+    const target = { clientKinds: ['cli' as const], deviceId: 'device-1', workspaceId: 'ws-1' };
+
+    await expect(resolveMcpDeviceFeatures('user-1', target)).resolves.toEqual(['apps']);
+    expect(readDeviceSystemInfoMock).toHaveBeenCalledWith('user-1', 'device-1', 'ws-1', {
+      clientKinds: ['cli'],
+    });
+    expect(rememberFeaturesMock).toHaveBeenCalledWith(
+      { clientKinds: ['cli'], deviceId: 'device-1', userId: 'user-1', workspaceId: 'ws-1' },
+      expect.any(Function),
+    );
+  });
+
+  it('reports none for an older client, or one that does not answer', async () => {
+    const target = { clientKinds: ['desktop' as const], deviceId: 'device-1' };
+    readDeviceSystemInfoMock.mockResolvedValueOnce({ ok: true, systemInfo: {} });
+    await expect(resolveMcpDeviceFeatures('user-1', target)).resolves.toEqual([]);
+
+    readDeviceSystemInfoMock.mockResolvedValueOnce({ ok: false, reason: 'TIMEOUT' });
+    await expect(resolveMcpDeviceFeatures('user-1', target)).resolves.toEqual([]);
   });
 });

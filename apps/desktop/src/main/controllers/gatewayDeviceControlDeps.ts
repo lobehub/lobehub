@@ -60,6 +60,8 @@ export const createDesktopDeviceControlDeps = (app: App): DeviceControlDeps => {
       app.getController(HeterogeneousAgentCtr).listModels(params),
     // A server that can't reach an MCP server itself lists its tools here
     listMcpTools: (params) => app.getController(McpCtr).listToolsForGateway(params),
+    // ...and reads the MCP Apps view of a result its call produced here
+    readMcpUiResource: (params) => app.getController(McpCtr).readUiResourceForGateway(params),
     searchProjectFiles: (params) => localFileCtr().searchProjectFiles(params),
     // Remote "delete" goes to this machine's trash (`shell.trashItem`), same
     // as the local Files tree, so it stays recoverable.
