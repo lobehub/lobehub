@@ -56,6 +56,7 @@ import { openCreateChannel } from './CreateChannel';
 import { matchChannel, matchChannelThread } from './paths';
 import { sortChannels } from './sortChannels';
 import { threadTitle } from './threadTitle';
+import { duplicateTitleHints } from './titleHints';
 import { useChannelEvents } from './useChannelEvents';
 import { useChannelMenu } from './useChannelMenu';
 import { useChannelsEnabled } from './useChannelsEnabled';
@@ -104,6 +105,8 @@ const styles = stylex.create({
   // The first thread reaches up under the Channel's icon.
   firstElbow: { insetBlockStart: -8 },
   channel: { position: 'relative' },
+  // Muted like the role tag after an Agent's name in the same sidebar.
+  titleHint: { marginInlineStart: 6, fontSize: 12, opacity: 0.6 },
   // An unread Channel gets a pill on the row's leading edge and a title one step brighter, the
   // way Discord marks it; an @mention adds a count badge. The accordion panel clips anything
   // outside the row, so the pill sits in the row's own inline padding.
@@ -203,6 +206,8 @@ interface ChannelRowProps {
   activeChannelId: string | undefined;
   activeThreadId: string | null;
   channel: ChannelListItem;
+  /** Set when another Channel in the list has the same name; see `duplicateTitleHints`. */
+  hint?: string;
   menuItems: ReturnType<typeof useChannelMenu>;
 }
 
@@ -211,7 +216,13 @@ interface ChannelRowProps {
  * threads are listed swaps its `#` for a chevron that folds them away; the fold is kept per
  * Channel on this device.
  */
-const ChannelRow = ({ activeChannelId, activeThreadId, channel, menuItems }: ChannelRowProps) => {
+const ChannelRow = ({
+  activeChannelId,
+  activeThreadId,
+  channel,
+  hint,
+  menuItems,
+}: ChannelRowProps) => {
   const { t } = useTranslation('channel');
   const navigate = useWorkspaceAwareNavigate();
   const slug = useActiveWorkspaceSlug();
@@ -278,7 +289,6 @@ const ChannelRow = ({ activeChannelId, activeThreadId, channel, menuItems }: Cha
         icon={toggle ? undefined : Hash}
         iconSize={14}
         slots={toggle ? { iconPostfix: toggle } : undefined}
-        title={channel.title}
         titleColor={unread ? cssVar.colorText : joined ? undefined : cssVar.colorTextTertiary}
         actions={
           joined
@@ -304,6 +314,16 @@ const ChannelRow = ({ activeChannelId, activeThreadId, channel, menuItems }: Cha
               {mentions > 99 ? '99+' : mentions}
             </span>
           ) : undefined
+        }
+        title={
+          hint ? (
+            <>
+              {channel.title}
+              <span {...stylex.props(styles.titleHint)}>{hint}</span>
+            </>
+          ) : (
+            channel.title
+          )
         }
         onClick={() => navigate(path)}
         onPointerEnter={() => setPointed(true)}
@@ -349,7 +369,7 @@ const EnabledChannelSection = ({
   layoutMenuItems,
   projectId,
 }: ChannelSectionProps) => {
-  const { t } = useTranslation('channel');
+  const { t, i18n } = useTranslation('channel');
   const sectionTriggerStyle = useSectionTriggerStyle();
   const { pathname } = useActiveLocation();
   const navigate = useWorkspaceAwareNavigate();
@@ -361,6 +381,11 @@ const EnabledChannelSection = ({
     const scoped = channelsInScope(allChannels, projectId);
     return scoped && sortChannels(scoped, sort);
   }, [allChannels, projectId, sort]);
+  const separator = t('autoTitle.separator');
+  const hints = useMemo(
+    () => duplicateTitleHints(channels ?? [], { locale: i18n.language, separator }),
+    [channels, i18n.language, separator],
+  );
   useChannelEvents();
 
   const [showArchived, setShowArchived] = useState(false);
@@ -410,6 +435,7 @@ const EnabledChannelSection = ({
       activeChannelId={activeChannelId}
       activeThreadId={activeThreadId}
       channel={channel}
+      hint={hints.get(channel.id)}
       key={channel.id}
       menuItems={menuItems}
     />
