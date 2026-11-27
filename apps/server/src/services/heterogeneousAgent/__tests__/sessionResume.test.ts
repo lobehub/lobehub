@@ -21,6 +21,8 @@ const createPersistenceHandler = (
       findById: vi.fn(async () => null),
       getLatestSpineMessageId: vi.fn(async () => null),
       listToolCallIndexByTopic: vi.fn(async () => []),
+      listToolCallIndexByTopicSince: vi.fn(async () => []),
+      findAssistantSnapshotById: vi.fn(async () => undefined),
       update: vi.fn(async () => ({ success: true })),
     } as any,
     threadModel: {} as any,

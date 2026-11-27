@@ -83,7 +83,12 @@ export const createHarness = (
     update: vi.fn(async (id: string, patch: Partial<FakeMessage>) => {
       const existing = messages.get(id);
       if (!existing) return { success: false };
-      messages.set(id, { ...existing, ...patch });
+      messages.set(id, {
+        ...existing,
+        ...patch,
+        // MessageModel.update merges metadata patches into the stored row.
+        metadata: patch.metadata ? { ...existing.metadata, ...patch.metadata } : existing.metadata,
+      });
       return { success: true };
     }),
     updateToolMessage: vi.fn(
@@ -129,6 +134,7 @@ export const createHarness = (
       },
     ),
     findById: vi.fn(async (id: string) => messages.get(id) ?? null),
+    findAssistantSnapshotById: vi.fn(async (id: string) => messages.get(id)),
     getLatestSpineMessageId: vi.fn(
       async ({ threadId, topicId }: { threadId?: string | null; topicId: string }) => {
         const match = [...messages.values()].findLast(
@@ -142,6 +148,7 @@ export const createHarness = (
       },
     ),
     listToolCallIndexByTopic: vi.fn(async (_topicId: string) => []),
+    listToolCallIndexByTopicSince: vi.fn(async (_topicId: string, _opts: unknown) => []),
     updateMessagePlugin: vi.fn(async (id: string, patch: Record<string, unknown>) => {
       const existing = messages.get(id);
       if (existing) messages.set(id, { ...existing, plugin: { ...existing.plugin, ...patch } });

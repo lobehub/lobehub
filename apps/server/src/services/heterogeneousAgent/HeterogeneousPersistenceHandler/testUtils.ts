@@ -123,6 +123,7 @@ export const createHarness = (params: {
       },
     ),
     findById: vi.fn(async (id: string) => messages.get(id) ?? null),
+    findAssistantSnapshotById: vi.fn(async (id: string) => messages.get(id)),
     getLatestSpineMessageId: vi.fn(
       async ({
         operationId,
@@ -143,6 +144,7 @@ export const createHarness = (params: {
       },
     ),
     listToolCallIndexByTopic: vi.fn(async (_topicId: string) => []),
+    listToolCallIndexByTopicSince: vi.fn(async (_topicId: string, _opts: unknown) => []),
   };
 
   const threadModel = {

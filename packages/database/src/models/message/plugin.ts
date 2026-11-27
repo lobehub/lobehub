@@ -33,6 +33,44 @@ export interface ToolCallIndexItem extends Pick<
   state?: Record<string, unknown>;
 }
 
+interface ToolCallIndexRow {
+  apiName: string | null;
+  arguments: string | null;
+  id: string;
+  identifier: string | null;
+  intervention: MessagePluginItem['intervention'] | null;
+  interventionState: unknown;
+  operationId: unknown;
+  toolCallId: string | null;
+  toolStateOperationId: unknown;
+  toolStateSeq: unknown;
+}
+
+const toToolCallIndexItem = (
+  row: ToolCallIndexRow,
+  interventionStateKey: string,
+): ToolCallIndexItem => {
+  const metadata: ToolCallIndexItem['metadata'] = {};
+  if (typeof row.operationId === 'string') metadata.operationId = row.operationId;
+  if (typeof row.toolStateOperationId === 'string')
+    metadata.heterogeneousToolStateOperationId = row.toolStateOperationId;
+  if (typeof row.toolStateSeq === 'number') metadata.heterogeneousToolStateSeq = row.toolStateSeq;
+
+  return {
+    apiName: row.apiName ?? undefined,
+    arguments: row.arguments ?? undefined,
+    id: row.id,
+    identifier: row.identifier ?? undefined,
+    intervention: row.intervention ?? undefined,
+    metadata,
+    state:
+      row.interventionState === null || row.interventionState === undefined
+        ? undefined
+        : { [interventionStateKey]: row.interventionState },
+    toolCallId: row.toolCallId ?? undefined,
+  };
+};
+
 export class MessagePluginStore extends MessageScope {
   private readonly lookups: MessageLookupQueries;
 
@@ -185,8 +223,9 @@ export class MessagePluginStore extends MessageScope {
    * `listMessagePluginsByTopic`, without the payloads the index never reads.
    *
    * The heterogeneous persistence handler rebuilds its toolCallId → message id
-   * map and pending-intervention state from this on every event batch, so it
-   * runs once per batch over the whole topic. Full plugin rows there returned
+   * map and pending-intervention state from this whenever its state may be
+   * stale (bootstrap, replica handoff, step resync, finish); warm batches use
+   * {@link listToolCallIndexByTopicSince}. Full plugin rows there returned
    * every tool's arguments and state each time (≈3.6 MB per call on busy
    * topics). This projection keeps only:
    * - `state`: just `interventionStateKey`, absent when the row has none;
@@ -198,53 +237,93 @@ export class MessagePluginStore extends MessageScope {
     topicId: string,
     { interventionStateKey }: { interventionStateKey: string },
   ): Promise<ToolCallIndexItem[]> => {
-    // `jsonb_exists` instead of `state -> key IS NOT NULL`: see the serverless
-    // engine note in `spine.ts`.
-    const hasInterventionState = sql`COALESCE(jsonb_exists(${messagePlugins.state}, ${interventionStateKey}::text), false)`;
-
     const rows = await this.db
-      .select({
-        apiName: messagePlugins.apiName,
-        arguments: sql<
-          string | null
-        >`CASE WHEN ${hasInterventionState} THEN ${messagePlugins.arguments} END`,
-        id: messagePlugins.id,
-        identifier: messagePlugins.identifier,
-        intervention: messagePlugins.intervention,
-        interventionState: sql<unknown>`${messagePlugins.state} -> ${interventionStateKey}::text`,
-        operationId: sql<unknown>`${messages.metadata} -> 'operationId'`,
-        toolCallId: messagePlugins.toolCallId,
-        toolStateOperationId: sql<unknown>`${messages.metadata} -> 'heterogeneousToolStateOperationId'`,
-        toolStateSeq: sql<unknown>`${messages.metadata} -> 'heterogeneousToolStateSeq'`,
-      })
+      .select(this.toolCallIndexColumns(interventionStateKey))
       .from(messagePlugins)
       .innerJoin(messages, eq(messagePlugins.id, messages.id))
       .where(and(eq(messages.topicId, topicId), this.ownership(), this.pluginsOwnership()))
       .orderBy(asc(messages.createdAt), asc(messages.id));
 
-    return rows.map((row) => {
-      const metadata: ToolCallIndexItem['metadata'] = {};
-      if (typeof row.operationId === 'string') metadata.operationId = row.operationId;
-      if (typeof row.toolStateOperationId === 'string')
-        metadata.heterogeneousToolStateOperationId = row.toolStateOperationId;
-      if (typeof row.toolStateSeq === 'number')
-        metadata.heterogeneousToolStateSeq = row.toolStateSeq;
-
-      return {
-        apiName: row.apiName ?? undefined,
-        arguments: row.arguments ?? undefined,
-        id: row.id,
-        identifier: row.identifier ?? undefined,
-        intervention: row.intervention ?? undefined,
-        metadata,
-        state:
-          row.interventionState === null || row.interventionState === undefined
-            ? undefined
-            : { [interventionStateKey]: row.interventionState },
-        toolCallId: row.toolCallId ?? undefined,
-      };
-    });
+    return rows.map((row) => toToolCallIndexItem(row, interventionStateKey));
   };
+
+  /**
+   * The incremental counterpart of {@link listToolCallIndexByTopic}: the same
+   * projection, limited to tool rows whose message was created or updated at
+   * or after `since`, plus the rows named in `ids` regardless of age.
+   *
+   * The heterogeneous persistence handler calls this on a warm replica between
+   * full rebuilds, so a batch reads the few rows touched since its last sync
+   * instead of the whole topic. `messages.updated_at` moves on insert and on
+   * every `messages` UPDATE (content, tool-state sequence metadata), served by
+   * `messages_topic_id_updated_at_idx (topic_id, updated_at)`. Writes that touch
+   * only `message_plugins` (intervention, plugin state) do NOT move it; `ids`
+   * re-reads those rows by primary key.
+   *
+   * Rows come back in the same first-seen order (createdAt, id) as the full
+   * index, without duplicates.
+   */
+  listToolCallIndexByTopicSince = async (
+    topicId: string,
+    {
+      ids = [],
+      interventionStateKey,
+      since,
+    }: { ids?: string[]; interventionStateKey: string; since: Date },
+  ): Promise<ToolCallIndexItem[]> => {
+    const columns = {
+      ...this.toolCallIndexColumns(interventionStateKey),
+      createdAt: messages.createdAt,
+    };
+    const scope = and(eq(messages.topicId, topicId), this.ownership(), this.pluginsOwnership());
+
+    const [changed, named] = await Promise.all([
+      this.db
+        .select(columns)
+        .from(messagePlugins)
+        .innerJoin(messages, eq(messagePlugins.id, messages.id))
+        .where(and(scope, gte(messages.updatedAt, since))),
+      ids.length === 0
+        ? Promise.resolve([])
+        : this.db
+            .select(columns)
+            .from(messagePlugins)
+            .innerJoin(messages, eq(messagePlugins.id, messages.id))
+            .where(and(scope, inArray(messagePlugins.id, ids))),
+    ]);
+
+    const byId = new Map<string, (typeof changed)[number]>();
+    for (const row of [...changed, ...named]) byId.set(row.id, row);
+
+    return [...byId.values()]
+      .sort(
+        (a, b) =>
+          a.createdAt.getTime() - b.createdAt.getTime() || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+      )
+      .map((row) => toToolCallIndexItem(row, interventionStateKey));
+  };
+
+  /** Select list shared by the full and incremental tool-call index reads. */
+  private toolCallIndexColumns(interventionStateKey: string) {
+    // `jsonb_exists` instead of `state -> key IS NOT NULL`: see the serverless
+    // engine note in `spine.ts`.
+    const hasInterventionState = sql`COALESCE(jsonb_exists(${messagePlugins.state}, ${interventionStateKey}::text), false)`;
+
+    return {
+      apiName: messagePlugins.apiName,
+      arguments: sql<
+        string | null
+      >`CASE WHEN ${hasInterventionState} THEN ${messagePlugins.arguments} END`,
+      id: messagePlugins.id,
+      identifier: messagePlugins.identifier,
+      intervention: messagePlugins.intervention,
+      interventionState: sql<unknown>`${messagePlugins.state} -> ${interventionStateKey}::text`,
+      operationId: sql<unknown>`${messages.metadata} -> 'operationId'`,
+      toolCallId: messagePlugins.toolCallId,
+      toolStateOperationId: sql<unknown>`${messages.metadata} -> 'heterogeneousToolStateOperationId'`,
+      toolStateSeq: sql<unknown>`${messages.metadata} -> 'heterogeneousToolStateSeq'`,
+    };
+  }
 
   /**
    * The newest calls to one tool API across several topics, oldest first, with

@@ -32,6 +32,7 @@ import { MessageWriteMutations } from './write';
  */
 export class MessageModel {
   findById: MessageLookupQueries['findById'];
+  findAssistantSnapshotById: MessageLookupQueries['findAssistantSnapshotById'];
   findShareVisitorMessageIds: MessageLookupQueries['findShareVisitorMessageIds'];
   findByClientId: MessageLookupQueries['findByClientId'];
   findLatestAssistantMessageByThread: MessageLookupQueries['findLatestAssistantMessageByThread'];
@@ -87,6 +88,7 @@ export class MessageModel {
   findMessagePlugin: MessagePluginStore['findMessagePlugin'];
   listMessagePluginsByTopic: MessagePluginStore['listMessagePluginsByTopic'];
   listToolCallIndexByTopic: MessagePluginStore['listToolCallIndexByTopic'];
+  listToolCallIndexByTopicSince: MessagePluginStore['listToolCallIndexByTopicSince'];
   findLatestPluginStateInTopic: MessagePluginStore['findLatestPluginStateInTopic'];
   listToolCallsInTopics: MessagePluginStore['listToolCallsInTopics'];
   listMessagePluginsForOperation: MessagePluginStore['listMessagePluginsForOperation'];
@@ -157,6 +159,7 @@ export class MessageModel {
     this.annotations = annotations;
 
     this.findById = lookups.findById;
+    this.findAssistantSnapshotById = lookups.findAssistantSnapshotById;
     this.findShareVisitorMessageIds = lookups.findShareVisitorMessageIds;
     this.findByClientId = lookups.findByClientId;
     this.findLatestAssistantMessageByThread = lookups.findLatestAssistantMessageByThread;
@@ -209,6 +212,7 @@ export class MessageModel {
     this.findMessagePlugin = plugins.findMessagePlugin;
     this.listMessagePluginsByTopic = plugins.listMessagePluginsByTopic;
     this.listToolCallIndexByTopic = plugins.listToolCallIndexByTopic;
+    this.listToolCallIndexByTopicSince = plugins.listToolCallIndexByTopicSince;
     this.findLatestPluginStateInTopic = plugins.findLatestPluginStateInTopic;
     this.listToolCallsInTopics = plugins.listToolCallsInTopics;
     this.listMessagePluginsForOperation = plugins.listMessagePluginsForOperation;

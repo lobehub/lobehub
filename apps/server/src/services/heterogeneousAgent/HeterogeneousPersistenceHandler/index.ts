@@ -26,12 +26,13 @@ import { persistCodexTurnProvenance } from '../heteroProvenance';
 import { applyMainIntent, applySubagentIntent } from './applyIntents';
 import { eventKey, operationStates } from './operationState';
 import {
+  HETERO_INGEST_STAMP_KEY,
   loadOrCreateState,
   recoverLastToolMessageFromDb,
-  refreshMainStateFromDb,
   refreshSubagentRunsFromDb,
   refreshToolMessageIndex,
   syncAssistantPointerForAdvancedStep,
+  syncToolIndexAndMainState,
 } from './stateSync';
 import type { HeterogeneousPersistenceHandlerDeps, OperationState } from './types';
 
@@ -41,6 +42,7 @@ export type { HeterogeneousPersistenceHandlerDeps } from './types';
 const log = debug('lobe-server:hetero-agent:persistence');
 
 const generateThreadId = () => `thd_${createNanoId(16)()}`;
+const generateIngestStamp = createNanoId(12);
 
 /** A `newStep` carrying `externalSignal` opens a signal turn (a background task's wake-up). */
 const opensSignalTurn = (event: AgentStreamEvent): boolean =>
@@ -141,7 +143,18 @@ export class HeterogeneousPersistenceHandler {
       params.topicId,
       params.assistantMessageId,
     );
-    const batchMaxStepIndex = Math.max(...params.events.map((event) => event.stepIndex));
+    try {
+      await this.ingestWithState(state, params.events);
+    } catch (error) {
+      // A partly applied batch leaves DB writes this state may not reflect;
+      // the retry (here or on another replica) starts from a full rebuild.
+      state.toolIndexSync = undefined;
+      throw error;
+    }
+  }
+
+  private async ingestWithState(state: OperationState, events: AgentStreamEvent[]): Promise<void> {
+    const batchMaxStepIndex = Math.max(...events.map((event) => event.stepIndex));
 
     // A different Lambda may have already processed `stream_start { newStep }`
     // and persisted `heteroCurrentMsgId` for this operation. Warm instances keep
@@ -152,19 +165,21 @@ export class HeterogeneousPersistenceHandler {
       await syncAssistantPointerForAdvancedStep(this.deps, state);
     }
 
-    const subagentParents = subagentParentsOf(params.events);
+    const subagentParents = subagentParentsOf(events);
 
-    await refreshToolMessageIndex(this.deps, state);
-    await refreshMainStateFromDb(this.deps, state);
+    // Full topic tool index only when another writer may have run; a warm
+    // replica that ingested the previous batch merges just the recent rows.
+    await syncToolIndexAndMainState(this.deps, state);
     await refreshSubagentRunsFromDb(this.deps, state, subagentParents);
     // Only a batch that opens a signal turn needs the tool anchor; skip the
     // lookup for the rest. Re-read it even when warm: another replica may have
     // persisted a newer tool since this one last saw the run.
-    if (params.events.some(opensSignalTurn)) {
+    if (events.some(opensSignalTurn)) {
       await recoverLastToolMessageFromDb(this.deps, state);
     }
 
-    for (const event of params.events) {
+    let wroteIntents = false;
+    for (const event of events) {
       const key = eventKey(event);
       if (state.processedKeys.has(key)) {
         log('skip duplicate event %s op=%s', key, state.operationId);
@@ -176,7 +191,7 @@ export class HeterogeneousPersistenceHandler {
       // would ack OK while DB state diverges from the renderer's view. Mark
       // only on success so a retry can complete the lost write.
       const spineBefore = state.main.lastSpineMessageId;
-      await this.handleEvent(state, event);
+      if (await this.handleEvent(state, event)) wroteIntents = true;
       if (isMainStreamStart(event)) {
         state.streamStartAssistantIds.set(key, state.main.currentAssistantId);
         const steer = state.steerMessages.get(spineBefore);
@@ -191,7 +206,7 @@ export class HeterogeneousPersistenceHandler {
     // Flush accumulated content after every batch so a subsequent replica
     // picking up this operation always sees the latest content in the DB,
     // even if it never processes a step boundary or terminal event.
-    await this.flushBatchContent(state);
+    await this.flushBatchContent(state, wroteIntents);
     await this.flushSubagentContent(state, subagentParents);
   }
 
@@ -369,10 +384,11 @@ export class HeterogeneousPersistenceHandler {
 
   // ─── Event dispatch ──────────────────────────────────────────────────────
 
-  private async handleEvent(state: OperationState, event: AgentStreamEvent): Promise<void> {
+  /** Returns whether the event applied reducer intents (message / tool writes). */
+  private async handleEvent(state: OperationState, event: AgentStreamEvent): Promise<boolean> {
     if (isSteerReplay(event)) {
       await this.consumeSteer(state, event.data.uuid);
-      return;
+      return false;
     }
     // Claude Code's mode, incl. the switch it makes when a plan is approved:
     // the topic's next run starts in it, and the composer chip shows it.
@@ -381,7 +397,7 @@ export class HeterogeneousPersistenceHandler {
         ...permissionModeReportPatch(event.data),
         heteroPermissionModeReportPending: null,
       });
-      return;
+      return false;
     }
     // Codex Plan switch: a thread back in `default` clears the pending reset;
     // the switch follows Codex only where Codex disagrees with the request.
@@ -390,9 +406,9 @@ export class HeterogeneousPersistenceHandler {
       if (Object.keys(patch).length > 0) {
         await this.deps.topicModel.updateMetadata(state.topicId, patch);
       }
-      return;
+      return false;
     }
-    await this.reduceAndApply(state, event);
+    return this.reduceAndApply(state, event);
   }
 
   /**
@@ -433,7 +449,7 @@ export class HeterogeneousPersistenceHandler {
    * so a failing DB write leaves the event unmarked and the BatchIngester retry
    * replays it against the previous reducer state.
    */
-  private async reduceAndApply(state: OperationState, event: AgentStreamEvent) {
+  private async reduceAndApply(state: OperationState, event: AgentStreamEvent): Promise<boolean> {
     // Capture the CC-native session id off the stream_start stream so every
     // message persisted below carries the session it belongs to. Stable per
     // run; the copy is what makes a mid-topic session fork detectable.
@@ -469,6 +485,7 @@ export class HeterogeneousPersistenceHandler {
     }
 
     state.main = next;
+    return intents.length > 0;
   }
 
   /**
@@ -523,19 +540,28 @@ export class HeterogeneousPersistenceHandler {
    * This ensures a subsequent replica always finds the latest text in the DB
    * even if the current replica never processes a step-boundary or terminal
    * event (which are the normal flush triggers).
+   *
+   * Every batch that wrote anything also leaves a fresh ingest stamp on the
+   * current assistant, even with no text to flush. The next batch compares it
+   * (see `syncToolIndexAndMainState`): its own stamp means no other replica
+   * wrote this run in between, so the full tool index rebuild can be skipped.
    */
-  private async flushBatchContent(state: OperationState): Promise<void> {
-    if (!state.main.accContent && !state.main.accReasoning) return;
+  private async flushBatchContent(state: OperationState, wroteIntents: boolean): Promise<void> {
+    const hasContent = !!state.main.accContent || !!state.main.accReasoning;
+    if (!hasContent && !wroteIntents) return;
+
+    const stamp = generateIngestStamp();
     const update: Record<string, any> = {};
     if (state.main.accContent) update.content = state.main.accContent;
     if (state.main.accReasoning) update.reasoning = { content: state.main.accReasoning };
     // The first assistant is seeded before the heterogeneous operation exists.
     // Stamp every durable main reply so ordinary completion lookups stay scoped to this run.
-    update.metadata = {
-      ...state.main.turnMetadata,
-      operationId: state.operationId,
-    };
+    update.metadata = hasContent
+      ? { ...state.main.turnMetadata, operationId: state.operationId }
+      : {};
+    update.metadata[HETERO_INGEST_STAMP_KEY] = stamp;
     await this.deps.messageModel.update(state.main.currentAssistantId, update);
+    if (state.toolIndexSync) state.toolIndexSync = { ...state.toolIndexSync, stamp };
   }
 
   /**

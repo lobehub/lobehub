@@ -32,11 +32,26 @@ import type { HeterogeneousPersistenceHandlerDeps, OperationState } from './type
 
 const log = debug('lobe-server:hetero-agent:persistence');
 
+/**
+ * Metadata key each replica stamps on the current assistant at the end of a
+ * batch it ingested. Comparing it with the stamp this replica last saw tells a
+ * warm replica whether another one ingested this run in between.
+ */
+export const HETERO_INGEST_STAMP_KEY = 'heteroIngestStamp';
+
+/**
+ * How far before the previous index read an incremental read starts. Covers
+ * clock skew between replicas and the DB, and transactions that committed
+ * after that read with an older `updated_at`.
+ */
+const TOOL_INDEX_SINCE_OVERLAP_MS = 10_000;
+
 interface AssistantDbSnapshot {
   content: string;
+  /** `heteroIngestStamp` of the row, kept out of `metadata` so turns never copy it. */
+  ingestStamp: string | undefined;
   metadata: Record<string, any>;
   model: string | undefined;
-  parentId: string | null | undefined;
   provider: string | undefined;
   reasoning: string;
   reasoningSnapshotSeq: number;
@@ -46,13 +61,28 @@ interface AssistantDbSnapshot {
 
 interface AssistantMessageDbLike {
   content?: unknown;
-  metadata?: Record<string, any> | null;
-  model?: string;
-  parentId?: string | null;
-  provider?: string;
+  metadata?: unknown;
+  model?: string | null;
+  provider?: string | null;
   reasoning?: { content?: string } | null;
-  tools?: ChatToolPayload[] | null;
+  tools?: unknown;
 }
+
+/**
+ * The assistant row this operation currently writes to, per the topic: the
+ * step pointer `heteroCurrentMsgId` when it belongs to this operation, else
+ * the running marker's assistant.
+ */
+const topicAssistantPointer = (
+  topic: Awaited<ReturnType<HeterogeneousPersistenceHandlerDeps['topicModel']['findById']>>,
+  operationId: string,
+  running: { assistantMessageId?: string } | undefined,
+): string | undefined => {
+  const stored = topic?.metadata?.heteroCurrentMsgId;
+  return stored?.operationId === operationId
+    ? (stored.msgId ?? running?.assistantMessageId)
+    : running?.assistantMessageId;
+};
 
 export async function loadOrCreateState(
   deps: HeterogeneousPersistenceHandlerDeps,
@@ -110,7 +140,10 @@ export async function loadOrCreateState(
   // Cached accumulators do not grant write ownership. A steer can replace the
   // topic's operation without advancing this producer's step index, so every
   // batch must pass the same ownership/liveness check as a cold replica.
-  if (state) return state;
+  if (state) {
+    state.topicCurrentMsgId = topicAssistantPointer(topic, operationId, running);
+    return state;
+  }
 
   // Prefer the assistantMessageId forwarded in the ingest payload (sandbox path).
   // The orchestrator already has it in-memory and passes it through env → CLI → tRPC,
@@ -189,10 +222,10 @@ export async function loadOrCreateState(
     // its parent's turn runs (never once a background child outlives it); its
     // seeded assistant message always sits in that thread.
     threadId: running?.threadId ?? baseAssistantMessage?.threadId ?? undefined,
+    topicCurrentMsgId: topicAssistantPointer(topic, operationId, running),
     topicId,
   };
-  await refreshToolMessageIndex(deps, state);
-  await refreshMainStateFromDb(deps, state);
+  await syncToolIndexAndMainState(deps, state, { forceFull: true });
   operationStates.set(operationId, state);
   log(
     'created state for operation %s on topic %s msgId=%s tools=%d restored(content=%d tools=%d)',
@@ -214,15 +247,18 @@ function toAssistantSnapshot(
   message: AssistantMessageDbLike | null | undefined,
 ): AssistantDbSnapshot {
   const rawContent = (message?.content ?? '') as string;
-  const metadata = ((message?.metadata as Record<string, any> | null) ?? {}) as Record<string, any>;
+  const { [HETERO_INGEST_STAMP_KEY]: rawStamp, ...metadata } = ((message?.metadata as Record<
+    string,
+    any
+  > | null) ?? {}) as Record<string, any>;
   const textSnapshotSeq = Number(metadata.heteroTextSnapshotSeq ?? 0);
   const reasoningSnapshotSeq = Number(metadata.heteroReasoningSnapshotSeq ?? 0);
   return {
     content: rawContent === LOADING_FLAT ? '' : rawContent,
+    ingestStamp: typeof rawStamp === 'string' ? rawStamp : undefined,
     metadata,
-    model: message?.model,
-    parentId: message?.parentId,
-    provider: message?.provider,
+    model: message?.model ?? undefined,
+    provider: message?.provider ?? undefined,
     reasoning: (message?.reasoning as { content?: string } | null)?.content ?? '',
     reasoningSnapshotSeq: Number.isFinite(reasoningSnapshotSeq) ? reasoningSnapshotSeq : 0,
     textSnapshotSeq: Number.isFinite(textSnapshotSeq) ? textSnapshotSeq : 0,
@@ -261,15 +297,51 @@ function buildMainToolStateFromSnapshot(
   return toolState;
 }
 
+/**
+ * Rebuild the topic-wide tool index (toolCallId → message id, this
+ * operation's interventions and tool-state watermarks) from every tool row.
+ * Used whenever the in-memory index may be stale; warm batches use
+ * {@link mergeToolMessageIndexSince} instead.
+ */
 export async function refreshToolMessageIndex(
   deps: HeterogeneousPersistenceHandlerDeps,
   state: OperationState,
 ): Promise<void> {
-  // Runs once per event batch over the whole topic: read only the index
-  // columns, not every tool's arguments and state.
+  // Read only the index columns, not every tool's arguments and state.
   const toolPlugins = await deps.messageModel.listToolCallIndexByTopic(state.topicId, {
     interventionStateKey: HETEROGENEOUS_INTERVENTION_STATE_KEY,
   });
+  mergeToolIndexRows(state, toolPlugins);
+}
+
+/**
+ * Merge only the tool rows written since `sinceMs` into the index, plus every
+ * row this operation holds an intervention for. Those rows are re-read by id
+ * because intervention writes touch only `message_plugins` and leave
+ * `messages.updated_at` unchanged, and a Web client can write them too.
+ */
+export async function mergeToolMessageIndexSince(
+  deps: HeterogeneousPersistenceHandlerDeps,
+  state: OperationState,
+  sinceMs: number,
+): Promise<void> {
+  const ids = [...state.main.interventionsByCallId.keys()]
+    .map((toolCallId) => state.toolMsgIdByCallId.get(toolCallId))
+    .filter((id): id is string => !!id);
+  const toolPlugins = await deps.messageModel.listToolCallIndexByTopicSince(state.topicId, {
+    ids,
+    interventionStateKey: HETEROGENEOUS_INTERVENTION_STATE_KEY,
+    since: new Date(sinceMs),
+  });
+  mergeToolIndexRows(state, toolPlugins);
+}
+
+type ToolCallIndexRows = Awaited<
+  ReturnType<HeterogeneousPersistenceHandlerDeps['messageModel']['listToolCallIndexByTopic']>
+>;
+
+/** Same merge for full and incremental reads: later rows win, watermarks only grow. */
+function mergeToolIndexRows(state: OperationState, toolPlugins: ToolCallIndexRows): void {
   for (const plugin of toolPlugins) {
     if (plugin.toolCallId) state.toolMsgIdByCallId.set(plugin.toolCallId, plugin.id);
     if (plugin.toolCallId && plugin.state && typeof plugin.state === 'object') {
@@ -362,9 +434,9 @@ export async function refreshToolMessageIndex(
 export async function refreshMainStateFromDb(
   deps: HeterogeneousPersistenceHandlerDeps,
   state: OperationState,
+  preloaded?: AssistantDbSnapshot,
 ): Promise<void> {
-  const currentMsg = await deps.messageModel.findById(state.main.currentAssistantId);
-  const snapshot = toAssistantSnapshot(currentMsg);
+  const snapshot = preloaded ?? (await loadAssistantSnapshot(deps, state.main.currentAssistantId));
 
   // Recover the in-flight turn's CC message.id so a replayed `newStep` (cold
   // replica retry) is recognized as the SAME turn — no duplicate assistant,
@@ -429,6 +501,62 @@ export async function refreshMainStateFromDb(
     topicId: state.topicId,
   });
   if (spineId) state.main.lastSpineMessageId = spineId;
+}
+
+async function loadAssistantSnapshot(
+  deps: HeterogeneousPersistenceHandlerDeps,
+  messageId: string,
+): Promise<AssistantDbSnapshot> {
+  return toAssistantSnapshot(await deps.messageModel.findAssistantSnapshotById(messageId));
+}
+
+/**
+ * Bring the tool index and the current assistant's reducer state up to date
+ * with the DB before a batch is reduced.
+ *
+ * Batches of one run can land on different serverless replicas, each holding
+ * its own `operationStates`, so a warm replica may have missed tool rows,
+ * intervention transitions and tool-state watermarks another replica wrote.
+ * That is why the index used to be rebuilt from every tool row of the topic on
+ * each batch. Its own writes, by contrast, are already in memory.
+ *
+ * The full rebuild now runs only when another writer may have run:
+ * - no trusted sync yet (bootstrap, after a failed batch) or `forceFull`;
+ * - the current assistant's ingest stamp differs from the one this replica
+ *   last saw or wrote, i.e. another replica flushed a batch in between;
+ * - the topic's turn pointer no longer names the assistant this replica
+ *   writes to.
+ * Otherwise only rows touched since the previous read (with a safety window)
+ * and this operation's intervention rows are merged.
+ *
+ * The stamp is read before the index, so a write racing the read leaves the
+ * older stamp behind and the next batch rebuilds again.
+ */
+export async function syncToolIndexAndMainState(
+  deps: HeterogeneousPersistenceHandlerDeps,
+  state: OperationState,
+  { forceFull = false }: { forceFull?: boolean } = {},
+): Promise<void> {
+  const snapshot = await loadAssistantSnapshot(deps, state.main.currentAssistantId);
+  const sync = state.toolIndexSync;
+  const pointerMoved =
+    state.topicCurrentMsgId !== undefined &&
+    state.topicCurrentMsgId !== state.main.currentAssistantId;
+  const startedAt = Date.now();
+
+  if (!forceFull && sync && sync.stamp === snapshot.ingestStamp && !pointerMoved) {
+    await mergeToolMessageIndexSince(deps, state, sync.at - TOOL_INDEX_SINCE_OVERLAP_MS);
+  } else {
+    log(
+      'full tool index refresh op=%s reason=%s',
+      state.operationId,
+      forceFull ? 'forced' : !sync ? 'untrusted' : pointerMoved ? 'pointer' : 'handoff',
+    );
+    await refreshToolMessageIndex(deps, state);
+  }
+  state.toolIndexSync = { at: startedAt, stamp: snapshot.ingestStamp };
+
+  await refreshMainStateFromDb(deps, state, snapshot);
 }
 
 /** Spine assistants walked back from the tip; a run's tools sit a hop or two behind it. */
@@ -624,11 +752,8 @@ export async function syncAssistantPointerForAdvancedStep(
     );
   }
 
-  const stored = topic?.metadata?.heteroCurrentMsgId;
-  const authoritativeAssistantMessageId =
-    stored?.operationId === state.operationId
-      ? (stored.msgId ?? running?.assistantMessageId)
-      : running?.assistantMessageId;
+  const authoritativeAssistantMessageId = topicAssistantPointer(topic, state.operationId, running);
+  state.topicCurrentMsgId = authoritativeAssistantMessageId;
 
   if (
     !authoritativeAssistantMessageId ||
@@ -647,8 +772,7 @@ export async function syncAssistantPointerForAdvancedStep(
     toolState: createEmptyMainToolState(),
     turnMetadata: {},
   };
-  await refreshToolMessageIndex(deps, state);
-  await refreshMainStateFromDb(deps, state);
+  await syncToolIndexAndMainState(deps, state, { forceFull: true });
 
   log(
     'synced warm state op=%s to assistant=%s after step advance',

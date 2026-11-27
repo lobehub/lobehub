@@ -121,6 +121,7 @@ const createHarness = () => {
       return { success: true };
     }),
     findById: vi.fn(async (id: string) => messages.get(id) ?? null),
+    findAssistantSnapshotById: vi.fn(async (id: string) => messages.get(id)),
     query: vi.fn(async (params: { threadId?: string; topicId?: string }) => {
       if (params?.threadId)
         return [...messages.values()].filter((m) => m.threadId === params.threadId);
@@ -137,6 +138,10 @@ const createHarness = () => {
         );
         return match?.id;
       },
+    ),
+    // A superset of the incremental rows is always a correct answer.
+    listToolCallIndexByTopicSince: vi.fn(async (topicId: string) =>
+      (messageModel as any).listToolCallIndexByTopic(topicId),
     ),
     listToolCallIndexByTopic: vi.fn(async () =>
       [...messages.values()]
