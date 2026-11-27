@@ -47,6 +47,7 @@ import MetaProvider from './meta';
 import MinimaxProvider from './minimax';
 import MinimaxCodingPlanProvider from './minimaxCodingPlan';
 import MistralProvider from './mistral';
+import ModelFoldProvider from './modelfold';
 import ModelScopeProvider from './modelscope';
 import MoonshotProvider from './moonshot';
 import NebiusProvider from './nebius';
@@ -231,6 +232,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   ReplicateProvider,
   NebiusProvider,
   CometAPIProvider,
+  ModelFoldProvider,
   VercelAIGatewayProvider,
   CerebrasProvider,
   ZenMuxProvider,
@@ -357,6 +359,7 @@ export { default as MetaProviderCard } from './meta';
 export { default as MinimaxProviderCard } from './minimax';
 export { default as MinimaxCodingPlanProviderCard } from './minimaxCodingPlan';
 export { default as MistralProviderCard } from './mistral';
+export { default as ModelFoldProviderCard } from './modelfold';
 export { default as ModelScopeProviderCard } from './modelscope';
 export { default as MoonshotProviderCard } from './moonshot';
 export { default as NebiusProviderCard } from './nebius';

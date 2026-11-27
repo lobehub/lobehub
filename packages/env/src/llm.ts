@@ -221,6 +221,8 @@ export const getLLMConfig = () => {
       COMFYUI_PASSWORD: z.string().optional(),
       COMFYUI_CUSTOM_HEADERS: z.string().optional(),
 
+      ENABLED_MODELFOLD: z.boolean(),
+      MODELFOLD_API_KEY: z.string().optional(),
       ENABLED_MODELSCOPE: z.boolean(),
       MODELSCOPE_API_KEY: z.string().optional(),
 
@@ -495,6 +497,8 @@ export const getLLMConfig = () => {
       COMFYUI_PASSWORD: process.env.COMFYUI_PASSWORD,
       COMFYUI_CUSTOM_HEADERS: process.env.COMFYUI_CUSTOM_HEADERS,
 
+      ENABLED_MODELFOLD: !!process.env.MODELFOLD_API_KEY,
+      MODELFOLD_API_KEY: process.env.MODELFOLD_API_KEY,
       ENABLED_MODELSCOPE: !!process.env.MODELSCOPE_API_KEY,
       MODELSCOPE_API_KEY: process.env.MODELSCOPE_API_KEY,
 

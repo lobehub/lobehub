@@ -886,6 +886,12 @@ Volcengine speech synthesis, text-to-speech only; separate from the Volcengine A
 
 The above example disables all models first, then enables `flux-pro-1.1` and `flux-kontext-pro` (displayed as `FLUX.1 Kontext [pro]`).
 
+## ModelFold
+
+Set `MODELFOLD_API_KEY` on the server to enable ModelFold for the deployment. Leave it unset if users supply their own keys in Settings. Do not put a real key in a Dockerfile or commit it to source control.
+
+`MODELFOLD_PROXY_URL` optionally overrides the default `https://modelfold.ai/v1`. Use only a trusted Chat Completions endpoint: it receives the configured key. `MODELFOLD_MODEL_LIST` optionally customizes the server model list; for example, `+deepseek-v4-flash` adds that model if your account has access. Otherwise, fetch available models in provider settings.
+
 ## NewAPI
 
 ### `NEWAPI_API_KEY`

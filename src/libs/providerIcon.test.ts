@@ -5,6 +5,17 @@ import { describe, expect, it } from 'vitest';
 import { ProviderCombine, ProviderIcon } from './providerIcon';
 
 describe('provider artwork', () => {
+  it('renders the ModelFold brand mark in the avatar and the combined label', () => {
+    const avatar = renderToStaticMarkup(createElement(ProviderIcon, { provider: 'modelfold' }));
+    const wordmark = renderToStaticMarkup(
+      createElement(ProviderCombine, { provider: 'ModelFold' }),
+    );
+
+    expect(avatar).toContain('/avatars/modelfold.png');
+    expect(wordmark).toContain('/avatars/modelfold.png');
+    expect(wordmark).toContain('>ModelFold<');
+  });
+
   it.each([
     { provider: 'unsloth', title: 'Unsloth' },
     { provider: 'Unsloth', title: 'Unsloth' },
