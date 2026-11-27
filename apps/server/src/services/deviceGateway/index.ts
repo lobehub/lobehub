@@ -17,6 +17,7 @@ import { resolveDeviceClientKinds } from './clientKinds';
 import * as clientUpdate from './clientUpdate';
 import * as gitRead from './gitRead';
 import * as gitWrite from './gitWrite';
+import * as needyExecutor from './needyExecutor';
 import * as projectFileMutations from './projectFileMutations';
 import * as projectFiles from './projectFiles';
 import * as terminal from './terminal';
@@ -539,6 +540,14 @@ export class DeviceGateway {
 
   checkAgentCredential(...args: DeviceRpcArgs<typeof agentCredentials.checkAgentCredential>) {
     return agentCredentials.checkAgentCredential(this.clientGetter, ...args);
+  }
+
+  attachNeedyExecutor(...args: DeviceRpcArgs<typeof needyExecutor.attachNeedyExecutor>) {
+    return needyExecutor.attachNeedyExecutor(this.clientGetter, ...args);
+  }
+
+  detachNeedyExecutor(...args: DeviceRpcArgs<typeof needyExecutor.detachNeedyExecutor>) {
+    return needyExecutor.detachNeedyExecutor(this.clientGetter, ...args);
   }
 
   private getClient(): GatewayHttpClient | null {

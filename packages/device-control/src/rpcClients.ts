@@ -24,13 +24,15 @@ const DESKTOP_ONLY_RPC_METHODS: ReadonlySet<string> = new Set<DeviceRpcMethod>([
 
 /**
  * RPC methods only the CLI daemon (`lh connect`) implements: the desktop app
- * passes no CLI self-update or restart handler, so a call that lands on the
- * desktop is rejected.
+ * passes no CLI self-update, restart or needy executor handler, so a call that
+ * lands on the desktop is rejected.
  */
 const CLI_ONLY_RPC_METHODS: ReadonlySet<string> = new Set<DeviceRpcMethod>([
   'getCliUpdateState',
   'checkCliUpdate',
   'restartCli',
+  'attachNeedyExecutor',
+  'detachNeedyExecutor',
 ]);
 
 /** Device clients that can serve `method`; `undefined` means any client. */

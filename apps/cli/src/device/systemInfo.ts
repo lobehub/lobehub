@@ -14,6 +14,7 @@ import { resolveCliDirName } from '../constants/identity';
 import { cliVersion } from '../pkg';
 import type { BrowserDevice } from '../tools/browser';
 import type { ComputerUseDevice } from '../tools/computerUse';
+import { collectNeedyCapability } from './needyExecutor';
 
 /**
  * Checks the currently resolved Codex binary without creating a conversation.
@@ -118,6 +119,7 @@ export async function collectSystemInfo(
     downloadsPath: path.join(home, 'Downloads'),
     homePath: home,
     musicPath: path.join(home, 'Music'),
+    needy: collectNeedyCapability(),
     picturesPath: path.join(home, 'Pictures'),
     supportedAgentRuntimes: await nativeRuntimes.get(),
     // Tunneled MCP calls (stdio / local-network servers) run on this machine.

@@ -36,6 +36,7 @@ export * from './deviceAgentCredential';
 export * from './deviceFilePreviewFailure';
 export * from './deviceGatewayToken';
 export * from './deviceMetric';
+export * from './deviceNeedyExecutor';
 export * from './discover';
 export * from './document';
 export * from './documentComment';
