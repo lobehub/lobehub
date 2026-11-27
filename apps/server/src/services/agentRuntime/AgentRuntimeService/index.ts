@@ -212,7 +212,10 @@ export class AgentRuntimeService {
     });
     this.humanIntervention = new HumanInterventionHandler(db, this.messageModel);
     // Self-hosted servers re-arm persisted MCP work the first time the runtime is used.
-    ensureMcpRecoveryWorker();
+    ensureMcpRecoveryWorker(
+      (runtimeDb, runtimeUserId, runtimeOptions) =>
+        new AgentRuntimeService(runtimeDb, runtimeUserId, runtimeOptions),
+    );
 
     // Initialize ToolExecutionService with dependencies
     const builtinToolsExecutor = new BuiltinToolsExecutor(db, userId);

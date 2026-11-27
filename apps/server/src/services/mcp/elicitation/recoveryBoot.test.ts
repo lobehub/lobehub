@@ -8,9 +8,11 @@ const { getServerDB, startMcpRecoveryWorker } = vi.hoisted(() => ({
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB }));
 vi.mock('./recoveryWorker', () => ({ startMcpRecoveryWorker }));
 
+const createRuntime = vi.fn();
 const load = async () => {
   vi.resetModules();
-  return (await import('./recoveryBoot')).ensureMcpRecoveryWorker;
+  const { ensureMcpRecoveryWorker } = await import('./recoveryBoot');
+  return () => ensureMcpRecoveryWorker(createRuntime);
 };
 
 describe('starting MCP recovery with the Agent runtime', () => {
@@ -27,7 +29,9 @@ describe('starting MCP recovery with the Agent runtime', () => {
     const ensure = await load();
     ensure();
     ensure();
-    await vi.waitFor(() => expect(startMcpRecoveryWorker).toHaveBeenCalledWith('db'));
+    await vi.waitFor(() =>
+      expect(startMcpRecoveryWorker).toHaveBeenCalledWith('db', createRuntime),
+    );
     expect(startMcpRecoveryWorker).toHaveBeenCalledTimes(1);
   });
 
