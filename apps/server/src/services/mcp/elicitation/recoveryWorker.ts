@@ -2,20 +2,33 @@ import pMap from 'p-map';
 
 import { McpInvocationModel } from '@/database/models/mcpInvocation';
 import type { LobeChatDatabase } from '@/database/type';
-import { AgentRuntimeService } from '@/server/services/agentRuntime';
+import type { AgentRuntimeService } from '@/server/services/agentRuntime';
 
 import { expireClientMcpStep } from './clientStep';
 import { expireMcpElicitation } from './expire';
 import { recoverMcpElicitationResume } from './queue';
 
+/**
+ * Builds the Agent runtime recovery works through. Passed in rather than imported: the runtime
+ * starts this worker, so importing it back would close an import cycle.
+ */
+export type McpRecoveryRuntimeFactory = (
+  db: LobeChatDatabase,
+  userId: string,
+  options: { workspaceId?: string },
+) => Pick<AgentRuntimeService, 'createMcpElicitationService' | 'getMcpElicitationRuntime'>;
+
 /** Persisted rows own recovery; this timer carries neither responses nor invocation promises. */
-export async function recoverPersistedMcpWork(db: LobeChatDatabase) {
+export async function recoverPersistedMcpWork(
+  db: LobeChatDatabase,
+  createRuntime: McpRecoveryRuntimeFactory,
+) {
   const work = await McpInvocationModel.recoveryWork(db);
   const outcomes = await Promise.allSettled([
     pMap(
       work.interactions,
       async (item) => {
-        const runtime = new AgentRuntimeService(db, item.userId, {
+        const runtime = createRuntime(db, item.userId, {
           workspaceId: item.workspaceId ?? undefined,
         });
         const service = runtime.createMcpElicitationService();
@@ -31,7 +44,7 @@ export async function recoverPersistedMcpWork(db: LobeChatDatabase) {
     pMap(
       work.clients,
       async (item) => {
-        const runtime = new AgentRuntimeService(db, item.userId, {
+        const runtime = createRuntime(db, item.userId, {
           workspaceId: item.workspaceId ?? undefined,
         });
         await expireClientMcpStep(runtime.createMcpElicitationService(), item.operationId);
@@ -46,12 +59,15 @@ export async function recoverPersistedMcpWork(db: LobeChatDatabase) {
 }
 
 let started = false;
-export function startMcpRecoveryWorker(db: LobeChatDatabase) {
+export function startMcpRecoveryWorker(
+  db: LobeChatDatabase,
+  createRuntime: McpRecoveryRuntimeFactory,
+) {
   if (started) return;
   started = true;
   const tick = async () => {
     try {
-      await recoverPersistedMcpWork(db);
+      await recoverPersistedMcpWork(db, createRuntime);
     } catch (error) {
       console.error('[MCP recovery] Failed to recover persisted work', error);
     } finally {
