@@ -1,4 +1,4 @@
-import { gptImage1Schema, gptImage2Schema } from '../../const/imageParameters';
+import { gptImage1Schema, gptImage2Schema, gptImage25Schema } from '../../const/imageParameters';
 import {
   openaiGpt4oMiniTTSSchema,
   openaiGpt4oTTSVoices,
@@ -205,7 +205,7 @@ export const openaiImageModels: AIImageModelCard[] = [
     enabled: true,
     id: 'gpt-image-2.5-sunburst',
     isOfficial: true,
-    parameters: gptImage2Schema,
+    parameters: gptImage25Schema,
     pricing: {
       // Token rates match GPT Image 2; OpenAI publishes no per-image estimate for GPT Image 2.5,
       // so there is no `approximatePricePerImage`.
@@ -228,7 +228,7 @@ export const openaiImageModels: AIImageModelCard[] = [
     enabled: true,
     id: 'gpt-image-2.5-flare',
     isOfficial: true,
-    parameters: gptImage2Schema,
+    parameters: gptImage25Schema,
     pricing: {
       // Token rates match GPT Image 2; OpenAI publishes no per-image estimate for GPT Image 2.5,
       // so there is no `approximatePricePerImage`.
