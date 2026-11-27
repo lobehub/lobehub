@@ -36,6 +36,8 @@ class TaskService {
     after?: { at: Date | string; seq: number };
     assigneeAgentId?: string;
     automated?: boolean;
+    /** Only tasks completed in `[from, to)` (the Tasks calendar). */
+    completedBetween?: { from: Date; to: Date };
     /** Keep completed / canceled tasks only when closed within this window. */
     completedWithin?: TaskCompletedWindow;
     /** The Tasks page filter, applied server-side before paging. */
@@ -51,6 +53,8 @@ class TaskService {
     projectId?: string;
     /** Attach each row's latest N runs and its `awaitingHuman` flag. */
     recentRuns?: number;
+    /** Attach each row's runs started in `[from, to)` (the Tasks calendar). */
+    runsBetween?: { from: Date; to: Date };
     /** "My tasks" narrowing: assigned to the caller, or created by them. */
     scope?: 'assigned' | 'created';
     statuses?: TaskStatus[];

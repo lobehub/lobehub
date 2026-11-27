@@ -42,7 +42,7 @@ const DEFAULT_KANBAN_GROUPS = [
  * 'all' has no server filter (undefined), 'workspace' translates to the DB
  * 'public' value, and 'private' passes through unchanged.
  */
-const filterToServerVisibility = (
+export const filterToServerVisibility = (
   filter: 'all' | 'private' | 'workspace',
 ): 'private' | 'public' | undefined => {
   if (filter === 'all') return undefined;

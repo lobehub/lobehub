@@ -202,9 +202,15 @@ describe('AgentTasksPage', () => {
       expect(resolveTaskCollectionView('tasks', 'list')).toBe('list');
     });
 
-    it('keeps the scheduled roll-up a list — it is offered no switch', () => {
+    it('keeps the scheduled roll-up a list when a board is stored — it offers none', () => {
       expect(resolveTaskCollectionView('scheduled', 'kanban')).toBe('list');
       expect(resolveTaskCollectionView('scheduled', 'list')).toBe('list');
+    });
+
+    it('renders the calendar in every collection, the scheduled one included', () => {
+      expect(resolveTaskCollectionView('tasks', 'calendar')).toBe('calendar');
+      expect(resolveTaskCollectionView('mine', 'calendar')).toBe('calendar');
+      expect(resolveTaskCollectionView('scheduled', 'calendar')).toBe('calendar');
     });
   });
 

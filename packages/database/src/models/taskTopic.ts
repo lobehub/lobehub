@@ -3,8 +3,13 @@ import {
   QUOTA_LIMITED_RUN_STATUS,
   TRANSIENT_FAILED_RUN_STATUS,
 } from '@lobechat/const/goal';
-import type { BriefDecision, TaskRecentRun, TaskTopicHandoff } from '@lobechat/types';
-import { and, count, desc, eq, gte, inArray, lte, ne, sql } from 'drizzle-orm';
+import type {
+  BriefDecision,
+  TaskCalendarRun,
+  TaskRecentRun,
+  TaskTopicHandoff,
+} from '@lobechat/types';
+import { and, asc, count, desc, eq, gte, inArray, lt, lte, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
 import { agentOperations } from '../schemas/agentOperations';
@@ -28,6 +33,26 @@ const notSupersededBy = (operationId: string) => sql`not exists (
     and row_operation.id <> reported_operation.id
     and row_operation.created_at > reported_operation.created_at
 )`;
+
+/** Longest note a calendar card shows; the full summary stays on the run. */
+const RUN_NOTE_MAX_LENGTH = 80;
+
+/**
+ * The one-line note a run leaves on the calendar: its handoff title, else the
+ * first sentence of its summary, trimmed to a card's width.
+ */
+export const resolveRunNote = (handoff: TaskTopicHandoff | null | undefined): string | null => {
+  const source =
+    handoff?.title?.trim() ||
+    handoff?.summary
+      ?.trim()
+      .split(/(?<=[.!?。！？])\s*|\n/)[0]
+      ?.trim();
+  if (!source) return null;
+  return source.length > RUN_NOTE_MAX_LENGTH
+    ? `${source.slice(0, RUN_NOTE_MAX_LENGTH - 1)}…`
+    : source;
+};
 
 /** The operation a run row names, and the one reporting on it. */
 const current = alias(agentOperations, 'current_operation');
@@ -568,6 +593,51 @@ export class TaskTopicModel {
     for (const { taskId, ...run } of rows) {
       const runs = runsByTaskId.get(taskId) ?? [];
       runs.push(run);
+      runsByTaskId.set(taskId, runs);
+    }
+    return runsByTaskId;
+  }
+
+  /**
+   * Runs of the given tasks that started in `[from, to)`, oldest first per
+   * task, each with the short note its handoff left. Capped at `limit` rows
+   * across all tasks (earliest first), so a dense heartbeat cannot blow up a
+   * month view's payload.
+   */
+  async findRunsInRange(
+    taskIds: string[],
+    { from, limit, to }: { from: Date; limit: number; to: Date },
+  ): Promise<Map<string, TaskCalendarRun[]>> {
+    const runsByTaskId = new Map<string, TaskCalendarRun[]>();
+    if (taskIds.length === 0 || limit <= 0 || from >= to) return runsByTaskId;
+
+    const rows = await this.db
+      .select({
+        completedAt: topics.completedAt,
+        createdAt: taskTopics.createdAt,
+        handoff: taskTopics.handoff,
+        seq: taskTopics.seq,
+        status: taskTopics.status,
+        taskId: taskTopics.taskId,
+        topicId: taskTopics.topicId,
+        trigger: taskTopics.trigger,
+      })
+      .from(taskTopics)
+      .leftJoin(topics, eq(taskTopics.topicId, topics.id))
+      .where(
+        and(
+          inArray(taskTopics.taskId, taskIds),
+          gte(taskTopics.createdAt, from),
+          lt(taskTopics.createdAt, to),
+          this.ownership(),
+        ),
+      )
+      .orderBy(asc(taskTopics.createdAt), asc(taskTopics.seq))
+      .limit(limit);
+
+    for (const { handoff, taskId, ...run } of rows) {
+      const runs = runsByTaskId.get(taskId) ?? [];
+      runs.push({ ...run, note: resolveRunNote(handoff as TaskTopicHandoff | null) });
       runsByTaskId.set(taskId, runs);
     }
     return runsByTaskId;

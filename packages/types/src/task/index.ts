@@ -421,6 +421,20 @@ export interface TaskRecentRun {
   trigger: TaskRunTrigger | null;
 }
 
+/**
+ * One run of a task as the Tasks calendar places it: the run plus the short
+ * note its handoff left (its title, else the first sentence of its summary).
+ */
+export interface TaskCalendarRun extends TaskRecentRun {
+  note: string | null;
+}
+
+/** Most runs a single `runsBetween` list request returns across its page. */
+export const TASK_CALENDAR_MAX_RUNS = 2000;
+
+/** Longest `runsBetween` window a list request accepts: a six-week month grid. */
+export const TASK_CALENDAR_MAX_RANGE_DAYS = 42;
+
 export type TaskListItem = TaskItem & {
   /**
    * The task has an unresolved urgent brief, so its schedule and heartbeat
@@ -429,6 +443,11 @@ export type TaskListItem = TaskItem & {
    */
   awaitingHuman?: boolean;
   participants: TaskParticipant[];
+  /**
+   * Runs started within the requested window, oldest first. Only set when the
+   * list was asked for `runsBetween`.
+   */
+  rangeRuns?: TaskCalendarRun[];
   /** Latest runs, newest first. Only set when the list was asked for `recentRuns`. */
   recentRuns?: TaskRecentRun[];
 };
