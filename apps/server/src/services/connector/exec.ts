@@ -1,5 +1,5 @@
 import { hasCallableMcpEndpoint, isMarketplaceInstallRunnable } from '@lobechat/const';
-import { getMcpServerFingerprint, isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
+import { isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { McpElicitationCall } from '@lobechat/mcp-elicitation/types';
 import {
@@ -19,6 +19,7 @@ import type { DecryptedConnector } from '@/database/models/connector';
 import type { PluginModel } from '@/database/models/plugin';
 import { ConnectorMcpConnectionType, ConnectorToolPermission } from '@/database/schemas';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { resolveMcpDeviceFeatures } from '@/server/services/deviceGateway/deviceChannels';
 import type { FileService } from '@/server/services/file';
 import { mcpService } from '@/server/services/mcp';
 import { callCloudMcpTool, type CloudMcpCaller } from '@/server/services/mcp/cloudTool';
@@ -28,7 +29,14 @@ import {
   resolveBoundMcpDevice,
   toGatewayMcpParams,
 } from '@/server/services/mcp/deviceTunnel';
+import {
+  getMcpParamsFingerprint,
+  type McpRelayDevice,
+  relayDeviceViewState,
+} from '@/server/services/mcp/deviceView';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
+import { redisService } from '@/server/services/redis';
+import type { McpRelayTargetEntry } from '@/server/services/redis/mcpDeviceRelay';
 import {
   buildMcpAuthorizationErrorContent,
   isMcpAuthorizationError,
@@ -187,22 +195,115 @@ const assertInstallFinished = async (connector: DecryptedConnector, ctx: Connect
  * credentials. Shared by the `connector.callTool` tRPC procedure.
  */
 /**
- * Whether an HTTP connector reaches `server` (`getMcpServerFingerprint`): its
- * URL and headers as its calls send them.
+ * Whether a connector reaches `server` (`getMcpServerFingerprint`): an HTTP
+ * one's URL and headers, or a stdio one's command, arguments and environment,
+ * as its calls send them.
  */
 const reachesServer = async (
   connector: DecryptedConnector,
   server: string | undefined,
 ): Promise<boolean> => {
-  if (!server || !connector.mcpServerUrl) return false;
+  if (!server) return false;
+  if (connector.mcpConnectionType === ConnectorMcpConnectionType.stdio) {
+    if (!connector.mcpStdioConfig?.command) return false;
+  } else if (!connector.mcpServerUrl) return false;
   const params = buildConnectorMcpParams(connector);
-  if (params.type !== 'http') return false;
+  if (params.type !== 'http' && params.type !== 'stdio') return false;
 
-  return (
-    (await getMcpServerFingerprint({ headers: params.headers, type: 'http', url: params.url })) ===
-    server
-  );
+  return (await getMcpParamsFingerprint(params)) === server;
 };
+
+/** The device an MCP App view names (`relayDeviceId`), from the call's input. */
+const viewDeviceOf = (params: {
+  relayDeviceId?: string;
+  relayWorkspaceId?: string;
+}): McpRelayDevice | undefined =>
+  params.relayDeviceId
+    ? {
+        deviceId: params.relayDeviceId,
+        ...(params.relayWorkspaceId && { workspaceId: params.relayWorkspaceId }),
+      }
+    : undefined;
+
+/**
+ * The device a device-run connector's call goes to, and whether its client
+ * serves MCP App views. A bound connector runs on its binding; a view's call
+ * or read to an unbound one runs on the device the view came from
+ * (`viewDevice`), never on one picked for it. A view from another device than
+ * the binding names is refused: its server process lives elsewhere now.
+ *
+ * Either device is checked the way every bound call is (`resolveBoundMcpDevice`:
+ * registered, visible to the caller in its pool, online, a client that runs
+ * MCP). For a view (`cached`), the answer is kept for a few seconds per user,
+ * connector and device: a view polls its tools far more often than that.
+ */
+const resolveConnectorDevice = async (
+  connector: DecryptedConnector,
+  {
+    binding,
+    cached,
+    mcpApps,
+    viewDevice,
+  }: {
+    binding?: McpDeviceBinding;
+    cached: boolean;
+    mcpApps: boolean;
+    viewDevice?: McpRelayDevice;
+  },
+  ctx: ConnectorExecContext,
+): Promise<McpRelayTargetEntry> => {
+  const device = binding ?? viewDevice;
+  if (!ctx.serverDB || !ctx.userId || !device) {
+    throw new ConnectorToolCallError(
+      'BAD_REQUEST',
+      `Connector '${connector.name}' runs on a bound device, which this call can't reach.`,
+    );
+  }
+  if (
+    binding &&
+    viewDevice &&
+    (viewDevice.deviceId !== binding.deviceId ||
+      (viewDevice.workspaceId ?? undefined) !== (binding.workspaceId ?? undefined))
+  ) {
+    throw new ConnectorToolCallError(
+      'FORBIDDEN',
+      'This view came from another device than the connector runs on now',
+    );
+  }
+  const { serverDB, userId } = ctx;
+
+  const resolve = async (): Promise<McpRelayTargetEntry> => {
+    const target = await resolveBoundMcpDevice({
+      binding: device,
+      identifier: connector.identifier,
+      serverDB,
+      userId,
+    });
+    const apps = mcpApps && (await resolveMcpDeviceFeatures(userId, target)).includes('apps');
+    return { ...target, apps };
+  };
+  try {
+    return cached
+      ? await redisService.mcpDeviceRelay.rememberTarget(
+          {
+            connectorId: connector.id,
+            deviceId: device.deviceId,
+            userId,
+            workspaceId: device.workspaceId,
+          },
+          resolve,
+        )
+      : await resolve();
+  } catch (error) {
+    if (error instanceof McpBoundDeviceUnavailableError) {
+      throw new ConnectorToolCallError('PRECONDITION_FAILED', error.message);
+    }
+    throw error;
+  }
+};
+
+const DEVICE_SERVES_NO_VIEWS =
+  'The app on the device that runs this connector is too old to show interactive views. Update the desktop app or the `lh` CLI on that computer, then try again.';
 
 /**
  * A failed call in the shape the chat stores as a tool error. The model reads
@@ -226,6 +327,12 @@ export const callConnectorToolById = async (
     fromEntrypoint?: boolean;
     linkId?: string;
     identifier: string;
+    /**
+     * With `fromApp`: the device the view's result came from (`relayDeviceId`
+     * on its `mcpApp`), in its pool, for a connector run on the user's device.
+     */
+    relayDeviceId?: string;
+    relayWorkspaceId?: string;
     /** With `fromApp`: the server the view came from; its calls reach no other. */
     server?: string;
     toolName: string;
@@ -312,7 +419,10 @@ export const callConnectorToolById = async (
   // A personal row a private agent's workspace run resolved refreshes through
   // its own scope (`connectorSyncContextForRow`).
   try {
-    const refreshContext = connectorSyncContextForRow(ctx, connector, ctx.serverDB);
+    // A view's calls (a poll many times a second) leave the refresh to its other calls
+    const refreshContext = params.fromApp
+      ? undefined
+      : connectorSyncContextForRow(ctx, connector, ctx.serverDB);
     if (refreshContext) {
       scheduleStaleConnectorToolsRefresh(
         [
@@ -341,13 +451,17 @@ export const callConnectorToolById = async (
     })
   ) {
     // A connector bound to a device runs there: the caller's client may be on
-    // another machine (the web, or a desktop that isn't the bound one). A view's
-    // call is refused: a device's result offers no view to call back into.
+    // another machine (the web, or a desktop that isn't the bound one). A
+    // view's call runs where its result came from: the binding, or the device
+    // the view names.
     const binding = connectorDeviceBinding(connector);
-    if (binding && deviceGateway.isConfigured && !params.fromApp && !params.fromEntrypoint) {
-      return runConnectorToolOnBoundDevice(
+    const viewDevice = viewDeviceOf(params);
+    const viewCall = !!(params.fromApp || params.fromEntrypoint);
+    if (deviceGateway.isConfigured && (binding || (viewCall && viewDevice))) {
+      if (viewCall) assertDeviceViewCall(tool, params, mcpApps);
+      return runConnectorToolOnDevice(
         connector,
-        binding,
+        { binding, viewDevice },
         { ...params, mcpApps, schemas: tools.map((t) => t.inputSchema) },
         ctx,
       );
@@ -537,55 +651,96 @@ const runConnectorTool = async (
 };
 
 /**
- * Run a bound connector's tool on its device through the device gateway, with
- * the credentials its agent-run calls send (`buildConnectorMcpParams`, token
- * fields only). Never moves to another device: when the bound one can't run
- * it, the call fails with the reason.
+ * What a device is trusted to check for a view's call, checked here first:
+ * an older client ignores the call's MCP Apps options and would run it as a
+ * model call. A view reaches only app-visible tools, and a thread entrypoint
+ * only a tool that declares one, while MCP Apps are on.
  */
-const runConnectorToolOnBoundDevice = async (
-  connector: DecryptedConnector,
-  binding: McpDeviceBinding,
-  params: ConnectorCallAccount & { mcpApps: boolean; toolName: string },
-  ctx: ConnectorExecContext,
-): Promise<unknown> => {
-  if (!ctx.serverDB || !ctx.userId) {
+const assertDeviceViewCall = (
+  tool: { metadata?: Record<string, unknown> | null; toolName: string },
+  params: { fromApp?: boolean; fromEntrypoint?: boolean },
+  mcpApps: boolean,
+) => {
+  if (!mcpApps) throw new ConnectorToolCallError('FORBIDDEN', 'Interactive views are turned off');
+  if (params.fromEntrypoint && !tool.metadata?.threadEntry) {
     throw new ConnectorToolCallError(
-      'BAD_REQUEST',
-      `Connector '${connector.name}' runs on a bound device, which this call can't reach.`,
+      'FORBIDDEN',
+      'This tool does not declare an enabled thread entrypoint.',
     );
   }
+  if (!params.fromEntrypoint && !isSyncedMcpToolVisibleTo(tool, 'app', mcpApps)) {
+    throw new ConnectorToolCallError(
+      'FORBIDDEN',
+      `The tool "${tool.toolName}" can't be called from an interactive view.`,
+    );
+  }
+};
 
-  let target: Awaited<ReturnType<typeof resolveBoundMcpDevice>>;
-  try {
-    target = await resolveBoundMcpDevice({
-      binding,
-      identifier: connector.identifier,
-      serverDB: ctx.serverDB,
-      userId: ctx.userId,
-    });
-  } catch (error) {
-    if (error instanceof McpBoundDeviceUnavailableError) {
-      throw new ConnectorToolCallError('PRECONDITION_FAILED', error.message);
-    }
-    throw error;
+/**
+ * Run a device-run connector's tool on its device through the device gateway,
+ * with the credentials its agent-run calls send (`buildConnectorMcpParams`,
+ * token fields only): on its binding, or for a view's call on the device the
+ * view came from (`resolveConnectorDevice`). Never moves to another device:
+ * when that one can't run it, the call fails with the reason.
+ *
+ * On a client that serves MCP App views, the call runs with the MCP Apps
+ * options (a view's media stays inline), and a result's view is kept for
+ * relay back to that device (`relayDeviceViewState`).
+ */
+const runConnectorToolOnDevice = async (
+  connector: DecryptedConnector,
+  { binding, viewDevice }: { binding?: McpDeviceBinding; viewDevice?: McpRelayDevice },
+  params: ConnectorCallAccount & {
+    fromEntrypoint?: boolean;
+    mcpApps: boolean;
+    toolName: string;
+  },
+  ctx: ConnectorExecContext,
+): Promise<unknown> => {
+  const viewCall = !!(params.fromApp || params.fromEntrypoint);
+  const target = await resolveConnectorDevice(
+    connector,
+    { binding, cached: viewCall, mcpApps: params.mcpApps, viewDevice },
+    ctx,
+  );
+  if (viewCall && !target.apps) {
+    throw new ConnectorToolCallError('PRECONDITION_FAILED', DEVICE_SERVES_NO_VIEWS);
   }
 
   const account = await resolveCallAccount(connector, params, ctx);
   if (account.failure) return account.failure;
+  const connection = buildConnectorMcpParams(account.fresh);
+  if (connection.type !== 'http' && connection.type !== 'stdio') {
+    throw new ConnectorToolCallError(
+      'BAD_REQUEST',
+      `Connector '${connector.name}' can't run on a device`,
+    );
+  }
   const result = await deviceGateway.executeMcpCall({
     apiName: params.toolName,
     arguments: account.argsStr,
     clientKinds: target.clientKinds,
     deviceId: target.deviceId,
     identifier: connector.identifier,
-    params: toGatewayMcpParams(buildConnectorMcpParams(account.fresh)),
-    userId: ctx.userId,
+    params: {
+      ...toGatewayMcpParams(connection),
+      ...(target.apps && {
+        mcpCall: {
+          ...(params.fromApp && { fromApp: true }),
+          ...(params.fromEntrypoint && { fromEntrypoint: true }),
+          mcpApps: true,
+        },
+      }),
+    },
+    userId: ctx.userId!,
     workspaceId: target.workspaceId,
   });
 
-  // A view is read from the client that opens the conversation, so a device's
-  // result offers none (as agent runs drop it).
-  const { mcpApp: _deviceView, ...state } = (result.state as Record<string, unknown>) ?? {};
+  const state = await relayDeviceViewState(result.state, {
+    device: target,
+    keep: target.apps,
+    params: connection,
+  });
   return {
     content: result.content,
     // A failure keeps its marker and structured details, as agent runs do
@@ -612,6 +767,9 @@ export const readConnectorUiResourceById = async (
     agentId?: string;
     identifier: string;
     linkId?: string;
+    /** For a connector run on the user's device: the device the result came from. */
+    relayDeviceId?: string;
+    relayWorkspaceId?: string;
     server: string;
     topicId?: string;
     uri: string;
@@ -630,26 +788,25 @@ export const readConnectorUiResourceById = async (
     throw new ConnectorToolCallError('FORBIDDEN', 'Connector is disabled');
   }
   await assertInstallFinished(connector, ctx);
-  if (
-    connector.mcpConnectionType === ConnectorMcpConnectionType.stdio ||
-    connector.mcpConnectionType === ConnectorMcpConnectionType.cloud
-  ) {
+  if (connector.mcpConnectionType === ConnectorMcpConnectionType.cloud) {
     throw new ConnectorToolCallError(
       'BAD_REQUEST',
       `Interactive views are not supported for ${connector.mcpConnectionType} connectors yet`,
     );
   }
-  // A cloud server can't reach a device-routed endpoint (localhost / LAN, or
-  // set to connect through the device), and resource reads aren't tunneled to
-  // the device yet; the chat falls back to the plain result.
-  if (
-    shouldConnectViaDevice(connectorMcpEndpoint(connector), {
-      deviceGatewayConfigured: deviceGateway.isConfigured,
-    })
-  ) {
+  // A server run on the user's device (stdio, localhost / LAN, or set to
+  // connect through the device) serves its view from there: from its binding,
+  // or the device the result came from. Without either the chat falls back
+  // to the plain result.
+  const viaDevice = shouldConnectViaDevice(connectorMcpEndpoint(connector), {
+    deviceGatewayConfigured: deviceGateway.isConfigured,
+  });
+  const binding = viaDevice ? connectorDeviceBinding(connector) : undefined;
+  const viewDevice = viaDevice ? viewDeviceOf(params) : undefined;
+  if (viaDevice && !(deviceGateway.isConfigured && (binding || viewDevice))) {
     throw new ConnectorToolCallError(
       'BAD_REQUEST',
-      'Interactive views are not supported for local-network connectors yet',
+      `Interactive views of connector '${connector.name}' are shown from the device that runs it, which this read doesn't name.`,
     );
   }
 
@@ -662,6 +819,17 @@ export const readConnectorUiResourceById = async (
     );
   }
 
+  const target = viaDevice
+    ? await resolveConnectorDevice(
+        connector,
+        { binding, cached: true, mcpApps: true, viewDevice },
+        ctx,
+      )
+    : undefined;
+  if (target && !target.apps) {
+    throw new ConnectorToolCallError('PRECONDITION_FAILED', DEVICE_SERVES_NO_VIEWS);
+  }
+
   const resolved = await resolveLinkedCall(
     { connector, linkId: params.linkId, fromApp: true },
     ctx,
@@ -669,6 +837,21 @@ export const readConnectorUiResourceById = async (
   const fresh = resolved.linkId
     ? resolved.connector
     : await ensureFreshConnectorToken(connector, ctx.connectorModel);
+  const connection = buildConnectorMcpParams(fresh);
 
-  return mcpService.readUiResource(buildConnectorMcpParams(fresh), params.uri);
+  if (!target) return mcpService.readUiResource(connection, params.uri);
+  if (connection.type !== 'http' && connection.type !== 'stdio') {
+    throw new ConnectorToolCallError(
+      'BAD_REQUEST',
+      `Connector '${connector.name}' can't run on a device`,
+    );
+  }
+  return deviceGateway.readMcpUiResource({
+    clientKinds: target.clientKinds,
+    deviceId: target.deviceId,
+    params: toGatewayMcpParams(connection),
+    uri: params.uri,
+    userId: ctx.userId!,
+    workspaceId: target.workspaceId,
+  });
 };

@@ -1,4 +1,9 @@
-import type { ListedMcpServerTool, ListMcpToolsParams } from '@lobechat/device-control';
+import type {
+  ListedMcpServerTool,
+  ListMcpToolsParams,
+  McpUiResource,
+  ReadMcpUiResourceParams,
+} from '@lobechat/device-control';
 import type { GatewayMcpParams } from '@lobechat/device-gateway-client';
 import type { DeviceMcpRuntime, MCPClientParams } from '@lobechat/device-mcp';
 import { resolveUserSpawnPath } from '@lobechat/heterogeneous-agents/resolveCliCommand';
@@ -60,7 +65,9 @@ const getRuntime = () => {
  * user's login-shell PATH, as the desktop app does, unless the connector set
  * its own PATH.
  */
-const toClientParams = async (params: GatewayMcpParams): Promise<MCPClientParams> => {
+const toClientParams = async (
+  params: GatewayMcpParams | ReadMcpUiResourceParams['params'],
+): Promise<MCPClientParams> => {
   if (params.type === 'http') {
     return {
       auth: params.auth,
@@ -95,11 +102,17 @@ export async function executeDeviceMcpCall(
   currentToolAuth = getToolAuth;
   try {
     const mcp = await getRuntime();
+    // A server that reads our `'apps'` MCP feature says how the call runs: a
+    // view's call keeps its media inline and reaches only app-visible tools.
+    const { fromApp, fromEntrypoint, mcpApps } = call.params.mcpCall ?? {};
     const result = await mcp.runTool(
       await toClientParams(call.params),
       call.apiName,
       call.arguments,
       {
+        fromApp,
+        fromEntrypoint,
+        mcpApps,
         timeoutMs: call.timeout,
       },
     );
@@ -127,6 +140,19 @@ export async function listDeviceMcpTools({
 }: ListMcpToolsParams): Promise<ListedMcpServerTool[]> {
   const mcp = await getRuntime();
   return mcp.listTools(await toClientParams(params), { mcpApps });
+}
+
+/**
+ * Read an MCP Apps `ui://` resource on this machine (the `readMcpUiResource`
+ * device RPC), for a view the chat renders from a result a tunneled call
+ * produced here. Read on the session the view's calls reuse.
+ */
+export async function readDeviceMcpUiResource({
+  params,
+  uri,
+}: ReadMcpUiResourceParams): Promise<McpUiResource> {
+  const mcp = await getRuntime();
+  return (await mcp.readUiResource(await toClientParams(params), uri)) as McpUiResource;
 }
 
 /**

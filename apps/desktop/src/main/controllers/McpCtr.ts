@@ -8,7 +8,7 @@ import {
   partitionMcpToolsForViews,
   resolveMcpUiToolMeta,
 } from '@lobechat/const/mcpApp';
-import type { ListMcpToolsParams } from '@lobechat/device-control';
+import type { ListMcpToolsParams, ReadMcpUiResourceParams } from '@lobechat/device-control';
 import {
   DeviceMcpRuntime,
   type McpCallOptions,
@@ -207,6 +207,24 @@ const toMcpAppsManifestFields = (tools: McpTool[], enabled = false) => {
     ...(modelOnlyToolNames.length > 0 && { mcpModelOnlyTools: modelOnlyToolNames }),
   };
 };
+
+/** The client params of a connection the device gateway forwarded. */
+const toGatewayClientParams = (params: ListMcpToolsParams['params']): MCPClientParams =>
+  params.type === 'http'
+    ? {
+        auth: params.auth,
+        headers: params.headers,
+        name: params.name,
+        type: 'http',
+        url: params.url,
+      }
+    : {
+        args: params.args ?? [],
+        command: params.command,
+        env: params.env,
+        name: params.name,
+        type: 'stdio',
+      };
 
 const deserializePayload = deserializeMcpIpcPayload;
 
@@ -411,23 +429,16 @@ export default class McpCtr extends ControllerModule {
    * Listed by the same runtime the tunneled calls run on.
    */
   async listToolsForGateway({ mcpApps, params }: ListMcpToolsParams): Promise<McpTool[]> {
-    const client: MCPClientParams =
-      params.type === 'http'
-        ? {
-            auth: params.auth,
-            headers: params.headers,
-            name: params.name,
-            type: 'http',
-            url: params.url,
-          }
-        : {
-            args: params.args ?? [],
-            command: params.command,
-            env: params.env,
-            name: params.name,
-            type: 'stdio',
-          };
-    return this.runtime.listTools(client, { mcpApps });
+    return this.runtime.listTools(toGatewayClientParams(params), { mcpApps });
+  }
+
+  /**
+   * The device-gateway `readMcpUiResource` RPC: the MCP Apps view of a result a
+   * tunneled call produced here, read on the session the view's calls reuse,
+   * so any client that opens the conversation can render it.
+   */
+  async readUiResourceForGateway({ params, uri }: ReadMcpUiResourceParams) {
+    return this.runtime.readUiResource(toGatewayClientParams(params), uri);
   }
 
   @IpcMethod()

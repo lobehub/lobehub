@@ -71,6 +71,13 @@ describe('probeNativeRuntimes', () => {
     });
   });
 
+  /** @example The server keeps a relayed result's MCP Apps view only for a CLI that serves it. */
+  it('reports that its tunneled MCP calls support MCP Apps views', async () => {
+    await expect(collectSystemInfo(uncachedProbe)).resolves.toMatchObject({
+      supportedMcpFeatures: ['apps'],
+    });
+  });
+
   /** @example A handshake timeout must not stall device discovery or advertise support. */
   it('bounds native Codex probing and closes the stalled client', async () => {
     vi.useFakeTimers();

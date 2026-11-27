@@ -79,6 +79,7 @@ import type {
   ProjectDirectoryListParams,
   ProjectFileIndexParams,
   ProjectFileSearchParams,
+  ReadMcpUiResourceParams,
   ReadTerminalParams,
   ResizeTerminalParams,
   TrashLocalFilesParams,
@@ -100,6 +101,7 @@ export const DEVICE_RPC_METHODS = [
   'initWorkspace',
   'listHeterogeneousAgentModels',
   'listMcpTools',
+  'readMcpUiResource',
   'getClaudeCodeQuota',
   'getCodexQuota',
   'getKimiCodeQuota',
@@ -196,7 +198,7 @@ const runAgentCredentialRpc = async <T>(
   }
 };
 
-/** Why a client that runs no MCP servers rejects `listMcpTools`. */
+/** Why a client that runs no MCP servers rejects `listMcpTools` and `readMcpUiResource`. */
 export const MCP_UNSUPPORTED_MESSAGE = 'This device client does not support MCP servers';
 
 /** Why a client without a recoverable trash (the CLI daemon) rejects `trashLocalFiles`. */
@@ -298,6 +300,11 @@ export const executeDeviceRpc = async (
     case 'listMcpTools': {
       if (!deps.listMcpTools) throw new Error(MCP_UNSUPPORTED_MESSAGE);
       return deps.listMcpTools(params as ListMcpToolsParams);
+    }
+
+    case 'readMcpUiResource': {
+      if (!deps.readMcpUiResource) throw new Error(MCP_UNSUPPORTED_MESSAGE);
+      return deps.readMcpUiResource(params as ReadMcpUiResourceParams);
     }
 
     case 'getClaudeCodeQuota': {

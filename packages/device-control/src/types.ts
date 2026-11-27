@@ -474,6 +474,14 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
   readExternalAssetForPublish?: (
     params: ExternalAssetForPublishParams,
   ) => Promise<ExternalAssetForPublishResult>;
+  /**
+   * Read an MCP Apps `ui://` resource from such a server, for a view the chat
+   * renders from a result this machine produced. Optional, like
+   * {@link DeviceControlDeps.listMcpTools}: a client that omits it reports no
+   * `'apps'` MCP feature, and the dispatcher fails the RPC with
+   * {@link MCP_UNSUPPORTED_MESSAGE}.
+   */
+  readMcpUiResource?: (params: ReadMcpUiResourceParams) => Promise<McpUiResource>;
   readTerminal?: (params: ReadTerminalParams) => Promise<ReadTerminalResult>;
   /** Delete an installed agent credential and its managed config. Idempotent. */
   removeAgentCredential?: (params: unknown) => Promise<RemoveAgentCredentialResult>;
@@ -528,6 +536,24 @@ export interface ListMcpToolsParams {
   /** List on a session that announces MCP Apps, so view-only tools are listed too. */
   mcpApps?: boolean;
   params: ListMcpToolsConnection;
+}
+
+export interface ReadMcpUiResourceParams {
+  params: ListMcpToolsConnection;
+  /** A `ui://` resource; any other scheme is refused. */
+  uri: string;
+}
+
+/** An MCP `resources/read` result, as the server returned it. */
+export interface McpUiResource {
+  _meta?: Record<string, unknown>;
+  contents: Array<{
+    _meta?: Record<string, unknown>;
+    blob?: string;
+    mimeType?: string;
+    text?: string;
+    uri: string;
+  }>;
 }
 
 /**
