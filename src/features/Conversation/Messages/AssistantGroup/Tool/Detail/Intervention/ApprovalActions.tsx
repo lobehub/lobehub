@@ -253,59 +253,66 @@ const ApprovalActions = memo<ApprovalActionsProps>(
       messageId,
     ]);
     const submitBlocked = isChoiceSubmitBlocked(effectiveChoice, approveDisabled);
-    const handleSubmit = useCallback(async () => {
-      if (loading || isMessageCreating || !canUseResource || submitBlocked) return;
-      setLoading(true);
-      try {
-        if (effectiveChoice === 'reject') {
-          await rejectAndContinueToolCall(messageId, reason.trim() || undefined);
-        } else {
-          const remember = effectiveChoice === 'approve-remember';
-          // The tool's own remember step runs first, so the very next call
-          // after this approval already sees it.
-          if (remember && rememberAction === 'tool') await rememberOption?.onRemember();
-          const editedArguments = await onBeforeApprove?.();
-          if (remember) {
-            const audit = rememberAuditFor(interventionConfig);
-            await approveToolCallAndCovered(messageId, assistantGroupId ?? '', {
-              editedArguments,
-              isCovered: (sibling) =>
-                isCoveredByRemember({
-                  audit,
-                  config: interventionConfig,
-                  rememberAction,
-                  toolArgs: safeParseJSON(sibling.requestArgs) ?? {},
-                }),
-              ...(rememberAction === 'allow-list'
-                ? { rememberToolKey: `${identifier}/${apiName}` }
-                : {}),
-            });
+    const submitChoice = useCallback(
+      async (submitted: Choice) => {
+        if (loading || isMessageCreating || !canUseResource) return;
+        if (isChoiceSubmitBlocked(submitted, approveDisabled)) return;
+        setLoading(true);
+        try {
+          if (submitted === 'reject') {
+            await rejectAndContinueToolCall(messageId, reason.trim() || undefined);
           } else {
-            await approveToolCall(messageId, assistantGroupId ?? '', { editedArguments });
+            const remember = submitted === 'approve-remember';
+            // The tool's own remember step runs first, so the very next call
+            // after this approval already sees it.
+            if (remember && rememberAction === 'tool') await rememberOption?.onRemember();
+            const editedArguments = await onBeforeApprove?.();
+            if (remember) {
+              const audit = rememberAuditFor(interventionConfig);
+              await approveToolCallAndCovered(messageId, assistantGroupId ?? '', {
+                editedArguments,
+                isCovered: (sibling) =>
+                  isCoveredByRemember({
+                    audit,
+                    config: interventionConfig,
+                    rememberAction,
+                    toolArgs: safeParseJSON(sibling.requestArgs) ?? {},
+                  }),
+                ...(rememberAction === 'allow-list'
+                  ? { rememberToolKey: `${identifier}/${apiName}` }
+                  : {}),
+              });
+            } else {
+              await approveToolCall(messageId, assistantGroupId ?? '', { editedArguments });
+            }
           }
+        } finally {
+          setLoading(false);
         }
-      } finally {
-        setLoading(false);
-      }
-    }, [
-      apiName,
-      approveToolCall,
-      approveToolCallAndCovered,
-      assistantGroupId,
-      canUseResource,
-      effectiveChoice,
-      identifier,
-      interventionConfig,
-      isMessageCreating,
-      loading,
-      messageId,
-      onBeforeApprove,
-      reason,
-      rejectAndContinueToolCall,
-      rememberAction,
-      rememberOption,
-      submitBlocked,
-    ]);
+      },
+      [
+        apiName,
+        approveDisabled,
+        approveToolCall,
+        approveToolCallAndCovered,
+        assistantGroupId,
+        canUseResource,
+        identifier,
+        interventionConfig,
+        isMessageCreating,
+        loading,
+        messageId,
+        onBeforeApprove,
+        reason,
+        rejectAndContinueToolCall,
+        rememberAction,
+        rememberOption,
+      ],
+    );
+    const handleSubmit = useCallback(
+      () => submitChoice(effectiveChoice),
+      [effectiveChoice, submitChoice],
+    );
 
     /**
      * "Switch to auto approve": the one-click way out of being asked call after
@@ -493,7 +500,13 @@ const ApprovalActions = memo<ApprovalActionsProps>(
                 )}
                 key={c}
                 role="radio"
-                onClick={() => setChoice(c)}
+                // An approve row has nothing left to fill in, so clicking it is
+                // the decision. Selecting alone looked identical to approving —
+                // `approve` starts highlighted — and left the run waiting.
+                onClick={() => {
+                  setChoice(c);
+                  void submitChoice(c);
+                }}
               >
                 <span className={stylex.props(styles.number).className}>{index + 1}.</span>
                 <span className={stylex.props(styles.optionLabel).className}>
@@ -505,16 +518,18 @@ const ApprovalActions = memo<ApprovalActionsProps>(
         </div>
 
         <div {...stylex.props(styles.footer, compact && styles.footerCompact)}>
-          <Button
-            disabled={loading || isMessageCreating}
-            icon={CircleStop}
-            loading={stopping}
-            size={buttonSize}
-            type={'text'}
-            onClick={handleStop}
-          >
-            {t('tool.intervention.stop')}
-          </Button>
+          <Tooltip title={t('tool.intervention.stopTooltip')}>
+            <Button
+              disabled={loading || isMessageCreating}
+              icon={CircleStop}
+              loading={stopping}
+              size={buttonSize}
+              type={'text'}
+              onClick={handleStop}
+            >
+              {t('tool.intervention.stop')}
+            </Button>
+          </Tooltip>
           {showSwitchToAutoRun && (
             <Tooltip title={t('tool.intervention.switchToAutoRunDesc')}>
               <Button
