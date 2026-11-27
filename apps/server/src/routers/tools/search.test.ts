@@ -13,6 +13,8 @@ vi.mock('@lobechat/web-crawler', () => ({
   Crawler: vi.fn().mockImplementation(function () {
     return {
       crawl: vi.fn().mockResolvedValue({ content: 'test content' }),
+      impls: ['naive'],
+      urlRuleImpls: ['naive'],
     };
   }),
 }));
@@ -28,6 +30,9 @@ describe('searchRouter', () => {
     vi.clearAllMocks();
     // @ts-ignore
     toolsEnv.SEARXNG_URL = 'http://test-searxng.com';
+    // A developer's .env can enable paid providers; these cases exercise the SearXNG fallback.
+    // @ts-ignore
+    toolsEnv.SEARCH_PROVIDERS = '';
   });
 
   describe('crawlPages', () => {

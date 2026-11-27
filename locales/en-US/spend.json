@@ -73,6 +73,8 @@
   "table.columns.type.enums.speechRecognition": "Voice transcription",
   "table.columns.type.enums.textToSpeech": "Speech synthesis",
   "table.columns.type.enums.videoGeneration": "Video generation",
+  "table.columns.type.enums.webCrawl": "Web page reading",
+  "table.columns.type.enums.webSearch": "Web search",
   "table.columns.type.title": "Type",
   "table.desc": "Details of spend for text generation, embedding, image generation, etc.",
   "table.empty.clearFilters": "Clear filters",

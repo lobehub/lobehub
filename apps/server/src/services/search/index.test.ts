@@ -68,7 +68,7 @@ describe('SearchService', () => {
 
   describe('constructor', () => {
     it('should create instance with default search implementation when no providers configured', () => {
-      expect(createSearchServiceImpl).toHaveBeenCalledWith();
+      expect(createSearchServiceImpl).toHaveBeenCalledWith(SearchImplType.SearXNG);
     });
 
     it('should create instances for all providers from SEARCH_PROVIDERS', () => {

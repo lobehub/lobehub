@@ -166,9 +166,16 @@ export class WebBrowsingExecutionRuntime {
   }
 
   async crawlMultiPages(args: CrawlMultiPagesQuery): Promise<BuiltinServerRuntimeOutput> {
-    const response = await this.searchService.crawlPages({
-      urls: args.urls,
-    });
+    let response: Awaited<ReturnType<SearchServiceImpl['crawlPages']>>;
+    try {
+      response = await this.searchService.crawlPages({
+        urls: args.urls,
+      });
+    } catch (e) {
+      // A refused crawl (e.g. its fee could not be held) is a result the model can relay,
+      // not a failed step.
+      return { content: (e as Error).message, error: e, success: false };
+    }
 
     const { results } = response;
 

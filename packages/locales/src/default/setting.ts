@@ -2985,6 +2985,8 @@ When I am ___, I need ___
   'workspace.billingPage.usage.categories.musicGeneration': 'Music generation',
   'workspace.billingPage.usage.categories.tts': 'Text to speech',
   'workspace.billingPage.usage.categories.videoGeneration': 'Video generation',
+  'workspace.billingPage.usage.categories.webCrawl': 'Web page reading',
+  'workspace.billingPage.usage.categories.webSearch': 'Web search',
   'workspace.billingPage.usage.empty':
     'No spend yet. Spend appears here once members start using models.',
   'workspace.billingPage.usage.logsTitle': 'Recent activity',

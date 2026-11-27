@@ -32,6 +32,10 @@ describe('ExaImpl', () => {
     delete process.env.EXA_API_KEY;
   });
 
+  it('should advertise automatic engine selection so an empty answer is not re-sent', () => {
+    expect(impl.useAutoSearchEngineSelection).toBe(true);
+  });
+
   describe('query', () => {
     it('should return mapped results for a successful query', async () => {
       const exaResults = [

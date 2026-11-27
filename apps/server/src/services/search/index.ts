@@ -8,10 +8,16 @@ import type { Crawler, CrawlImplType, CrawlUniformResult } from '@lobechat/web-c
 import debug from 'debug';
 import pMap from 'p-map';
 
+import {
+  holdWebBrowsingFee,
+  type WebBrowsingBillingContext,
+  type WebBrowsingFeeHold,
+  type WebBrowsingFeeKind,
+  type WebBrowsingFeeUsage,
+} from '@/business/server/web-browsing/billing';
 import { toolsEnv } from '@/envs/tools';
 
-import { type SearchImplType, type SearchServiceImpl } from './impls';
-import { createSearchServiceImpl } from './impls';
+import { createSearchServiceImpl, SearchImplType, type SearchServiceImpl } from './impls';
 
 const DEFAULT_CRAWL_CONCURRENCY = 3;
 const DEFAULT_CRAWLER_RETRY = 1;
@@ -71,6 +77,11 @@ export const resolveOrderedChannels = (
 
 export interface SearchServiceOptions {
   /**
+   * Who pays for the upstream calls this service makes. Without it, nothing is billed; every
+   * caller acting for a user (the agent tool runtime, the tools router) passes it.
+   */
+  billing?: WebBrowsingBillingContext;
+  /**
    * User-level ordered channel preferences (search providers / crawler impls).
    * Each list is intersected with the server-enabled set and reordered by the
    * user's priority; missing or fully-filtered lists fall back to the env order.
@@ -111,10 +122,27 @@ const getMemorySnapshot = () => {
 };
 
 /**
+ * A search is charged only when it answered with results: an error, or an answer with
+ * nothing in it, gives the fee back.
+ */
+const isBillableSearch = (data: UniformSearchResponse) =>
+  !data.errorDetail && data.results.length > 0;
+
+/** Groups served units by the provider that served them. */
+const countServedUnits = (providers: string[]): WebBrowsingFeeUsage[] => {
+  const counts = new Map<string, number>();
+  for (const provider of providers) counts.set(provider, (counts.get(provider) ?? 0) + 1);
+  return [...counts].map(([provider, units]) => ({ provider, units }));
+};
+
+/**
  * Search service class
  * Uses different implementations for different search operations
  */
 export class SearchService {
+  private billing?: WebBrowsingBillingContext;
+  /** Provider ids of {@link searchImpList}, index for index. */
+  private searchProviderIds: string[];
   private searchImpList: SearchServiceImpl[];
   private userChannels?: UserChannelPreferences;
 
@@ -152,13 +180,42 @@ export class SearchService {
   }
 
   constructor(options: SearchServiceOptions = {}) {
+    this.billing = options.billing;
     this.userChannels = options.userChannels;
 
     const impls = this.searchImpls;
-    this.searchImpList =
-      impls.length > 0
-        ? impls.map((impl) => createSearchServiceImpl(impl))
-        : [createSearchServiceImpl()];
+    // An unconfigured deployment falls back to SearXNG, as `createSearchServiceImpl` defaults.
+    this.searchProviderIds = impls.length > 0 ? impls : [SearchImplType.SearXNG];
+    this.searchImpList = this.searchProviderIds.map((impl) =>
+      createSearchServiceImpl(impl as SearchImplType),
+    );
+  }
+
+  /**
+   * Holds the fee before any upstream call, runs the call, then settles what it served.
+   * A refused hold throws before `run` starts; the hold is settled (or given back) even
+   * when `run` throws.
+   */
+  private async withFee<T>(
+    fee: () => { candidates: string[]; kind: WebBrowsingFeeKind; units: number },
+    run: () => Promise<T>,
+    served: (result: T) => WebBrowsingFeeUsage[],
+  ): Promise<T> {
+    if (!this.billing) return run();
+
+    const params = fee();
+    const hold: WebBrowsingFeeHold | undefined =
+      params.units > 0 ? await holdWebBrowsingFee({ ...params, context: this.billing }) : undefined;
+    if (!hold) return run();
+
+    let usage: WebBrowsingFeeUsage[] = [];
+    try {
+      const result = await run();
+      usage = served(result);
+      return result;
+    } finally {
+      await hold.settle(usage);
+    }
   }
 
   /**
@@ -201,15 +258,34 @@ export class SearchService {
     const { Crawler } = await import('@lobechat/web-crawler');
     const crawler = new Crawler(this.crawlerOptions);
 
-    const results = await pMap(
-      input.urls,
-      async (url) => {
-        return await this.crawlWithRetry(crawler, url, input.impls);
-      },
-      { concurrency: this.crawlConcurrency },
-    );
+    return this.withFee(
+      () => ({
+        // Every impl a page can land on: the fallback order, the ones URL rules (PDF,
+        // YouTube, ...) pick from, and a caller's explicit list.
+        candidates: [
+          ...new Set([...crawler.impls, ...crawler.urlRuleImpls, ...(input.impls ?? [])]),
+        ],
+        kind: 'crawl',
+        units: input.urls.length,
+      }),
+      async () => {
+        const results = await pMap(
+          input.urls,
+          async (url) => {
+            return await this.crawlWithRetry(crawler, url, input.impls);
+          },
+          { concurrency: this.crawlConcurrency },
+        );
 
-    return { results };
+        return { results };
+      },
+      ({ results }) =>
+        countServedUnits(
+          results
+            .filter((result) => !this.isFailedCrawlResult(result))
+            .map((result) => result.crawler),
+        ),
+    );
   }
 
   private async crawlWithRetry(
@@ -314,10 +390,34 @@ export class SearchService {
    * Query for search results (uses the first provider)
    */
   async query(query: string, params?: SearchParams) {
-    return this.queryWithImpl(this.searchImpList[0], query, params);
+    const provider = this.searchProviderIds[0];
+    return this.withFee(
+      () => ({ candidates: [provider], kind: 'search', units: 1 }),
+      () => this.queryWithImpl(this.searchImpList[0], query, params),
+      (data) => (isBillableSearch(data) ? [{ provider, units: 1 }] : []),
+    );
   }
 
-  async webSearch({ query, searchCategories, searchEngines, searchTimeRange }: SearchQuery) {
+  async webSearch(params: SearchQuery): Promise<UniformSearchResponse> {
+    let servedBy: string | undefined;
+    return this.withFee(
+      () => ({ candidates: this.searchProviderIds, kind: 'search', units: 1 }),
+      () =>
+        this.searchWithFallback(params, (provider) => {
+          servedBy = provider;
+        }),
+      (data) => (servedBy && isBillableSearch(data) ? [{ provider: servedBy, units: 1 }] : []),
+    );
+  }
+
+  /**
+   * Tries each provider in order, relaxing the params on an empty answer. `onServed` names
+   * the provider whose results are returned.
+   */
+  private async searchWithFallback(
+    { query, searchCategories, searchEngines, searchTimeRange }: SearchQuery,
+    onServed: (provider: string) => void,
+  ): Promise<UniformSearchResponse> {
     try {
       if (log.enabled) {
         log(
@@ -333,7 +433,8 @@ export class SearchService {
 
     let lastSuccessfulEmpty: UniformSearchResponse | undefined;
 
-    for (const impl of this.searchImpList) {
+    for (const [index, impl] of this.searchImpList.entries()) {
+      const provider = this.searchProviderIds[index];
       try {
         if (log.enabled) {
           log(
@@ -353,7 +454,10 @@ export class SearchService {
         const data = await this.queryWithImpl(impl, query, currentParams);
 
         if (data.errorDetail) break;
-        if (data.results.length > 0) return data;
+        if (data.results.length > 0) {
+          onServed(provider);
+          return data;
+        }
 
         lastSuccessfulEmpty = data;
 
