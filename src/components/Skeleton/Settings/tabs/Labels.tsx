@@ -13,7 +13,7 @@ const ROWS = 4;
 
 /**
  * The label table while the registry loads: the static column header, then
- * 42px (compact 36px) rows (color dot + name, description, usage, created date,
+ * 44px (compact 36px) rows (color dot + name, description, usage, created date,
  * menu) on the same column widths as the loaded rows.
  */
 export const LabelsListSkeleton = () => {
@@ -56,7 +56,7 @@ export const LabelsListSkeleton = () => {
           horizontal
           align={'center'}
           gap={12}
-          height={compact ? 36 : 42}
+          height={compact ? 36 : 44}
           key={index}
           paddingInline={12}
         >
