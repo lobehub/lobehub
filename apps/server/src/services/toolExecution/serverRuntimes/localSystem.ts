@@ -180,9 +180,9 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
           }
         }
 
-        // A file tool entering a directory below the working directory that
-        // the run has not scanned asks the device, in the same call, for that
-        // directory's agent files. See `agentFileDiscovery`.
+        // A file tool or command entering a directory the run has not scanned
+        // asks the device, in the same call, for that directory's agent files.
+        // See `agentFileDiscovery`.
         const scanRequest = buildAgentFileScanRequest({
           agentFiles: context.agentFiles,
           apiName: api.name,

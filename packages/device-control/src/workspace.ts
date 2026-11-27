@@ -84,6 +84,12 @@ const resolveAgentFileDirs = async (root: string): Promise<string[]> => {
   return [start];
 };
 
+/** The nearest ancestor of `dir` (or `dir` itself) holding `.git`, else `dir`. */
+const resolveRepositoryRoot = async (dir: string): Promise<string> => {
+  const dirs = await resolveAgentFileDirs(dir);
+  return dirs.at(-1) ?? dir;
+};
+
 const createProjectSkillRoots = (root: string, dirs: string[]): SkillScanRoot[] =>
   dirs.flatMap((dir, index) =>
     SKILL_SOURCES.map((source) => {
@@ -361,7 +367,7 @@ export const initWorkspace = async (
  * parse its frontmatter, so a directory holding hundreds of skills must not
  * turn the file tool it rides on into a bulk read.
  */
-const MAX_DISCOVERED_SKILLS = 50;
+const MAX_DISCOVERED_SKILLS = 150;
 
 /**
  * Time a discovery may add to the file tool it rides on. Past it the tool
@@ -430,15 +436,18 @@ const scan = async (
   params: DiscoverAgentFilesParams,
 ): Promise<Omit<DiscoverAgentFilesResult, 'durationMs'>> => {
   const target = resolveAgainstCwd(params.path, params.cwd);
-  if (!target) return { dirs: [], instructions: [], outcome: 'outside-root', skills: [] };
+  if (!target) return { dirs: [], instructions: [], outcome: 'unresolved', skills: [] };
 
-  // Compared on real paths: a symlink inside the working directory must not
-  // pull in the agent files of wherever it points.
-  const root = await realDir(path.resolve(params.root));
+  // Compared on real paths, so a symlink inside the working directory is
+  // treated as the tree it points into.
+  const workingRoot = await realDir(path.resolve(params.root));
   const start = await realDir(await resolveTouchedDir(path.resolve(target)));
-  if (!isWithin(root, start)) {
-    return { dirs: [], instructions: [], outcome: 'outside-root', skills: [] };
-  }
+  // Outside the working directory the walk stops at the target's own
+  // repository root, as the start-of-run scan does for the working
+  // directory. The tool call already ran, so the user allowed reading there
+  // (an approval, or auto-approve); that tree's rules are what the model
+  // should follow while it works in it.
+  const root = isWithin(workingRoot, start) ? workingRoot : await resolveRepositoryRoot(start);
 
   const known = new Set(
     await Promise.all((params.knownDirs ?? []).map((dir) => realDir(path.resolve(dir)))),
@@ -466,12 +475,13 @@ const scan = async (
 };
 
 /**
- * Mid-run counterpart of {@link initWorkspace}: when a file tool reads, writes
- * or edits a file in a directory below the working directory that the run has
- * not scanned (a package of a monorepo), find the agent files that apply
- * there. Mirrors Claude Code, which loads a subdirectory's `CLAUDE.md` and
- * skills the first time the model touches a file in it, and likewise never
- * looks outside the working directory.
+ * Mid-run counterpart of {@link initWorkspace}: when a file tool or command
+ * reads, writes or enters a directory the run has not scanned (a package of a
+ * monorepo, or another repository on the device), find the agent files that
+ * apply there. Like Claude Code, which loads a subdirectory's `CLAUDE.md` and
+ * skills the first time the model touches a file in it. Below the working
+ * directory the walk stops at it; elsewhere it stops at the target's
+ * repository root, since the call that ran there was already allowed.
  *
  * Runs inside the file tool call it rides on (see `LocalSystemExecutionRuntime`),
  * so it needs no authorization or wake handling of its own.

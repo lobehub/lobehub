@@ -1,6 +1,7 @@
 /**
  * Command-agnostic shell command parsing shared by the shell-Work normalizers
- * (github today; any future CLI whose runs should register Works). Everything
+ * (github today; any future CLI whose runs should register Works) and the
+ * mid-run agent file discovery (which directories a command reads). Everything
  * here is about turning raw shell command TEXT into simple-command token
  * segments — nothing in this module knows about `gh` or any other CLI.
  */
@@ -77,7 +78,7 @@ const skipHeredocBodies = (input: string, start: number, pending: PendingHeredoc
  * Known trade-off: quoting is stripped before operator splitting, so a quoted
  * literal like `--title '&&'` is treated as a control operator and at worst
  * truncates the parsed segment. Edge cases are pinned in
- * `__tests__/githubToolResult.test.ts`.
+ * `packages/database/src/models/work/__tests__/githubToolResult.test.ts`.
  */
 const tokenizeShellCommand = (input: string): string[] | null => {
   const tokens: string[] = [];

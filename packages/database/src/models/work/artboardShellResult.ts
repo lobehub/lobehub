@@ -4,11 +4,11 @@ import {
   type SkillToolResultWorkInput,
   type WorkItem,
 } from '@lobechat/types';
+import { parseShellCommandSegments } from '@lobechat/utils/shellCommandParsing';
 
 import { ArtboardModel } from '../artboard';
 import { registerArtboardWork } from './artboard';
 import type { WorkContext } from './context';
-import { parseShellCommandSegments } from './shellCommandParsing';
 
 interface ShellRecord {
   command: string;

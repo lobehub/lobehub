@@ -918,6 +918,68 @@ describe('LocalSystemExecutionRuntime.executeToolCall — agent file scan', () =
     expect(service.discoverAgentFiles).not.toHaveBeenCalled();
   });
 
+  it('scans each path a command touched, as one merged answer', async () => {
+    const service = createService({
+      discoverAgentFiles: vi
+        .fn()
+        .mockResolvedValueOnce({
+          dirs: ['/repo/web'],
+          durationMs: 3,
+          instructions: [{ content: 'web', path: '/repo/web/AGENTS.md' }],
+          outcome: 'found',
+          skills: [{ name: 'web-design' }],
+        })
+        .mockResolvedValueOnce({
+          dirs: ['/repo/web/src'],
+          durationMs: 2,
+          instructions: [],
+          outcome: 'empty',
+          skills: [{ name: 'web-design' }],
+        }),
+      runCommand: vi.fn().mockResolvedValue({ exit_code: 0, success: true }),
+    });
+
+    const output = await new LocalSystemExecutionRuntime(service).executeToolCall(
+      'runCommand',
+      { agentFileScan: scanRequest, command: 'cd web && cat src/a.ts', cwd: '/repo' },
+      { trustArgsCwd: true },
+    );
+
+    expect(vi.mocked(service.discoverAgentFiles!).mock.calls.map(([params]) => params)).toEqual([
+      { cwd: '/repo', knownDirs: ['/repo'], path: 'web', root: '/repo' },
+      { cwd: '/repo', knownDirs: ['/repo', '/repo/web'], path: 'web/src/a.ts', root: '/repo' },
+    ]);
+    expect(output?.state?.agentFileScan).toEqual({
+      dirs: ['/repo/web', '/repo/web/src'],
+      durationMs: 5,
+      instructions: [{ content: 'web', path: '/repo/web/AGENTS.md' }],
+      outcome: 'found',
+      skills: [{ name: 'web-design' }],
+    });
+    // The scan request is not a shell param.
+    expect(vi.mocked(service.runCommand).mock.calls[0][0]).not.toHaveProperty('agentFileScan');
+  });
+
+  it('does not scan for a background command', async () => {
+    const service = createService({
+      discoverAgentFiles: vi.fn(),
+      runCommand: vi.fn().mockResolvedValue({ shell_id: 's1', success: true }),
+    });
+
+    await new LocalSystemExecutionRuntime(service).executeToolCall(
+      'runCommand',
+      {
+        agentFileScan: scanRequest,
+        command: 'cat web/a.ts',
+        cwd: '/repo',
+        run_in_background: true,
+      },
+      { trustArgsCwd: true },
+    );
+
+    expect(service.discoverAgentFiles).not.toHaveBeenCalled();
+  });
+
   it('keeps the tool result when the scan throws', async () => {
     const service = createService({
       discoverAgentFiles: vi.fn().mockRejectedValue(new Error('EACCES')),

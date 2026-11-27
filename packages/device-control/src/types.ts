@@ -67,15 +67,18 @@ export interface DiscoverAgentFilesParams {
   knownDirs?: string[];
   /** The path the file tool was given (absolute, relative, or `~/…`). */
   path: string;
-  /** The run's working directory. Nothing outside it is scanned. */
+  /**
+   * The run's working directory, where a walk below it stops. A target
+   * outside it is walked up to its own repository root instead.
+   */
   root: string;
 }
 
 /**
  * Why a discovery returned what it did, so a missing `AGENTS.md` can be told
- * apart from a slow disk or a path outside the working directory.
+ * apart from a slow disk or a path that could not be resolved.
  */
-export type DiscoverAgentFilesOutcome = 'empty' | 'failed' | 'found' | 'outside-root' | 'timed-out';
+export type DiscoverAgentFilesOutcome = 'empty' | 'failed' | 'found' | 'timed-out' | 'unresolved';
 
 export interface DiscoverAgentFilesResult {
   /**

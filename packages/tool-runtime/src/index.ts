@@ -1,3 +1,4 @@
+export { type CommandFileTarget, extractCommandFileTargets } from './commandFileTargets';
 export { ComputerRuntime } from './ComputerRuntime';
 export {
   AGENT_FILE_SCAN_ARG,

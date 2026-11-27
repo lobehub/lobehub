@@ -100,12 +100,35 @@ describe('localSystemRuntime — mid-run agent file discovery', () => {
     });
   });
 
-  it('never scans outside the working directory', async () => {
+  it('scans a file outside the working directory too: the call ran, so it was allowed', async () => {
     await call(makeContext(), LocalSystemApiName.readFile, { path: '/other/repo/a.ts' });
-    await call(makeContext(), LocalSystemApiName.readFile, { path: '../other/a.ts' });
+    expect(sentArgs().agentFileScan).toEqual({ knownDirs: ['/repo', '/'] });
 
-    for (const [, request] of mocks.executeToolCall.mock.calls) {
-      expect(JSON.parse(request.arguments)).not.toHaveProperty('agentFileScan');
+    await call(makeContext(), LocalSystemApiName.readFile, { path: '../other/a.ts' });
+    expect(sentArgs().agentFileScan).toBeDefined();
+  });
+
+  it('scans the directories a command reads, writes or cds into', async () => {
+    for (const command of [
+      'cat packages/web/src/app.ts',
+      'cd packages/web && pnpm test',
+      'sed -n 1,20p /other/repo/AGENTS.md',
+      'echo x > packages/web/notes.md',
+    ]) {
+      await call(makeContext(), LocalSystemApiName.runCommand, { command });
+      expect(sentArgs().agentFileScan, command).toEqual({ knownDirs: ['/repo', '/'] });
+    }
+  });
+
+  it('skips commands that touch no new directory, and background commands', async () => {
+    for (const args of [
+      { command: 'grep -rn x packages' },
+      { command: 'cat README.md' },
+      { command: 'cd /repo && git status' },
+      { command: 'cat packages/web/a.ts', run_in_background: true },
+    ]) {
+      await call(makeContext(), LocalSystemApiName.runCommand, args);
+      expect(sentArgs(), args.command).not.toHaveProperty('agentFileScan');
     }
   });
 

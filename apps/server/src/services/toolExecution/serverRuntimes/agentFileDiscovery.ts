@@ -5,7 +5,12 @@ import {
   type PendingAgentFileDiscovery,
 } from '@lobechat/agent-runtime';
 import { LocalSystemApiName } from '@lobechat/builtin-tool-local-system';
-import { AGENT_FILE_SCAN_ARG, AGENT_FILE_SCAN_STATE_KEY } from '@lobechat/tool-runtime';
+import {
+  AGENT_FILE_SCAN_ARG,
+  AGENT_FILE_SCAN_STATE_KEY,
+  type CommandFileTarget,
+  extractCommandFileTargets,
+} from '@lobechat/tool-runtime';
 import debug from 'debug';
 
 import type { RunAgentFiles } from '../types';
@@ -16,8 +21,9 @@ const log = debug('lobe-server:agent-file-discovery');
  * The file tools whose target brings a directory into the run's scope, and the
  * argument naming it. Claude Code loads a subdirectory's agent files on the
  * same trigger: the model reading, writing or editing a file there. Searches
- * and commands are left out — a `grep` over a tree or a `cd` in a command does
- * not say which directory the model is working in.
+ * are left out — a `grep` over a tree does not say which directory the model
+ * is working in. `runCommand` counts through the paths its command reads,
+ * writes or `cd`s into (see `extractCommandFileTargets`).
  */
 const TARGET_PATH_ARG: Partial<Record<string, 'file_path' | 'path'>> = {
   [LocalSystemApiName.editFile]: 'file_path',
@@ -26,8 +32,9 @@ const TARGET_PATH_ARG: Partial<Record<string, 'file_path' | 'path'>> = {
 };
 
 /**
- * What the server asks the device for, riding on the file tool's args. The
- * device bounds the scan by the working directory it was given as `cwd`.
+ * What the server asks the device for, riding on the tool's args. The device
+ * takes the paths from the call itself and bounds each walk by the working
+ * directory it was given as `cwd`, or by the target's repository root.
  */
 export interface AgentFileScanRequest {
   knownDirs: string[];
@@ -43,27 +50,46 @@ const trimSeparators = (dir: string) => {
 };
 
 /**
- * Whether the directory holding `target` was already walked, so the scan can
- * be skipped. Only an exact match counts: a subdirectory of a known directory
- * can still hold its own `AGENTS.md` (a package in a monorepo), which is what
- * discovery is for.
+ * Whether the directory a target touches was already walked, so the scan can
+ * be skipped: the target itself for a `cd`, its parent for a file. Only an
+ * exact match counts: a subdirectory of a known directory can still hold its
+ * own `AGENTS.md` (a package in a monorepo), which is what discovery is for.
  */
-export const isTargetDirKnown = (target: string, knownDirs: readonly string[]) => {
+export const isTargetDirKnown = (
+  target: string,
+  knownDirs: readonly string[],
+  kind: CommandFileTarget['kind'] = 'file',
+) => {
   const pathApi = pathApiFor(target);
-  const dir = pathApi.dirname(target);
+  const dir = kind === 'dir' ? trimSeparators(pathApi.normalize(target)) : pathApi.dirname(target);
   return knownDirs.some((known) => trimSeparators(pathApi.normalize(known)) === dir);
 };
 
+/** The paths a call touches: the file tool's argument, or a foreground command's targets. */
+const touchedTargets = (
+  apiName: string,
+  args: Record<string, unknown> | undefined,
+): CommandFileTarget[] => {
+  if (apiName === LocalSystemApiName.runCommand) {
+    // A background command may not have touched anything when the call returns.
+    if (args?.run_in_background === true || typeof args?.command !== 'string') return [];
+    return extractCommandFileTargets(args.command);
+  }
+  const arg = TARGET_PATH_ARG[apiName];
+  const raw = arg ? args?.[arg] : undefined;
+  return typeof raw === 'string' && raw.trim() ? [{ kind: 'file', path: raw }] : [];
+};
+
 /**
- * The scan request for a file tool call, or `undefined` when there is nothing
- * to ask: not a file tool, no working directory, a target outside it, or a
- * directory already walked. Discovery never leaves the working directory —
- * approving one file elsewhere does not approve reading that tree's agent
- * files (Claude Code does not load them either).
+ * The scan request for a call, or `undefined` when there is nothing to ask:
+ * not a file tool or a command touching a path, no working directory, or
+ * every directory touched already walked. A target outside the working
+ * directory is scanned too — the call only runs once the user allowed it
+ * (an approval, or auto-approve), and the rules of the tree it works in are
+ * what the model should follow there.
  *
- * This is a pre-filter on the path as given. A `~/…` path is left to the
- * device, which resolves it like the file tool and checks the real path
- * against the working directory itself.
+ * This is a pre-filter on the paths as given. A `~/…` path is left to the
+ * device, which resolves it like the tool does.
  */
 export const buildAgentFileScanRequest = (params: {
   agentFiles: RunAgentFiles | undefined;
@@ -72,21 +98,15 @@ export const buildAgentFileScanRequest = (params: {
   workingDirectory: string | undefined;
 }): AgentFileScanRequest | undefined => {
   const { agentFiles, apiName, args, workingDirectory } = params;
-  const arg = TARGET_PATH_ARG[apiName];
-  const raw = arg ? args?.[arg] : undefined;
-  if (!agentFiles || !workingDirectory || typeof raw !== 'string' || !raw.trim()) return undefined;
-
-  const request = { knownDirs: agentFiles.knownDirs };
-  if (raw.startsWith('~')) return request;
+  if (!agentFiles || !workingDirectory) return undefined;
 
   const pathApi = pathApiFor(workingDirectory);
-  const target = pathApi.resolve(workingDirectory, raw);
-  const relative = pathApi.relative(trimSeparators(pathApi.normalize(workingDirectory)), target);
-  const outside = relative === '..' || relative.startsWith('../') || relative.startsWith('..\\');
-  if (outside || pathApi.isAbsolute(relative)) return undefined;
-  if (isTargetDirKnown(target, agentFiles.knownDirs)) return undefined;
-
-  return request;
+  const unknown = touchedTargets(apiName, args).some(
+    ({ kind, path: raw }) =>
+      raw.startsWith('~') ||
+      !isTargetDirKnown(pathApi.resolve(workingDirectory, raw), agentFiles.knownDirs, kind),
+  );
+  return unknown ? { knownDirs: agentFiles.knownDirs } : undefined;
 };
 
 /** Strip a model-supplied scan request: like `cwd`, only the server may set it. */

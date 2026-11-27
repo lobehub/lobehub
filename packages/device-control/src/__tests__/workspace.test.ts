@@ -370,21 +370,42 @@ describe('discoverAgentFiles', () => {
     expect(relative.instructions.map((item) => item.content)).toEqual(['pkg rules']);
   });
 
-  it('reads nothing outside the working directory', async () => {
+  it('walks a target outside the working directory up to its repository root', async () => {
     const other = path.join(base, 'other');
     await mkdir(path.join(other, '.git'), { recursive: true });
     await write(path.join(other, 'AGENTS.md'), 'other rules');
+    await write(path.join(other, 'pkg', 'AGENTS.md'), 'other pkg rules');
 
     const result = await discoverAgentFiles({
       knownDirs: [repo],
-      path: path.join(other, 'a.ts'),
+      path: path.join(other, 'pkg', 'a.ts'),
       root: repo,
     });
 
-    expect(result).toMatchObject({ dirs: [], instructions: [], outcome: 'outside-root' });
+    expect(result.outcome).toBe('found');
+    expect(result.dirs).toEqual([path.join(other, 'pkg'), other]);
+    expect(result.instructions.map((item) => item.content)).toEqual([
+      'other rules',
+      'other pkg rules',
+    ]);
   });
 
-  it('does not follow a symlink out of the working directory', async () => {
+  it('scans only the touched directory outside the working directory and any repository', async () => {
+    await write(path.join(base, 'AGENTS.md'), 'base rules');
+    const loose = path.join(base, 'loose');
+    await write(path.join(loose, 'AGENTS.md'), 'loose rules');
+
+    const result = await discoverAgentFiles({
+      knownDirs: [repo],
+      path: path.join(loose, 'notes.md'),
+      root: repo,
+    });
+
+    expect(result.dirs).toEqual([loose]);
+    expect(result.instructions.map((item) => item.content)).toEqual(['loose rules']);
+  });
+
+  it('scans a symlinked directory where it really lives', async () => {
     const other = path.join(base, 'other');
     await write(path.join(other, 'AGENTS.md'), 'other rules');
     await symlink(other, path.join(repo, 'linked'));
@@ -395,7 +416,8 @@ describe('discoverAgentFiles', () => {
       root: repo,
     });
 
-    expect(result).toMatchObject({ instructions: [], outcome: 'outside-root' });
+    expect(result.dirs).toEqual([other]);
+    expect(result.instructions.map((item) => item.content)).toEqual(['other rules']);
   });
 
   it('returns nothing to walk inside a known directory', async () => {
@@ -418,11 +440,11 @@ describe('discoverAgentFiles', () => {
     expect(result.instructions.map((item) => item.content)).toEqual(['root rules']);
   });
 
-  it('reads at most 50 skills', async () => {
+  it('reads at most 150 skills', async () => {
     const skills = path.join(repo, 'pkg', '.agents', 'skills');
     await Promise.all(
-      Array.from({ length: 60 }, (_, index) =>
-        writeSkill(skills, `skill-${String(index).padStart(2, '0')}`),
+      Array.from({ length: 160 }, (_, index) =>
+        writeSkill(skills, `skill-${String(index).padStart(3, '0')}`),
       ),
     );
 
@@ -432,6 +454,6 @@ describe('discoverAgentFiles', () => {
       root: repo,
     });
 
-    expect(result.skills).toHaveLength(50);
+    expect(result.skills).toHaveLength(150);
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseShellCommandSegments } from '../shellCommandParsing';
+import { parseShellCommandSegments } from './shellCommandParsing';
 
 describe('parseShellCommandSegments · heredoc operators', () => {
   it('keeps a `<<<` here-string literal instead of reading it as a heredoc', () => {

@@ -92,7 +92,7 @@ export interface PendingAgentFileDiscovery {
  * leading window) never cuts it; the budget keeps it from crowding out the
  * file the model asked for.
  */
-const MAX_INJECTED_INSTRUCTION_CHARS = 16_000;
+const MAX_INJECTED_INSTRUCTION_CHARS = 32_000;
 
 const isPending = (value: unknown): value is PendingAgentFileDiscovery => {
   if (!value || typeof value !== 'object') return false;
