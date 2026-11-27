@@ -655,9 +655,13 @@ export default {
   'plans.cancelDowngrade': 'Cancel scheduled downgrade',
   'plans.cancelDowngradeSuccess': 'Scheduled downgrade has been cancelled',
   'plans.legacy.banner.blackFriday':
-    'Black Friday: pay for 1 year of {{target}} and get 1 free, {{price}}/mo over the two years.',
+    'Your plan lists at {{current}}/mo. Black Friday: pay for 1 year of {{target}} and get 1 free, {{price}}/mo over the two years.',
   'plans.legacy.banner.blackFridayCheaper':
-    'Black Friday: pay for 1 year of {{target}} and get 1 free, {{price}}/mo over the two years, less than the {{current}}/mo list price of {{plan}}.',
+    'Your plan lists at {{current}}/mo. Black Friday: pay for 1 year of {{target}} and get 1 free, {{price}}/mo over the two years, below its list price.',
+  'plans.legacy.banner.blackFridayPayOnce':
+    'Your plan lists at {{current}}/mo. Black Friday: a one-time payment for 1 year of {{target}} gets 1 more year free, {{price}}/mo over the two years.',
+  'plans.legacy.banner.blackFridayPayOnceCheaper':
+    'Your plan lists at {{current}}/mo. Black Friday: a one-time payment for 1 year of {{target}} gets 1 more year free, {{price}}/mo over the two years, below its list price.',
   'plans.legacy.banner.canceledDesc':
     'Your subscription is canceled and ends with this billing period. You can upgrade to a current plan anytime to keep going.',
   'plans.legacy.banner.desc':
