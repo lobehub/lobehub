@@ -761,7 +761,7 @@
   "plans.limits.topUpRate": "充值享优惠",
   "plans.limits.topUpRate.tooltip": "比免费版充值更划算",
   "plans.limits.ultraWeeklySpend": "Pro 模型每周额度",
-  "plans.limits.ultraWeeklySpend.multiple": "{{multiple}} 倍 Pro 模型额度",
+  "plans.limits.ultraWeeklySpend.multiple": "{{multiple}} 倍 Pro 模型每周额度",
   "plans.limits.ultraWeeklySpend.tooltip": "Pro 模型是能力最强、成本最高的模型。它们的用量计入每周额度，另有一份专属额度，两者同时重置。",
   "plans.limits.ultraWeeklySpend.unavailable": "Pro 模型",
   "plans.llm.customAPI": "全球主流模型自定义 API 服务",
