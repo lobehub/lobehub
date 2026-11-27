@@ -8,8 +8,8 @@ import MaxTokenSlider from '@/components/MaxTokenSlider';
 import { type ChatModelCard } from '@/types/llm';
 
 import ExtendParamsSelect from './ExtendParamsSelect';
-import TTSVoiceSelect from './TTSVoiceSelect';
 import ReasoningEffortSettingsField from './ReasoningEffortSettingsField';
+import TTSVoiceSelect from './TTSVoiceSelect';
 import { CUSTOM_MODEL_TYPES, hasDuplicateModelId } from './utils';
 
 interface ModelConfigFormProps {
