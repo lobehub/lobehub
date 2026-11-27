@@ -33,6 +33,7 @@ import { homeAgentListSelectors } from '@/store/home/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { useDensity } from '@/styles/density';
 
 import { ComposerActions } from './ComposerActions';
 import { ComposerAttachments } from './ComposerAttachments';
@@ -122,6 +123,7 @@ export function Composer({
   onCancelReply?: () => void;
 } & ComposerDelivery) {
   const { t } = useTranslation('channel');
+  const { compact } = useDensity();
   const workspaceId = useActiveWorkspaceId();
   const editor = useEditor();
   const draft = useComposerDraft(editor, draftKey, starter);
@@ -266,7 +268,11 @@ export function Composer({
   );
   return (
     <WideScreenContainer fullWidth paddingInline={8} style={{ maxWidth }}>
-      <Flexbox {...stylex.props(styles.composer)} gap={4} {...getContainerProps()}>
+      <Flexbox
+        {...stylex.props(styles.composer, compact && styles.composerCompact)}
+        gap={4}
+        {...getContainerProps()}
+      >
         {/* Without an activity line the input meets the feed directly, with no empty strip. */}
         {activity != null && (
           <div {...stylex.props(styles.composerStatus)}>
@@ -309,7 +315,7 @@ export function Composer({
             ) : undefined
           }
         >
-          <div {...stylex.props(styles.composerRow)}>
+          <div {...stylex.props(styles.composerRow, compact && styles.composerRowCompact)}>
             <ComposerActions
               disabled={busy}
               upload={

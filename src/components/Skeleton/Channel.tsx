@@ -4,6 +4,9 @@ import { Flexbox, Skeleton } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
+import { useChannelMessageLayout } from '@/features/Channels/messageLayout';
+import { useDensity } from '@/styles/density';
+
 import SkeletonBar from './Bar';
 
 /** Name width and body line widths per row, so the feed reads as a few distinct speakers. */
@@ -42,23 +45,26 @@ const styles = stylex.create({
 });
 
 /**
- * One `ChannelMessage` row: the 36px avatar pinned left, then the name and time
- * header over the body lines, indented 48px like `ChatItem` in the feed.
+ * One `ChannelMessage` row: the avatar pinned left, then the name and time header over the
+ * body lines, indented like `ChatItem` in the feed (`CHANNEL_MESSAGE_LAYOUT`).
  */
-const MessageRowSkeleton = ({ lines, name }: (typeof MESSAGE_ROWS)[number]) => (
-  <Flexbox horizontal gap={12} paddingBlock={8}>
-    <Skeleton.Avatar shape={'circle'} size={36} />
-    <Flexbox flex={1} gap={10} paddingBlock={'4px 0'} style={{ minWidth: 0 }}>
-      <Flexbox horizontal align={'center'} gap={8}>
-        <SkeletonBar height={14} width={name} />
-        <SkeletonBar height={12} width={40} />
+const MessageRowSkeleton = ({ lines, name }: (typeof MESSAGE_ROWS)[number]) => {
+  const { avatarSize, indent, paddingBlock } = useChannelMessageLayout();
+  return (
+    <Flexbox horizontal gap={indent - avatarSize} paddingBlock={paddingBlock}>
+      <Skeleton.Avatar shape={'circle'} size={avatarSize} />
+      <Flexbox flex={1} gap={10} paddingBlock={'4px 0'} style={{ minWidth: 0 }}>
+        <Flexbox horizontal align={'center'} gap={8}>
+          <SkeletonBar height={14} width={name} />
+          <SkeletonBar height={12} width={40} />
+        </Flexbox>
+        {lines.map((width, index) => (
+          <SkeletonBar height={14} key={index} width={width} />
+        ))}
       </Flexbox>
-      {lines.map((width, index) => (
-        <SkeletonBar height={14} key={index} width={width} />
-      ))}
     </Flexbox>
-  </Flexbox>
-);
+  );
+};
 
 interface ChannelConversationSkeletonProps {
   /**
@@ -75,31 +81,34 @@ interface ChannelConversationSkeletonProps {
  * Also the conversation's own data-loading state, so route load and detail fetch
  * share one shape.
  */
-export const ChannelConversationSkeleton = ({ maxWidth }: ChannelConversationSkeletonProps) => (
-  <div aria-busy {...stylex.props(styles.root, !!maxWidth && styles.column(maxWidth))}>
-    <Flexbox flex={1} paddingBlock={'16px 24px'} paddingInline={16} style={{ minHeight: 0 }}>
-      {MESSAGE_ROWS.map((row, index) => (
-        <MessageRowSkeleton key={index} {...row} />
-      ))}
-    </Flexbox>
-    <Flexbox flex={'none'} gap={4} paddingBlock={'0 12px'} paddingInline={8}>
-      <Flexbox height={24} />
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={stylex.props(styles.composer).className}
-        gap={4}
-        padding={4}
-      >
-        <SkeletonBar height={28} radius={'50%'} width={28} />
-        <Flexbox flex={1} paddingInline={8}>
-          <SkeletonBar height={14} width={'32%'} />
-        </Flexbox>
-        <SkeletonBar height={28} radius={'50%'} width={28} />
+export const ChannelConversationSkeleton = ({ maxWidth }: ChannelConversationSkeletonProps) => {
+  const { compact } = useDensity();
+  return (
+    <div aria-busy {...stylex.props(styles.root, !!maxWidth && styles.column(maxWidth))}>
+      <Flexbox flex={1} paddingBlock={'16px 24px'} paddingInline={16} style={{ minHeight: 0 }}>
+        {MESSAGE_ROWS.map((row, index) => (
+          <MessageRowSkeleton key={index} {...row} />
+        ))}
       </Flexbox>
-    </Flexbox>
-  </div>
-);
+      <Flexbox flex={'none'} gap={4} paddingBlock={compact ? '0 8px' : '0 12px'} paddingInline={8}>
+        <Flexbox height={24} />
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.composer).className}
+          gap={4}
+          padding={4}
+        >
+          <SkeletonBar height={28} radius={'50%'} width={28} />
+          <Flexbox flex={1} paddingInline={8}>
+            <SkeletonBar height={14} width={'32%'} />
+          </Flexbox>
+          <SkeletonBar height={28} radius={'50%'} width={28} />
+        </Flexbox>
+      </Flexbox>
+    </div>
+  );
+};
 
 /** A Channel page: the 44px header (hash, title, member avatars) over the conversation. */
 const ChannelLayoutSkeleton = () => (

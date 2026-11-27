@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useCloseOnNavigate } from '@/hooks/useCloseOnNavigate';
+import { useDensity } from '@/styles/density';
 import { sx } from '@/styles/sx';
 
 import { openChannelAgentEnvironment } from './AgentEnvironment';
@@ -56,6 +57,7 @@ export function MemberStatus({
   const { t } = useTranslation('channel');
   const [open, setOpen] = useState(false);
   const popoverKey = useCloseOnNavigate(open, () => setOpen(false));
+  const { compact } = useDensity();
   const navigate = useWorkspaceAwareNavigate();
   const { channel, members: allMembers = [] } = detail;
   const entries = useMemberEntries(detail);
@@ -189,7 +191,7 @@ export function MemberStatus({
                   key={entry.member.id}
                   {...sx(statusStyles.memberStackItem, { zIndex: MAX_VISIBLE - index })}
                 >
-                  <StatusAvatar entry={entry} size={20} />
+                  <StatusAvatar entry={entry} size={compact ? 18 : 20} />
                 </span>
               ))}
             </span>

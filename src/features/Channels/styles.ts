@@ -94,11 +94,12 @@ export const styles = stylex.create({
   highlightedMessage: { backgroundColor: cssVar.colorInfoBg },
   /** A message still on its way shows faded instead of carrying a status line. */
   pendingMessage: { opacity: 0.6 },
-  messageAvatar: {
+  messageAvatar: (insetBlockStart: number) => ({
     position: 'absolute',
-    insetBlockStart: 8,
+    insetBlockStart,
     insetInlineStart: 0,
-  },
+  }),
+  messageIndent: (paddingInlineStart: number) => ({ paddingInlineStart }),
   // A continuation has no header for its toolbar; reserve room for both actions.
   continuationWithAction: {
     paddingInlineEnd: 88,
@@ -183,7 +184,6 @@ export const styles = stylex.create({
   /** Inline system line in the timeline, such as who joined. */
   event: {
     paddingBlock: 8,
-    paddingInlineStart: 48,
     fontSize: cssVar.fontSizeSM,
     lineHeight: 1.8,
     color: cssVar.colorTextSecondary,
@@ -238,6 +238,9 @@ export const styles = stylex.create({
       backgroundImage: `linear-gradient(to top, ${cssVar.colorBgContainer}, transparent)`,
     },
   },
+  composerCompact: {
+    paddingBlockEnd: 8,
+  },
   /** Typing activity above the input; rendered only while someone is replying. */
   composerStatus: {
     display: 'flex',
@@ -257,6 +260,10 @@ export const styles = stylex.create({
     minHeight: 48,
     paddingBlock: 10,
     paddingInline: 8,
+  },
+  composerRowCompact: {
+    minHeight: 40,
+    paddingBlock: 6,
   },
   composerEditor: {
     overflowY: 'auto',
@@ -283,6 +290,11 @@ export const styles = stylex.create({
     fontSize: 13,
     color: cssVar.colorTextSecondary,
     backgroundColor: cssVar.colorFillQuaternary,
+  },
+  archivedNoticeCompact: {
+    marginBlockEnd: 8,
+    paddingBlock: 6,
+    paddingInline: 10,
   },
   muted: {
     fontSize: 12,

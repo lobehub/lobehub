@@ -11,6 +11,7 @@ import AgentAvatar from '@/components/AgentAvatar';
 import UserAvatar from '@/features/User/UserAvatar';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { useDensity } from '@/styles/density';
 
 import { authorAvatar, isCurrentUserAuthor } from './memberName';
 import { threadTitle } from './threadTitle';
@@ -44,6 +45,12 @@ const styles = stylex.create({
       ':hover': cssVar.colorFillTertiary,
     },
     cursor: 'pointer',
+  },
+  cardCompact: {
+    gap: 2,
+    marginBlockStart: -4,
+    paddingBlock: 4,
+    paddingInline: 8,
   },
   row: {
     display: 'flex',
@@ -119,13 +126,18 @@ export const ThreadPreviewCard = ({
   thread: ChannelPublicThread;
 }) => {
   const { t } = useTranslation('channel');
+  const { compact } = useDensity();
   const { lastReply, replyCount } = thread;
   // Same rule as the message header: the viewer's own replies use their live avatar.
   const isOwnReply = useUserStore(
     (s) => !!lastReply && isCurrentUserAuthor(lastReply.author, userProfileSelectors.userId(s)),
   );
   return (
-    <button type="button" {...stylex.props(styles.card)} onClick={onOpen}>
+    <button
+      type="button"
+      {...stylex.props(styles.card, compact && styles.cardCompact)}
+      onClick={onOpen}
+    >
       <span {...stylex.props(styles.row)}>
         {/* The sidebar's thread glyph, not a branch. */}
         <span {...stylex.props(styles.threadIcon)}>
