@@ -13,7 +13,13 @@ import {
   Tooltip,
 } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { MoreHorizontalIcon, RotateCcw, SquareArrowOutUpRight, Unplug } from 'lucide-react';
+import {
+  KeyRound,
+  MoreHorizontalIcon,
+  RotateCcw,
+  SquareArrowOutUpRight,
+  Unplug,
+} from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,7 +32,7 @@ import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types'
 import { toConnectorActionError } from '@/utils/connectorActionError';
 
 import { renderConnectorRowDescription } from './ConnectorRowFeedback';
-import { isSettledByConnection } from './connectorRowState';
+import { isAuthorizedForScope, isSettledByConnection } from './connectorRowState';
 import { RowAddAction, RowMoreMenu } from './RowActions';
 import SkillListRow, {
   type CatalogConnectRow,
@@ -34,6 +40,7 @@ import SkillListRow, {
   useSkillListVariant,
 } from './SkillListRow';
 import { styles } from './style';
+import { useLobehubSkillScope } from './useLobehubSkillScope';
 
 const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 15_000;
@@ -72,7 +79,13 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     const { t } = useTranslation('setting');
     const isPage = useSkillListVariant() === 'page';
     const { allowed: canCreate, reason: createReason } = usePermission('create_content');
-    const { allowed: canEdit, reason: editReason } = usePermission('edit_own_content');
+    const { allowed: canEditContent, reason: editContentReason } =
+      usePermission('edit_own_content');
+    // A workspace's LobeHub Skill connection serves every member: only admins
+    // may connect, replace or disconnect it. Members still read and use it.
+    const scope = useLobehubSkillScope(server, provider.label);
+    const canEdit = canEditContent && scope.canManage;
+    const editReason = canEditContent ? scope.manageReason : editContentReason;
     const [isConnecting, setIsConnecting] = useState(false);
     const [isWaitingAuth, setIsWaitingAuth] = useState(false);
 
@@ -93,7 +106,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
       const latest = lobehubSkillStoreSelectors.getServerByIdentifier(provider.id)(
         useToolStore.getState(),
       );
-      if (latest?.status !== LobehubSkillStatus.CONNECTED) {
+      if (!isAuthorizedForScope(latest)) {
         setActionError(provider.id, { action: 'connect', code: 'AUTH_INCOMPLETE' });
       }
     }, [provider.id, setActionError]);
@@ -121,11 +134,15 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
       };
     }, [cleanup]);
 
+    // Done waiting once the row is connected by its own authorization. A row
+    // that borrows a member's authorization is already connected, so replacing
+    // it is done only when the reference is gone.
+    const isAuthorized = isAuthorizedForScope(server);
     useEffect(() => {
-      if (server?.status === LobehubSkillStatus.CONNECTED && isWaitingAuth) {
+      if (isAuthorized && isWaitingAuth) {
         cleanup();
       }
-    }, [server?.status, isWaitingAuth, cleanup]);
+    }, [isAuthorized, isWaitingAuth, cleanup]);
 
     const startFallbackPolling = useCallback(() => {
       if (pollIntervalRef.current) return;
@@ -212,7 +229,9 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
 
     const handleConnect = async () => {
       if (!canCreate || !canEdit) return;
-      if (server?.isConnected) return;
+      // A borrowed personal authorization is replaced by authorizing the
+      // workspace itself; any other connected row has nothing to connect.
+      if (server?.isConnected && !server.reference) return;
 
       setIsConnecting(true);
       setActionError(provider.id, undefined);
@@ -235,7 +254,14 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
       if (!canEdit) return;
       confirmModal({
         cancelText: t('cancel', { ns: 'common' }),
-        content: t('tools.lobehubSkill.disconnectConfirm.desc', { name: provider.label }),
+        content: scope.disconnectNote ? (
+          <Flexbox gap={8}>
+            <span>{scope.disconnectNote}</span>
+            <span>{t('tools.lobehubSkill.disconnectConfirm.desc', { name: provider.label })}</span>
+          </Flexbox>
+        ) : (
+          t('tools.lobehubSkill.disconnectConfirm.desc', { name: provider.label })
+        ),
         okButtonProps: { danger: true },
         okText: t('tools.lobehubSkill.disconnect'),
         onOk: async () => {
@@ -287,6 +313,20 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
       }
     };
 
+    // The workspace uses a member's personal authorization: an admin replaces it
+    // with the workspace's own by authorizing it.
+    const replaceItems = server?.reference
+      ? [
+          {
+            disabled: !canCreate || !canEdit,
+            icon: <Icon icon={KeyRound} />,
+            key: 'replace',
+            label: t('tools.lobehubSkill.reference.replace'),
+            onClick: handleConnect,
+          },
+        ]
+      : [];
+
     const renderAction = () => {
       if (isConnecting || isWaitingAuth) {
         return (
@@ -315,6 +355,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
         <DropdownMenu
           placement="bottomRight"
           items={[
+            ...replaceItems,
             {
               disabled: !canEdit,
               icon: <Icon icon={Unplug} />,
@@ -332,7 +373,11 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     };
 
     const isConnected = server?.status === LobehubSkillStatus.CONNECTED;
-    const description = renderConnectorRowDescription({ error: actionError, name: provider.label });
+    const description =
+      renderConnectorRowDescription({ error: actionError, name: provider.label }) ??
+      (isConnected && scope.referenceNote ? (
+        <span {...stylex.props(styles.disconnected)}>{scope.referenceNote}</span>
+      ) : undefined);
 
     // Becoming connected settles an earlier connect failure; a failed disconnect
     // leaves the row connected on purpose, so its reason stays.
@@ -352,6 +397,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
         return (
           <RowMoreMenu
             items={[
+              ...replaceItems,
               {
                 danger: true,
                 disabled: !canEdit,
@@ -478,7 +524,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
             {renderAction()}
           </Flexbox>
         </Flexbox>
-        {actionError && renderConnectorRowDescription({ error: actionError, name: provider.label })}
+        {description}
       </>
     );
   },

@@ -23,12 +23,20 @@ const mockMarketServiceOptions = vi.hoisted(() => [] as unknown[]);
 const mockResolveSandboxSessionConfig = vi.hoisted(() =>
   vi.fn(async () => ({ claim: null, mode: 'ephemeral' as const })),
 );
+const mockEnsureWorkspaceConnectScope = vi.hoisted(() => vi.fn(async () => {}));
 const mockMarketSDK = vi.hoisted(() => ({
+  connect: {
+    authorize: vi.fn(),
+  },
   skills: {
     callTool: vi.fn(),
     listLiveTools: vi.fn(),
     listTools: vi.fn(),
   },
+}));
+
+vi.mock('@/business/server/workspaceConnectScope', () => ({
+  ensureWorkspaceConnectScope: mockEnsureWorkspaceConnectScope,
 }));
 
 vi.mock('@/libs/trpc/lambda/middleware', () => ({
@@ -93,6 +101,72 @@ describe('tools marketRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockMarketServiceOptions.length = 0;
+  });
+
+  // A workspace connection lives on the workspace's Market organization, which
+  // older workspaces may not have yet: when Market refuses, mirror and retry once.
+  it('should mirror the workspace and retry once when Market refuses to authorize', async () => {
+    mockEnsureWorkspaceConnectScope.mockResolvedValueOnce(true);
+    mockMarketSDK.connect.authorize
+      .mockRejectedValueOnce(
+        new MarketAPIError(403, 'Forbidden', { error: { code: 'WORKSPACE_UNAVAILABLE' } }),
+      )
+      .mockResolvedValueOnce({
+        authorize_url: 'https://market.example.com/start',
+        code: 'code',
+        expires_in: 300,
+      });
+    const caller = marketRouter.createCaller({
+      serverDB: {},
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    } as any);
+
+    const result = await caller.connectGetAuthorizeUrl({ provider: 'github' });
+
+    expect(result.authorizeUrl).toBe('https://market.example.com/start');
+    expect(mockEnsureWorkspaceConnectScope).toHaveBeenCalledWith({
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+    expect(mockMarketSDK.connect.authorize).toHaveBeenCalledTimes(2);
+  });
+
+  it('should authorize with one request when Market accepts, without mirroring', async () => {
+    mockMarketSDK.connect.authorize.mockResolvedValue({
+      authorize_url: 'https://market.example.com/start',
+      code: 'code',
+      expires_in: 300,
+    });
+    const caller = marketRouter.createCaller({
+      serverDB: {},
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    } as any);
+
+    await caller.connectGetAuthorizeUrl({ provider: 'github' });
+
+    expect(mockEnsureWorkspaceConnectScope).not.toHaveBeenCalled();
+    expect(mockMarketSDK.connect.authorize).toHaveBeenCalledTimes(1);
+  });
+
+  it('should not retry when nothing could be mirrored (a member, or the personal space)', async () => {
+    mockEnsureWorkspaceConnectScope.mockResolvedValueOnce(false);
+    mockMarketSDK.connect.authorize.mockRejectedValue(
+      new MarketAPIError(403, 'Forbidden', { error: { code: 'WORKSPACE_ADMIN_REQUIRED' } }),
+    );
+    const caller = marketRouter.createCaller({
+      serverDB: {},
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    } as any);
+
+    await expect(caller.connectGetAuthorizeUrl({ provider: 'github' })).rejects.toThrow();
+    expect(mockMarketSDK.connect.authorize).toHaveBeenCalledTimes(1);
+
+    const personal = marketRouter.createCaller({ serverDB: {}, userId: 'user-1' } as any);
+    await expect(personal.connectGetAuthorizeUrl({ provider: 'github' })).rejects.toThrow();
+    expect(mockEnsureWorkspaceConnectScope).toHaveBeenCalledTimes(1);
   });
 
   it('should pass workspace scope when preprocessing sandbox lh commands', async () => {

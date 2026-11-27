@@ -2,11 +2,20 @@
 
 import { getLobehubSkillProviderById, hasCallableMcpEndpoint } from '@lobechat/const';
 import { agentDisplayName, type ConnectorVisibility } from '@lobechat/types';
-import { Avatar, Button, confirmModal, Markdown, Skeleton, toast, Tooltip } from '@lobehub/ui';
+import {
+  Avatar,
+  Button,
+  confirmModal,
+  Flexbox,
+  Markdown,
+  Skeleton,
+  toast,
+  Tooltip,
+} from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
-import { SquareArrowOutUpRight, Trash2, Unplug, Wrench } from 'lucide-react';
+import { KeyRound, SquareArrowOutUpRight, Trash2, Unplug, Wrench } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -26,6 +35,7 @@ import { connectorSelectors } from '@/store/tool/slices/connector';
 import { pluginSelectors } from '@/store/tool/slices/plugin/selectors';
 import { densityTokens } from '@/styles/density.stylex';
 
+import { useLobehubSkillScope } from '../useLobehubSkillScope';
 import { getLocalizedBuiltinSkillDetail, getNoPermissionsTitle } from './localization';
 
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
@@ -119,18 +129,28 @@ const LobehubConnectorAction = memo<LobehubConnectorActionProps>(
   ({ identifier, label, onDisconnected }) => {
     const { t } = useTranslation('setting');
     const { allowed: canCreate } = usePermission('create_content');
-    const { allowed: canEdit } = usePermission('edit_own_content');
+    const { allowed: canEditContent } = usePermission('edit_own_content');
     const { handleConnect, handleDisconnect, isConnected, isConnecting } = useSkillConnect({
       identifier,
       type: 'lobehub',
     });
+    // Only workspace admins change a workspace's LobeHub Skill connection;
+    // members still see and use it.
+    const server = useToolStore(lobehubSkillStoreSelectors.getServerByIdentifier(identifier));
+    const scope = useLobehubSkillScope(server, label);
+    const canEdit = canEditContent && scope.canManage;
 
     const handleConfirmDisconnect = useCallback(() => {
       if (!canEdit) return;
 
       confirmModal({
         cancelText: t('cancel', { ns: 'common' }),
-        content: t('tools.lobehubSkill.disconnectConfirm.desc', { name: label }),
+        content: [
+          scope.disconnectNote,
+          t('tools.lobehubSkill.disconnectConfirm.desc', { name: label }),
+        ]
+          .filter(Boolean)
+          .join(' '),
         okButtonProps: { danger: true },
         okText: t('tools.lobehubSkill.disconnect'),
         onOk: async () => {
@@ -139,36 +159,63 @@ const LobehubConnectorAction = memo<LobehubConnectorActionProps>(
         },
         title: t('tools.lobehubSkill.disconnectConfirm.title', { name: label }),
       });
-    }, [canEdit, handleDisconnect, label, onDisconnected, t]);
+    }, [canEdit, handleDisconnect, label, onDisconnected, scope.disconnectNote, t]);
 
     if (isConnected) {
       return (
-        <Button
-          danger
-          disabled={!canEdit}
-          icon={<Unplug size={14} />}
-          loading={isConnecting}
-          size="small"
-          onClick={handleConfirmDisconnect}
-        >
-          {t('tools.lobehubSkill.disconnect')}
-        </Button>
+        <Flexbox horizontal align={'center'} gap={8}>
+          {scope.referenceNote && (
+            <span style={{ color: cssVar.colorTextDescription, fontSize: 12 }}>
+              {scope.referenceNote}
+            </span>
+          )}
+          {scope.referenceNote && (
+            <ManageTooltip title={canEdit ? undefined : scope.manageReason}>
+              <Button
+                disabled={!canCreate || !canEdit}
+                icon={<KeyRound size={14} />}
+                loading={isConnecting}
+                size="small"
+                onClick={() => {
+                  if (!canCreate || !canEdit) return;
+                  handleConnect();
+                }}
+              >
+                {t('tools.lobehubSkill.reference.replace')}
+              </Button>
+            </ManageTooltip>
+          )}
+          <ManageTooltip title={canEdit ? undefined : scope.manageReason}>
+            <Button
+              danger
+              disabled={!canEdit}
+              icon={<Unplug size={14} />}
+              loading={isConnecting}
+              size="small"
+              onClick={handleConfirmDisconnect}
+            >
+              {t('tools.lobehubSkill.disconnect')}
+            </Button>
+          </ManageTooltip>
+        </Flexbox>
       );
     }
 
     return (
-      <Button
-        disabled={!canCreate || !canEdit}
-        icon={<SquareArrowOutUpRight size={14} />}
-        loading={isConnecting}
-        size="small"
-        onClick={() => {
-          if (!canCreate || !canEdit) return;
-          handleConnect();
-        }}
-      >
-        {t('tools.lobehubSkill.connect')}
-      </Button>
+      <ManageTooltip title={canEdit ? undefined : scope.manageReason}>
+        <Button
+          disabled={!canCreate || !canEdit}
+          icon={<SquareArrowOutUpRight size={14} />}
+          loading={isConnecting}
+          size="small"
+          onClick={() => {
+            if (!canCreate || !canEdit) return;
+            handleConnect();
+          }}
+        >
+          {t('tools.lobehubSkill.connect')}
+        </Button>
+      </ManageTooltip>
     );
   },
 );

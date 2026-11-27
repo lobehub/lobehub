@@ -1,6 +1,10 @@
 import { arrayEntity, defineReplica, type ReplicaEntityAdapter } from '@/libs/replica';
 
-import { type LobehubSkillServer, type LobehubSkillTool } from './types';
+import {
+  type LobehubSkillConnectionReference,
+  type LobehubSkillServer,
+  type LobehubSkillTool,
+} from './types';
 
 /** The user's connected LobeHub Skill providers are one list entry per scope. */
 export const LOBEHUB_SKILL_SERVERS_KEY = 'all';
@@ -136,4 +140,32 @@ export const mergeLobehubSkillServers = (
   if (carriedWithTools.length === 0 && keptWithTools === incoming) return incoming;
 
   return [...keptWithTools, ...carriedWithTools];
+};
+
+/**
+ * The scope fields of a Market connection. Older Market releases (and the
+ * pinned SDK types) do not send them, so every field is optional.
+ */
+interface MarketConnectionScopeFields {
+  reference?: { sourceDisplayName?: string | null; sourceUserId?: string | null } | null;
+  referencedByWorkspaceIds?: string[] | null;
+}
+
+/** Inside a workspace: whose personal authorization the workspace keeps using. */
+export const toConnectionReference = (
+  connection: unknown,
+): LobehubSkillConnectionReference | undefined => {
+  const reference = (connection as MarketConnectionScopeFields | null | undefined)?.reference;
+  if (!reference) return undefined;
+  return {
+    sourceDisplayName: reference.sourceDisplayName ?? null,
+    sourceUserId: reference.sourceUserId ?? null,
+  };
+};
+
+/** In the personal space: the workspaces that use this authorization. */
+export const toReferencedByWorkspaceIds = (connection: unknown): string[] | undefined => {
+  const ids = (connection as MarketConnectionScopeFields | null | undefined)
+    ?.referencedByWorkspaceIds;
+  return ids && ids.length > 0 ? ids : undefined;
 };

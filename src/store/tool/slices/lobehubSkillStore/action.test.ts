@@ -377,6 +377,38 @@ describe('lobehubSkillStore actions', () => {
       expect(result.current.lobehubSkillLoadingIds.has('linear')).toBe(false);
     });
 
+    it('should keep whose personal authorization a workspace uses', async () => {
+      const { result } = renderHook(() => useToolStore());
+
+      act(() => {
+        useToolStore.setState(createSkillServerState());
+      });
+
+      vi.mocked(toolsClient.market.connectGetStatus.query).mockResolvedValue({
+        connected: true,
+        connection: {
+          providerUsername: 'owner-gh',
+          reference: { sourceAccountId: 7, sourceDisplayName: 'Owner', sourceUserId: 'user_owner' },
+          scopes: ['repo'],
+        },
+      } as any);
+      vi.mocked(toolsClient.market.connectListTools.query).mockResolvedValue({
+        provider: 'github',
+        tools: [],
+      });
+
+      let server;
+      await act(async () => {
+        server = await result.current.checkLobehubSkillStatus('github');
+      });
+
+      expect(server).toMatchObject({
+        isConnected: true,
+        reference: { sourceDisplayName: 'Owner', sourceUserId: 'user_owner' },
+      });
+      expect((server as any).referencedByWorkspaceIds).toBeUndefined();
+    });
+
     it('should check status and add server when not connected', async () => {
       const { result } = renderHook(() => useToolStore());
 

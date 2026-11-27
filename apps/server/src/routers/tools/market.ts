@@ -8,6 +8,7 @@ import {
   requireWorkspaceRoleWhenScoped,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { ensureWorkspaceConnectScope } from '@/business/server/workspaceConnectScope';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
 import { UserModel } from '@/database/models/user';
@@ -579,10 +580,32 @@ export const marketRouter = router({
       log('connectGetAuthorizeUrl: provider=%s', input.provider);
 
       try {
-        const response = await ctx.marketSDK.connect.authorize(input.provider, {
-          redirect_uri: input.redirectUri,
-          scopes: input.scopes,
-        });
+        const authorize = () =>
+          ctx.marketSDK.connect.authorize(input.provider, {
+            redirect_uri: input.redirectUri,
+            scopes: input.scopes,
+          });
+
+        let response;
+        try {
+          response = await authorize();
+        } catch (error) {
+          // A workspace's connection lives on its Market organization. Market
+          // refuses when that account (or the caller's membership) is not
+          // mirrored yet; mirror it and retry once. Only on refusal, so the
+          // common path stays one request and the OAuth popup opens promptly.
+          const refused = error instanceof MarketAPIError && error.status === 403;
+          if (
+            !refused ||
+            !ctx.workspaceId ||
+            !(await ensureWorkspaceConnectScope({
+              userId: ctx.userId,
+              workspaceId: ctx.workspaceId,
+            }))
+          )
+            throw error;
+          response = await authorize();
+        }
 
         return {
           authorizeUrl: response.authorize_url,
