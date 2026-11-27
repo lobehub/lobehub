@@ -271,6 +271,30 @@ describe('withHeteroSteer', () => {
     expect(wait).toHaveBeenCalledTimes(1);
   });
 
+  // A run whose session takes no input (an ACP agent, Codex exec) used to say
+  // nothing, so the client could not tell it from a steerable run whose first
+  // poll was not answered yet, and could only wait for the run to end.
+  it('marks the first main stream_start of a run whose session takes no input', async () => {
+    const stream = createStream();
+    stream.push({ data: { subagent: { id: 's' } }, type: 'stream_start' });
+    stream.push({ data: { newStep: true }, type: 'stream_start' });
+    stream.push({ data: { newStep: true }, type: 'stream_start' });
+    stream.end();
+
+    expect(
+      await collect(
+        withHeteroSteer(
+          { events: stream.events },
+          { getTrpcClient: async () => createClient([]).client, operationId: 'op-1' },
+        ),
+      ),
+    ).toEqual([
+      { data: { subagent: { id: 's' } }, type: 'stream_start' },
+      { data: { liveSteer: false, newStep: true }, type: 'stream_start' },
+      { data: { newStep: true }, type: 'stream_start' },
+    ]);
+  });
+
   it('passes events through without a server or a live session', async () => {
     const stream = createStream();
     stream.push(replay('uuid-prompt'));

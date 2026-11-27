@@ -1841,6 +1841,8 @@
   "inputQueue.steerDeliveryUnknownHint": "无法确认助理是否收到。可以重新发送或删除",
   "inputQueue.steerHint": "插入当前运行",
   "inputQueue.steerMergeHint": "合并成一条插入当前运行",
+  "inputQueue.steerRestartHint": "这个助理不支持运行中插入消息，正在停止当前运行，带着这条消息重新开始",
+  "inputQueue.steerRestartMergeHint": "这个助理不支持运行中插入消息，正在停止当前运行，合并后重新开始",
   "inputQueue.steerUnsupportedHint": "这个助理不支持运行中插入消息，已排队，运行完成后发送",
   "inputQueue.steerUnsupportedMergeHint": "这个助理不支持运行中插入消息，已排队，运行完成后合并发送",
   "inputQueue.withdrawFailed": "没能撤回这条消息，请重试",

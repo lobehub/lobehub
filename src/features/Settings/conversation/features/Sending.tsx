@@ -1,10 +1,8 @@
 'use client';
 
 import { KeyEnum } from '@lobechat/const/hotkeys';
-import { DEFAULT_FOLLOW_UP_BEHAVIOR } from '@lobechat/types';
 import { combineKeys, Flexbox, Hotkey, Select, Switch } from '@lobehub/ui';
 import { Form, type FormFieldProps, type FormGroupItem, useForm } from '@lobehub/ui/form';
-import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
@@ -14,7 +12,7 @@ import { FORM_STYLE } from '@/const/layoutTokens';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { useSaveState } from '@/hooks/useSaveState';
 import { useUserStore } from '@/store/user';
-import { settingsSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { type UserGeneralConfig } from '@/types/user/settings';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
@@ -46,9 +44,10 @@ const SEND_KEY_OPTIONS = (['enter', 'modEnter'] as const).map((sendKey) => ({
 /** How messages get into the conversation: send key, paste handling, sending mid-run. */
 const Sending = memo(() => {
   const { t } = useTranslation(['setting', 'chat']);
-  const general = useUserStore((s) => settingsSelectors.currentSettings(s).general, isEqual);
   const enablePasteAutoConvert = useUserStore(userGeneralSettingsSelectors.enablePasteAutoConvert);
   const enableVoiceMessage = useUserStore(userGeneralSettingsSelectors.enableVoiceMessage);
+  const followUpBehavior = useUserStore(userGeneralSettingsSelectors.followUpBehavior);
+  const restartUnsteerableRun = useUserStore(userGeneralSettingsSelectors.restartUnsteerableRun);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const { sendKey, setSendKey } = useSendKeyPreference();
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
@@ -84,7 +83,7 @@ const Sending = memo(() => {
     children: (
       <Select
         style={{ width: 160 }}
-        value={general.followUpBehavior ?? DEFAULT_FOLLOW_UP_BEHAVIOR}
+        value={followUpBehavior}
         options={[
           {
             label: t('settingChatAppearance.followUpBehavior.options.queue'),
@@ -102,6 +101,22 @@ const Sending = memo(() => {
     label: t('settingChatAppearance.followUpBehavior.title'),
     minWidth: undefined,
   };
+
+  // Only Steer tries to join a running turn, so only it has a run that can't take one.
+  const restartUnsteerableItem: FormFieldProps | undefined =
+    followUpBehavior === 'steer'
+      ? {
+          children: (
+            <Switch
+              checked={restartUnsteerableRun}
+              onChange={(checked) => update({ restartUnsteerableRun: checked })}
+            />
+          ),
+          desc: t('settingChatAppearance.followUpBehavior.restartUnsteerable.desc'),
+          label: t('settingChatAppearance.followUpBehavior.restartUnsteerable.title'),
+          minWidth: undefined,
+        }
+      : undefined;
 
   const group: FormGroupItem = {
     children: [
@@ -137,6 +152,7 @@ const Sending = memo(() => {
         minWidth: undefined,
       },
       followUpBehaviorItem,
+      restartUnsteerableItem,
     ].filter((item): item is FormFieldProps => !!item),
     extra: <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />,
     title: t('settingConversation.input.title'),

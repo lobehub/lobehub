@@ -1,23 +1,9 @@
 import { getSlicedMessages } from '@lobechat/context-engine';
-import type {
-  ConversationContext,
-  FollowUpBehavior,
-  OpenAIChatMessage,
-  UIChatMessage,
-} from '@lobechat/types';
-import { generateEntityId } from '@lobechat/utils';
+import type { FollowUpBehavior, OpenAIChatMessage, UIChatMessage } from '@lobechat/types';
 
 import type { PlaceholderVariant } from '@/features/ChatInput/InputEditor/Placeholder';
 import type { ContextWindow, SendButtonProps } from '@/features/ChatInput/store/initialState';
-import { operationSelectors } from '@/store/chat/selectors';
-import { getOptimisticMessageMedia } from '@/store/chat/slices/agentRun/actions/entries/conversationLifecycle/optimisticMessageMedia';
-import {
-  type QueuedMessage,
-  reconstructUploadFilesFromQueue,
-  SEND_NOW_CANCEL_REASON,
-} from '@/store/chat/slices/operation/types';
-import type { ChatStore } from '@/store/chat/store';
-import { isLocalOnlyMessage, LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
+import { type QueuedMessage } from '@/store/chat/slices/operation/types';
 import type { FileStore } from '@/store/file/store';
 import type { UploadFileItem } from '@/types/files/upload';
 import { isMachineErrorMessage } from '@/utils/machineErrorMessage';
@@ -90,11 +76,17 @@ export const createQueueSendNowGate = (): QueueSendNowGate => {
 export const getQueuedHintKey = ({
   count,
   mode,
+  restartsRun,
   waitsForRunEnd,
 }: {
   count: number;
   /** The user's Follow-up behavior. */
   mode: FollowUpBehavior;
+  /**
+   * The run can't take a steer and "restart agents that can't steer" is on, so
+   * the queue stops it and starts the next turn instead of waiting.
+   */
+  restartsRun?: boolean;
   waitsForRunEnd: boolean;
 }) => {
   const merged = count > 1;
@@ -103,6 +95,8 @@ export const getQueuedHintKey = ({
   if (mode === 'queue')
     return merged ? 'inputQueue.queuedOneByOneHint' : 'inputQueue.queuedRunEndHint';
   // Steer: joins the running turn, unless this run cannot take one mid-run.
+  if (restartsRun)
+    return merged ? 'inputQueue.steerRestartMergeHint' : 'inputQueue.steerRestartHint';
   if (waitsForRunEnd)
     return merged ? 'inputQueue.steerUnsupportedMergeHint' : 'inputQueue.steerUnsupportedHint';
   return merged ? 'inputQueue.steerMergeHint' : 'inputQueue.steerHint';
@@ -280,135 +274,6 @@ export const toDisplayableSendErrorMessage = (message?: string): string | undefi
   if (isMachineErrorMessage(trimmed)) return undefined;
 
   return trimmed;
-};
-
-/**
- * "Send now" for one queued message: take it out of the queue, stop every run
- * it waits behind, then send it as a steered turn.
- *
- * Withdrawn first: interrupting a run that already wrote it into the
- * conversation would leave that copy unanswered. One the run took but has not
- * written yet (a CLI agent only reads it between its own turns) still
- * interrupts: the stop returns it to this tab, and it is withdrawn again and
- * sent. Should the interrupt fail, a withdrawn item goes back to the tray,
- * held by this client only.
- *
- * @returns `'delivered'` when the run already has it, so nothing was sent
- */
-export const sendQueuedMessageNow = async ({
-  context,
-  contextKey,
-  getChat,
-  msg,
-  withdraw,
-}: {
-  context: ConversationContext;
-  contextKey: string;
-  getChat: () => ChatStore;
-  msg: QueuedMessage;
-  /** Throws when the server cannot be asked; `false` means the run has it. */
-  withdraw: (msg: QueuedMessage) => Promise<boolean>;
-}): Promise<'delivered' | 'sent'> => {
-  const chat = getChat();
-  const messageContext = { conversationContext: context };
-  const index = chat.queuedMessages[contextKey]?.findIndex((queued) => queued.id === msg.id) ?? -1;
-  const runningOpIds = operationSelectors.getRunningQueueBlockingOperationIds(context)(chat);
-  const files = msg.filesPreview?.length
-    ? reconstructUploadFilesFromQueue(msg.filesPreview)
-    : msg.files?.length
-      ? (msg.files.map((id) => ({ id })) as UploadFileItem[])
-      : undefined;
-  const metadata = { ...msg.metadata, steer: true };
-  let optimisticUserMessageId: string | undefined;
-  let accepted = false;
-  let persisted = false;
-  let withdrawn = await withdraw(msg);
-  // A `false` that leaves it in the tray means "taken, not yet written".
-  if (!withdrawn && !getChat().queuedMessages[contextKey]?.some((queued) => queued.id === msg.id))
-    return 'delivered';
-
-  const showPendingBubble = () => {
-    if (!context.topicId || context.isNew) return;
-    optimisticUserMessageId = generateEntityId('messages');
-    chat.internal_createClientMessage(
-      optimisticUserMessageId,
-      {
-        agentId: context.agentId,
-        content: msg.content,
-        editorData: msg.editorData,
-        files: msg.files,
-        groupId: context.groupId,
-        metadata: { ...metadata, scope: LOCAL_MESSAGE_SCOPE },
-        role: 'user',
-        threadId: context.threadId,
-        topicId: context.topicId,
-        ...getOptimisticMessageMedia(files),
-      },
-      messageContext,
-    );
-  };
-
-  try {
-    if (withdrawn) showPendingBubble();
-
-    // Cancel every blocker, including overlapping operations from a regenerate.
-    const cancellationConfirmed = await Promise.all(
-      runningOpIds.map((id) => chat.cancelOperation(id, SEND_NOW_CANCEL_REASON)),
-    );
-    if (cancellationConfirmed.some((confirmed) => !confirmed))
-      throw new Error('Running agent cancellation was not confirmed');
-
-    // The stop handed it back unless the run wrote it first.
-    if (!withdrawn) {
-      withdrawn = await withdraw(msg);
-      if (!withdrawn) return 'delivered';
-      showPendingBubble();
-    }
-
-    await chat.sendMessage({
-      context,
-      editorData: msg.editorData,
-      files,
-      ...(msg.forceRuntime ? { forceRuntime: msg.forceRuntime } : {}),
-      message: msg.content,
-      metadata,
-      onMessageAccepted: () => {
-        accepted = true;
-      },
-      onMessagePersisted: () => {
-        persisted = true;
-      },
-      optimisticUserMessageId,
-      preserveComposer: true,
-    });
-    if (!accepted) throw new Error('The queued message was not accepted');
-    return 'sent';
-  } finally {
-    if (withdrawn && !accepted) {
-      chat.restoreQueuedMessage(
-        contextKey,
-        {
-          ...msg,
-          serverDelivering: undefined,
-          serverDelivery: undefined,
-          serverUnconfirmed: undefined,
-        },
-        index < 0 ? Number.MAX_SAFE_INTEGER : index,
-      );
-    }
-    // The gateway may acknowledge persistence before its transcript catches up.
-    // Keep that bubble until the same ID arrives with the persisted row.
-    if (optimisticUserMessageId && !persisted) {
-      const preview = getChat().dbMessagesMap[contextKey]?.find(
-        (message) => message.id === optimisticUserMessageId,
-      );
-      if (isLocalOnlyMessage(preview))
-        chat.internal_dispatchMessage(
-          { id: optimisticUserMessageId, type: 'deleteMessage' },
-          messageContext,
-        );
-    }
-  }
 };
 
 /**

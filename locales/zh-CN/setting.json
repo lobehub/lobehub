@@ -2010,6 +2010,8 @@
   "settingChatAppearance.followUpBehavior.desc": "Agent 运行时发出的消息：排到本次运行结束后再发，或插入当前运行",
   "settingChatAppearance.followUpBehavior.options.queue": "排队",
   "settingChatAppearance.followUpBehavior.options.steer": "插入",
+  "settingChatAppearance.followUpBehavior.restartUnsteerable.desc": "对于不支持运行中插入消息的 Agent，强制停止当前 Agent 会话，带着新消息重新开始，而不是等运行结束",
+  "settingChatAppearance.followUpBehavior.restartUnsteerable.title": "不支持插入时，强制停止并重新开始",
   "settingChatAppearance.followUpBehavior.title": "运行中发送的消息",
   "settingChatAppearance.fontSize.desc": "消息字体大小",
   "settingChatAppearance.fontSize.marks.normal": "标准",

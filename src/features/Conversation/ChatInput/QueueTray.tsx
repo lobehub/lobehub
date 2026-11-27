@@ -11,6 +11,7 @@ import FileIcon from '@/components/FileIcon';
 import { useSingleton } from '@/hooks/useSingleton';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
+import { sendQueuedMessageNow } from '@/store/chat/slices/agentRun/actions/lifecycle/sendQueuedNow';
 import { canSteerClientRun } from '@/store/chat/slices/agentRun/actions/transports/client/clientSteer';
 import {
   isServerDeliveringQueuedMessage,
@@ -26,12 +27,7 @@ import { densityTokens } from '@/styles/density.stylex';
 
 import { useConversationResourceAccess } from '../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../store';
-import {
-  createQueueSendNowGate,
-  getQueuedHintKey,
-  putQueuedMessageInEditor,
-  sendQueuedMessageNow,
-} from './utils';
+import { createQueueSendNowGate, getQueuedHintKey, putQueuedMessageInEditor } from './utils';
 
 const PREVIEW_SIZE = 28;
 
@@ -212,6 +208,8 @@ const QueueTray = memo(() => {
   const queuedMessages = useChatStore((s) => operationSelectors.getQueuedMessages(context)(s));
   const waitsForRunEnd = useChatStore(operationSelectors.isQueueDrainedAtRunEnd(context));
   const followUpMode = useUserStore(userGeneralSettingsSelectors.followUpBehavior);
+  const restartUnsteerableRun = useUserStore(userGeneralSettingsSelectors.restartUnsteerableRun);
+  const steerUnsupported = useChatStore(operationSelectors.isRunSteerUnsupported(context));
   const withdrawQueuedMessage = useChatStore((s) => s.withdrawQueuedMessage);
   const dispatchChatUploadFileList = useFileStore((s) => s.dispatchChatUploadFileList);
   const editor = useConversationStore((s) => s.editor);
@@ -315,7 +313,14 @@ const QueueTray = memo(() => {
   const waitingCount = queuedMessages.filter(
     (msg) => !isServerDeliveringQueuedMessage(msg) && !msg.localSteer,
   ).length;
-  const hintText = t(getQueuedHintKey({ count: waitingCount, mode: followUpMode, waitsForRunEnd }));
+  const hintText = t(
+    getQueuedHintKey({
+      count: waitingCount,
+      mode: followUpMode,
+      restartsRun: followUpMode === 'steer' && restartUnsteerableRun && steerUnsupported,
+      waitsForRunEnd,
+    }),
+  );
 
   return (
     <Flexbox {...stylex.props(styles.container)} gap={0}>

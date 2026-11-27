@@ -67,6 +67,13 @@ export interface UserGeneralConfig {
   /** A locale chosen by the user. An empty string records an explicit Automatic choice. */
   responseLanguage?: string;
   /**
+   * With Follow-up behavior Steer: a message sent while an agent that can't
+   * take messages mid-run is running stops that run and starts a new turn with
+   * it, instead of waiting for the run to end.
+   * @default false
+   */
+  restartUnsteerableRun?: boolean;
+  /**
    * Whether a tool call that only reads an image (e.g. Claude Code `Read` of a
    * PNG) gets its own row with the image expanded. Off folds it into the
    * "N calls" collapse like any other call, collapsed until clicked.
