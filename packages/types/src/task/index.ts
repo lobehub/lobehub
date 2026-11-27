@@ -607,6 +607,8 @@ export interface TaskDetailActivity {
    * unlike `runningOperation`, which is cleared when the run terminates.
    */
   operationId?: string | null;
+  /** Comment-only: root comment ID; null/undefined denotes a root. */
+  parentCommentId?: string | null;
   priority?: string | null;
   /**
    * Property-only: a field a person (or an agent acting for them) changed.

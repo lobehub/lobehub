@@ -34,6 +34,7 @@ import ActivityAuthorProfile from './ActivityAuthorProfile';
 import { resolveAssignmentActivityCopy } from './assignmentActivityCopy';
 import CommentCard from './CommentCard';
 import CommentInput from './CommentInput';
+import { groupCommentThreads } from './commentThreads';
 import TaskBriefCard from './TaskBriefCard';
 import TaskRunReport from './TaskRunReport';
 import TaskSectionHeader from './TaskSectionHeader';
@@ -407,11 +408,12 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
 
   const items = useMemo(
     () =>
-      activities
-        .map((act, i) => ({
+      groupCommentThreads(activities)
+        .map(({ activity: act, replies }, i) => ({
           activity: act,
           brief: act.type === 'brief' ? toBriefItem(act) : null,
           key: act.id ?? `activity-${i}`,
+          replies,
         }))
         .reverse(),
     [activities],
@@ -456,10 +458,12 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
     return [...page, resultReport].sort((a, b) => order.get(a.key)! - order.get(b.key)!);
   }, [page, resultReport, items]);
 
-  const commentInput = activeTaskId ? <CommentInput taskId={activeTaskId} /> : null;
+  const commentInput = activeTaskId ? (
+    <CommentInput key={activeTaskId} taskId={activeTaskId} />
+  ) : null;
 
-  // Compact lines that sit next to each other share one rail, so the marks
-  // read as a timeline; a card (comment, run, brief) breaks the rail.
+  // Comments and compact lines that sit next to each other share one rail, so
+  // faces and marks read as one timeline; a card (run, brief) breaks the rail.
   const withRail = (nodes: ReactNode[]): ReactNode[] => {
     const out: ReactNode[] = [];
     let run: ReactNode[] = [];
@@ -477,7 +481,10 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
       const isLine =
         typeof node === 'object' &&
         'type' in node &&
-        (node.type === PropertyRow || node.type === AssignmentRow || node.type === ActivityRow);
+        (node.type === PropertyRow ||
+          node.type === AssignmentRow ||
+          node.type === ActivityRow ||
+          node.type === CommentCard);
       if (isLine) run.push(node);
       else {
         flush();
@@ -491,7 +498,7 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
   const rows =
     items.length > 0 ? (
       withRail(
-        visible.map(({ activity, brief, key }) => {
+        visible.map(({ activity, brief, key, replies }) => {
           if (brief) {
             return (
               <TaskBriefCard
@@ -517,7 +524,15 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
             );
           }
           if (activity.type === 'comment') {
-            return <CommentCard activity={activity} key={key} />;
+            return (
+              <CommentCard
+                activity={activity}
+                key={key}
+                readOnly={variant === 'result'}
+                replies={replies}
+                taskId={activeTaskId}
+              />
+            );
           }
           // Lifecycle bookkeeping ("created the task", reassignments). It belongs
           // to the activity timeline; in a result panel it is a row between the

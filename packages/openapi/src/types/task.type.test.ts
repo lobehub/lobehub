@@ -151,6 +151,23 @@ describe('task response schemas', () => {
     expect(() => TaskDetailSchema.parse(detail)).not.toThrow();
   });
 
+  it('preserves root pointers on flat comment activities, including legacy roots', () => {
+    const activities = [
+      { id: 'root', parentCommentId: null, type: 'comment' },
+      { id: 'reply', parentCommentId: 'root', type: 'comment' },
+      { id: 'legacy', type: 'comment' },
+    ];
+    const detail = TaskDetailSchema.parse({
+      activities,
+      identifier: 'T-1',
+      instruction: 'Thread',
+      status: 'backlog',
+      subtasks: [],
+    });
+
+    expect(detail.activities).toEqual(activities);
+  });
+
   it('accepts a past run', () => {
     expect(() =>
       TaskRunSchema.parse(

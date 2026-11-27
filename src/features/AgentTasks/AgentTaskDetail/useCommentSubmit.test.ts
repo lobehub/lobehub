@@ -129,6 +129,57 @@ describe('useCommentSubmit', () => {
     expect(doc.json).toEqual(JSON_DOC);
     expect(onContentReset).toHaveBeenLastCalledWith({ hasAttachments: true, hasContent: true });
     expect(hook.result.current.submitting).toBe(false);
+    expect(hook.result.current.sendFailed).toBe(true);
+  });
+
+  it('submits a reply with its root and restores its draft after failure', async () => {
+    mocks.addComment.mockRejectedValue(new Error('network'));
+    const { doc, editor } = createEditor();
+    const onContentReset = vi.fn();
+    const { result } = renderHook(() =>
+      useCommentSubmit({
+        canComment: true,
+        editor,
+        onContentReset,
+        parentCommentId: 'root',
+        taskId: 'task-1',
+      }),
+    );
+
+    await act(async () => {
+      await result.current.submit();
+    });
+
+    expect(mocks.addComment).toHaveBeenCalledWith('task-1', 'looks good', {
+      editorData: JSON_DOC,
+      parentCommentId: 'root',
+    });
+    expect(doc.json).toEqual(JSON_DOC);
+    expect(onContentReset).toHaveBeenLastCalledWith({ hasAttachments: false, hasContent: true });
+  });
+
+  it('clears the send failure when retrying the restored draft', async () => {
+    mocks.addComment.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(undefined);
+    const { doc, editor } = createEditor();
+    const { hook } = setup(editor);
+
+    await act(async () => {
+      await hook.result.current.submit();
+    });
+    expect(hook.result.current.sendFailed).toBe(true);
+    expect(doc.json).toEqual(JSON_DOC);
+    // A real editor regenerates Markdown when restoring the JSON document.
+    doc.markdown = 'looks good';
+
+    await act(async () => {
+      await hook.result.current.submit();
+    });
+
+    expect(hook.result.current.sendFailed).toBe(false);
+    expect(mocks.addComment).toHaveBeenCalledTimes(2);
+    expect(mocks.addComment).toHaveBeenLastCalledWith('task-1', 'looks good', {
+      editorData: JSON_DOC,
+    });
   });
 
   it('keeps a new draft typed while the failed comment was sending', async () => {
@@ -150,6 +201,7 @@ describe('useCommentSubmit', () => {
 
     expect(editor.setDocument).not.toHaveBeenCalled();
     expect(doc.markdown).toBe('next comment');
+    expect(hook.result.current.sendFailed).toBe(true);
   });
 
   it('keeps a new draft whose attachment is still uploading', async () => {

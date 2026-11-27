@@ -13,6 +13,7 @@ interface UseCommentSubmitOptions {
   editor: IEditor | undefined;
   /** Called after the input is cleared or restored, so the caller can resync its flags. */
   onContentReset: (state: { hasAttachments: boolean; hasContent: boolean }) => void;
+  parentCommentId?: string;
   taskId: string;
 }
 
@@ -20,10 +21,12 @@ export const useCommentSubmit = ({
   canComment,
   editor,
   onContentReset,
+  parentCommentId,
   taskId,
 }: UseCommentSubmitOptions) => {
   const addComment = useTaskStore((s) => s.addComment);
   const [submitting, setSubmitting] = useState(false);
+  const [failedTaskId, setFailedTaskId] = useState<string>();
   // `submitting` only updates after a render, so a second Enter in the same
   // tick would still read `false`; the ref closes that window.
   const submittingRef = useRef(false);
@@ -44,21 +47,25 @@ export const useCommentSubmit = ({
     // inviting a duplicate send; put it back if the send fails.
     submittingRef.current = true;
     setSubmitting(true);
+    setFailedTaskId(undefined);
     editor?.cleanDocument?.();
     onContentReset({ hasAttachments: false, hasContent: false });
     try {
-      await addComment(taskId, markdown, { editorData: json });
+      await addComment(taskId, markdown, {
+        editorData: json,
+        ...(parentCommentId ? { parentCommentId } : {}),
+      });
     } catch {
-      // The tRPC error link already reports the failure; keep the text —
-      // unless the user has started a new comment or moved to another task
-      // while it was sending, which a restore would overwrite or misplace.
+      if (taskIdRef.current !== taskId) return;
+      setFailedTaskId(taskId);
+      // Keep a newer draft instead of overwriting it with the failed comment.
       // Count still-uploading attachments too: they have no file id yet.
       const attachments = getEditorAttachmentStateFromJson(editor?.getDocument?.('json'));
       const isEmpty =
         !String(editor?.getDocument?.('markdown') ?? '').trim() &&
         !attachments.hasCompletedAttachments &&
         !attachments.hasIncompleteAttachments;
-      if (!isEmpty || taskIdRef.current !== taskId) return;
+      if (!isEmpty) return;
       if (json) editor?.setDocument?.('json', json);
       else editor?.setDocument?.('markdown', markdown);
       onContentReset({ hasAttachments: hasFiles, hasContent: !!markdown });
@@ -66,7 +73,7 @@ export const useCommentSubmit = ({
       submittingRef.current = false;
       setSubmitting(false);
     }
-  }, [canComment, editor, onContentReset, addComment, taskId]);
+  }, [canComment, editor, onContentReset, addComment, parentCommentId, taskId]);
 
-  return { submit, submitting };
+  return { sendFailed: failedTaskId === taskId, submit, submitting };
 };

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { TaskCommentActivityRecipient } from '@/business/server/task/notifyTaskCommentActivity';
 import { notifyTaskCommentActivity } from '@/business/server/task/notifyTaskCommentActivity';
 import type { TaskModel } from '@/database/models/task';
+import { TaskCommentParentNotFoundError } from '@/database/models/task/comments';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { assertAssigneeAgentBelongsToUser } from '@/server/services/task/patchValidation';
@@ -118,6 +119,7 @@ export const commentsRouter = router({
         content: z.string().min(1),
         editorData: z.unknown().optional(),
         id: z.string(),
+        parentCommentId: z.string().min(1).nullable().optional(),
         topicId: z.string().optional(),
       }),
     )
@@ -149,6 +151,7 @@ export const commentsRouter = router({
           briefId: input.briefId,
           content: input.content,
           editorData: input.editorData as never,
+          parentCommentId: input.parentCommentId,
           taskId: task.id,
           topicId: input.topicId,
           userId: ctx.userId,
@@ -181,6 +184,9 @@ export const commentsRouter = router({
         return { data: comment, message: 'Comment added', success: true };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
+        if (error instanceof TaskCommentParentNotFoundError) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: error.message });
+        }
         console.error('[task:addComment]', error);
         throw new TRPCError({
           cause: error,

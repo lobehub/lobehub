@@ -88,6 +88,7 @@ export interface BuildOptimisticCommentInput {
   content: string;
   editorData?: unknown;
   now: string;
+  parentCommentId?: string | null;
   topicId?: string | null;
 }
 
@@ -104,6 +105,7 @@ export const buildOptimisticCommentActivity = ({
   content,
   editorData,
   now,
+  parentCommentId,
   topicId,
 }: BuildOptimisticCommentInput): TaskDetailActivity | undefined => {
   if (!actor) return undefined;
@@ -113,6 +115,7 @@ export const buildOptimisticCommentActivity = ({
     editorData,
     id: `${OPTIMISTIC_ACTIVITY_ID_PREFIX}comment-${now}`,
     time: now,
+    parentCommentId: parentCommentId ?? null,
     topicId: topicId ?? null,
     type: 'comment',
   };
