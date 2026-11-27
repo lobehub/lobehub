@@ -24,7 +24,7 @@ vi.mock('@/server/utils/scheduleAfterResponse', () => ({
   },
 }));
 
-vi.mock('@/business/server/managedDevice', () => ({
+vi.mock('@/business/server/deviceAgentRunCredential', () => ({
   resolveDeviceAgentRunCredential: mocks.resolveDeviceAgentRunCredential,
 }));
 

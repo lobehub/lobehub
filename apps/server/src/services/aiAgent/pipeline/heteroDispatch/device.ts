@@ -3,7 +3,7 @@ import type { ExecAgentResult } from '@lobechat/types';
 import { getWorkingDirSessionPath } from '@lobechat/types';
 import debug from 'debug';
 
-import { resolveDeviceAgentRunCredential } from '@/business/server/managedDevice';
+import { resolveDeviceAgentRunCredential } from '@/business/server/deviceAgentRunCredential';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DeviceModel } from '@/database/models/device';
 import type { ExecutionPlan } from '@/helpers/executionTarget';
