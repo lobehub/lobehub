@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
+
 import { HeterogeneousAgentService } from '..';
 import { __resetOperationStatesForTesting } from '../HeterogeneousPersistenceHandler';
 import { buildEvent, createHarness } from '../HeterogeneousPersistenceHandler/testUtils';
@@ -81,5 +83,45 @@ describe('HeterogeneousAgentService.heteroIngest — credentials in output', () 
       userId: 'user-1',
       workspaceId: 'ws-1',
     });
+  });
+
+  it('redacts a token in the terminal error the CLI reports on its own', async () => {
+    vi.spyOn(CompletionLifecycle.prototype, 'completeOperation').mockResolvedValue(
+      undefined as any,
+    );
+    const finish = vi.fn(async () => undefined);
+    const publishStreamEvent = vi.fn(async (_operationId: string, _event: any) => 'ok');
+    const service = new HeterogeneousAgentService({} as any, 'user-1', {
+      agentOperationModel: { findById: vi.fn(async () => ({ metadata: {} })) } as any,
+      persistenceHandler: { finish } as any,
+      snapshotStore: null,
+      streamEventManager: { publishStreamEvent } as any,
+      topicModel: {
+        settleRunningOperation: vi.fn(async () => ({ status: 'settled' })),
+        updateMetadata: vi.fn(async () => undefined),
+      } as any,
+    });
+
+    await service.heteroFinish({
+      agentType: 'claude-code',
+      error: {
+        body: { detail: `token=${TOKEN}` },
+        message: `auth failed for ${TOKEN}`,
+        type: 'AgentRuntimeError',
+      },
+      operationId: 'op-1',
+      result: 'error',
+      topicId: 'tpc-1',
+    });
+
+    expect(JSON.stringify(publishStreamEvent.mock.calls)).not.toContain(TOKEN);
+    expect(JSON.stringify((finish.mock.calls as unknown[]) ?? [])).not.toContain(TOKEN);
+    for (const work of mocks.afterWork.splice(0)) await work();
+    expect(mocks.onAgentOutputSecretsDetected).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationId: 'op-1',
+        secrets: [{ fingerprint: fingerprintSecret(TOKEN), kind: 'anthropic-oauth-token' }],
+      }),
+    );
   });
 });

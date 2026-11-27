@@ -1,4 +1,5 @@
 import { realpath } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 
 /** The RPC error for a file operation that reaches into the credential store. */
@@ -13,6 +14,19 @@ const contains = (root: string, target: string) => {
     relative === '' ||
     (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative))
   );
+};
+
+/**
+ * `~` / `~/…` as the home directory, as the file handlers expand it before
+ * they touch the path (see `filePreview.ts`, `workspaceGuard.ts`): the guard
+ * must judge the path they will actually open.
+ */
+const expandHomePath = (target: string): string => {
+  if (target === '~') return os.homedir();
+  if (target.startsWith('~/') || target.startsWith('~\\')) {
+    return path.join(os.homedir(), target.slice(2));
+  }
+  return target;
 };
 
 /**
@@ -49,7 +63,8 @@ export const isPathInsideAgentCredentialRoot = async (
 ): Promise<boolean> => {
   const resolvedRoot = path.resolve(rootDir);
   const realRoot = await realpathOrAncestor(resolvedRoot);
-  const resolved = baseDir ? path.resolve(baseDir, target) : path.resolve(target);
+  const expanded = expandHomePath(target);
+  const resolved = baseDir ? path.resolve(baseDir, expanded) : path.resolve(expanded);
   const real = await realpathOrAncestor(resolved);
   return [resolved, real].some(
     (candidate) =>

@@ -122,6 +122,22 @@ describe('file RPCs and the agent-credential store', () => {
     expect(await readFile(credentialFile, 'utf8')).toBe('{"token":"secret"}');
   });
 
+  it('expands `~` the way the file handlers do before judging the path', async () => {
+    const homedir = vi.spyOn(os, 'homedir').mockReturnValue(home);
+    try {
+      await denied('getLocalFilePreview', {
+        path: '~/.lobehub/agent-credentials/claude-code/credential.json',
+        workingDirectory: home,
+      });
+      await denied('copyLocalFiles', {
+        items: [{ sourcePath: '~', targetPath: path.join(workspace, 'copy') }],
+        workspaceRoot: home,
+      });
+    } finally {
+      homedir.mockRestore();
+    }
+  });
+
   it('refuses moving, copying or trashing a folder that contains the store', async () => {
     const lobehubDir = path.join(home, '.lobehub');
     await denied('copyLocalFiles', {

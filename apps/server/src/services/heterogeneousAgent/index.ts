@@ -464,9 +464,15 @@ export class HeterogeneousAgentService {
     const rejection =
       reportedResult === 'success' ? await this.readIngestRejection(operationId) : undefined;
     const result: HeterogeneousFinishResult = rejection ? 'error' : reportedResult;
+    // The CLI sends its terminal error on its own, apart from the ingested
+    // events: redact it the same way before it is logged, stored or published.
+    const reported = params.error ? redactOutputSecrets([params.error]) : undefined;
+    if (reported?.secrets.length) {
+      this.reportOutputSecrets({ agentType, operationId, secrets: reported.secrets, topicId });
+    }
     const error = rejection
       ? buildIngestRejectionError(rejection)
-      : normalizeHeterogeneousFinishError(agentType, params.error);
+      : normalizeHeterogeneousFinishError(agentType, reported?.events[0]);
 
     if (rejection) {
       log(
