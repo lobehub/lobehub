@@ -40,6 +40,14 @@ const hasNodeType = (value: unknown, type: string): boolean => {
   return Object.values(value).some((child) => hasNodeType(child, type));
 };
 
+const collectText = (value: unknown): string => {
+  if (!value || typeof value !== 'object') return '';
+  const node = value as { children?: unknown[]; root?: unknown; text?: unknown; type?: unknown };
+  if (node.type === 'text' && typeof node.text === 'string') return node.text;
+  if (node.root) return collectText(node.root);
+  return (node.children ?? []).map(collectText).join('');
+};
+
 describe('createChatInputRichPlugins math', () => {
   it('mounts the math plugin with inline `$…$` math turned off', () => {
     expect(chatInputMathProps()).toEqual({ enableInlineMath: false });
@@ -50,8 +58,9 @@ describe('createChatInputRichPlugins math', () => {
     const snapshot = importMessage(command);
 
     expect(hasNodeType(snapshot.editorData, 'math')).toBe(false);
-    expect(snapshot.markdown).toContain('$LOBEHUB_CLI');
-    expect(snapshot.markdown).toContain('/proc/$PPID/exe');
+    // Assert on the stored text nodes, not the exported Markdown: the
+    // exporter may escape `_` as `\_` depending on the editor version.
+    expect(collectText(snapshot.editorData)).toBe(command);
   });
 
   it('keeps dollar prices as plain text', () => {
