@@ -50,6 +50,7 @@ import {
   useConversationStoreApi,
 } from '../store';
 import TodoProgress from '../TodoProgress';
+import IdleCacheNotice from './IdleCacheNotice';
 import InputCompletionErrorAlert from './InputCompletionErrorAlert';
 import LinkedGoalTray from './LinkedGoalTray';
 import OpStatusTray from './OpStatusTray';
@@ -566,6 +567,9 @@ const ChatInput = memo<ChatInputProps>(
           {/* A refused send already says what to do next; a second notice with its
               own buttons beside it would compete for the same decision. */}
           {!sendMessageErrorMsg && businessAlerts}
+          {/* About the next reply's cost, so it sits closest to the input. A send-area
+              cost estimate should step aside while it shows: both would price the same send. */}
+          {!sendMessageErrorMsg && <IdleCacheNotice />}
           <Flexbox
             paddingInline={12}
             ref={overlayRef}

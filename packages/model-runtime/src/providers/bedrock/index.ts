@@ -421,7 +421,9 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       }
 
       const pricing = await getModelPricing(payload.model, this.id, options?.pricingContext);
-      const cacheTTL = resolveCacheTTL({ ...payload, enabledContextCaching }, anthropicBase);
+      const cacheTTL = resolveCacheTTL({ ...payload, enabledContextCaching }, anthropicBase, {
+        anthropicCache: true,
+      });
       const pricingOptions = cacheTTL ? { lookupParams: { ttl: cacheTTL } } : undefined;
 
       // Respond with the stream

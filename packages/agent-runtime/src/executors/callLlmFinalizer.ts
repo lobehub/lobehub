@@ -2,6 +2,7 @@ import type {
   ChatToolPayload,
   MessageContextAccounting,
   MessageMetadata,
+  MessagePromptCache,
   MessageToolCall,
   ModelPerformance,
   ModelReasoning,
@@ -80,6 +81,7 @@ const buildMessageMetadata = ({
   finishType,
   hasContentImages,
   interruptedMidStream,
+  promptCache,
   usageEstimated,
 }: {
   answerSalvagedFromReasoning?: boolean;
@@ -90,12 +92,14 @@ const buildMessageMetadata = ({
   finishType?: string;
   hasContentImages?: boolean;
   interruptedMidStream?: boolean;
+  promptCache?: MessagePromptCache;
   usageEstimated?: boolean;
 }): CallLlmMessageMetadata | undefined => {
   const metadata: CallLlmMessageMetadata = {
     ...(currentStepUsage && { ...currentStepUsage, usage: currentStepUsage }),
     ...(currentStepSpeed && { ...currentStepSpeed, performance: currentStepSpeed }),
     ...(contextAccounting && { contextAccounting }),
+    ...(promptCache && { promptCache }),
     ...(finishType && { finishType }),
     ...(hasContentImages && { isMultimodal: true }),
     ...(answerSalvagedFromReasoning && { answerSalvagedFromReasoning: true }),
@@ -226,6 +230,7 @@ const persistFinalMessage = async ({
     finishType: output.finishReason,
     hasContentImages: output.hasContentImages,
     interruptedMidStream: aborted,
+    promptCache: output.promptCache,
     usageEstimated: output.usageEstimated,
   });
   const workAnchor = buildWorkAnchor({
@@ -522,6 +527,7 @@ export const persistInterruptedCallLlmResult = async ({
         currentStepUsage: output.usage,
         executionSite: output.executionSite,
         interruptedMidStream: true,
+        promptCache: output.promptCache,
         usageEstimated: output.usageEstimated,
       }),
       reasoning: output.thinkingContent ? { content: output.thinkingContent } : undefined,

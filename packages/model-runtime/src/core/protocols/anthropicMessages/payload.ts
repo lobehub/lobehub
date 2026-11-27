@@ -128,19 +128,37 @@ export const buildDefaultAnthropicPayload = async (
   return basePayload;
 };
 
+const toPricingOptions = (cacheTTL: string | undefined): ComputeChatCostOptions | undefined =>
+  cacheTTL ? { lookupParams: { ttl: cacheTTL } } : undefined;
+
 /**
- * Resolve cache-aware pricing options for usage cost calculation.
+ * Resolve cache-aware pricing options for usage cost calculation on a Messages-compatible
+ * provider. It reports only a TTL the request states, never Anthropic's implicit default: see
+ * {@link resolveAnthropicPricingOptions} for Anthropic's own cache.
  */
 export const resolveDefaultAnthropicPricingOptions = (
   requestPayload: ChatStreamPayload,
   anthropicPayload: Anthropic.MessageCreateParams,
-): ComputeChatCostOptions | undefined => {
-  const cacheTTL = resolveCacheTTL(requestPayload, {
-    messages: anthropicPayload.messages,
-    system: anthropicPayload.system,
-  });
+): ComputeChatCostOptions | undefined =>
+  toPricingOptions(
+    resolveCacheTTL(requestPayload, {
+      messages: anthropicPayload.messages,
+      system: anthropicPayload.system,
+    }),
+  );
 
-  if (!cacheTTL) return undefined;
-
-  return { lookupParams: { ttl: cacheTTL } };
-};
+/**
+ * Pricing options for Anthropic's own cache, where a `cache_control` block without a TTL lives
+ * for the default 5 minutes. The TTL also becomes the message's recorded prompt cache lifetime.
+ */
+export const resolveAnthropicPricingOptions = (
+  requestPayload: ChatStreamPayload,
+  anthropicPayload: Anthropic.MessageCreateParams,
+): ComputeChatCostOptions | undefined =>
+  toPricingOptions(
+    resolveCacheTTL(
+      requestPayload,
+      { messages: anthropicPayload.messages, system: anthropicPayload.system },
+      { anthropicCache: true },
+    ),
+  );

@@ -2,6 +2,7 @@ import type {
   ChatImageItem,
   ChatToolPayload,
   GroundingSearch,
+  MessagePromptCache,
   MessageToolCall,
   ModelPerformance,
   ModelReasoning,
@@ -59,6 +60,12 @@ export interface LLMAttemptOutput {
   hasReasoningImages: boolean;
   imageList: ChatImageItem[];
   observationId?: string;
+  /**
+   * Prompt-cache lifetime the request asked the provider for, persisted on the
+   * assistant message as `metadata.promptCache`. Absent when the request did not
+   * ask for caching.
+   */
+  promptCache?: MessagePromptCache;
   /** Adapter-produced structured reasoning metadata such as duration and signature. */
   reasoning?: ModelReasoning;
   reasoningParts: LLMAttemptContentPart[];
