@@ -6,12 +6,12 @@ import { projectAgents, projects } from '../schemas/project';
 import { topics } from '../schemas/topic';
 import type { LobeChatDatabase, Transaction } from '../type';
 
-export type ProjectTopicAgentsFilter = { projectId: string } | { topicIds: string[] };
-
 /**
  * An agent that works on a project topic is a member of that project: add the
- * agent of every matching topic to its project's members. Existing members keep
- * their role, responsibility and enabled state.
+ * agent of each written topic to its project's members. Existing members keep
+ * their role, responsibility and enabled state. It runs on the topic write only,
+ * never on a read: a member someone removed keeps its old topics and stays out
+ * until it works on the project again.
  *
  * The coordinator is managed by the project, and a shared workspace project only
  * takes shared agents, so neither ever joins this way. A project whose main
@@ -24,9 +24,9 @@ export type ProjectTopicAgentsFilter = { projectId: string } | { topicIds: strin
  */
 export const joinTopicAgentsToProjects = async (
   db: LobeChatDatabase | Transaction,
-  filter: ProjectTopicAgentsFilter,
+  { topicIds }: { topicIds: string[] },
 ) => {
-  if ('topicIds' in filter && filter.topicIds.length === 0) return;
+  if (topicIds.length === 0) return;
 
   try {
     await db.transaction(async (tx) => {
@@ -41,9 +41,7 @@ export const joinTopicAgentsToProjects = async (
         .innerJoin(agents, eq(agents.id, topics.agentId))
         .where(
           and(
-            'topicIds' in filter
-              ? inArray(topics.id, filter.topicIds)
-              : eq(topics.projectId, filter.projectId),
+            inArray(topics.id, topicIds),
             isNotNull(topics.agentId),
             isNull(topics.deletedAt),
             or(
