@@ -16,8 +16,18 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
       ...(await importOriginal<object>()),
       DropdownMenuGroup: ({ children }: { children: ReactNode }) => <div>{children}</div>,
       DropdownMenuGroupLabel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-      DropdownMenuItem: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
-        <button onClick={onClick}>{children}</button>
+      DropdownMenuItem: ({
+        children,
+        disabled,
+        onClick,
+      }: {
+        children: ReactNode;
+        disabled?: boolean;
+        onClick?: () => void;
+      }) => (
+        <button aria-disabled={disabled} onClick={onClick}>
+          {children}
+        </button>
       ),
       DropdownMenuItemIcon: ({ children }: { children: ReactNode }) => <span>{children}</span>,
       DropdownMenuItemLabel: ({ children }: { children: ReactNode }) => <span>{children}</span>,
@@ -32,8 +42,15 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
         className,
         onClick,
         style,
+        ...rest
       }: HTMLAttributes<HTMLDivElement>) => (
-        <div className={className} style={style} onClick={onClick}>
+        <div
+          aria-disabled={rest['aria-disabled']}
+          className={className}
+          data-testid="row-trigger"
+          style={style}
+          onClick={onClick}
+        >
           {children}
         </div>
       ),
@@ -223,5 +240,86 @@ describe('MultipleProvidersModelItem', () => {
 
     expect(onBeforeModelSelect).toHaveBeenCalledWith('claude-opus-4-8', 'lobehub');
     await vi.waitFor(() => expect(onModelChange).not.toHaveBeenCalled());
+  });
+
+  describe('disabled models', () => {
+    const data = {
+      displayName: 'Claude Opus 4.7',
+      model: { abilities: {}, displayName: 'Claude Opus 4.7', id: 'claude-opus-4-7' } as any,
+      providers: [
+        { id: 'lobehub', name: 'LobeHub' },
+        { id: 'anthropic', name: 'Anthropic' },
+      ],
+    };
+    const reason = 'Ask your workspace admin';
+
+    it('keeps the row inert and explains why when the default provider is disabled', () => {
+      const onClose = vi.fn();
+      const onModelChange = vi.fn();
+      const onRestrictedModelClick = vi.fn();
+
+      render(
+        <MultipleProvidersModelItem
+          activeKey=""
+          data={data}
+          getDisabledReason={(_, providerId) => (providerId === 'lobehub' ? reason : undefined)}
+          newLabel="new"
+          onClose={onClose}
+          onModelChange={onModelChange}
+          onRestrictedModelClick={onRestrictedModelClick}
+        />,
+      );
+
+      fireEvent.click(screen.getByText('Claude Opus 4.7'));
+
+      expect(onModelChange).not.toHaveBeenCalled();
+      expect(onRestrictedModelClick).not.toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
+      expect(screen.getByRole('note')).toHaveTextContent(reason);
+      // Another provider of the same model can still be picked.
+      expect(screen.getByTestId('row-trigger')).not.toHaveAttribute('aria-disabled');
+      expect(screen.getByText('LobeHub').closest('button')).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    });
+
+    it('dims the row only when every provider is disabled', () => {
+      render(
+        <MultipleProvidersModelItem
+          activeKey=""
+          data={data}
+          getDisabledReason={() => reason}
+          newLabel="new"
+          onClose={vi.fn()}
+          onModelChange={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByTestId('row-trigger')).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    it('lets a restricted model keep its upsell over a disabled reason', () => {
+      const onRestrictedModelClick = vi.fn();
+
+      render(
+        <MultipleProvidersModelItem
+          activeKey=""
+          data={data}
+          getDisabledReason={() => reason}
+          getRestrictedLabel={() => 'pro'}
+          isModelRestricted={(_, providerId) => providerId === 'lobehub'}
+          newLabel="new"
+          onClose={vi.fn()}
+          onModelChange={vi.fn()}
+          onRestrictedModelClick={onRestrictedModelClick}
+        />,
+      );
+
+      fireEvent.click(screen.getByText('Claude Opus 4.7'));
+
+      expect(onRestrictedModelClick).toHaveBeenCalledWith('claude-opus-4-7', 'lobehub');
+      expect(screen.queryByRole('note')).toBeNull();
+    });
   });
 });

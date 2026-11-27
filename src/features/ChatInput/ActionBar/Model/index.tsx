@@ -3,6 +3,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
+import { useBusinessModelListGuard } from '@/business/client/hooks/useBusinessModelListGuard';
 import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import { SkeletonBar } from '@/components/Skeleton';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
@@ -54,6 +55,10 @@ const ModelSwitch = memo(() => {
   const enabledModel = useAiInfraStore(aiModelSelectors.getEnabledModelById(model, provider));
   const displayName = enabledModel?.displayName || model;
   const lockTooltip = useModelLockTooltip(displayName, selectionLockReason);
+  // The selected model may be one the viewer can no longer run (e.g. a workspace admin
+  // lowered their tier): the chip says why, the way the panel row does.
+  const { getModelDisabledReason } = useBusinessModelListGuard();
+  const disabledReason = getModelDisabledReason?.(model, provider);
   // Reasoning effort rides along with the model trigger instead of claiming a
   // second action slot. Like the model, it pins to the composer's topic when
   // there is one and edits the user's per-model default otherwise.
@@ -73,6 +78,9 @@ const ModelSwitch = memo(() => {
     <SelectorTrigger
       aria-disabled={!interactive}
       ariaLabel={triggerText}
+      disabledReason={disabledReason}
+      // A locked chip carries one tooltip that names the lock and this reason together.
+      disabledReasonTooltip={interactive}
       secondaryText={effortLabel}
       text={displayName}
       {...(interactive ? {} : { style: { cursor: 'default' } })}
@@ -105,7 +113,18 @@ const ModelSwitch = memo(() => {
 
   // Locked: say which model is pinned AND why it can't be changed here — the
   // bare model name used to leave the inert chip unexplained.
-  if (!canSelectModel) return <Tooltip title={lockTooltip ?? displayName}>{trigger}</Tooltip>;
+  if (!canSelectModel)
+    return (
+      <Tooltip
+        title={
+          disabledReason
+            ? [lockTooltip ?? displayName, disabledReason].join(' · ')
+            : (lockTooltip ?? displayName)
+        }
+      >
+        {trigger}
+      </Tooltip>
+    );
 
   return (
     <ModelSwitchPanel

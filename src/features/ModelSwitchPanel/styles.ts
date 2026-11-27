@@ -80,6 +80,11 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       line-height: 20px;
     }
   `,
+  // A listed model the viewer cannot pick: dimmed, and no pointer since a click does nothing.
+  rowDisabled: css`
+    cursor: not-allowed;
+    opacity: 0.5;
+  `,
   menuItemActive: css`
     background: ${cssVar.colorFillTertiary};
   `,

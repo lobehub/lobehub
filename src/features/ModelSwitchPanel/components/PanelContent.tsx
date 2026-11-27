@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Rnd } from 'react-rnd';
 
 import { useBusinessModelPricingPrefetch } from '@/business/client/hooks/useBusinessModelPricing';
-import { useSelectableChatModels } from '@/hooks/useSelectableChatModels';
+import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
 
 import { ENABLE_RESIZING, MAX_WIDTH } from '../const';
@@ -39,7 +39,9 @@ export const PanelContent: FC<PanelContentProps> = ({
   pricingMode,
   provider: providerProp,
 }) => {
-  const chatEnabledList = useSelectableChatModels();
+  // Unfiltered on purpose: `List` applies the business guard, keeping models it disables
+  // listed (dimmed) while leaving out the ones it hides.
+  const chatEnabledList = useEnabledChatModels();
   const enabledList = enabledListProp ?? chatEnabledList;
   const [searchKeyword, setSearchKeyword] = useState('');
   const { groupMode, handleGroupModeChange } = usePanelState();

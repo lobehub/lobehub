@@ -6,6 +6,39 @@ import { type ListItem } from './types';
 
 export const menuKey = (provider: string, model: string) => `${provider}-${model}`;
 
+type ModelPredicate = (modelId: string, providerId: string) => boolean;
+
+/**
+ * Why a listed model cannot be picked from a provider, or `undefined` when it can. A
+ * restricted model keeps its upsell, so only an otherwise unrestricted one is disabled.
+ */
+export const resolveModelDisabledReason = (
+  {
+    getDisabledReason,
+    isModelRestricted,
+  }: {
+    getDisabledReason?: (modelId: string, providerId: string) => string | undefined;
+    isModelRestricted?: ModelPredicate;
+  },
+  modelId: string,
+  providerId: string,
+): string | undefined =>
+  isModelRestricted?.(modelId, providerId) ? undefined : getDisabledReason?.(modelId, providerId);
+
+/**
+ * The switch panel's hide predicate: the business guard's `isModelHidden`, except that a
+ * model with a disabled reason stays listed (dimmed) so the viewer learns why it is out of
+ * reach. Other pickers keep hiding it.
+ */
+export const resolvePanelHiddenPredicate = (
+  isModelHidden?: ModelPredicate,
+  getModelDisabledReason?: (modelId: string, providerId: string) => string | undefined,
+): ModelPredicate | undefined =>
+  isModelHidden && getModelDisabledReason
+    ? (modelId, providerId) =>
+        isModelHidden(modelId, providerId) && !getModelDisabledReason(modelId, providerId)
+    : isModelHidden;
+
 export const getListItemKey = (item: ListItem): string => {
   switch (item.type) {
     case 'model-item-single':

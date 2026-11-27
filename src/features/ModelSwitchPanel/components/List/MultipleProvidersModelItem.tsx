@@ -23,8 +23,9 @@ import { useDensityTokens } from '@/styles/density';
 
 import { styles } from '../../styles';
 import { type ModelWithProviders } from '../../types';
-import { menuKey } from '../../utils';
+import { menuKey, resolveModelDisabledReason } from '../../utils';
 import ModelDetailPanel from '../ModelDetailPanel';
+import { DisabledModelReason } from './DisabledModelReason';
 import { ModelRowRender } from './ModelRowRender';
 
 interface MultipleProvidersModelItemProps {
@@ -33,6 +34,8 @@ interface MultipleProvidersModelItemProps {
   activeSecondaryText?: string;
   data: ModelWithProviders;
   defaultProviderId?: string;
+  /** Why a listed model cannot be picked from a provider; that choice renders dimmed and inert. */
+  getDisabledReason?: (modelId: string, providerId: string) => string | undefined;
   /** Badge text of a restricted model */
   getRestrictedLabel?: (modelId: string, providerId: string) => string;
   isModelRestricted?: (modelId: string, providerId: string) => boolean;
@@ -48,6 +51,7 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
     activeKey,
     activeSecondaryText,
     data,
+    getDisabledReason,
     getRestrictedLabel,
     isModelRestricted,
     newLabel,
@@ -66,6 +70,20 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
     const defaultProviderRestricted = Boolean(
       defaultProvider && isModelRestricted?.(data.model.id, defaultProvider.id),
     );
+
+    const disabledReasonOf = (providerId: string) =>
+      resolveModelDisabledReason(
+        { getDisabledReason, isModelRestricted },
+        data.model.id,
+        providerId,
+      );
+    const defaultDisabledReason = defaultProvider
+      ? disabledReasonOf(defaultProvider.id)
+      : undefined;
+    const allDisabled =
+      !!getDisabledReason &&
+      data.providers.length > 0 &&
+      data.providers.every((p) => !!disabledReasonOf(p.id));
 
     const allRestricted =
       isModelRestricted &&
@@ -89,12 +107,17 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
         }}
       >
         <DropdownMenuSubmenuTrigger
+          aria-description={defaultDisabledReason}
+          aria-disabled={allDisabled ? true : undefined}
           className={cx(
             menuSharedStyles.item,
             styles.rowTrigger,
             isActive && styles.menuItemActive,
+            allDisabled && styles.rowDisabled,
           )}
           onClick={() => {
+            // Inert: the hover panel says why; another provider can still be picked there.
+            if (defaultDisabledReason) return;
             if (defaultProviderRestricted && defaultProvider) {
               onRestrictedModelClick?.(data.model.id, defaultProvider.id);
               onClose();
@@ -109,6 +132,7 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
         >
           <ModelRowRender
             activeEffortLabel={activeSecondaryText}
+            disabled={allDisabled}
             isActive={isActive}
             model={data.model}
             newLabel={newLabel}
@@ -123,6 +147,7 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
         <DropdownMenuPortal>
           <DropdownMenuPositioner anchor={null} placement="right" sideOffset={12}>
             <DropdownMenuPopup className={cx(styles.detailPopup, styles.dropdownMenu)}>
+              {defaultDisabledReason && <DisabledModelReason reason={defaultDisabledReason} />}
               <ModelDetailPanel
                 model={data.model.id}
                 provider={(activeProvider ?? data.providers[0]).id}
@@ -135,11 +160,14 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
                   const key = menuKey(p.id, data.model.id);
                   const isProviderActive = isActive ? activeKey === key : p.id === 'lobehub';
                   const providerRestricted = isModelRestricted?.(data.model.id, p.id);
+                  const providerDisabled = !!disabledReasonOf(p.id);
 
                   return (
                     <DropdownMenuItem
+                      disabled={providerDisabled}
                       key={key}
                       onClick={() => {
+                        if (providerDisabled) return;
                         if (providerRestricted) {
                           onRestrictedModelClick?.(data.model.id, p.id);
                           onClose();

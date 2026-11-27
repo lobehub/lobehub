@@ -1,4 +1,5 @@
-import { Tag } from '@lobehub/ui';
+import { Icon, Tag } from '@lobehub/ui';
+import { LockIcon } from 'lucide-react';
 import { type AiModelForSelect } from 'model-bank';
 import { memo } from 'react';
 
@@ -15,6 +16,8 @@ interface ModelRowRenderProps {
   activeEffortLabel?: string;
   /** Tag after the name, e.g. what sets a featured model apart. */
   badge?: string;
+  /** The viewer cannot pick this model: a lock marks the row the panel dims. */
+  disabled?: boolean;
   isActive?: boolean;
   model: AiModelForSelect;
   newLabel: string;
@@ -29,6 +32,7 @@ export const ModelRowRender = memo<ModelRowRenderProps>(
   ({
     activeEffortLabel,
     badge,
+    disabled,
     isActive,
     model,
     newLabel,
@@ -52,6 +56,7 @@ export const ModelRowRender = memo<ModelRowRenderProps>(
         nameSuffix={
           <>
             {model.abilities?.imageOutput && <ImageOutputMark />}
+            {disabled && <Icon aria-hidden icon={LockIcon} size={12} style={{ flex: 'none' }} />}
             {badge && (
               <Tag color="green" size="small" style={{ flex: 'none' }}>
                 {badge}
