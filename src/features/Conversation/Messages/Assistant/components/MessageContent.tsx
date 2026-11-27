@@ -3,6 +3,8 @@ import { type UIChatMessage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
+import { useDensity } from '@/styles/density';
+
 import { messageStateSelectors, useConversationStore } from '../../../store';
 import { CollapsedMessage } from '../../AssistantGroup/components/CollapsedMessage';
 import DisplayContent from '../../components/DisplayContent';
@@ -21,6 +23,7 @@ const MessageContent = memo<UIChatMessage>(
     const isCreating = useConversationStore(messageStateSelectors.isMessageCreating(id));
     const isCollapsed = useConversationStore(messageStateSelectors.isMessageCollapsed(id));
     const isReasoning = useConversationStore(messageStateSelectors.isMessageInReasoning(id));
+    const { compact } = useDensity();
 
     const isLoading = generating || isCreating;
     const isToolCallGenerating = isLoading && (content === LOADING_FLAT || !content) && !!tools;
@@ -44,7 +47,7 @@ const MessageContent = memo<UIChatMessage>(
     if (isCollapsed) return <CollapsedMessage content={content} id={id} />;
 
     return (
-      <Flexbox gap={8} id={id}>
+      <Flexbox gap={compact ? 6 : 8} id={id}>
         {drawer}
         {showSearch && (
           <SearchGrounding

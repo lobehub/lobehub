@@ -7,6 +7,7 @@ import { StartTopicConversationContext } from '@/features/LocalFile';
 import { cleanSpeakerTag } from '@/store/chat/utils/cleanSpeakerTag';
 import { parseChannelPrompt } from '@/store/chat/utils/parseChannelPrompt';
 import { splitReferencedMessage } from '@/store/chat/utils/parseReferencedMessage';
+import { useDensity } from '@/styles/density';
 import { type UIChatMessage } from '@/types/index';
 
 import { useStartTopicConversation } from '../../../hooks/useStartTopicConversation';
@@ -25,6 +26,7 @@ const UserMessageContent = memo<UIChatMessage>(
   ({ id, content, editorData, imageList, videoList, audioList, fileList, metadata }) => {
     const markdownProps = useMarkdown(id);
     const startTopicConversation = useStartTopicConversation();
+    const { compact } = useDensity();
     const selections = metadata?.contextSelections?.length
       ? metadata.contextSelections
       : metadata?.pageSelections;
@@ -55,7 +57,7 @@ const UserMessageContent = memo<UIChatMessage>(
     );
 
     return (
-      <Flexbox gap={8} id={id}>
+      <Flexbox gap={compact ? 6 : 8} id={id}>
         {selections && selections.length > 0 && <PageSelections selections={selections} />}
         {reference && <ReferencedMessage reference={reference} />}
         {textBody && <CollapsibleContent>{textBody}</CollapsibleContent>}

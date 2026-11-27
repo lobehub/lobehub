@@ -7,6 +7,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsDark } from '@/hooks/useIsDark';
+import { useDensity } from '@/styles/density';
 import { densityTokens } from '@/styles/density.stylex';
 
 import ChunkItem from './ChunkItem';
@@ -16,9 +17,10 @@ const styles = stylex.create({
     cursor: 'pointer',
     paddingBlock: '8px',
     paddingInline: densityTokens['--lobe-density-content-gap'],
-    borderRadius: '8px',
+    borderRadius: densityTokens['--lobe-density-radius'],
     color: cssVar.colorText,
   },
+  containerCompact: { paddingBlock: '4px', fontSize: '13px' },
   containerDark: {
     backgroundColor: cssVar.colorFillTertiary,
     backgroundImage: 'none',
@@ -36,6 +38,7 @@ interface FileChunksProps {
 const FileChunks = memo<FileChunksProps>(({ data }) => {
   const { t } = useTranslation('chat');
   const isDarkMode = useIsDark();
+  const { compact } = useDensity();
 
   const [showDetail, setShowDetail] = useState(false);
 
@@ -44,8 +47,11 @@ const FileChunks = memo<FileChunksProps>(({ data }) => {
       gap={16}
       width={'100%'}
       className={
-        stylex.props(styles.container, isDarkMode ? styles.containerDark : styles.containerLight)
-          .className
+        stylex.props(
+          styles.container,
+          compact && styles.containerCompact,
+          isDarkMode ? styles.containerDark : styles.containerLight,
+        ).className
       }
       onClick={() => {
         setShowDetail(!showDetail);

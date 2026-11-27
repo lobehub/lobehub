@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
 import { useChatStore } from '@/store/chat';
+import { useDensity } from '@/styles/density';
 import { type ChatFileItem } from '@/types/index';
 import { formatSize } from '@/utils/format';
 
@@ -15,17 +16,18 @@ import { formatSize } from '@/utils/format';
  */
 const InaccessibleFileItem = memo(() => {
   const { t } = useTranslation('chat');
+  const { compact } = useDensity();
 
   return (
     <Block
       horizontal
       align={'center'}
-      gap={12}
-      paddingBlock={8}
-      paddingInline={'12px 16px'}
+      gap={compact ? 8 : 12}
+      paddingBlock={compact ? 6 : 8}
+      paddingInline={compact ? '8px 12px' : '12px 16px'}
       variant={'outlined'}
     >
-      <Icon icon={FileLock2Icon} size={32} style={{ opacity: 0.45 }} />
+      <Icon icon={FileLock2Icon} size={compact ? 28 : 32} style={{ opacity: 0.45 }} />
       <Flexbox style={{ overflow: 'hidden' }}>
         <Text ellipsis type={'secondary'}>
           {t('inaccessibleFile.name')}
@@ -41,6 +43,7 @@ const InaccessibleFileItem = memo(() => {
 const FileItem = memo<ChatFileItem & { onClick?: () => void }>(
   ({ id, fileType, size, name, inaccessible, onClick }) => {
     const openFilePreview = useChatStore((s) => s.openFilePreview);
+    const { compact } = useDensity();
 
     if (inaccessible) return <InaccessibleFileItem />;
 
@@ -49,17 +52,17 @@ const FileItem = memo<ChatFileItem & { onClick?: () => void }>(
         clickable
         horizontal
         align={'center'}
-        gap={12}
+        gap={compact ? 8 : 12}
         key={id}
-        paddingBlock={8}
-        paddingInline={'12px 16px'}
+        paddingBlock={compact ? 6 : 8}
+        paddingInline={compact ? '8px 12px' : '12px 16px'}
         variant={'outlined'}
         onClick={() => {
           if (onClick) onClick();
           else openFilePreview({ fileId: id });
         }}
       >
-        <FileIcon fileName={name} fileType={fileType} size={32} />
+        <FileIcon fileName={name} fileType={fileType} size={compact ? 28 : 32} />
         <Flexbox style={{ overflow: 'hidden' }}>
           <Text ellipsis>{name}</Text>
           <Text fontSize={12} type={'secondary'}>

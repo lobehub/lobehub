@@ -5,22 +5,25 @@ import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
+import { useDensity } from '@/styles/density';
 
 import { contextSelectors, useConversationStore } from '../../../store';
 
 const styles = stylex.create({
   container: { paddingBlock: '4px', fontSize: '12px', color: cssVar.colorTextTertiary },
+  containerCompact: { paddingBlock: '2px' },
 });
 
 const InterruptedHint = memo(() => {
   const { t } = useTranslation('chat');
   const context = useConversationStore(contextSelectors.context);
   const handingOff = useChatStore(operationSelectors.isSteerHandoffPending(context));
+  const { compact } = useDensity();
 
   if (handingOff) return null;
 
   return (
-    <div {...stylex.props(styles.container)}>
+    <div {...stylex.props(styles.container, compact && styles.containerCompact)}>
       {t('messageAction.interrupted')} · {t('messageAction.interruptedHint')}
     </div>
   );

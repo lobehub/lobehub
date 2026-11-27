@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useIsDark } from '@/hooks/useIsDark';
 import Image from '@/libs/next/Image';
+import { useDensity } from '@/styles/density';
 import { type GroundingSearch } from '@/types/search';
 
 // Resolve the favicon host defensively: some providers (e.g. OpenRouter built-in
@@ -42,6 +43,12 @@ const styles = stylex.create({
     paddingInline: '8px',
     borderRadius: '6px',
     color: cssVar.colorTextTertiary,
+  },
+  containerCompact: {
+    paddingBlock: '2px',
+    paddingInline: '6px',
+    fontSize: '13px',
+    lineHeight: '20px',
   },
   containerDark: {
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
@@ -111,6 +118,7 @@ const SearchGrounding = memo<GroundingSearch>(
   ({ searchQueries, citations, imageResults, imageSearchQueries }) => {
     const { t } = useTranslation('chat');
     const isDarkMode = useIsDark();
+    const { compact } = useDensity();
 
     const [showDetail, setShowDetail] = useState(false);
 
@@ -131,6 +139,7 @@ const SearchGrounding = memo<GroundingSearch>(
         className={
           stylex.props(
             styles.container,
+            compact && styles.containerCompact,
             isDarkMode ? styles.containerDark : styles.containerLight,
             showDetail && (isDarkMode ? styles.expandDark : styles.expandLight),
           ).className

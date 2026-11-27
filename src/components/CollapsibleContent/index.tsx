@@ -7,6 +7,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useDensity } from '@/styles/density';
 import { REVEAL_IN_PAGE_EVENT, type RevealInPageEvent } from '@/utils/findInDom';
 
 import { useCollapsible } from './useCollapsible';
@@ -43,7 +44,9 @@ const styles = stylex.create({
     transition: `color 150ms ${cssVar.motionEaseOut},
       background 150ms ${cssVar.motionEaseOut}`,
   },
+  toggleButtonCompact: { blockSize: '20px', paddingInline: '8px' },
   toggleWrapper: { display: 'flex', justifyContent: 'center', marginBlockStart: '6px' },
+  toggleWrapperCompact: { marginBlockStart: '4px' },
 });
 
 interface CollapsibleContentProps {
@@ -87,6 +90,7 @@ const CollapsibleContent = memo<CollapsibleContentProps>(
     overflowThreshold = OVERFLOW_THRESHOLD,
   }) => {
     const { t } = useTranslation('chat');
+    const { compact } = useDensity();
     const contentRef = useRef<HTMLDivElement | null>(null);
 
     const {
@@ -138,10 +142,10 @@ const CollapsibleContent = memo<CollapsibleContentProps>(
           {children}
         </div>
         {shouldCollapse && (collapsed || !hideCollapseToggle) && (
-          <div {...stylex.props(styles.toggleWrapper)}>
+          <div {...stylex.props(styles.toggleWrapper, compact && styles.toggleWrapperCompact)}>
             <button
               aria-expanded={!collapsed}
-              {...stylex.props(styles.toggleButton)}
+              {...stylex.props(styles.toggleButton, compact && styles.toggleButtonCompact)}
               type="button"
               onClick={toggle}
             >

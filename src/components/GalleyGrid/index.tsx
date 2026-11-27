@@ -2,8 +2,12 @@ import { Flexbox, useResponsive } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 
+import { useDensity } from '@/styles/density';
+
 import Grid from './Grid';
 import { MAX_SIZE_DESKTOP, MAX_SIZE_MOBILE } from './style';
+
+const COMPACT_ITEM_STYLE = { borderRadius: 6 };
 
 interface GalleyGridProps<T = any> {
   items: T[];
@@ -12,6 +16,8 @@ interface GalleyGridProps<T = any> {
 
 const GalleyGrid = memo<GalleyGridProps>(({ items, renderItem: Render }) => {
   const { mobile } = useResponsive();
+  const { compact } = useDensity();
+  const itemStyle = compact ? COMPACT_ITEM_STYLE : undefined;
 
   const { firstRow, lastRow } = useMemo(() => {
     if (items.length === 4) {
@@ -35,22 +41,22 @@ const GalleyGrid = memo<GalleyGridProps>(({ items, renderItem: Render }) => {
     scale = scale < 1 ? 1 : scale;
 
     return {
-      gap: mobile ? 4 : 6,
+      gap: mobile || compact ? 4 : 6,
       max: (mobile ? MAX_SIZE_MOBILE : MAX_SIZE_DESKTOP) * scale,
     };
-  }, [mobile, items]);
+  }, [mobile, compact, items]);
 
   return (
     <Flexbox gap={gap}>
       <Grid col={firstRow.length} gap={gap} max={max}>
         {firstRow.map((i, index) => (
-          <Render {...i} index={index} key={index} />
+          <Render {...i} index={index} key={index} style={itemStyle} />
         ))}
       </Grid>
       {lastRow.length > 0 && (
         <Grid col={firstRow.length} gap={gap} max={max}>
           {lastRow.map((i, index) => (
-            <Render {...i} index={index} key={index} />
+            <Render {...i} index={index} key={index} style={itemStyle} />
           ))}
         </Grid>
       )}
