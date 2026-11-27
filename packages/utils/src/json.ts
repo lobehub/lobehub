@@ -6,15 +6,17 @@ export interface JsonSafeObject {
 }
 
 export const safeJsonStringify = (value: unknown): string => {
-  const seen = new WeakSet<object>();
+  const ancestors: object[] = [];
 
   try {
     return (
-      JSON.stringify(value, (_key, item) => {
+      JSON.stringify(value, function (_key, item) {
         if (typeof item === 'bigint') return item.toString();
         if (typeof item === 'object' && item !== null) {
-          if (seen.has(item as object)) return '[Circular]';
-          seen.add(item as object);
+          // Only ancestors are cycles; repeated siblings still carry their full data.
+          while (ancestors.length > 0 && ancestors.at(-1) !== this) ancestors.pop();
+          if (ancestors.includes(item)) return '[Circular]';
+          ancestors.push(item);
         }
         return item;
       }) ?? 'null'
