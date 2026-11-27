@@ -269,12 +269,21 @@ export class ToolExecutionService {
         );
       }
 
+      const state =
+        truncatedContent !== data.content &&
+        data.state &&
+        typeof data.state === 'object' &&
+        !Array.isArray(data.state)
+          ? { ...data.state, truncated: true }
+          : data.state;
+
       if (!data.success) {
         return {
           ...data,
           content: truncatedContent,
           error: normalizeExecutionError(data.errorData ?? data.error, data.content),
           executionTime,
+          state,
         };
       }
 
@@ -282,6 +291,7 @@ export class ToolExecutionService {
         ...data,
         content: truncatedContent,
         executionTime,
+        state,
       };
 
       // Handle MCP and other types (default, standalone, markdown, mcp)
