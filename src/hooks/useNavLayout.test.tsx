@@ -57,7 +57,7 @@ describe('useNavLayout', () => {
     return result.current.topNavItems.find((item) => item.key === 'dashboard');
   };
 
-  // Boards stay reachable from the command menu and project sidebars; the home
+  // Boards stay reachable at /dashboard and from widget links; the home
   // sidebar no longer carries an entry for them.
   it.each([null, 'lobe-team'])(
     'keeps Dashboards out of the home sidebar even with the flag on (workspace: %s)',
