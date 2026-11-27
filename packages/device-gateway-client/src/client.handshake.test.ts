@@ -1,6 +1,8 @@
+import https from 'node:https';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { GatewayClient } from './client';
+import { GatewayClient, resolveEnvProxyAgent } from './client';
 
 vi.mock('ws', async () => {
   const { EventEmitter } = await import('node:events');
@@ -145,5 +147,45 @@ describe('GatewayClient handshake', () => {
       headers: { 'User-Agent': 'LobeHub Desktop/1.2.3' },
     });
     c.disconnect();
+  });
+});
+
+describe('resolveEnvProxyAgent', () => {
+  // ROOT CAUSE:
+  //
+  // If the CLI ran on a host that reaches the internet only through
+  // HTTPS_PROXY (a needy actor VM has no network interface), `fetch` signed
+  // in through the proxy in env-proxy mode but the gateway socket failed with
+  // `getaddrinfo EAI_AGAIN`, because `ws` dials with its own connection and
+  // never uses Node's proxy-aware default agent.
+  //
+  // Before the fix, the socket always dialed directly.
+  // The fix gives `ws` a `proxyEnv` agent in env-proxy mode.
+  it('should tunnel a wss socket through the proxy in env-proxy mode', () => {
+    const env = { HTTPS_PROXY: 'http://127.0.0.1:3128', NODE_USE_ENV_PROXY: '1' };
+    const agent = resolveEnvProxyAgent('wss://gateway.test.com/ws', env);
+
+    expect(agent).toBeInstanceOf(https.Agent);
+  });
+
+  it('should dial directly outside env-proxy mode', () => {
+    const env = { HTTPS_PROXY: 'http://127.0.0.1:3128' };
+
+    expect(resolveEnvProxyAgent('wss://gateway.test.com/ws', env)).toBeUndefined();
+  });
+
+  it('should pass the agent to the socket in env-proxy mode', () => {
+    vi.stubEnv('NODE_USE_ENV_PROXY', '1');
+    vi.stubEnv('HTTPS_PROXY', 'http://127.0.0.1:3128');
+    const c = new GatewayClient({
+      autoReconnect: false,
+      gatewayUrl: 'https://gateway.test.com',
+      token: 'tok',
+    });
+    c.connect();
+
+    expect((c as any).ws.options.agent).toBeInstanceOf(https.Agent);
+    c.disconnect();
+    vi.unstubAllEnvs();
   });
 });

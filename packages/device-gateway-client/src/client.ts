@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
+import http from 'node:http';
+import https from 'node:https';
 import os from 'node:os';
 
 import type { DeviceMetricSample } from '@lobechat/types';
@@ -25,6 +27,29 @@ import type {
   ToolCallRequestMessage,
   ToolCallResponseMessage,
 } from './types';
+
+/**
+ * The agent the gateway socket dials through in Node's env-proxy mode.
+ *
+ * With `NODE_USE_ENV_PROXY=1`, Node sends `fetch` and requests on its default
+ * agents through `HTTPS_PROXY`/`HTTP_PROXY` unless `NO_PROXY` matches, but `ws`
+ * dials with its own `createConnection` and so never meets that proxy. A host
+ * that reaches the internet only through a proxy (a sandbox VM without a
+ * network interface, a locked-down CI runner) then signs in over `fetch` and
+ * fails the socket's DNS lookup. An agent built with `proxyEnv` tunnels the
+ * socket with CONNECT and reads `NO_PROXY` the same way the default agents do.
+ *
+ * Outside env-proxy mode the socket dials directly, as before.
+ */
+export const resolveEnvProxyAgent = (
+  wsUrl: string,
+  env: NodeJS.ProcessEnv = process.env,
+): http.Agent | undefined => {
+  if (env.NODE_USE_ENV_PROXY !== '1') return undefined;
+
+  const options = { proxyEnv: env };
+  return wsUrl.startsWith('wss:') ? new https.Agent(options) : new http.Agent(options);
+};
 
 // ─── Constants ───
 
@@ -376,8 +401,10 @@ export class GatewayClient extends EventEmitter {
       // a black-holed handshake into a normal error/close pair. The watchdog
       // below is the belt to that suspenders: it also covers the phase `ws`
       // knows nothing about — an opened socket whose `auth_success` never lands.
+      const agent = resolveEnvProxyAgent(wsUrl);
       const wsOptions = {
         handshakeTimeout: this.connectTimeoutMs,
+        ...(agent ? { agent } : {}),
         ...(this.userAgent ? { headers: { 'User-Agent': this.userAgent } } : {}),
       };
       const ws = new WebSocket(wsUrl, wsOptions);
