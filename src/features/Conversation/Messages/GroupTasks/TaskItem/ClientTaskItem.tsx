@@ -28,7 +28,7 @@ interface ClientTaskItemProps {
 const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
   const { id, agentId: itemAgentId, groupId: itemGroupId, metadata, taskDetail } = item;
   const [expanded, setExpanded] = useState(false);
-  const { compact } = useDensity();
+  const { tokens } = useDensity();
 
   const title = taskDetail?.title || metadata?.taskTitle;
   const instruction = metadata?.instruction;
@@ -150,7 +150,7 @@ const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
     <Accordion
       keepMounted
       indicatorPlacement="inline"
-      styles={{ trigger: { paddingBlock: compact ? 2 : 4, paddingInline: 4 } }}
+      styles={{ trigger: { paddingBlock: tokens.inlineRowPaddingBlock, paddingInline: 4 } }}
       value={expanded ? [id] : []}
       items={[
         {

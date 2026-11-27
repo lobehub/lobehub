@@ -131,11 +131,11 @@ const MetricsDisplay = memo<MetricsDisplayProps>(({ metrics, status }) => {
 MetricsDisplay.displayName = 'MetricsDisplay';
 
 const TaskTitle = memo<TaskTitleProps>(({ title, status, metrics }) => {
-  const { compact } = useDensity();
+  const { tokens } = useDensity();
   return (
     <Flexbox horizontal align="center" gap={6}>
       <TaskStatusIndicator status={status} />
-      <Text ellipsis fontSize={compact ? 13 : 14}>
+      <Text ellipsis fontSize={tokens.fontSize}>
         {title}
       </Text>
       {metrics && <MetricsDisplay metrics={metrics} status={status} />}

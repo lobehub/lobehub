@@ -1,6 +1,6 @@
 'use client';
 
-import type { CompressionGroupMetadata, UIChatMessage } from '@lobechat/types';
+import type { CompressionGroupMetadata, InterfaceDensity, UIChatMessage } from '@lobechat/types';
 import {
   ActionIcon,
   confirmModal,
@@ -23,6 +23,7 @@ import StreamingMarkdown from '@/components/StreamingMarkdown';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { useDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 import { shinyTextStyles } from '@/styles/loading';
 
 import { dataSelectors, useConversationStore, useConversationStoreApi } from '../../store';
@@ -38,6 +39,11 @@ import { openCompressionSummary } from './SummaryModal';
 import { useFollowCompressingRow } from './useFollowCompressingRow';
 import { useGroupPreferences } from './useGroupPreferences';
 import { useIsSlow } from './useIsSlow';
+
+const CONTAINER_MARGIN_BLOCK_END = {
+  compact: '4px',
+  loose: '8px',
+} as const satisfies Record<InterfaceDensity, string>;
 
 const styles = stylex.create({
   collapsedButton: {
@@ -62,18 +68,17 @@ const styles = stylex.create({
     gap: '6px',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    paddingBlock: '4px',
+    paddingBlock: densityTokens['--lobe-density-inline-row-padding-block'],
     paddingInline: '0',
     borderStyle: 'none',
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     color: { 'default': cssVar.colorTextDescription, ':hover': cssVar.colorTextSecondary },
     backgroundColor: 'transparent',
     backgroundImage: 'none',
   },
-  statusRowCompact: { paddingBlock: '2px', fontSize: '13px' },
   statusRowButton: { cursor: 'pointer' },
-  container: { marginBlockEnd: '8px' },
-  containerCompact: { marginBlockEnd: '4px' },
+  container: { marginBlockEnd: CONTAINER_MARGIN_BLOCK_END.loose },
+  containerCompact: { marginBlockEnd: CONTAINER_MARGIN_BLOCK_END.compact },
   divider: { margin: '0' },
   messagesContainer: { paddingBlock: '8px' },
 });
@@ -178,7 +183,7 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
       <Flexbox
         className={stylex.props(styles.container, compact && styles.containerCompact).className}
       >
-        <div {...stylex.props(styles.statusRow, compact && styles.statusRowCompact)}>
+        <div {...stylex.props(styles.statusRow)}>
           <Icon icon={CompactIcon} size={16} />
           <span className={cx(shinyTextStyles.shinyText)}>
             {t('compression.compacting')}
@@ -223,11 +228,7 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
       >
         {/* The reader scrolls through the history right above; a turn count adds nothing. */}
         <button
-          {...stylex.props(
-            styles.statusRow,
-            compact && styles.statusRowCompact,
-            styles.statusRowButton,
-          )}
+          {...stylex.props(styles.statusRow, styles.statusRowButton)}
           aria-haspopup={'dialog'}
           type={'button'}
           onClick={() =>

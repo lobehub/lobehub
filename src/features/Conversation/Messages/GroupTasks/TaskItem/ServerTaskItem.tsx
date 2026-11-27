@@ -21,7 +21,7 @@ interface ServerTaskItemProps {
 const ServerTaskItem = memo<ServerTaskItemProps>(({ item }) => {
   const { id, agentId, metadata, taskDetail, tasks } = item;
   const [expanded, setExpanded] = useState(false);
-  const { compact } = useDensity();
+  const { tokens } = useDensity();
 
   const title = taskDetail?.title || metadata?.taskTitle;
   const status = taskDetail?.status;
@@ -61,7 +61,7 @@ const ServerTaskItem = memo<ServerTaskItemProps>(({ item }) => {
     <Accordion
       keepMounted
       indicatorPlacement="inline"
-      styles={{ trigger: { paddingBlock: compact ? 2 : 4, paddingInline: 4 } }}
+      styles={{ trigger: { paddingBlock: tokens.inlineRowPaddingBlock, paddingInline: 4 } }}
       value={expanded ? [id] : []}
       items={[
         {
