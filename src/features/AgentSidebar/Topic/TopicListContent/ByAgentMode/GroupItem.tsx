@@ -27,11 +27,16 @@ import { useTranslation } from 'react-i18next';
 import AgentAvatar from '@/components/AgentAvatar';
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
+import { resolveAgentProjectRunner } from '@/features/Projects/WorkingDirectories/agentProjectRunner';
+import { orderExecutionEnvironments } from '@/features/Projects/WorkingDirectories/executionEnvironmentOrder';
 import { canStageDraftOn } from '@/features/Projects/WorkingDirectories/startProjectTopicDraft';
 import { useAgentFixedDeviceId } from '@/features/Projects/WorkingDirectories/useAgentFixedDeviceId';
+import { useAgentOwnDevice } from '@/features/Projects/WorkingDirectories/useAgentOwnDevice';
+import { isExecutionDirectoryAvailable } from '@/features/Projects/WorkingDirectories/useProjectExecutionEnvironments';
 import { useStartProjectTopic } from '@/features/Projects/WorkingDirectories/useStartProjectTopic';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
+import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useGlobalStore } from '@/store/global';
 import { type ProjectTopicSubGroupMode } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -117,11 +122,36 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
   );
 
   const startTopic = useStartProjectTopic(scope?.projectId);
+  // A heterogeneous agent with a device of its own starts there first
+  // (`resolveAgentProjectRunner`), as Auto, and its "+" waits until that device is known.
+  const { loading: ownDeviceLoading, ownDevice } = useAgentOwnDevice(agentId);
+  const devices = useDeviceStore(deviceSelectors.deviceList);
   // Same habit as an agent's "+": straight into this agent's conversation, on
-  // the first directory it can run in when there is one.
+  // the first directory it can run in when there is one. A device section's
+  // "+" names its directory: a pick by hand.
   const handleAddTopic = (initialDirectoryId?: string) => {
     if (!scope || !agentId) return;
-    startTopic({ agentId, directoryId: initialDirectoryId ?? startDirectories?.[0]?.id });
+    if (initialDirectoryId || !ownDevice) {
+      if (!initialDirectoryId && ownDeviceLoading) return;
+      startTopic({ agentId, directoryId: initialDirectoryId ?? startDirectories?.[0]?.id });
+      return;
+    }
+    const { environment } = resolveAgentProjectRunner(
+      orderExecutionEnvironments(directories),
+      undefined,
+      {
+        isAvailable: (directory) =>
+          canStageDraftOn(directory, fixedDeviceId) &&
+          isExecutionDirectoryAvailable(directory, devices),
+        isRunnable: (directory) => canStageDraftOn(directory, fixedDeviceId),
+        ownDevice,
+      },
+    );
+    startTopic({
+      agentId,
+      auto: true,
+      directoryId: environment.kind === 'directory' ? environment.id : undefined,
+    });
   };
 
   // The agent bucket already sits inside one project, so its rows skip the
@@ -190,6 +220,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
             </DropdownMenu>
             {canAddTopic && (
               <ActionIcon
+                disabled={ownDeviceLoading}
                 icon={PlusIcon}
                 size={'small'}
                 title={tProject('sidebar.newConversation')}

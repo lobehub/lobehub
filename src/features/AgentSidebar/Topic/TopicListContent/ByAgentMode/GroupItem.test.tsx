@@ -82,8 +82,8 @@ vi.mock('@/store/device', () => ({
   useDeviceStore: (selector: (state: object) => unknown) =>
     selector({
       devices: [
-        { deviceId: 'device-1', friendlyName: 'MacBook' },
-        { deviceId: 'device-2', friendlyName: 'Studio Linux' },
+        { deviceId: 'device-1', friendlyName: 'MacBook', online: true },
+        { deviceId: 'device-2', friendlyName: 'Studio Linux', online: true },
       ],
       useFetchDevices: () => ({}),
     }),
@@ -105,6 +105,14 @@ vi.mock('@/store/chat/selectors', () => ({
     unreadCompletedCountForTopics: () => () => 0,
     visiblyRunningTopicIds: () => new Set(),
   },
+}));
+
+const ownDeviceState = vi.hoisted(() => ({
+  loading: false,
+  ownDevice: undefined as { deviceId: string; sandboxFallback: boolean } | undefined,
+}));
+vi.mock('@/features/Projects/WorkingDirectories/useAgentOwnDevice', () => ({
+  useAgentOwnDevice: () => ownDeviceState,
 }));
 
 vi.mock('./DevicePresenceDot', () => ({ default: () => null }));
@@ -255,6 +263,23 @@ describe('TopicByAgentGroupItem', () => {
     expect(startProjectTopicDraft).toHaveBeenCalledWith(
       expect.objectContaining({ directoryId: 'binding-linux' }),
     );
+  });
+
+  /** @example Review (T-14984): a heterogeneous agent's "+" pinned the first directory, on another member's device. */
+  it("starts a heterogeneous agent on its own device's directory, as Auto", () => {
+    directories[0] = { ...directories[0], ...runnable('ins-mac') };
+    directories[1] = { ...directories[1], ...runnable('ins-linux') };
+    ownDeviceState.ownDevice = { deviceId: directories[1].deviceId!, sandboxFallback: true };
+    try {
+      renderGroup();
+      fireEvent.click(screen.getByRole('button', { name: 'sidebar.newConversation' }));
+
+      expect(startProjectTopicDraft).toHaveBeenCalledWith(
+        expect.objectContaining({ auto: true, directoryId: 'binding-linux' }),
+      );
+    } finally {
+      ownDeviceState.ownDevice = undefined;
+    }
   });
 
   /** @example Review: an agent fixed to one device staged a directory on another, so the first send was refused. */

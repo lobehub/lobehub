@@ -106,8 +106,8 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
   );
   const startTopic = useStartProjectTopic(projectId);
   const fixedDeviceId = useAgentFixedDeviceId(coordinatorAgentId);
-  // While it loads, the draft follows the order and Auto restages it once known.
-  const { ownDevice } = useAgentOwnDevice(coordinatorAgentId);
+  // The "+" waits until the main agent's own device is known.
+  const { loading: ownDeviceLoading, ownDevice } = useAgentOwnDevice(coordinatorAgentId);
   const { ordered } = useProjectExecutionEnvironments(projectId);
   const { data: devices } = useDeviceList();
   return (
@@ -132,7 +132,7 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
           <Filter />
           <ActionIcon
             aria-label={t('sidebar.newConversation')}
-            disabled={!directoriesRequest.hasData || !!directoriesRequest.error}
+            disabled={!directoriesRequest.hasData || !!directoriesRequest.error || ownDeviceLoading}
             icon={PlusIcon}
             size="small"
             title={t('sidebar.newConversation')}
