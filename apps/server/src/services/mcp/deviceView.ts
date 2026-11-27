@@ -41,14 +41,14 @@ const isDisplayMode = (value: unknown): value is 'inline' | 'fullscreen' =>
  * client serves views (`supportedMcpFeatures` includes `'apps'`): any other
  * result reads as plain, as it did before views were relayed.
  */
-export const relayDeviceViewState = async (
-  state: unknown,
+export const relayDeviceViewState = async <T>(
+  state: T,
   {
     device,
     keep,
     params,
   }: { device: McpRelayDevice; keep: boolean; params: StdioMCPParams | HttpMCPClientParams },
-): Promise<unknown> => {
+): Promise<T | Record<string, unknown>> => {
   if (!state || typeof state !== 'object') return state;
 
   const { mcpApp, ...rest } = state as Record<string, unknown>;

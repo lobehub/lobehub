@@ -1,14 +1,14 @@
 /**
  * A stdio MCP Apps server for testing views relayed through a device
  * (`lh connect` or the desktop app). Register it as a stdio connector bound to
- * that device:
+ * that device. Tool names start with `fixture_`, so `model-server.mts` calls them:
  *
  *   command: bun   args: [<repo>/e2e/fixtures/mcpApps/stdio-relay-server.mts]
  *
- * - `relay_show_inline` renders an inline view.
- * - `relay_show_panel` prefers the side panel (fullscreen) and is a thread
+ * - `fixture_relay_show_inline` renders an inline view.
+ * - `fixture_relay_show_panel` prefers the side panel (fullscreen) and is a thread
  *   entrypoint, so it can also be opened from the conversation's app menu.
- * - `relay_frame` is app-only: the view polls it for "frames" of a chosen size
+ * - `fixture_relay_frame` is app-only: the view polls it for "frames" of 50 / 200 / 500 KB
  *   (an image block of random bytes, base64) and shows calls per second, the
  *   round trip, and whether the frame came back inline (base64) or was
  *   uploaded as a file, which a view's call must never do.
@@ -50,11 +50,10 @@ button,select{font:inherit;margin:2px}
 <div>server pid: <b data-testid="relay-pid">${process.pid}</b> · started ${startedAt}</div>
 <div>tool result: <span data-testid="relay-result">waiting…</span></div>
 <div>
-  <select data-testid="relay-size">
-    <option value="51200">50 KB</option><option value="204800">200 KB</option><option value="512000">500 KB</option>
-  </select>
   <button data-testid="relay-call">Call app tool</button>
-  <button data-testid="relay-loop">Start loop</button>
+  <button data-testid="relay-loop" data-bytes="51200">Loop 50 KB</button>
+  <button data-testid="relay-loop" data-bytes="204800">Loop 200 KB</button>
+  <button data-testid="relay-loop" data-bytes="512000">Loop 500 KB</button>
   <button data-testid="relay-stop">Stop</button>
 </div>
 <div id="stats" data-testid="relay-stats"></div>
@@ -82,10 +81,10 @@ button,select{font:inherit;margin:2px}
       m.error ? p.reject(new Error(m.error.message)) : p.resolve(m.result ?? {});
     }
   });
-  const size = () => Number(document.querySelector('[data-testid="relay-size"]').value);
+  let bytes = 51200;
   const callOnce = async () => {
     const t0 = performance.now();
-    const result = await request('tools/call', { name: 'relay_frame', arguments: { bytes: size() } });
+    const result = await request('tools/call', { name: 'fixture_relay_frame', arguments: { bytes } });
     const ms = performance.now() - t0;
     const image = (result.content ?? []).find((b) => b.type === 'image');
     const text = (result.content ?? []).find((b) => b.type === 'text')?.text ?? '';
@@ -93,6 +92,7 @@ button,select{font:inherit;margin:2px}
   };
   const show = (lines) => { stats.textContent = lines.join('\\n'); };
   document.querySelector('[data-testid="relay-call"]').onclick = async () => {
+    bytes = 51200;
     try {
       const r = await callOnce();
       show([
@@ -102,8 +102,8 @@ button,select{font:inherit;margin:2px}
     } catch (error) { show(['call failed: ' + error.message]); }
   };
   document.querySelector('[data-testid="relay-stop"]').onclick = () => { looping = false; };
-  document.querySelector('[data-testid="relay-loop"]').onclick = async () => {
-    if (looping) return; looping = true;
+  const loop = async (size) => {
+    if (looping) return; looping = true; bytes = size;
     const start = performance.now(); const times = []; let errors = 0; let notInline = 0; let last = '';
     while (looping) {
       try {
@@ -114,11 +114,14 @@ button,select{font:inherit;margin:2px}
       const sorted = [...times].sort((a, b) => a - b);
       const pct = (q) => sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))].toFixed(0) : '-';
       show([
-        'calls: ' + times.length + ' in ' + elapsed.toFixed(1) + ' s', 'fps: ' + (times.length / elapsed).toFixed(2),
+        'frame size: ' + bytes / 1024 + ' KB', 'calls: ' + times.length + ' in ' + elapsed.toFixed(1) + ' s', 'fps: ' + (times.length / elapsed).toFixed(2),
         'p50: ' + pct(0.5) + ' ms  p90: ' + pct(0.9) + ' ms', 'errors: ' + errors + '  not inline: ' + notInline, 'last: ' + last,
       ]);
     }
   };
+  document.querySelectorAll('[data-testid="relay-loop"]').forEach((button) => {
+    button.onclick = () => loop(Number(button.dataset.bytes));
+  });
   request('ui/initialize', {
     protocolVersion: '2026-01-26',
     appInfo: { name: 'relay fixture', version: '1.0.0' },
@@ -141,7 +144,7 @@ for (const mode of ['inline', 'fullscreen'] as const) {
 }
 
 server.registerTool(
-  'relay_show_inline',
+  'fixture_relay_show_inline',
   {
     _meta: {
       'lobehub/ui': { preferredModelDisplayMode: 'inline' },
@@ -151,13 +154,13 @@ server.registerTool(
     inputSchema: {},
   },
   async (args) => {
-    record('relay_show_inline', args);
+    record('fixture_relay_show_inline', args);
     return { content: [{ text: `relay inline view from pid ${process.pid}`, type: 'text' }] };
   },
 );
 
 server.registerTool(
-  'relay_show_panel',
+  'fixture_relay_show_panel',
   {
     _meta: {
       'lobehub/ui': { entrypoints: [{ type: 'thread' }], preferredModelDisplayMode: 'fullscreen' },
@@ -167,14 +170,14 @@ server.registerTool(
     inputSchema: {},
   },
   async (args) => {
-    record('relay_show_panel', args);
+    record('fixture_relay_show_panel', args);
     return { content: [{ text: `relay panel view from pid ${process.pid}`, type: 'text' }] };
   },
 );
 
 let frames = 0;
 server.registerTool(
-  'relay_frame',
+  'fixture_relay_frame',
   {
     _meta: { ui: { resourceUri: 'ui://relay/fullscreen', visibility: ['app'] } },
     description: 'App-only: return a frame of the requested size.',
@@ -183,7 +186,7 @@ server.registerTool(
   async (args: { bytes?: number }) => {
     const bytes = Math.max(1, Math.min(Number(args?.bytes) || 51_200, 4 * 1024 * 1024));
     frames += 1;
-    record('relay_frame', { bytes });
+    record('fixture_relay_frame', { bytes });
     return {
       content: [
         { text: `frame ${frames} (${bytes} bytes) from pid ${process.pid}`, type: 'text' },

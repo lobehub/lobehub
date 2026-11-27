@@ -895,7 +895,7 @@ export class ToolExecutionService {
 
     // A view the device names is read and driven through the server, from
     // any client that opens the conversation, back on this device
-    const state = await relayDeviceViewState(result.state, {
+    const state = await relayDeviceViewState(result.state as Record<string, any> | undefined, {
       device: target,
       keep: mcpApps,
       params: mcpParams,
