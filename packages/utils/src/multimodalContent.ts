@@ -15,7 +15,18 @@ export function deserializeParts(content: string): MessageContentPart[] | null {
   try {
     const parsed = JSON.parse(content);
     // Validate it's an array with valid part structure
-    if (Array.isArray(parsed) && parsed.length > 0 && parsed[0]?.type) {
+    if (
+      Array.isArray(parsed) &&
+      parsed.length > 0 &&
+      parsed.every(
+        (part) =>
+          part !== null &&
+          typeof part === 'object' &&
+          !Array.isArray(part) &&
+          typeof part.type === 'string' &&
+          part.type.length > 0,
+      )
+    ) {
       return parsed as MessageContentPart[];
     }
   } catch {
