@@ -127,9 +127,10 @@ export class ChannelHistoryRepository {
     operationId: string,
     fn: (tx: Transaction, channelId: string, manifest: ChannelInputManifest) => Promise<T>,
     /**
-     * Whether another person's shared Agent may use this read. Only plain history reads opt in:
-     * the run executes as the owner, so anything acting from it (listing or posting into
-     * Channels) would act in the owner's Channels.
+     * Whether another person's shared Agent may use this read. History reads opt in, and so do
+     * listing and posting where the Agent is itself a member, which narrow themselves to those
+     * Channels: the run executes as the owner, so anything else acting from it (asking the
+     * owner's Agents, opening Threads) would act as the owner.
      */
     { allowShared = false }: { allowShared?: boolean } = {},
   ): Promise<T> {
@@ -148,11 +149,11 @@ export class ChannelHistoryRepository {
         .innerJoin(agentOperations, eq(agentOperations.id, channelJobs.operationId))
         .where(and(eq(channelJobs.operationId, operationId), eq(channelJobs.channelId, channel.id)))
         .limit(1);
-      // A shared Agent runs as its owner in its own scope for the person of a direct
-      // conversation, personal or in that person's workspace (`executionConfig.share`, frozen at
-      // claim): the operation is the owner's, the Channel and its requester are that person's.
+      // A shared Agent runs as its owner in its own scope (`executionConfig.share`, frozen at
+      // claim): the operation is the owner's, the request another person's. That is the person of
+      // a direct conversation with it, personal or in their workspace, or a group member whose
+      // request the owner admitted.
       const share = row?.job.executionConfig?.share;
-      const requesterId = share ? channel.userId : this.userId;
       if (
         !row ||
         row.operation.userId !== this.userId ||
@@ -160,8 +161,8 @@ export class ChannelHistoryRepository {
         (share
           ? share.ownerId !== this.userId ||
             share.workspaceId !== this.workspaceId ||
-            channel.agentId !== row.job.manifest?.self.agentId ||
-            !requesterId
+            (!!channel.agentId &&
+              (channel.agentId !== row.job.manifest?.self.agentId || !channel.userId))
           : channel.workspaceId !== this.workspaceId ||
             (channel.agentId && channel.userId !== this.userId))
       )
@@ -183,9 +184,14 @@ export class ChannelHistoryRepository {
       const members = await activeMembers(tx, channel.id, [job.memberId, job.requesterMemberId]);
       const requester = members.find((member) => member.id === job.requesterMemberId);
       const agent = members.find((member) => member.id === job.memberId);
+      const requesterMatches = !share
+        ? requester?.userId === this.userId
+        : channel.agentId
+          ? requester?.userId === channel.userId
+          : !!requester?.userId && requester.userId !== this.userId;
       if (
         requester?.actorType !== 'user' ||
-        requester.userId !== requesterId ||
+        !requesterMatches ||
         agent?.actorType !== 'agent' ||
         agent.agentId !== job.manifest.self.agentId
       )
@@ -234,6 +240,8 @@ export class ChannelHistoryRepository {
    */
   currentRun = async (
     operationId: string,
+    /** Listing and posting where the Agent is a member admit a shared Agent's run; see `read`. */
+    options: { allowShared?: boolean } = {},
   ): Promise<{
     channelId: string;
     exchange?: ChannelAgentExchange;
@@ -241,33 +249,37 @@ export class ChannelHistoryRepository {
     requestByAgent?: boolean;
     requestVia?: ChannelMessageVia;
   }> =>
-    this.read(operationId, async (tx, channelId, manifest) => {
-      const message = (id: string) =>
-        tx
-          .select({
-            agentId: channelMessages.agentId,
-            metadata: channelMessages.metadata,
-            replyToId: channelMessages.replyToId,
-            routingStatus: channelMessages.routingStatus,
-          })
-          .from(channelMessages)
-          .where(and(eq(channelMessages.channelId, channelId), eq(channelMessages.id, id)))
-          .limit(1)
-          .then(([row]) => row);
-      const request = await message(manifest.requestMessageId);
-      if (request?.routingStatus !== 'reply' || !request.replyToId)
-        return {
-          channelId,
-          manifest,
-          ...(request?.agentId && { requestByAgent: true }),
-          requestVia: channelMessageVia(request?.metadata),
-        };
+    this.read(
+      operationId,
+      async (tx, channelId, manifest) => {
+        const message = (id: string) =>
+          tx
+            .select({
+              agentId: channelMessages.agentId,
+              metadata: channelMessages.metadata,
+              replyToId: channelMessages.replyToId,
+              routingStatus: channelMessages.routingStatus,
+            })
+            .from(channelMessages)
+            .where(and(eq(channelMessages.channelId, channelId), eq(channelMessages.id, id)))
+            .limit(1)
+            .then(([row]) => row);
+        const request = await message(manifest.requestMessageId);
+        if (request?.routingStatus !== 'reply' || !request.replyToId)
+          return {
+            channelId,
+            manifest,
+            ...(request?.agentId && { requestByAgent: true }),
+            requestVia: channelMessageVia(request?.metadata),
+          };
 
-      // Woken by an answer: the request it answered names where the exchange began.
-      const asked = await message(request.replyToId);
-      const exchange = channelAgentExchange(asked?.metadata);
-      return { channelId, ...(exchange && { exchange }), manifest };
-    });
+        // Woken by an answer: the request it answered names where the exchange began.
+        const asked = await message(request.replyToId);
+        const exchange = channelAgentExchange(asked?.metadata);
+        return { channelId, ...(exchange && { exchange }), manifest };
+      },
+      options,
+    );
 
   /**
    * Holds the questions a run asks its requester (`lobe-channel.askUser`) on its job; publishing

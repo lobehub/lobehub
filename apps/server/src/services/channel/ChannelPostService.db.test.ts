@@ -4,7 +4,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageModel } from '@/database/models/message';
-import { ChannelExecutionRepository } from '@/database/repositories/channel';
+import { ChannelExecutionRepository, ChannelRepository } from '@/database/repositories/channel';
 import {
   createChannelFixture,
   jobsOf,
@@ -12,8 +12,12 @@ import {
 } from '@/database/repositories/channel/__tests__/testUtils';
 import {
   agentOperations,
+  agents,
+  agentShares,
+  channelAgentGrants,
   channelJobs,
   channelMessages,
+  channels,
   topics,
   workspaceMembers,
 } from '@/database/schemas';
@@ -310,5 +314,101 @@ describe('ChannelPostService.postMessage', () => {
     expect(
       (await mainTimeline(channel.id)).filter((message) => message.agentId === reporter.agentId),
     ).toEqual([]);
+  });
+});
+
+/**
+ * The owner's Agent, shared by link, answers a group member the owner admitted. The run executes
+ * as the owner, so it reaches the owner's Channels: only those it is itself in, saying whom it
+ * posted for.
+ */
+describe('ChannelPostService.postMessage for a shared Agent’s visitor', () => {
+  const agentId = 'agt_channel_post_shared';
+  const asOwner = () => new ChannelRepository(db, fixture.ownerId);
+
+  const setup = async () => {
+    await db.insert(agents).values({ id: agentId, title: 'Star', userId: fixture.ownerId });
+    await db.insert(agentShares).values({ agentId, shareConfig: {}, visibility: 'link' });
+    const owner = asOwner();
+    // Where the visitor (the fixture's member, "mia") asks the owner's Agent.
+    const { channel: group, member: ownerMember } = await owner.create({ title: 'Owner & Mia' });
+    const mia = await fixture.addPerson(group.id, fixture.memberId, 'member');
+    const star = await owner.addAgent(group.id, { agentId, config: {}, name: 'Star' });
+    await db.insert(channelAgentGrants).values({
+      channelId: group.id,
+      decidedAt: new Date(),
+      granteeMemberId: mia.id,
+      memberId: star.id,
+      ownerId: fixture.ownerId,
+      requestedByMemberId: mia.id,
+      status: 'approved',
+    });
+    const request = await new ChannelRepository(db, fixture.memberId).send(group.id, {
+      content: '@Star say hi to the owner privately',
+      mentions: [star.id],
+      requestKey: 'visitor-request',
+      routing: 'decision',
+    });
+    const [job] = await jobsOf(db, request.id);
+    const claim = (await execution.claim(group.id, job.id, lease))!;
+    expect(claim.job.executionConfig?.share).toMatchObject({ ownerId: fixture.ownerId });
+    const operationId = claim.job.operationId!;
+    await db
+      .update(agentOperations)
+      .set({ status: 'running' })
+      .where(eq(agentOperations.id, operationId));
+
+    // The owner's own conversation with Star, which mia is not in.
+    const { channel: dm } = await owner.create({ title: 'Owner · Star' });
+    await owner.addAgent(dm.id, { agentId, config: {}, name: 'Star' });
+    expect(ownerMember.userId).toBe(fixture.ownerId);
+    return {
+      dm,
+      group,
+      operationId,
+      service: new ChannelPostService(db, fixture.ownerId, operationId),
+    };
+  };
+
+  const stored = async (messageId: string) =>
+    (await db.select().from(channelMessages).where(eq(channelMessages.id, messageId)))[0];
+
+  it('posts where the Agent is with its owner, naming the visitor', async () => {
+    const { dm, service } = await setup();
+
+    const posted = await service.postMessage({ channelId: dm.id, content: 'Mia says hi.' }, 'c1');
+    expect((await stored(posted.messageId)).metadata).toMatchObject({
+      postedFor: { name: 'mia', userId: fixture.memberId },
+      source: 'agent-post',
+    });
+    expect((await stored(posted.messageId)).metadata).not.toHaveProperty('postedFor.source');
+  });
+
+  it('links back when the visitor asked in a public Channel', async () => {
+    const { dm, group, service } = await setup();
+    // Only a workspace group can be made public; the post reads just its visibility.
+    await db.update(channels).set({ visibility: 'public' }).where(eq(channels.id, group.id));
+
+    const posted = await service.postMessage({ channelId: dm.id, content: 'Hi again.' }, 'c2');
+    expect((await stored(posted.messageId)).metadata).toMatchObject({
+      postedFor: {
+        name: 'mia',
+        source: {
+          channelId: group.id,
+          title: 'Owner & Mia',
+          url: expect.stringContaining(`/channels/${group.id}`),
+        },
+        userId: fixture.memberId,
+      },
+    });
+  });
+
+  it('refuses the owner’s Channels the Agent is not in', async () => {
+    const { service } = await setup();
+    const { channel: elsewhere } = await asOwner().create({ title: 'Owner only' });
+
+    await expect(
+      service.postMessage({ channelId: elsewhere.id, content: 'Hi' }, 'c3'),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
   });
 });

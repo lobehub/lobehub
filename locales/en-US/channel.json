@@ -177,6 +177,8 @@
   "message.copied": "Copied",
   "message.copy": "Copy text",
   "message.expand": "Expand message",
+  "message.postedFor": "Sent at {{name}}'s request",
+  "message.postedForFrom": "Sent at {{name}}'s request in #{{channel}}",
   "message.relayReplyFrom": "{{name}} replied in #{{channel}}",
   "message.relayedBy": "Relayed by {{name}}",
   "moveToTrash": "Move channel to trash",

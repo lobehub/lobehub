@@ -14,6 +14,10 @@ import {
   ChannelRepository,
   memberEnvironment,
 } from '@/database/repositories/channel';
+import {
+  channelPeopleNames,
+  findChannelRunRequester,
+} from '@/database/repositories/channel/runRequester';
 import { channelMembers } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
@@ -90,18 +94,39 @@ export class ChannelMessagingService {
 
   listChannels = async (params: ChannelListChannelsParams = {}): Promise<ChannelDirectoryPage> => {
     await assertChannelEnabled(this.userId);
-    const run = await this.history.currentRun(this.operationId);
+    const run = await this.history.currentRun(this.operationId, { allowShared: true });
     const limit = params.limit ?? DEFAULT_LIMIT;
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_LIMIT)
       throw new ChannelError('BAD_REQUEST', `Expected a limit between 1 and ${MAX_LIMIT}`);
     const query = params.query?.trim().toLowerCase();
 
-    const matched = (await this.channels.directory()).filter(
+    // A shared Agent answering a visitor runs as its owner: it lists only the owner's Channels it
+    // is in itself, the only ones it may post in (`ChannelPostService`).
+    const requester = await findChannelRunRequester(
+      this.db,
+      run.channelId,
+      run.manifest.requesterMemberId,
+    );
+    const forVisitor = !!requester && requester.userId !== this.userId;
+    const selfAgentId = run.manifest.self.agentId;
+
+    const directory = (await this.channels.directory()).filter(
+      ({ agents, channel }) =>
+        channel.id === run.channelId ||
+        !forVisitor ||
+        agents.some((agent) => agent.agentId === selfAgentId),
+    );
+    const people = await channelPeopleNames(
+      this.db,
+      directory.map(({ channel }) => channel.id),
+    );
+    const matched = directory.filter(
       ({ agents, channel }) =>
         (!params.agentId || agents.some((agent) => agent.agentId === params.agentId)) &&
         (!query ||
           (channel.title ?? '').toLowerCase().includes(query) ||
-          agents.some((agent) => agent.name.toLowerCase().includes(query))),
+          agents.some((agent) => agent.name.toLowerCase().includes(query)) ||
+          (people.get(channel.id) ?? []).some((name) => name.toLowerCase().includes(query))),
     );
     return {
       channels: matched.slice(0, limit).map(({ agents, channel }) => ({
@@ -109,6 +134,7 @@ export class ChannelMessagingService {
         current: channel.id === run.channelId,
         id: channel.id,
         kind: channel.agentId ? 'direct' : channel.agentPairKey ? 'agents' : 'group',
+        people: people.get(channel.id) ?? [],
         projectId: channel.projectId,
         title: channel.title ?? '',
       })),
