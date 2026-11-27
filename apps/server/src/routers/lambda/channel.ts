@@ -462,6 +462,16 @@ export const channelRouter = router({
       await ctx.channelService.repository.sections.reorder(input.ids);
       return { success: true };
     }),
+  /** The caller's own order of the conversations inside one of their sections. */
+  reorderSectionChannels: externalChannelProcedure
+    .input(z.object({ channelIds: z.array(channelId).max(500), sectionId }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.channelService.repository.sections.reorderChannels(
+        input.sectionId,
+        input.channelIds,
+      );
+      return { success: true };
+    }),
   /** Deletes a section; its conversations return to the built-in sections. */
   removeSection: externalChannelProcedure
     .input(z.object({ id: sectionId }))

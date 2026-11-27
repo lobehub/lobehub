@@ -60,6 +60,32 @@ describe('Channel sections', () => {
     ]);
   });
 
+  it('keeps the caller its own order inside a section until the conversation moves', async () => {
+    const { asMember, asOwner, channel: first } = await fixture.createTeamChannel('First');
+    const { channel: second } = await asOwner.create({ title: 'Second' });
+    const work = await asOwner.sections.create('Work');
+    await asOwner.moveToSection(first.id, work.id);
+    await asOwner.moveToSection(second.id, work.id);
+
+    await asOwner.sections.reorderChannels(work.id, [second.id, first.id]);
+    const sortOf = async () =>
+      Object.fromEntries((await asOwner.list()).map(({ id, sectionSort }) => [id, sectionSort]));
+    expect(await sortOf()).toEqual({ [first.id]: 1, [second.id]: 0 });
+    expect(await asMember.list()).toEqual([
+      expect.objectContaining({ id: first.id, sectionSort: null }),
+    ]);
+
+    // Nobody orders someone else's section.
+    await expect(asMember.sections.reorderChannels(work.id, [first.id])).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+
+    // Leaving the section forgets the position, and a conversation filed elsewhere is skipped.
+    await asOwner.moveToSection(first.id, null);
+    await asOwner.sections.reorderChannels(work.id, [first.id, second.id]);
+    expect(await sortOf()).toEqual({ [first.id]: null, [second.id]: 1 });
+  });
+
   it('hides a conversation for the caller until the next message', async () => {
     const { asMember, asOwner, channel } = await fixture.createTeamChannel();
 
