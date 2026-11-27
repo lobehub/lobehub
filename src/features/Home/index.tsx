@@ -13,6 +13,8 @@ import { EntityLinkHostProvider } from '@/features/EntityLink/host';
  * every refresh, painting it empty before the cards arrived.
  */
 import HomeInbox from '@/features/HomeInbox';
+import type { RailContentState } from '@/features/HomeInbox/railContentState';
+import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -38,7 +40,7 @@ import {
   HOME_PORTRAIT_INSET,
   HOME_PORTRAIT_WIDTH,
 } from './portraitFraming';
-import { RAIL_INBOX_PROPS, resolveRailVisibility } from './railVisibility';
+import { RAIL_INBOX_PROPS, resolveRailEmpty, resolveRailVisibility } from './railVisibility';
 import type { HomeMode } from './types';
 
 export const DEFAULT_HOME_MODE: HomeMode = 'chat';
@@ -400,9 +402,26 @@ const Home = memo(() => {
    * judging by an empty DOM node also matched while the lazy inbox was
    * suspended and while its feeds were still loading, so every refresh painted one column first and
    * slid back once the cards arrived.
+   *
+   * While the feeds load, the last settled answer for this scope decides, so a
+   * rail that is usually empty does not show skeletons beside a narrowed page
+   * and slide it back on every reload.
    */
-  const [railEmpty, setRailEmpty] = useState(false);
+  const cacheScope = useCacheScope();
+  const railEmptyLastTime = useGlobalStore(systemStatusSelectors.homeRailEmpty(cacheScope));
+  const [railState, setRailState] = useState<RailContentState>('pending');
+  const railEmpty = resolveRailEmpty(railState, railEmptyLastTime);
   const contentCollapsed = railCollapsed || (isLogin && railEmpty);
+  const handleRailStateChange = useCallback(
+    (state: RailContentState) => {
+      setRailState(state);
+      if (state === 'pending') return;
+      useGlobalStore
+        .getState()
+        .updateSystemStatus({ homeRailEmptyByScope: { [cacheScope]: state === 'empty' } });
+    },
+    [cacheScope],
+  );
   const portraitVisible = Boolean(isLogin && showHomePortrait);
 
   useEffect(() => {
@@ -505,17 +524,21 @@ const Home = memo(() => {
 
       {isLogin && (
         <aside
-          aria-hidden={railCollapsed}
+          aria-hidden={contentCollapsed}
           className={cx(styles.rail, styles.railSurface)}
-          data-collapsed={railCollapsed}
+          data-collapsed={contentCollapsed}
           data-testid={'home-rail'}
           id={'home-rail'}
-          inert={railCollapsed}
+          inert={contentCollapsed}
         >
           {/* The inbox reads assistant replies, which carry internal entity
               links; only the acceptance drawer can show a detail here. */}
           <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
-            <HomeInbox {...RAIL_INBOX_PROPS} variant={'rail'} onRailEmptyChange={setRailEmpty} />
+            <HomeInbox
+              {...RAIL_INBOX_PROPS}
+              variant={'rail'}
+              onRailStateChange={handleRailStateChange}
+            />
           </EntityLinkHostProvider>
         </aside>
       )}

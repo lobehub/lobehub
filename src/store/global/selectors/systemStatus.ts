@@ -655,6 +655,12 @@ const isBannerDismissed =
 const tokenDisplayFormatShort = (s: GlobalState) =>
   s.status.tokenDisplayFormatShort !== undefined ? s.status.tokenDisplayFormatShort : true;
 
+/** Whether the home rail last settled empty in `scope` (a cache scope). */
+const homeRailEmpty =
+  (scope: string) =>
+  (s: GlobalState): boolean =>
+    s.status.homeRailEmptyByScope?.[scope] ?? false;
+
 /** The home AgentSelect choice made in `scope` (a cache scope), if any. */
 const homeSelectedAgentId =
   (scope: string) =>
@@ -685,6 +691,7 @@ export const systemStatusSelectors = {
   hiddenSidebarSections,
   hidePWAInstaller,
   homeGoalsCollapsed,
+  homeRailEmpty,
   homeRecentsCount,
   homeSelectedAgentId,
   homeTaskCount,

@@ -1,4 +1,9 @@
-import { canHostRail, RAIL_INBOX_PROPS, resolveRailVisibility } from './railVisibility';
+import {
+  canHostRail,
+  RAIL_INBOX_PROPS,
+  resolveRailEmpty,
+  resolveRailVisibility,
+} from './railVisibility';
 
 const signedIn = { isLogin: true, showHomeRail: true };
 
@@ -60,5 +65,17 @@ describe('canHostRail', () => {
 
   it('stays true while needs-you and unread are the only ones off', () => {
     expect(canHostRail(['needsYou', 'unread'])).toBe(true);
+  });
+});
+
+describe('resolveRailEmpty', () => {
+  it('follows the settled answer once the feeds have loaded', () => {
+    expect(resolveRailEmpty('empty', false)).toBe(true);
+    expect(resolveRailEmpty('filled', true)).toBe(false);
+  });
+
+  it('reuses the last settled answer only while the feeds load', () => {
+    expect(resolveRailEmpty('pending', true)).toBe(true);
+    expect(resolveRailEmpty('pending', false)).toBe(false);
   });
 });
