@@ -269,10 +269,7 @@ export class ChannelRepository {
       { minRole: 'admin' },
     );
 
-  /**
-   * Adds a usable Agent reference; a missing reference is allowed only for retained history. Any
-   * member may bring an Agent in, like a person.
-   */
+  /** Any member adds a usable Agent; a missing reference is allowed only for retained history. */
   addAgent = async (channelId: string, input: ChannelAddAgentInput) =>
     this.write(channelId, (tx, { channel, member }) => addAgentMember(tx, channel, member, input));
 
@@ -474,14 +471,14 @@ export class ChannelRepository {
       const access = await this.memberAccess(tx, channelId);
       if (!access) return;
       if (access.channel.isDeleted) throw new ChannelError('NOT_FOUND', 'Channel not found');
-      const admin = hasRole(access.member.role, 'admin');
+      const canDelete = hasRole(access.member.role, 'admin');
       const notificationsMuted = access.member.metadata?.notificationsMuted === true;
       const view = await readChannelView(tx, channelId, options, this.userId);
       const shared = await sharedAgentView(tx, access.channel, this.userId);
       return {
         channel: {
           ...access.channel,
-          canDelete: admin,
+          canDelete,
           canInvite: true,
           notificationsMuted,
           ...shared.channel,
