@@ -112,12 +112,12 @@ async function fetchRegistryVersion(name: string, tag: string): Promise<string> 
 }
 
 /** `npm view` goes through the user's npm config: registry mirror, proxy and auth. */
-function npmViewVersion(name: string, tag: string): Promise<string> {
+function npmViewVersion(name: string, tag: string, timeout: number): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
       'npm',
       ['view', `${name}@${tag}`, 'version'],
-      { encoding: 'utf8', shell: process.platform === 'win32', timeout: 30_000 },
+      { encoding: 'utf8', shell: process.platform === 'win32', timeout },
       (error, stdout) => {
         const version = stdout?.trim();
         if (error || !version) reject(error ?? new Error('npm view printed no version'));
@@ -134,12 +134,16 @@ function npmViewVersion(name: string, tag: string): Promise<string> {
  * the registry through a proxy or a mirror the direct request fails while `npm install` works.
  * Fall back to `npm view`, which resolves the version the same way the install will.
  */
-export async function fetchLatestVersion(name: string, tag: string): Promise<string> {
+export async function fetchLatestVersion(
+  name: string,
+  tag: string,
+  { npmTimeoutMs = 30_000 }: { npmTimeoutMs?: number } = {},
+): Promise<string> {
   try {
     return await fetchRegistryVersion(name, tag);
   } catch (error) {
     try {
-      return await npmViewVersion(name, tag);
+      return await npmViewVersion(name, tag, npmTimeoutMs);
     } catch {
       throw error;
     }
@@ -206,7 +210,8 @@ export async function runAutoUpdateWorker(): Promise<void> {
   if (!isAutoUpdateEnabled() || !acquireInstallLock()) return;
   try {
     if (isDaemonInstallRunning()) return;
-    const latest = await fetchLatestVersion(cliPackageName, 'latest');
+    // Nobody waits on this process, so give a slow registry connection more time.
+    const latest = await fetchLatestVersion(cliPackageName, 'latest', { npmTimeoutMs: 120_000 });
     if (!semver.valid(latest) || !isNewerVersion(latest, cliVersion)) return;
     const { args, command } = buildInstallCommand(
       detectPackageManager(),
