@@ -317,7 +317,8 @@ describe('local file preview replica', () => {
     expect(cloudSandboxService.callTool).toHaveBeenCalledWith(
       'readLocalFile',
       { fullContent: true, path: '/workspace/a.txt' },
-      { topicId: 'topic-1' },
+      // A preview reads what the agent left; it is not a step of the agent's run.
+      { intent: 'view', topicId: 'topic-1' },
     );
     expect(projectFileService.getLocalFilePreview).not.toHaveBeenCalled();
   });

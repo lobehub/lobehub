@@ -11,6 +11,7 @@ import debug from 'debug';
 import { sha256 } from 'js-sha256';
 
 import { FileModel } from '@/database/models/file';
+import { redisService } from '@/server/services/redis';
 
 import {
   buildSandboxFilesInitCommand,
@@ -25,6 +26,7 @@ import {
   SANDBOX_ENVIRONMENT_INIT_TIMEOUT_MS,
   withEnvironmentVariables,
 } from './environmentInit';
+import { EPHEMERAL_SANDBOX_KEEP_ALIVE_MS, isHeteroExecLaunch } from './ephemeralFiles';
 import { isSandboxAccessDeniedError, isSandboxAuthError } from './errors';
 import type {
   SandboxCommandResult,
@@ -61,9 +63,15 @@ export class SandboxMiddlewareService implements SandboxService {
     toolName: string,
     params: Record<string, unknown>,
   ): Promise<SandboxCallToolResult> {
-    const report = await this.ensureEnvironmentInitialized();
-    if (report) this.pendingEnvironmentReport = report;
-    await this.ensureFilesInitialized();
+    // A viewer only reads what the agent left. Preparing a sandbox for work —
+    // cloning the environment, syncing the topic's uploads — is the agent's
+    // call to make, and a viewer's read of a recycled sandbox would otherwise
+    // pay for both just to find the agent's files missing.
+    if (!this.isEphemeralViewer()) {
+      const report = await this.ensureEnvironmentInitialized();
+      if (report) this.pendingEnvironmentReport = report;
+      await this.ensureFilesInitialized();
+    }
 
     if (READ_FILE_TOOL_NAMES.has(toolName) && typeof params.path === 'string') {
       const mimeType = getLocalImageMimeType(params.path);
@@ -74,6 +82,9 @@ export class SandboxMiddlewareService implements SandboxService {
       toolName,
       this.applyEnvironmentVariables(toolName, params),
     );
+    // Not awaited: it is bookkeeping for the Files panel, and must not add a
+    // round-trip to every step of the agent's run.
+    void this.recordEphemeralActivity(toolName, params, result);
 
     // Held until a shell result can carry it: a first call that lists or
     // reads files has no output to put it in, and dropping it would hide a
@@ -83,6 +94,56 @@ export class SandboxMiddlewareService implements SandboxService {
     this.pendingEnvironmentReport = undefined;
 
     return withEnvironmentReport(toolName, result, pending);
+  }
+
+  /**
+   * What the Files panel needs to tell a temporary sandbox that still holds
+   * the agent's files from one the execution plane recycled: the execution
+   * plane recreates an expired session silently, and asking it whether one is
+   * alive starts one. Only a call that reached the sandbox says anything, and
+   * a temporary sandbox is the only kind that can vanish with its files.
+   * Best-effort: never fails the call it follows.
+   */
+  private async recordEphemeralActivity(
+    toolName: string,
+    params: Record<string, unknown>,
+    result: SandboxCallToolResult,
+  ): Promise<void> {
+    const { activity = 'agent', topicId, userId } = this.options;
+    if (!topicId || !userId || !this.isEphemeral()) return;
+
+    try {
+      if (activity === 'agent') {
+        if (!result.success) return;
+        await redisService.ephemeralSandbox.recordAgentActivity(userId, topicId, {
+          keepAliveUntil: isHeteroExecLaunch(toolName, params)
+            ? Date.now() + EPHEMERAL_SANDBOX_KEEP_ALIVE_MS
+            : undefined,
+        });
+      } else if (result.sessionExpiredAndRecreated) {
+        // Checked before success: a read of the agent's file in the new,
+        // empty sandbox usually fails, and the recycle is what it found.
+        await redisService.ephemeralSandbox.recordRecycled(userId, topicId);
+      } else if (result.success) {
+        await redisService.ephemeralSandbox.recordAlive(userId, topicId);
+      }
+    } catch (error) {
+      log('Failed to record sandbox activity for topic %s: %O', topicId, error);
+    }
+  }
+
+  private isEphemeral() {
+    const { sandboxMode } = this.options;
+    return !sandboxMode || sandboxMode === 'ephemeral';
+  }
+
+  /**
+   * A read of a temporary sandbox's files. A folder on the drive is prepared
+   * on a viewer's first call as it always was: its files are already there,
+   * and the preparation only fills a folder that is still empty.
+   */
+  private isEphemeralViewer() {
+    return this.options.activity === 'viewer' && this.isEphemeral();
   }
 
   /**

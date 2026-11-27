@@ -26,9 +26,16 @@ export class ProjectFilePrivateAction {
       actionPrefix: 'projectFile/projectIndex',
       // An absent result is a terminal "nothing to read there", not a dropped
       // response: the engine skips `isMissing` for `undefined` heads.
-      fetcher: async ({ deviceId, dirPath, sandboxInstanceId, sandboxTopicId }) => {
+      fetcher: async ({
+        deviceId,
+        dirPath,
+        sandboxEphemeral,
+        sandboxInstanceId,
+        sandboxTopicId,
+      }) => {
         const result = await projectFileService.getProjectFileIndex({
           deviceId,
+          sandboxEphemeral,
           sandboxInstanceId,
           sandboxTopicId,
           scope: dirPath,

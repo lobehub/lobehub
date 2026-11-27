@@ -358,6 +358,13 @@ export interface ProjectFileIndexResult {
   entries: ProjectFileIndexEntry[];
   indexedAt: string;
   root: string;
+  /**
+   * Why a temporary cloud sandbox has no tree to show, instead of an empty
+   * one: `expired` — it was recycled, and the files the agent wrote went with
+   * it; `notStarted` — nothing has run in it yet. Absent for every other host,
+   * and for a sandbox that answered.
+   */
+  sandboxState?: 'expired' | 'notStarted';
   source: 'git' | 'glob' | 'sandbox';
   /**
    * The host stopped short of the whole tree. Set only by hosts that cap a

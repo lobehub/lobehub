@@ -342,6 +342,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     active: isSandboxExecution,
     directory: sandboxDirectory,
     directoryKnown: sandboxDirectoryKnown,
+    ephemeral: sandboxEphemeral,
     instanceId: sandboxInstanceId,
     topicId: sandboxTopicId,
   } = useSandboxFilesDirectory(activeAgentId ?? '', {
@@ -987,6 +988,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
               deviceId={filesDeviceId}
               directory={filesDirectory}
               prefetch={activeTab === 'files' && (!showRightPanel || !contentReady)}
+              sandboxEphemeral={sandboxEphemeral}
               sandboxInstanceId={isSandboxExecution ? sandboxInstanceId : undefined}
               sandboxTopicId={sandboxTopicId}
             />

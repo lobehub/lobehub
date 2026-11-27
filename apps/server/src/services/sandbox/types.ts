@@ -90,6 +90,14 @@ export interface SandboxSessionContext {
 }
 
 export interface SandboxServiceOptions extends SandboxSessionContext {
+  /**
+   * Who is using a temporary sandbox: the agent's run (`agent`, the default),
+   * whose files are what the Files panel shows, or someone reading what it left
+   * (`viewer` — a preview, the panel's own listing). A viewer's call that finds
+   * the session recreated means the agent's files are gone; an agent's call
+   * that does means the agent is working in the new one.
+   */
+  activity?: 'agent' | 'viewer';
   /** Set for Agent Share visitor runs; image previews get the same `metadata.agentShare` provenance as other visitor file writes. */
   agentShareVisitor?: Pick<AgentShareVisitorContext, 'shareId' | 'visitorUserId'>;
   fileService?: FileService;

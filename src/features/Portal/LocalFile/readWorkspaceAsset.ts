@@ -54,7 +54,7 @@ const readSandboxBytes = async (path: string, topicId: string): Promise<Uint8Arr
       command: `python3 -c ${quoteShellArg(`import pathlib,base64; print(base64.b64encode(pathlib.Path(${JSON.stringify(path)}).read_bytes()).decode(), end="")`)}`,
       description: 'Read workspace asset bytes',
     },
-    { topicId },
+    { intent: 'view', topicId },
   );
   const pythonBytes = decodeBase64Bytes(sandboxCommandOutput(python) ?? '');
   if (pythonBytes) return pythonBytes;
@@ -65,7 +65,7 @@ const readSandboxBytes = async (path: string, topicId: string): Promise<Uint8Arr
       command: `base64 ${quoteShellArg(path)}`,
       description: 'Read workspace asset bytes',
     },
-    { topicId },
+    { intent: 'view', topicId },
   );
   return decodeBase64Bytes(sandboxCommandOutput(fallback) ?? '');
 };
@@ -118,7 +118,7 @@ const readAsset = async (
         const result = await cloudSandboxService.callTool(
           'readLocalFile',
           { fullContent: true, path },
-          { topicId: sandboxTopicId },
+          { intent: 'view', topicId: sandboxTopicId },
         );
         if (!result.success || typeof result.result?.content !== 'string') {
           return { ok: false, reason: 'missing' };

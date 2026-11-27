@@ -133,6 +133,19 @@ describe('project index codec', () => {
     expect(isPersistedPartialIndex(decodeProjectIndex(encodeProjectIndex(restored)))).toBe(true);
   });
 
+  it("keeps a temporary sandbox's state, so a reload paints the notice and not lost files", () => {
+    const recycled: ProjectFileIndexResult = {
+      entries: [],
+      indexedAt: '2026-11-27T00:00:00.000Z',
+      root: '',
+      sandboxState: 'expired',
+      source: 'sandbox',
+    };
+
+    expect(decodeProjectIndex(encodeProjectIndex(recycled))).toEqual(recycled);
+    expect(encodeProjectIndex(index)).not.toHaveProperty('sandboxState');
+  });
+
   it('decodes only rows it encoded', () => {
     expect(projectIndexCodec.decode(projectIndexCodec.encode(index))).toEqual(index);
     // A raw (unencoded) value is an older shape: a miss, not a broken tree.

@@ -4,6 +4,7 @@ import { useFilesTreeSources } from './useFilesTreeSources';
 
 interface FilesPrefetchProps {
   deviceId?: string;
+  sandboxEphemeral?: boolean;
   sandboxInstanceId?: string;
   sandboxTopicId?: string;
   workingDirectory: string;
@@ -16,8 +17,9 @@ interface FilesPrefetchProps {
  * start reading the tree only once the user opened it.
  */
 const FilesPrefetch = memo<FilesPrefetchProps>(
-  ({ deviceId, sandboxInstanceId, sandboxTopicId, workingDirectory }) => {
+  ({ deviceId, sandboxEphemeral, sandboxInstanceId, sandboxTopicId, workingDirectory }) => {
     useFilesTreeSources(deviceId, workingDirectory, {
+      ephemeral: sandboxEphemeral,
       instanceId: sandboxInstanceId,
       // Warm the tree once. A hidden prefetch must not inherit the visible
       // pane's sandbox polling or focus revalidation and keep walking the

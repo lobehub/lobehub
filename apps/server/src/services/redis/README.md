@@ -9,6 +9,9 @@ callers do not choose a provider, prefix, key, SET options or claim lifetime.
   as unknown and the caller does the live read.
 - `deviceSystemInfo.remember`: principal/device scoped answers, three minute default freshness;
   callers may request a freshness bound through the existing gateway API.
+- `ephemeralSandbox`: per user and topic, when the conversation's temporary cloud sandbox was last
+  used by the agent, last reached alive, and found recycled — kept 30 days, so the Files panel can say
+  a sandbox is gone without starting a new one to find out. Reads answer `undefined` without Redis.
 - `skillTools.remember`: connection scoped tool lists, ten minutes; empty/failed results are not cached.
 - `workspaceRescan.claim`: one background scan per principal/device/directory for 45 seconds.
 - `steerQueue`: follow-ups a user queued behind a running agent turn, per topic/thread, held for

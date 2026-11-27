@@ -47,7 +47,7 @@ const fetchSandboxFilePreview = async (
   const result = await cloudSandboxService.callTool(
     'readLocalFile',
     { fullContent: true, path },
-    { topicId },
+    { intent: 'view', topicId },
   );
   if (!result.success || typeof result.result?.content !== 'string')
     throw new Error(result.error?.message || 'Failed to read sandbox file');

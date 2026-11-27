@@ -17,7 +17,7 @@ import { isAbsolute, relative, resolve } from 'pathe';
 
 import { mutate } from '@/libs/swr';
 import { localFileKeys } from '@/libs/swr/keys';
-import { lambdaClient } from '@/libs/trpc/client';
+import { lambdaClient, toolsClient } from '@/libs/trpc/client';
 import {
   type LocalFilePreview,
   localFilePreviewResultError,
@@ -116,11 +116,17 @@ class ProjectFileService {
    */
   async getProjectFileIndex({
     deviceId,
+    sandboxEphemeral,
     sandboxInstanceId,
     sandboxTopicId,
     scope,
   }: {
     deviceId?: string;
+    /**
+     * The topic's temporary sandbox: read live from its session, which only
+     * this conversation has. Needs {@link sandboxTopicId}.
+     */
+    sandboxEphemeral?: boolean;
     /**
      * Which instance's directory to read. Addressed directly rather than left
      * for the server to derive from the topic, so a tree can be shown before
@@ -131,6 +137,9 @@ class ProjectFileService {
     sandboxTopicId?: string;
     scope: string;
   }): Promise<ProjectFileIndexResult | undefined> {
+    if (sandboxEphemeral && sandboxTopicId)
+      return this.getEphemeralSandboxFileIndex(sandboxTopicId);
+
     if (sandboxTopicId || sandboxInstanceId) {
       return this.getSandboxFileIndex({
         instanceId: sandboxInstanceId,
@@ -207,6 +216,38 @@ class ProjectFileService {
       root,
       source: 'sandbox',
       truncated: listing.truncated,
+    };
+  }
+
+  /**
+   * A temporary sandbox's tree, rooted at the directory it starts in — where
+   * the agent's relative paths land. A sandbox with nothing to show still
+   * answers with an index, one that says why, so the panel can tell "recycled"
+   * from "empty" and a reload paints that rather than files that are gone.
+   */
+  private async getEphemeralSandboxFileIndex(topicId: string): Promise<ProjectFileIndexResult> {
+    const result = await toolsClient.market.listEphemeralSandboxFiles.query({ topicId });
+    const indexedAt = new Date().toISOString();
+
+    if (result.status !== 'ready') {
+      return { entries: [], indexedAt, root: '', sandboxState: result.status, source: 'sandbox' };
+    }
+
+    const root = result.root;
+    const base = root === '/' ? '' : root;
+
+    return {
+      entries: result.entries.map((entry) => ({
+        isDirectory: entry.isDirectory,
+        name: entry.name,
+        path: `${base}/${entry.path}`,
+        // A directory row's id ends in `/`, which is how the tree finds parents.
+        relativePath: entry.isDirectory ? `${entry.path}/` : entry.path,
+      })),
+      indexedAt,
+      root,
+      source: 'sandbox',
+      truncated: result.truncated,
     };
   }
 

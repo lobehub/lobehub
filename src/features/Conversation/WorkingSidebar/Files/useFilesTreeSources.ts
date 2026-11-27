@@ -2,6 +2,8 @@ import { useGitWorkingTreeFiles } from './useGitWorkingTreeFiles';
 import { useProjectFiles } from './useProjectFiles';
 
 interface FilesTreeSandbox {
+  /** The topic's temporary sandbox rather than its folder on the drive. */
+  ephemeral?: boolean;
   instanceId?: string;
   /**
    * Live reads for a running sandbox and focus revalidation. Only the visible

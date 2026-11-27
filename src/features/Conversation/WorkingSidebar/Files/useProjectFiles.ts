@@ -27,7 +27,7 @@ const SANDBOX_LIVE_REFRESH_INTERVAL = 15 * 1000;
 export const useProjectFiles = (
   deviceId: string | undefined,
   dirPath: string | undefined,
-  sandbox?: { instanceId?: string; live?: boolean; topicId?: string },
+  sandbox?: { ephemeral?: boolean; instanceId?: string; live?: boolean; topicId?: string },
 ) => {
   const isSandbox = !!sandbox?.instanceId || !!sandbox?.topicId;
   const enabled = isSandbox ? dirPath !== undefined : Boolean(dirPath) && (!!deviceId || isDesktop);
@@ -37,11 +37,12 @@ export const useProjectFiles = (
         ? {
             deviceId,
             dirPath: dirPath!,
+            ...(sandbox?.ephemeral && { sandboxEphemeral: true }),
             sandboxInstanceId: sandbox?.instanceId,
             sandboxTopicId: sandbox?.topicId,
           }
         : null,
-    [enabled, deviceId, dirPath, sandbox?.instanceId, sandbox?.topicId],
+    [enabled, deviceId, dirPath, sandbox?.ephemeral, sandbox?.instanceId, sandbox?.topicId],
   );
   const data = useProjectFileStore((s) =>
     params ? s.projectIndex[projectIndexResource.key(params)] : undefined,

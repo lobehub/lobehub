@@ -58,6 +58,7 @@ interface EncodedProjectIndex {
   entries: EncodedEntry[];
   indexedAt: string;
   root: string;
+  sandboxState?: ProjectFileIndexResult['sandboxState'];
   source: ProjectFileIndexResult['source'];
   truncated?: boolean;
 }
@@ -170,6 +171,7 @@ export const encodeProjectIndex = (
     entries: kept.map((entry) => encodeEntry(data.root, entry)),
     indexedAt: data.indexedAt,
     root: data.root,
+    ...(data.sandboxState ? { sandboxState: data.sandboxState } : {}),
     source: data.source,
     ...(data.truncated ? { truncated: true } : {}),
   };
@@ -180,6 +182,8 @@ export const decodeProjectIndex = (encoded: EncodedProjectIndex): PersistedProje
   indexedAt: encoded.indexedAt,
   ...(encoded.capped ? { persistedPartial: true as const } : {}),
   root: encoded.root,
+  // Kept so a reload of a recycled sandbox paints the notice, not the files it lost.
+  ...(encoded.sandboxState ? { sandboxState: encoded.sandboxState } : {}),
   source: encoded.source,
   ...(encoded.truncated ? { truncated: true } : {}),
 });

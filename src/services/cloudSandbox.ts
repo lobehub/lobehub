@@ -11,14 +11,17 @@ class CloudSandboxService {
    * Call a cloud sandbox tool
    * @param toolName - The name of the tool to call (e.g., 'runCommand', 'writeFile')
    * @param params - The parameters for the tool
-   * @param context - Session context containing topicId and optional userId for isolation
+   * @param context - Session context containing topicId and optional userId for isolation.
+   *   `intent: 'view'` marks a read of what the agent left (a file preview) rather
+   *   than a step of the agent's run.
    */
   async callTool(
     toolName: string,
     params: Record<string, any>,
-    context: { topicId: string; userId?: string },
+    context: { intent?: 'agent' | 'view'; topicId: string; userId?: string },
   ): Promise<CallToolResult> {
     const input: ExecInSandboxInput = {
+      ...(context.intent && { intent: context.intent }),
       params,
       toolName,
       topicId: context.topicId,

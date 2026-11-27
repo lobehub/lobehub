@@ -21,6 +21,7 @@ import { buildFileContextMenu, type FileMenuAction, type FileMenuTarget } from '
 import { resolveFileTreeShortcut } from './fileTreeShortcuts';
 import { getParentRelativePath, PROJECT_ROOT_NODE_ID } from './treePaths';
 import { useFileOperations } from './useFileOperations';
+import { useSandboxFileDownload } from './useSandboxFileDownload';
 
 type Node = ExplorerTreeNode<ProjectFileIndexEntry>;
 
@@ -38,6 +39,8 @@ interface UseFileTreeActionsParams {
   onClearDisplayFilter: () => void;
   onCollapseAll: () => void;
   projectRoot: string;
+  /** The tree is the topic's temporary sandbox, whose files can be downloaded. */
+  sandboxEphemeral?: boolean;
   /** Set when the tree is showing a sandbox instance nobody is talking to. */
   sandboxInstanceId?: string;
   /** Set when the tree is showing a cloud sandbox's workspace rather than a disk. */
@@ -80,6 +83,7 @@ export const useFileTreeActions = ({
   onClearDisplayFilter,
   onCollapseAll,
   projectRoot,
+  sandboxEphemeral,
   sandboxInstanceId,
   sandboxTopicId,
   treeRef,
@@ -89,6 +93,8 @@ export const useFileTreeActions = ({
   const isSandbox = !!sandboxTopicId || !!sandboxInstanceId;
   const isRemote = !!deviceId || isSandbox;
   const openLocalFile = useChatStore((s) => s.openLocalFile);
+  const canDownload = !!sandboxEphemeral && !!sandboxTopicId;
+  const downloadSandboxFile = useSandboxFileDownload(canDownload ? sandboxTopicId : undefined);
   const openWorkingSidebar = useGlobalStore((s) => s.openWorkingSidebar);
   const { canOfferFile, publishFile } = usePublishWorkspaceHtmlFromFile({
     deviceId,
@@ -226,6 +232,10 @@ export const useFileTreeActions = ({
           if (entry) void publishFile(entry.path);
           return;
         }
+        case 'download': {
+          if (entry) void downloadSandboxFile(entry);
+          return;
+        }
         case 'revealInSystem': {
           void localFileService.openFileFolder(entry?.path ?? projectRoot);
           return;
@@ -279,6 +289,7 @@ export const useFileTreeActions = ({
     },
     [
       copyText,
+      downloadSandboxFile,
       entriesFor,
       onCollapseAll,
       openNode,
@@ -293,6 +304,7 @@ export const useFileTreeActions = ({
 
   const menuEnv = useCallback(
     (canPublish: boolean) => ({
+      canDownload,
       canPaste: ops.canPaste,
       canPublish,
       canUseTerminal: ops.canUseTerminal,
@@ -300,7 +312,7 @@ export const useFileTreeActions = ({
       readOnly: isSandbox,
       trashName: ops.trashName,
     }),
-    [isRemote, isSandbox, ops.canPaste, ops.canUseTerminal, ops.trashName],
+    [canDownload, isRemote, isSandbox, ops.canPaste, ops.canUseTerminal, ops.trashName],
   );
 
   const getBlankContextMenuItems = useCallback(

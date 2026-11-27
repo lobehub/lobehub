@@ -14,6 +14,8 @@ interface FilesPaneProps {
   directory?: string;
   /** Warm the tree even while the pane itself is hidden or still loading. */
   prefetch: boolean;
+  /** The topic's temporary sandbox, read live from its session. */
+  sandboxEphemeral?: boolean;
   sandboxInstanceId?: string;
   sandboxTopicId?: string;
 }
@@ -34,6 +36,7 @@ const FilesPane = memo<FilesPaneProps>(
     deviceId,
     directory,
     prefetch,
+    sandboxEphemeral,
     sandboxInstanceId,
     sandboxTopicId,
   }) => {
@@ -44,6 +47,7 @@ const FilesPane = memo<FilesPaneProps>(
         {prefetch && (
           <FilesPrefetch
             deviceId={deviceId}
+            sandboxEphemeral={sandboxEphemeral}
             sandboxInstanceId={sandboxInstanceId}
             sandboxTopicId={sandboxTopicId}
             workingDirectory={directory}
@@ -54,6 +58,7 @@ const FilesPane = memo<FilesPaneProps>(
             <Flexbox className={className}>
               <Files
                 deviceId={deviceId}
+                sandboxEphemeral={sandboxEphemeral}
                 sandboxInstanceId={sandboxInstanceId}
                 sandboxTopicId={sandboxTopicId}
                 workingDirectory={directory}
