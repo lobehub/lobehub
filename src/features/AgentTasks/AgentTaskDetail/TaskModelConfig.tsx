@@ -9,6 +9,7 @@ import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import { HeterogeneousTaskConfig } from './HeterogeneousTaskConfig';
+import { taskDetailLayoutStyles as styles } from './taskDetailLayoutStyles';
 
 const TaskModelConfig = memo(() => {
   const { allowed: canEditTask } = usePermission('create_content');
@@ -57,17 +58,25 @@ const TaskModelConfig = memo(() => {
   // External runtimes previously hid this picker because ordinary provider models
   // do not describe their execution. Expose their runtime-aware configuration instead.
   if (runtimeConfig) {
-    return <HeterogeneousTaskConfig fields={runtimeConfig} source={'task'} />;
+    return (
+      <div className={styles.propertyControl}>
+        <HeterogeneousTaskConfig fields={runtimeConfig} source={'task'} />
+      </div>
+    );
   }
 
   return (
-    <ModelSelect
-      initialWidth
-      disabled={!canEditTask}
-      popupWidth={400}
-      value={{ model, provider }}
-      onChange={handleChange}
-    />
+    <div className={styles.propertyControl}>
+      <ModelSelect
+        initialWidth
+        disabled={!canEditTask}
+        popupWidth={400}
+        style={{ maxWidth: '100%', minWidth: 0 }}
+        value={{ model, provider }}
+        variant={'borderless'}
+        onChange={handleChange}
+      />
+    </div>
   );
 });
 

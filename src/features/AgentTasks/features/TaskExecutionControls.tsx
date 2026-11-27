@@ -21,6 +21,8 @@ interface TaskExecutionControlsProps {
    * private workspace devices (see `devicePoolForTask`).
    */
   canPinPrivateDevices: boolean;
+  /** Replaces the run-location chip's own compact look with the caller's row idiom. */
+  chipClassName?: string;
   disabled?: boolean;
   onChange: (execution?: TaskExecutionConfig) => void;
   /** The task's current selection; empty means "inherit the agent". */
@@ -62,7 +64,7 @@ const TaskExecutionControls = memo<TaskExecutionControlsProps>((props) => {
 
 const TaskExecutionControlsInner = memo<
   Omit<TaskExecutionControlsProps, 'assigneeAgentId'> & { assigneeAgentId: string }
->(({ assigneeAgentId, canPinPrivateDevices, disabled, onChange, value }) => {
+>(({ assigneeAgentId, canPinPrivateDevices, chipClassName, disabled, onChange, value }) => {
   const canExecuteSomewhere = useTaskExecutionAvailability(assigneeAgentId);
   const { changeDevice, changeDirectory, changeFollowing, changeRepos, following, target } =
     useTaskExecutionSelection({
@@ -83,6 +85,7 @@ const TaskExecutionControlsInner = memo<
       <TaskDeviceChip
         agentId={assigneeAgentId}
         canPinPrivateDevices={canPinPrivateDevices}
+        className={chipClassName}
         disabled={disabled}
         following={following}
         value={value?.boundDeviceId}
