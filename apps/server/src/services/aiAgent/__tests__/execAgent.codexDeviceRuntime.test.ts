@@ -213,6 +213,11 @@ vi.mock('@/database/models/user', async (importOriginal) => {
   return { ...actual, UserModel };
 });
 
+// The agent's own device is offline in these runs (presence comes from the gateway + DB).
+vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({
+  getScopedOnlineDevices: vi.fn(async () => []),
+}));
+
 // The project lookup reads the database; the turn only needs its id.
 vi.mock('@/server/services/aiAgent/pipeline/topicProject', () => ({
   resolveTurnProjectId: vi.fn(
@@ -331,9 +336,9 @@ describe('AiAgentService.execAgent - Codex device runtime', () => {
 
   // ROOT CAUSE (T-14984):
   // A project conversation the composer left without a directory because the
-  // agent's own device could not take it was routed to that device anyway.
-  /** @example A Codex agent's project conversation without a directory runs in the sandbox. */
-  it('runs a project conversation without a directory in the sandbox, not on its device', async () => {
+  // agent's own device was offline was routed to that device anyway.
+  /** @example A Codex agent's project conversation runs in the sandbox while its device is offline. */
+  it('runs a project conversation in the sandbox when its own device is offline', async () => {
     Object.assign(heteroAgentConfig.agencyConfig, {
       boundDeviceId: 'device-1',
       executionTarget: 'device',

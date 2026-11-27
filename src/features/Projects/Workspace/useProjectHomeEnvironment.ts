@@ -7,6 +7,7 @@ import { canStageDraftOn } from '@/features/Projects/WorkingDirectories/startPro
 import { useAgentFixedDeviceId } from '@/features/Projects/WorkingDirectories/useAgentFixedDeviceId';
 import { useAgentOwnDevice } from '@/features/Projects/WorkingDirectories/useAgentOwnDevice';
 import {
+  isDeviceOnline,
   isExecutionDirectoryAvailable,
   useProjectExecutionEnvironments,
 } from '@/features/Projects/WorkingDirectories/useProjectExecutionEnvironments';
@@ -31,6 +32,7 @@ export const useProjectHomeEnvironment = (projectId: string, agentId: string) =>
     isAvailable: (directory) =>
       canStageDraftOn(directory, fixedDeviceId) &&
       isExecutionDirectoryAvailable(directory, devices),
+    isDeviceOnline: (deviceId) => isDeviceOnline(devices, deviceId),
     isRunnable: (directory) => canStageDraftOn(directory, fixedDeviceId),
     ownDevice,
   });
@@ -40,15 +42,15 @@ export const useProjectHomeEnvironment = (projectId: string, agentId: string) =>
     directories,
     /** The folder the conversation starts in; none in the cloud sandbox. */
     directoryId: environment.kind === 'directory' ? environment.id : undefined,
-    onSandbox: environment.kind === 'sandbox',
+    onSandbox: environment.kind === 'sandbox' && !choice.ownWorkingDirectory,
     /** Nothing picked by hand: the project's order decides where it starts. */
     auto: pickedId === undefined,
     /** The agent's own device is still loading: Auto must not send yet. */
     loading: pickedId === undefined && ownDeviceLoading,
-    /** Auto could not start on the agent's own device: why, and whether nothing else may. */
-    notice: choice.ownDeviceUnavailable
-      ? { blocked: !!choice.blocked, reason: choice.ownDeviceUnavailable }
-      : undefined,
+    /** What Auto tells about the agent's own device (its own directory there, or offline). */
+    notice: choice.notice,
+    /** On the agent's own device, in its own working directory: a conversation without a project folder. */
+    ownWorkingDirectory: !!choice.ownWorkingDirectory,
     pick: setPickedId,
     pickAuto: () => setPickedId(undefined),
   };

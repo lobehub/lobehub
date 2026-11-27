@@ -9,6 +9,7 @@ import AgentAvatar from '@/components/AgentAvatar';
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
 import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgentManagementAccess';
 import { getAgentOwnDevice } from '@/helpers/agentOwnDevice';
+import { resolveAgentWorkingDirectorySource } from '@/helpers/agentWorkingDirectory';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { type ProjectDetail, useCurrentProjectDetail } from '@/store/project';
 import type { ProjectDirectory } from '@/store/projectWorkingDirectory';
@@ -53,22 +54,27 @@ export const listAgentsWithOwnDevice = (
  * (`resolveAgentAgencyConfig` with the caller's manager-vs-member answer), so
  * the page names the device a conversation will actually start on.
  */
-export const resolveMemberOwnDevice = (
+/** A member agent's routing config as this caller's run resolves it. */
+const resolveMemberAgencyConfig = (
   agent: Pick<MemberAgent, 'agencyConfig' | 'visibility' | 'workspaceId'>,
   override: DeviceOverride,
   canManage: boolean,
 ) =>
-  getAgentOwnDevice(
-    resolveAgentAgencyConfig(agent.agencyConfig as LobeAgentAgencyConfig | null, override, {
-      canManage,
-      visibility: agent.visibility,
-      workspaceId: agent.workspaceId,
-    }),
-  );
+  resolveAgentAgencyConfig(agent.agencyConfig as LobeAgentAgencyConfig | null, override, {
+    canManage,
+    visibility: agent.visibility,
+    workspaceId: agent.workspaceId,
+  });
 
-const useMemberOwnDevice = (agent: MemberAgent, override: DeviceOverride) => {
+export const resolveMemberOwnDevice = (
+  agent: Pick<MemberAgent, 'agencyConfig' | 'visibility' | 'workspaceId'>,
+  override: DeviceOverride,
+  canManage: boolean,
+) => getAgentOwnDevice(resolveMemberAgencyConfig(agent, override, canManage));
+
+const useMemberAgencyConfig = (agent: MemberAgent, override: DeviceOverride) => {
   const { canManageAgent, isAccessLoading } = useAgentManagementAccess(agent.id, agent);
-  return isAccessLoading ? undefined : resolveMemberOwnDevice(agent, override, canManageAgent);
+  return isAccessLoading ? undefined : resolveMemberAgencyConfig(agent, override, canManageAgent);
 };
 
 interface AgentOwnDeviceRowProps {
@@ -92,8 +98,19 @@ const AgentOwnDeviceRow = ({
   const { t } = useTranslation('project');
   const { t: tCommon } = useTranslation('common');
   const devices = useDeviceStore(deviceSelectors.deviceList);
-  const ownDevice = useMemberOwnDevice(agent, override);
+  const agencyConfig = useMemberAgencyConfig(agent, override);
+  const ownDevice = getAgentOwnDevice(agencyConfig);
+  const deviceDefaultCwd = useDeviceStore((s) =>
+    ownDevice ? deviceSelectors.getDeviceDefaultCwd(ownDevice.deviceId)(s) : undefined,
+  );
   if (!ownDevice) return null;
+  // With no project folder there, the agent runs in its own working directory
+  // on that device: its choice for the device, else the device's default.
+  const workingDirectory = resolveAgentWorkingDirectorySource({
+    agencyConfig,
+    currentDeviceId: ownDevice.deviceId,
+    deviceDefaultCwd,
+  });
 
   const device = devices.find((item) => item.deviceId === ownDevice.deviceId);
   const folders = directories.filter(
@@ -153,17 +170,21 @@ const AgentOwnDeviceRow = ({
               {folders.map((folder) => folder.path).join(', ')}
             </Text>
           ) : (
-            <Text fontSize={12} style={{ color: cssVar.colorWarningText }}>
-              {t('settings.agentDeviceNoDirectory')}
+            <Text ellipsis={{ tooltipWhenOverflow: true }} fontSize={12} type="secondary">
+              {workingDirectory
+                ? t('settings.agentDeviceWorkingDirectory', { path: workingDirectory })
+                : t('settings.agentDeviceDefaultDirectory')}
             </Text>
           )}
         </Flexbox>
       </Flexbox>
       {folders.length === 0 && canManage && (
+        // Optional: a project folder there takes the place of the agent's own directory.
         <Button
           icon={<Icon icon={PlusIcon} />}
           size="small"
           style={{ flex: 'none' }}
+          type="text"
           onClick={() =>
             openAddDirectoryModal(projectId, environmentId, {
               deviceId: ownDevice.deviceId,
@@ -187,8 +208,9 @@ interface AgentDeviceGroupsProps {
 /**
  * The members' own devices, apart from the project's order: each agent that
  * runs on a device of its own, the device and whether it is online, and the
- * project folder there it starts in — or a way to add one. These agents run
- * on their own device first, whatever the order above says.
+ * project folder there it starts in — or, without one, the agent's own
+ * working directory there. These agents run on their own device first,
+ * whatever the order above says.
  */
 export function AgentDeviceGroups({
   canManage,

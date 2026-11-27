@@ -2,7 +2,6 @@ import {
   type AgentOwnDevice,
   getAgentOwnDevice,
   OwnDeviceUnavailableError,
-  type OwnDeviceUnavailableReason,
   projectTopicFallsBackToSandbox,
 } from '@/helpers/agentOwnDevice';
 import { projectWorkingDirectoryService } from '@/services/projectWorkingDirectory';
@@ -22,24 +21,18 @@ export interface BoundProjectTopic {
   /** The machine it already ran on, if any. */
   boundDeviceId?: string;
   projectId?: string | null;
+  /** It fell back to the sandbox from its agent's own device (set by the server). */
+  projectSandboxFallback?: boolean;
   projectWorkingDirectoryId?: string | null;
 }
 
-/**
- * Why the agent's own device could not take an Auto draft, read from the
- * project's directory replica: it has a directory there it may run in (so the
- * device is offline or not ready), or none at all.
- */
-const ownDeviceReason = (
-  projectId: string,
-  ownDevice: AgentOwnDevice,
-): OwnDeviceUnavailableReason => {
-  const directories = useProjectDirectoryStore.getState().directoriesMap[projectId] ?? [];
-  return directories.some(
-    (directory) => directory.deviceId === ownDevice.deviceId && directory.runnable,
-  )
-    ? 'offline'
-    : 'noDirectory';
+/** The agent's own device's presence in the device replica; `unknown` before it is confirmed. */
+const ownDevicePresence = (ownDevice: AgentOwnDevice): 'offline' | 'online' | 'unknown' => {
+  const device = deviceSelectors
+    .deviceList(getDeviceStoreState())
+    .find((item) => item.deviceId === ownDevice.deviceId);
+  if (!device || device.onlineUnknown) return 'unknown';
+  return device.online ? 'online' : 'offline';
 };
 
 /**
@@ -57,11 +50,7 @@ const retargetAutoDraft = (
   if (!staged?.auto || !ownDevice || !staged.projectWorkingDirectoryId) return staged;
   const directory = findProjectDirectory(staged.projectWorkingDirectoryId);
   if (!directory) return staged;
-  const device = deviceSelectors
-    .deviceList(getDeviceStoreState())
-    .find((item) => item.deviceId === ownDevice.deviceId);
-  const presence =
-    !device || device.onlineUnknown ? 'unknown' : device.online ? 'online' : 'offline';
+  const presence = ownDevicePresence(ownDevice);
   if (directory.deviceId === ownDevice.deviceId && presence !== 'offline') return staged;
   const own =
     presence === 'online'
@@ -88,13 +77,15 @@ const retargetAutoDraft = (
  * topic is bound to in either staged case.
  *
  * A heterogeneous agent with a device of its own (`getAgentOwnDevice`) runs an
- * Auto draft on that device's project directory, as the draft staged it. When
- * the draft could only stage the project (the device is offline or has no
- * directory there), one that may use the sandbox runs there — and keeps
- * running there for the conversation's later sends, `ownDeviceFallback` says
- * why — while a device-only one is refused (`OwnDeviceUnavailableError`)
- * rather than moved to another device. The server applies the same sandbox
- * rule to the run (`projectFallsBackToSandbox`): this per-send target only
+ * Auto draft on that device's project directory, as the draft staged it. A
+ * draft staged on the project alone runs on that device in the agent's own
+ * working directory while the device is online (no project folder is needed
+ * there). With the device offline, one that may use the sandbox runs there —
+ * and keeps running there for the conversation's later sends,
+ * `ownDeviceFallback` says so — while a device-only one is refused
+ * (`OwnDeviceUnavailableError`) rather than moved to another device. The
+ * server applies the same rule to the run and marks a fallen-back
+ * conversation (`withProjectSandboxFallback`): this per-send target only
  * shapes the client's own plan and does not reach `execAgent`.
  */
 export const resolveProjectDirectoryRun = async <T extends DeviceRouting>(params: {
@@ -113,18 +104,36 @@ export const resolveProjectDirectoryRun = async <T extends DeviceRouting>(params
   if (!directoryId) {
     const stagedProjectId = staged?.projectId;
     const autoDraft = !!staged?.auto && !!stagedProjectId;
-    // Auto could not place the agent on its own device: a device-only agent
-    // stays off every other runner, the sandbox included.
-    if (autoDraft && ownDevice && !ownDevice.sandboxFallback)
-      throw new OwnDeviceUnavailableError(ownDeviceReason(stagedProjectId, ownDevice));
-    // A project conversation without a directory, started by an agent that
-    // fell back from its own device, stays in the sandbox it began in — unless
-    // it already ran on a machine.
+    const presence = ownDevice && ownDevicePresence(ownDevice);
+    const newTopicProject = stagedProjectId ? { projectId: stagedProjectId } : undefined;
+    if (autoDraft && ownDevice) {
+      // Its own device, in its own working directory: the agent's own target.
+      if (presence !== 'offline')
+        return { agencyConfig, newTopicProject, stagedDirectory: undefined, stagedProjectId };
+      // Offline: a device-only agent stays off every other runner, the sandbox included.
+      if (!ownDevice.sandboxFallback) throw new OwnDeviceUnavailableError('offline');
+      return {
+        agencyConfig: { ...agencyConfig, executionTarget: 'sandbox' } as T,
+        newTopicProject,
+        ownDeviceFallback: 'offline' as const,
+        stagedDirectory: undefined,
+        stagedProjectId,
+      };
+    }
+    // A project conversation without a directory whose agent fell back from
+    // its own device stays in the sandbox it began in (see the helper).
     const sandboxTopic =
       !staged &&
       projectTopicFallsBackToSandbox(
         agencyConfig,
-        boundTopic && { ...boundTopic, metadata: { boundDeviceId: boundTopic.boundDeviceId } },
+        boundTopic && {
+          ...boundTopic,
+          metadata: {
+            boundDeviceId: boundTopic.boundDeviceId,
+            projectSandboxFallback: boundTopic.projectSandboxFallback,
+          },
+        },
+        presence === 'unknown' ? undefined : presence === 'online',
       );
     // Auto put this draft in the project's sandbox: this send runs there,
     // without rewriting the agent's own target (a draft-local choice must not
@@ -135,9 +144,7 @@ export const resolveProjectDirectoryRun = async <T extends DeviceRouting>(params
       agencyConfig: autoSandbox
         ? ({ ...agencyConfig, executionTarget: 'sandbox' } as T)
         : agencyConfig,
-      newTopicProject: stagedProjectId ? { projectId: stagedProjectId } : undefined,
-      ownDeviceFallback:
-        autoDraft && ownDevice ? ownDeviceReason(stagedProjectId, ownDevice) : undefined,
+      newTopicProject,
       stagedDirectory: undefined,
       stagedProjectId,
     };

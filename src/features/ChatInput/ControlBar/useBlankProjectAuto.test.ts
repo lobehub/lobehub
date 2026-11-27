@@ -21,6 +21,7 @@ const directory = (id: string, deviceId: string) => ({
 });
 
 vi.mock('@/features/Projects/WorkingDirectories/useProjectExecutionEnvironments', () => ({
+  isDeviceOnline: (_devices: unknown, deviceId: string) => env.online.has(deviceId),
   isExecutionDirectoryAvailable: (d: { deviceId: string }) => env.online.has(d.deviceId),
   useProjectExecutionEnvironments: () => ({
     ordered: [

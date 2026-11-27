@@ -45,79 +45,89 @@ export const getAgentOwnDevice = (
 
 /**
  * Whether a started project conversation runs in the cloud sandbox because its
- * agent fell back from a device of its own: it has no directory and never ran
- * on a machine, and the agent may use the sandbox (Claude Code, Codex). Such a
- * conversation was only left without a directory because the device could not
- * take it; the server routes its runs there too (`projectFallsBackToSandbox`).
+ * agent fell back from a device of its own (Claude Code, Codex): the server
+ * marked it so on a run that found the device offline
+ * (`metadata.projectSandboxFallback`), or it has no directory, never ran on a
+ * machine, and the device is offline now — which is what that run will find.
+ * While the device is online such a conversation runs there, in the agent's
+ * own working directory. Mirrors the server's `withProjectSandboxFallback`.
  */
 export const projectTopicFallsBackToSandbox = (
   agencyConfig: OwnDeviceConfig | undefined,
   topic:
     | {
-        metadata?: { boundDeviceId?: string } | null;
+        metadata?: { boundDeviceId?: string; projectSandboxFallback?: boolean } | null;
         projectId?: string | null;
         projectWorkingDirectoryId?: string | null;
       }
     | undefined,
-) =>
-  !!topic?.projectId &&
-  !topic.projectWorkingDirectoryId &&
-  !topic.metadata?.boundDeviceId &&
-  !!getAgentOwnDevice(agencyConfig)?.sandboxFallback;
+  /** The own device's presence now; `undefined` while it is not known. */
+  ownDeviceOnline: boolean | undefined,
+) => {
+  if (!topic?.projectId || topic.projectWorkingDirectoryId) return false;
+  if (!getAgentOwnDevice(agencyConfig)?.sandboxFallback) return false;
+  if (topic.metadata?.projectSandboxFallback) return true;
+  return !topic.metadata?.boundDeviceId && ownDeviceOnline === false;
+};
 
 /** Why an agent's own device cannot take a project conversation. */
-export type OwnDeviceUnavailableReason = 'noDirectory' | 'offline';
+export type OwnDeviceUnavailableReason = 'offline';
 
 export type OwnDeviceDirectoryResult<D> =
-  { directory: D; kind: 'directory' } | { kind: 'unavailable'; reason: OwnDeviceUnavailableReason };
+  | { directory: D; kind: 'directory' }
+  | { kind: 'workingDirectory' }
+  | { kind: 'unavailable'; reason: OwnDeviceUnavailableReason };
 
 /**
- * The agent's own device's project directory a new conversation starts in: the
+ * Where on its own device a new project conversation of the agent starts: the
  * first of `directories` (in the project's order) on that device that can take
- * it now. Without one, why not — the device has no directory it may run in, or
- * it has one but cannot take the conversation now (offline, not ready).
+ * it now; else, while the device is online, the agent's own working directory
+ * there (`workingDirByDevice`, or the device's default) — no project folder
+ * has to be added first; else nowhere, the device being offline.
  */
 export const pickOwnDeviceDirectory = <D extends { deviceId?: string | null }>(
   directories: readonly D[],
   ownDevice: AgentOwnDevice,
   {
+    deviceOnline,
     isAvailable,
     isRunnable,
-  }: { isAvailable: (directory: D) => boolean; isRunnable: (directory: D) => boolean },
+  }: {
+    deviceOnline: boolean;
+    isAvailable: (directory: D) => boolean;
+    isRunnable: (directory: D) => boolean;
+  },
 ): OwnDeviceDirectoryResult<D> => {
-  const own = directories.filter(
-    (directory) => directory.deviceId === ownDevice.deviceId && isRunnable(directory),
+  const directory = directories.find(
+    (item) => item.deviceId === ownDevice.deviceId && isRunnable(item) && isAvailable(item),
   );
-  const directory = own.find(isAvailable);
   if (directory) return { directory, kind: 'directory' };
-  return { kind: 'unavailable', reason: own.length > 0 ? 'offline' : 'noDirectory' };
+  if (deviceOnline) return { kind: 'workingDirectory' };
+  return { kind: 'unavailable', reason: 'offline' };
 };
 
-/** The message key telling why Auto could not start on the agent's own device. */
-export const ownDeviceNoticeKey = ({
-  blocked,
-  reason,
-}: {
-  blocked: boolean;
-  reason: OwnDeviceUnavailableReason;
-}) =>
-  blocked
-    ? reason === 'offline'
+/**
+ * What Auto tells about the agent's own device: it runs in its own working
+ * directory there, or the device is offline — so the conversation runs in the
+ * sandbox, or (`blocked`) not at all.
+ */
+export type OwnDeviceNotice =
+  | { blocked: boolean; reason: OwnDeviceUnavailableReason }
+  | { deviceId: string; workingDirectory: true };
+
+/** The message key of an {@link OwnDeviceNotice}. */
+export const ownDeviceNoticeKey = (notice: OwnDeviceNotice) =>
+  'workingDirectory' in notice
+    ? ('runnerPicker.ownDevice.workingDirectory' as const)
+    : notice.blocked
       ? ('runnerPicker.ownDevice.blocked_offline' as const)
-      : ('runnerPicker.ownDevice.blocked_noDirectory' as const)
-    : reason === 'offline'
-      ? ('runnerPicker.ownDevice.fallback_offline' as const)
-      : ('runnerPicker.ownDevice.fallback_noDirectory' as const);
+      : ('runnerPicker.ownDevice.fallback_offline' as const);
 
 /** Thrown when a device-only agent's own device cannot take a project conversation. */
 export class OwnDeviceUnavailableError extends Error {
   reason: OwnDeviceUnavailableReason;
   constructor(reason: OwnDeviceUnavailableReason) {
-    super(
-      reason === 'offline'
-        ? "The agent's device is offline"
-        : "The agent's device has no directory in this project",
-    );
+    super("The agent's device is offline");
     this.name = 'OwnDeviceUnavailableError';
     this.reason = reason;
   }

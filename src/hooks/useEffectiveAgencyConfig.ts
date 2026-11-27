@@ -3,7 +3,7 @@ import type { LobeAgentAgencyConfig } from '@lobechat/types';
 import { resolveAgentAgencyConfig } from '@lobechat/types';
 
 import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgentManagementAccess';
-import { projectTopicFallsBackToSandbox } from '@/helpers/agentOwnDevice';
+import { getAgentOwnDevice, projectTopicFallsBackToSandbox } from '@/helpers/agentOwnDevice';
 import {
   applyTopicDeviceBinding,
   getTopicBoundDeviceId,
@@ -14,6 +14,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
+import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 
@@ -153,10 +154,18 @@ export const useEffectiveAgencyConfig = (
     ),
   );
   // A project conversation its agent fell back to the sandbox for runs there.
+  const ownDeviceId = getAgentOwnDevice(agentAgencyConfig)?.deviceId;
+  const ownDeviceOnline = useDeviceStore((s) => {
+    const device = ownDeviceId
+      ? deviceSelectors.deviceList(s).find((item) => item.deviceId === ownDeviceId)
+      : undefined;
+    return !device || device.onlineUnknown ? undefined : !!device.online;
+  });
   const projectSandboxTopic = useChatStore((s) =>
     projectTopicFallsBackToSandbox(
       agentAgencyConfig,
       bindingTopicId ? topicSelectors.getTopicById(bindingTopicId)(s) : undefined,
+      ownDeviceOnline,
     ),
   );
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);

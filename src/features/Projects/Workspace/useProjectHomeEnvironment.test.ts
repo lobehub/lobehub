@@ -14,6 +14,7 @@ const resolveProjectHomeEnvironment = (
 ) =>
   resolveAgentProjectRunner(ordered, pickedId, {
     isAvailable,
+    isDeviceOnline: () => true,
     isRunnable: () => true,
     ownDevice: undefined,
   }).environment;

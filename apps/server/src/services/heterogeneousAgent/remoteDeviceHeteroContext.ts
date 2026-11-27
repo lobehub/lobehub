@@ -1,3 +1,8 @@
+import {
+  formatUncommittedChangesContext,
+  type UncommittedChanges,
+} from '@/helpers/uncommittedChanges';
+
 import type { ConversationHistoryEntry } from './cloudHeteroContext';
 import type { UnansweredUserTurn } from './unansweredUserTurns';
 import { formatUnansweredUserTurns } from './unansweredUserTurns';
@@ -14,7 +19,8 @@ import { formatUnansweredUserTurns } from './unansweredUserTurns';
  *
  * What remains is only what's genuinely useful on a device:
  * - the agent-level static context (workspace conventions / rules),
- * - the selected git worktree, which is not the process cwd, and
+ * - the selected git worktree, which is not the process cwd,
+ * - someone's uncommitted work in the working directory, to be left alone, and
  * - prior conversation turns when a session is resumed without a native session
  *   file.
  *
@@ -38,8 +44,20 @@ export function buildRemoteDeviceHeteroContext(params: {
   conversationHistory?: ConversationHistoryEntry[];
   /** User messages a resumed session may have missed (see `collectUnansweredUserTurns`). */
   unansweredUserTurns?: UnansweredUserTurn[];
+  /**
+   * The working directory is a git repository holding uncommitted changes the
+   * run did not make (`readUncommittedChanges`): the agent works in a worktree
+   * of its own instead of on top of them.
+   */
+  uncommittedChanges?: UncommittedChanges;
 }): string | undefined {
-  const { activeWorktree, agentSystemContext, conversationHistory, unansweredUserTurns } = params;
+  const {
+    activeWorktree,
+    agentSystemContext,
+    conversationHistory,
+    unansweredUserTurns,
+    uncommittedChanges,
+  } = params;
 
   const parts: string[] = [];
 
@@ -58,6 +76,9 @@ export function buildRemoteDeviceHeteroContext(params: {
       `<active_worktree>\nThis conversation's selected git worktree is ${path}. Your process starts in the source repository, so read, edit and run git commands in the worktree.${fallback}\n</active_worktree>`,
     );
   }
+
+  // --- Someone's uncommitted work in the working directory ---
+  if (uncommittedChanges) parts.push(formatUncommittedChangesContext(uncommittedChanges));
 
   // --- Previous conversation context (injected when session was reset) ---
   // Mirrors buildCloudHeteroContext truncation: user 1 KB, assistant 2 KB.

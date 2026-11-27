@@ -32,7 +32,10 @@ import { orderExecutionEnvironments } from '@/features/Projects/WorkingDirectori
 import { canStageDraftOn } from '@/features/Projects/WorkingDirectories/startProjectTopicDraft';
 import { useAgentFixedDeviceId } from '@/features/Projects/WorkingDirectories/useAgentFixedDeviceId';
 import { useAgentOwnDevice } from '@/features/Projects/WorkingDirectories/useAgentOwnDevice';
-import { isExecutionDirectoryAvailable } from '@/features/Projects/WorkingDirectories/useProjectExecutionEnvironments';
+import {
+  isDeviceOnline,
+  isExecutionDirectoryAvailable,
+} from '@/features/Projects/WorkingDirectories/useProjectExecutionEnvironments';
 import { useStartProjectTopic } from '@/features/Projects/WorkingDirectories/useStartProjectTopic';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -143,6 +146,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
         isAvailable: (directory) =>
           canStageDraftOn(directory, fixedDeviceId) &&
           isExecutionDirectoryAvailable(directory, devices),
+        isDeviceOnline: (deviceId) => isDeviceOnline(devices, deviceId),
         isRunnable: (directory) => canStageDraftOn(directory, fixedDeviceId),
         ownDevice,
       },

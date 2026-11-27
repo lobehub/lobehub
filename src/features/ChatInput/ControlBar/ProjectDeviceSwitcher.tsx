@@ -23,7 +23,7 @@ import { useCanManageProject } from '@/features/Projects/useCanManageProject';
 import { openAddDirectoryModal } from '@/features/Projects/WorkingDirectories/AddDirectoryModal';
 import { useProjectExecutionEnvironments } from '@/features/Projects/WorkingDirectories/useProjectExecutionEnvironments';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { ownDeviceNoticeKey, type OwnDeviceUnavailableReason } from '@/helpers/agentOwnDevice';
+import { type OwnDeviceNotice, ownDeviceNoticeKey } from '@/helpers/agentOwnDevice';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useDeviceList } from '@/store/device';
@@ -87,10 +87,11 @@ interface ProjectDeviceSwitcherProps {
   auto?: {
     active: boolean;
     /**
-     * Auto could not start on the agent's own device: why, and whether the
-     * send will be refused (a device-only agent) or runs in the sandbox.
+     * What Auto tells about the agent's own device: it starts there in the
+     * agent's own working directory, or the device is offline — so the send
+     * runs in the sandbox, or is refused (a device-only agent).
      */
-    notice?: { blocked: boolean; reason: OwnDeviceUnavailableReason };
+    notice?: OwnDeviceNotice;
     onSelect: () => void;
   };
   directories: ProjectDirectory[];
@@ -179,7 +180,20 @@ const ProjectDeviceSwitcher = ({
   const autoActive = !!auto?.active;
   // Said only while Auto decides: a hand pick runs where it was picked.
   const notice = autoActive ? auto?.notice : undefined;
-  const noticeText = notice ? t(ownDeviceNoticeKey(notice), { ns: 'project' }) : undefined;
+  const noticeDevice =
+    notice && 'deviceId' in notice
+      ? devices?.find((item) => item.deviceId === notice.deviceId)
+      : undefined;
+  const noticeText = notice
+    ? t(ownDeviceNoticeKey(notice), {
+        device:
+          noticeDevice?.friendlyName ||
+          noticeDevice?.hostname ||
+          ('deviceId' in notice ? notice.deviceId : ''),
+        ns: 'project',
+      })
+    : undefined;
+  const noticeBlocked = !!notice && 'blocked' in notice && notice.blocked;
   const handleSelect = (target: ProjectDeviceTarget) => {
     setOpen(false);
     if (!target.active || autoActive) onSelect?.(target);
@@ -324,7 +338,7 @@ const ProjectDeviceSwitcher = ({
     <div {...stylex.props(workingDirectoryChipStyles.chip)}>
       {/* On the sandbox the chip names it as the menu does: its repositories
           and the first one's logo, once it has any. */}
-      {notice?.blocked ? (
+      {noticeBlocked ? (
         <Icon color={cssVar.colorWarning} icon={TriangleAlertIcon} size={14} />
       ) : autoActive ? (
         <Icon icon={SparklesIcon} size={14} />

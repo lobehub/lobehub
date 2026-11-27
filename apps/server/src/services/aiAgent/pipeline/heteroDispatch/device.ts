@@ -6,6 +6,10 @@ import debug from 'debug';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DeviceModel } from '@/database/models/device';
 import type { ExecutionPlan } from '@/helpers/executionTarget';
+import {
+  readUncommittedChanges,
+  shouldCheckUncommittedChanges,
+} from '@/helpers/uncommittedChanges';
 import { AgentQuotaService } from '@/server/services/agentQuota';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
@@ -281,8 +285,26 @@ export const dispatchToCliDevice = async (
   // Build only device-relevant context instead of reusing the cloud-sandbox one
   // (which describes an ephemeral /workspace + pre-cloned repos and would mislead
   // the agent). The spawned CLI already receives deviceCwd as its actual cwd.
+  // A project conversation in the agent's own working directory may be on top
+  // of someone's uncommitted work: the agent is told to take a worktree first.
+  const probe = { deviceId: dispatchDeviceId, path: deviceCwd ?? '', userId: deps.userId };
+  const uncommittedChanges =
+    deviceCwd && shouldCheckUncommittedChanges({ cwdConfig: deviceCwdConfig, topic })
+      ? await traceHeteroStage('device uncommitted_changes', () =>
+          readUncommittedChanges(
+            {
+              branch: () => deviceGateway.gitBranch({ ...probe, workspaceId: dispatchWorkspaceId }),
+              status: () =>
+                deviceGateway.gitWorkingTreeStatus({ ...probe, workspaceId: dispatchWorkspaceId }),
+            },
+            deviceCwd,
+          ),
+        )
+      : undefined;
+  const uncommittedContext = uncommittedChanges ? { uncommittedChanges } : {};
   const deviceSystemContext = buildRemoteDeviceHeteroContext({
     ...worktreeContext,
+    ...uncommittedContext,
     agentSystemContext,
     conversationHistory: resumeSessionId ? undefined : conversationHistory,
     unansweredUserTurns,
@@ -291,6 +313,7 @@ export const dispatchToCliDevice = async (
     resumeSessionId && conversationHistory
       ? buildRemoteDeviceHeteroContext({
           ...worktreeContext,
+          ...uncommittedContext,
           agentSystemContext,
           conversationHistory,
         })

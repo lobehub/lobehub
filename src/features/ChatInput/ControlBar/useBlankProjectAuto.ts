@@ -7,6 +7,7 @@ import { canStageDraftOn } from '@/features/Projects/WorkingDirectories/startPro
 import { useAgentFixedDeviceId } from '@/features/Projects/WorkingDirectories/useAgentFixedDeviceId';
 import { useAgentOwnDevice } from '@/features/Projects/WorkingDirectories/useAgentOwnDevice';
 import {
+  isDeviceOnline,
   isExecutionDirectoryAvailable,
   useProjectExecutionEnvironments,
 } from '@/features/Projects/WorkingDirectories/useProjectExecutionEnvironments';
@@ -21,8 +22,9 @@ import { useDeviceList } from '@/store/device';
  * Picking a runner by hand restages the draft without `auto`, which ends it.
  *
  * A heterogeneous agent with a device of its own starts on that device's
- * directory instead (`resolveAgentProjectRunner`); `notice` says why it could
- * not, and whether the send will be refused.
+ * directory instead (`resolveAgentProjectRunner`), or its own working
+ * directory there; `notice` says which, or that the device is offline and
+ * whether the send will be refused.
  */
 export const useBlankProjectAuto = (agentId: string, projectId: string | undefined) => {
   const { ordered } = useProjectExecutionEnvironments(projectId, !!projectId);
@@ -49,6 +51,7 @@ export const useBlankProjectAuto = (agentId: string, projectId: string | undefin
           isAvailable: (directory) =>
             canStageDraftOn(directory, fixedDeviceId) &&
             isExecutionDirectoryAvailable(directory, devices),
+          isDeviceOnline: (deviceId) => isDeviceOnline(devices, deviceId),
           isRunnable: (directory) => canStageDraftOn(directory, fixedDeviceId),
           ownDevice,
         })
@@ -72,9 +75,7 @@ export const useBlankProjectAuto = (agentId: string, projectId: string | undefin
     if (active && resolved && staged !== resolved.id) stage();
   }, [active, resolved?.id, staged]);
 
-  const notice = choice?.ownDeviceUnavailable
-    ? { blocked: !!choice.blocked, reason: choice.ownDeviceUnavailable }
-    : undefined;
+  const notice = choice?.notice;
 
   return projectId && resolved ? { active, notice, onSelect: stage } : undefined;
 };

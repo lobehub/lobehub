@@ -96,6 +96,7 @@ const resolveProjectRun = async <T extends { boundDeviceId?: string }>(params: {
     boundTopic: boundTopic && {
       boundDeviceId: boundTopic.metadata?.boundDeviceId,
       projectId: boundTopic.projectId,
+      projectSandboxFallback: boundTopic.metadata?.projectSandboxFallback,
       projectWorkingDirectoryId: boundTopic.projectWorkingDirectoryId,
     },
     isGatewayMode: params.isGatewayMode,
@@ -141,7 +142,9 @@ export const resolveSendProjectRun = async <T extends { boundDeviceId?: string }
     const run = await resolveProjectRun(params);
     if (run.ownDeviceFallback)
       toast.info(
-        t(ownDeviceNoticeKey({ blocked: false, reason: run.ownDeviceFallback }), { ns: 'project' }),
+        t(ownDeviceNoticeKey({ blocked: false, reason: run.ownDeviceFallback }), {
+          ns: 'project',
+        }),
       );
     return run;
   } catch (error) {

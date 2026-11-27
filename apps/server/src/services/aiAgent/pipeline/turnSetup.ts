@@ -888,11 +888,9 @@ export const setupTurn = async (
   } finally {
     topicStage.end();
   }
-  // Its own device could not take this project conversation: it runs in the sandbox.
-  agentConfig.agencyConfig = withProjectSandboxFallback(agentConfig.agencyConfig, input, {
-    boundDeviceId: topicBoundDeviceId,
-    projectId: turnProjectId,
-  });
+  // Its own device is offline for this project conversation: it runs in the sandbox.
+  const turn = { boundDeviceId: topicBoundDeviceId, projectId: turnProjectId, topicId };
+  agentConfig.agencyConfig = await withProjectSandboxFallback(deps, input, agentConfig, turn);
 
   if (heterogeneousProvider) {
     // A new topic has no pins, yet a native Task model still replaces the

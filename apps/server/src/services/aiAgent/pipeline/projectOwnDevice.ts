@@ -1,25 +1,27 @@
-import type { LobeAgentAgencyConfig } from '@lobechat/types';
+import type { ChatTopicMetadata, LobeAgentAgencyConfig } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 
 import { getAgentOwnDevice } from '@/helpers/agentOwnDevice';
+import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
+
+import type { TurnSetupDeps } from './turnSetup';
 
 /**
- * Whether a project conversation runs in the cloud sandbox because its agent
- * fell back from a device of its own. A heterogeneous agent that runs on its
- * own device and may use the sandbox (Claude Code, Codex) only gets a project
- * conversation without a directory when that device could not take it — the
- * client stages its own device's directory otherwise
- * (`resolveAgentProjectRunner`), and the conversation's runner picker shows
- * the sandbox. The run must land there too, not on the agent's stored device:
- * the client's per-send target (`resolveProjectDirectoryRun`) does not reach
- * this server.
+ * Whether a project conversation is one whose agent might fall back to the
+ * cloud sandbox from a device of its own: a composer send of a project
+ * conversation with no directory, no pinned or requested device, by a
+ * heterogeneous agent that runs on its own device and may use the sandbox
+ * (Claude Code, Codex).
  *
- * Left alone: a conversation that already runs on a machine (a directory, a
- * pinned or requested device), and runs nobody started from the composer,
- * which keep the agent's own target. A composer send is the `chat` trigger
- * (`startComposerRun`); channels, tasks, schedules, goals, verification and
- * other server-started runs carry their own trigger, or are bots and share
- * visitors.
+ * Such a conversation runs on that device in the agent's own working
+ * directory while the device is online — the client stages its own device's
+ * project folder when there is one (`resolveAgentProjectRunner`) — and in the
+ * sandbox when it is not ({@link withProjectSandboxFallback}).
+ *
+ * Left alone: runs nobody started from the composer, which keep the agent's own
+ * target. A composer send is the `chat` trigger (`startComposerRun`); channels,
+ * tasks, schedules, goals, verification and other server-started runs carry
+ * their own trigger, or are bots and share visitors.
  */
 export const projectFallsBackToSandbox = ({
   agencyConfig,
@@ -42,12 +44,19 @@ export const projectFallsBackToSandbox = ({
   !!getAgentOwnDevice(agencyConfig)?.sandboxFallback;
 
 /**
- * `agencyConfig` for this turn, moved to the sandbox when
- * {@link projectFallsBackToSandbox} says so. `run` is the turn's request; only
- * a `chat` trigger outside a task, schedule, bot or share visit is a composer send.
+ * `agencyConfig` for this turn. A conversation that may fall back
+ * ({@link projectFallsBackToSandbox}) runs in the sandbox once it has done so
+ * (`metadata.projectSandboxFallback`), or when the agent's own device is
+ * offline on a turn that never ran on a machine — which then marks the
+ * conversation, so its later turns stay where its session lives. While the
+ * device is online it keeps the agent's own target: its device, in its own
+ * working directory.
+ *
+ * `run` is the turn's request; only a `chat` trigger outside a task, schedule,
+ * bot or share visit is a composer send.
  */
-export const withProjectSandboxFallback = (
-  agencyConfig: LobeAgentAgencyConfig | undefined,
+export const withProjectSandboxFallback = async (
+  deps: Pick<TurnSetupDeps, 'db' | 'topicModel' | 'userId' | 'workspaceId'>,
   run: {
     botContext?: unknown;
     cronJobId?: string;
@@ -56,9 +65,10 @@ export const withProjectSandboxFallback = (
     shareGate?: unknown;
     trigger?: string;
   },
-  turn: { boundDeviceId: string | undefined; projectId: string | undefined },
-): LobeAgentAgencyConfig | undefined =>
-  projectFallsBackToSandbox({
+  { agencyConfig }: { agencyConfig?: LobeAgentAgencyConfig },
+  turn: { boundDeviceId: string | undefined; projectId: string | undefined; topicId?: string },
+): Promise<LobeAgentAgencyConfig | undefined> => {
+  const mayFallBack = projectFallsBackToSandbox({
     agencyConfig,
     boundDeviceId: turn.boundDeviceId,
     interactive:
@@ -69,6 +79,23 @@ export const withProjectSandboxFallback = (
       !run.shareGate,
     projectId: turn.projectId,
     requestedDeviceId: run.requestedDeviceId,
-  })
-    ? { ...agencyConfig, executionTarget: 'sandbox' }
-    : agencyConfig;
+  });
+  if (!mayFallBack || !turn.topicId) return agencyConfig;
+
+  const sandboxed = { ...agencyConfig, executionTarget: 'sandbox' as const };
+  const topic = await deps.topicModel.findById(turn.topicId);
+  const metadata = topic?.metadata as ChatTopicMetadata | null | undefined;
+  if (metadata?.projectSandboxFallback) return sandboxed;
+  // It already ran on a machine: it stays there.
+  if (metadata?.boundDeviceId) return agencyConfig;
+
+  const deviceId = getAgentOwnDevice(agencyConfig)!.deviceId;
+  const online = await getScopedOnlineDevices(deps.db, deps.userId, deps.workspaceId)
+    .then((devices) => devices.some((device) => device.deviceId === deviceId && device.online))
+    // Presence unknown: leave it to the device route, which reports an offline device.
+    .catch(() => true);
+  if (online) return agencyConfig;
+
+  await deps.topicModel.updateMetadata(turn.topicId, { projectSandboxFallback: true });
+  return sandboxed;
+};

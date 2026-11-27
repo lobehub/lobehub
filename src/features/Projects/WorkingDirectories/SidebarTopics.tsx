@@ -46,6 +46,7 @@ import { canStageDraftOn } from './startProjectTopicDraft';
 import { useAgentFixedDeviceId } from './useAgentFixedDeviceId';
 import { useAgentOwnDevice } from './useAgentOwnDevice';
 import {
+  isDeviceOnline,
   isExecutionDirectoryAvailable,
   useProjectExecutionEnvironments,
 } from './useProjectExecutionEnvironments';
@@ -146,6 +147,7 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
                 isAvailable: (directory) =>
                   canStageDraftOn(directory, fixedDeviceId) &&
                   isExecutionDirectoryAvailable(directory, devices),
+                isDeviceOnline: (deviceId) => isDeviceOnline(devices, deviceId),
                 isRunnable: (directory) => canStageDraftOn(directory, fixedDeviceId),
                 ownDevice,
               });

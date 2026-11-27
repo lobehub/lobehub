@@ -16,6 +16,7 @@ describe('resolveAgentProjectRunner', () => {
   );
   const online = (ids: string[]) => ({
     isAvailable: (d: ProjectDirectory) => ids.includes(d.deviceId!),
+    isDeviceOnline: (deviceId: string) => ids.includes(deviceId),
     isRunnable: () => true,
   });
 
@@ -33,10 +34,10 @@ describe('resolveAgentProjectRunner', () => {
       ownDevice: { deviceId: 'dev-1', sandboxFallback: true },
     });
     expect(choice.environment.id).toBe('dir-own');
-    expect(choice.ownDeviceUnavailable).toBeUndefined();
+    expect(choice.notice).toBeUndefined();
   });
 
-  it('falls back to the sandbox, not another device, when it can', () => {
+  it('falls back to the sandbox, not another device, while its device is offline', () => {
     const choice = resolveAgentProjectRunner(ordered, undefined, {
       ...online(['dev-2']),
       ownDevice: { deviceId: 'dev-1', sandboxFallback: true },
@@ -44,16 +45,30 @@ describe('resolveAgentProjectRunner', () => {
     expect(choice).toEqual({
       blocked: undefined,
       environment: { id: 'sandbox', kind: 'sandbox' },
-      ownDeviceUnavailable: 'offline',
+      notice: { blocked: false, reason: 'offline' },
     });
   });
 
-  it('blocks a device-only agent whose device has no directory', () => {
+  // Lin (11-27): a device without a project folder still runs the agent, in
+  // its own working directory there.
+  it("starts in the agent's own working directory on an online device without a project folder", () => {
     const choice = resolveAgentProjectRunner(ordered, undefined, {
       ...online(['dev-2', 'dev-3']),
       ownDevice: { deviceId: 'dev-3', sandboxFallback: false },
     });
-    expect(choice).toMatchObject({ blocked: true, ownDeviceUnavailable: 'noDirectory' });
+    expect(choice).toMatchObject({
+      notice: { deviceId: 'dev-3', workingDirectory: true },
+      ownWorkingDirectory: true,
+    });
+    expect(choice.blocked).toBeUndefined();
+  });
+
+  it('blocks a device-only agent whose device is offline', () => {
+    const choice = resolveAgentProjectRunner(ordered, undefined, {
+      ...online(['dev-2']),
+      ownDevice: { deviceId: 'dev-3', sandboxFallback: false },
+    });
+    expect(choice).toMatchObject({ blocked: true, notice: { blocked: true, reason: 'offline' } });
   });
 
   it('keeps a pick made by hand', () => {

@@ -167,15 +167,19 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
   // as a project conversation's own picker offers them.
   const environment = useProjectHomeEnvironment(project.id, agentId);
   // A task is not started in a conversation, so it has no repository or folder to pick.
+  // On the agent's own working directory the conversation has no project
+  // folder and no sandbox environment: the run takes the agent's device and cwd.
   const place =
     mode !== 'chat'
       ? {}
-      : environment.onSandbox
-        ? {
-            environmentId: repositoryState.repository?.id,
-            withoutEnvironment: repositoryState.withoutEnvironment,
-          }
-        : { directoryId: environment.directoryId };
+      : environment.ownWorkingDirectory
+        ? { withoutEnvironment: true }
+        : environment.onSandbox
+          ? {
+              environmentId: repositoryState.repository?.id,
+              withoutEnvironment: repositoryState.withoutEnvironment,
+            }
+          : { directoryId: environment.directoryId };
   const canPickSandbox = location.switchable && location.sandboxAvailable;
   const { send, sending } = useProjectComposer(project, mode, agentId, place);
 
@@ -198,11 +202,12 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
     // not sent anywhere else; one that may use the sandbox goes there, said so.
     if (mode === 'chat' && environment.loading) return;
     const notice = mode === 'chat' && environment.auto ? environment.notice : undefined;
-    if (notice?.blocked) return void toast.error(t(ownDeviceNoticeKey(notice)));
+    if (notice && 'blocked' in notice && notice.blocked)
+      return void toast.error(t(ownDeviceNoticeKey(notice)));
     try {
       await send(params);
       // Said once the conversation has left the composer, not before a refusal.
-      if (notice) toast.info(t(ownDeviceNoticeKey(notice)));
+      if (notice && 'blocked' in notice) toast.info(t(ownDeviceNoticeKey(notice)));
     } catch (error) {
       if (error instanceof AttachmentsNotReadyError) {
         toast.error(tHome('dashboard.task.attachmentsNotReady'));
