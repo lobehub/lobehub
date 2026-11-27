@@ -37,10 +37,12 @@ afterEach(async () => {
 });
 
 describe('initWorkspace without a working directory', () => {
-  it('discovers all home skill sources without importing home or process-cwd project rules', async () => {
+  it('loads device skills and global instructions without treating home or cwd as a project', async () => {
     const agentsPath = await writeSkill('.agents', 'writing');
     const claudePath = await writeSkill('.claude', 'analysis');
     const codexPath = await writeSkill('.codex', 'review');
+    await writeFile(path.join(home, '.agents', 'AGENTS.md'), 'Device instructions');
+    await writeFile(path.join(home, '.claude', 'CLAUDE.md'), 'Fallback device instructions');
     await writeFile(path.join(home, 'AGENTS.md'), 'Unselected home instructions');
     await writeFile(path.join(home, 'CLAUDE.md'), 'Unselected home instructions');
     // Even when the daemon starts inside a repository, it is not the user's
@@ -59,7 +61,14 @@ describe('initWorkspace without a working directory', () => {
     const result = await initWorkspace({}, { approveProjectRoot });
 
     expect(result.root).toBeUndefined();
-    expect(result.instructions).toEqual([]);
+    expect(result.instructions).toEqual([
+      {
+        content: 'Device instructions',
+        path: path.join(home, '.agents', 'AGENTS.md'),
+        scope: 'device',
+        source: 'AGENTS.md',
+      },
+    ]);
     expect(result.skills.map(({ name, path, scope }) => ({ name, path, scope }))).toEqual([
       { name: 'analysis', path: claudePath, scope: 'device' },
       { name: 'review', path: codexPath, scope: 'device' },
@@ -87,7 +96,26 @@ describe('initWorkspace without a working directory', () => {
     });
   });
 
-  it('returns an empty unbound scan when no device skills are installed', async () => {
+  it('loads fallback CLAUDE.md with no working directory or installed skills', async () => {
+    const file = path.join(home, '.claude', 'CLAUDE.md');
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, 'Fallback device instructions');
+
+    expect(await initWorkspace({})).toEqual({
+      instructions: [
+        {
+          content: 'Fallback device instructions',
+          path: file,
+          scope: 'device',
+          source: 'CLAUDE.md',
+        },
+      ],
+      root: undefined,
+      skills: [],
+    });
+  });
+
+  it('returns an empty unbound scan when no device skills or instructions are installed', async () => {
     const approveProjectRoot = vi.fn<(root: string) => Promise<void>>().mockResolvedValue();
 
     const result = await initWorkspace({}, { approveProjectRoot });
