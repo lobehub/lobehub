@@ -1,12 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
 
+import type { buildMcpToolMetadata } from '@lobechat/const/mcpApp';
 import {
-  buildMcpToolMetadata,
+  buildListedMcpAppMeta,
   getMcpAppEntrypoints,
   getMcpToolVisibility,
   isMcpToolVisibleTo,
   partitionMcpToolsForViews,
-  resolveMcpUiToolMeta,
 } from '@lobechat/const/mcpApp';
 import type { ListMcpToolsParams, ReadMcpUiResourceParams } from '@lobechat/device-control';
 import {
@@ -399,11 +399,7 @@ export default class McpCtr extends ControllerModule {
         name: tool.name,
         visibility: getMcpToolVisibility(tool._meta),
         ...(input.mcpApps && {
-          mcpAppMeta: buildMcpToolMetadata(resolveMcpUiToolMeta(tool._meta, false).visibility, {
-            ...resolveMcpUiToolMeta(tool._meta),
-            entrypoints: resolveMcpUiToolMeta(tool._meta).entrypoints ?? [],
-            threadEntry: getMcpAppEntrypoints([tool], true)[0],
-          }),
+          mcpAppMeta: buildListedMcpAppMeta(tool),
         }),
       }));
 

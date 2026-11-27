@@ -1,4 +1,4 @@
-import type { McpAppThreadEntry } from './mcpAppEntrypoints';
+import { getMcpAppEntrypoints, type McpAppThreadEntry } from './mcpAppEntrypoints';
 import type { McpUiToolMeta } from './mcpUiMeta';
 import { resolveMcpUiToolMeta } from './mcpUiMeta';
 import { sha256Hex } from './sha256';
@@ -49,6 +49,27 @@ export const buildMcpToolMetadata = (
     ...(visibility && { visibility: [...visibility] }),
   };
   return Object.keys(metadata).length ? metadata : null;
+};
+
+/**
+ * The MCP Apps metadata (`mcpAppMeta`) a client reports for a tool it listed
+ * itself (`connector.syncToolsFromClient`): what a server-side sync stores, its
+ * display preference, entrypoints and thread entry included. The server keeps
+ * it only while the user's `mcp_apps` flag is on.
+ */
+export const buildListedMcpAppMeta = (tool: {
+  _meta?: unknown;
+  annotations?: { title?: string };
+  icons?: { src: string }[];
+  name: string;
+  title?: string;
+}) => {
+  const ui = resolveMcpUiToolMeta(tool._meta);
+  return buildMcpToolMetadata(resolveMcpUiToolMeta(tool._meta, false).visibility, {
+    ...ui,
+    entrypoints: ui.entrypoints ?? [],
+    threadEntry: getMcpAppEntrypoints([tool], true)[0],
+  });
 };
 
 /**
