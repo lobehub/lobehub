@@ -1,8 +1,14 @@
 import type { ModelParamsSchema } from '../standard-parameters';
-import type { AiModelSettings, AiModelType, Pricing } from './aiModel';
+import type { AiModelSettings, AiModelType, CompressionThresholdRatio, Pricing } from './aiModel';
 import type { AiProviderSettings } from './aiProvider';
 
 export interface ChatModelCard {
+  /**
+   * Share of the context window that triggers automatic context compression,
+   * in (0, 1]. Unset uses the runtime default (0.5). Deployment-owned catalog
+   * metadata: user model mutations do not accept it.
+   */
+  compressionThresholdRatio?: CompressionThresholdRatio;
   /**
    * the context window (or input + output tokens limit)
    */

@@ -5,6 +5,7 @@ import type { AiModelConfig, ModelAbilities } from 'model-bank';
 import type { loadModels } from '@/business/client/model-bank/loadModels';
 import { AiModelModel } from '@/database/models/aiModel';
 import { AiProviderModel } from '@/database/models/aiProvider';
+import { buildCompressionModelFacts } from '@/server/modules/AgentRuntime/compressionModelFacts';
 import { resolveModelMediaCapabilities } from '@/server/modules/AgentRuntime/resolveModelMediaCapabilities';
 import { createServerModelParamsProviders } from '@/server/modules/Mecha/ModelParams/providers';
 
@@ -102,6 +103,18 @@ export const resolveModelContext = async (
           : null,
     },
   );
+  // Compression measures against the same row, so it freezes with the rest.
+  // When the row read failed, leave it out: each step then reads the row live
+  // instead of the whole run being stuck on the catalog window.
+  const compression =
+    modelMetadataResult.status === 'fulfilled'
+      ? await buildCompressionModelFacts(
+          model,
+          provider,
+          activeModelMetadata?.contextWindowTokens,
+          builtinModels,
+        )
+      : undefined;
   const searchDecision = resolveServerSearchDecision({
     builtinModels,
     chatConfig: agentConfig.chatConfig ?? undefined,
@@ -114,5 +127,9 @@ export const resolveModelContext = async (
     providerSearchMode: activeProviderMetadata?.settings?.searchMode,
   });
 
-  return { modelFacts, modelMediaCapabilities, searchDecision };
+  return {
+    modelFacts: compression ? { ...modelFacts, compression } : modelFacts,
+    modelMediaCapabilities,
+    searchDecision,
+  };
 };

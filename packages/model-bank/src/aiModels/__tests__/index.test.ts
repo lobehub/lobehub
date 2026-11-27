@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { ModelProvider } from '../../const/modelProvider';
+import { CompressionThresholdRatioSchema } from '../../types/aiModel';
 import { loadModels, LOBE_DEFAULT_MODEL_LIST } from '../index';
 
 describe('loadModels', () => {
@@ -630,5 +631,17 @@ describe('Gemini 4 Neon pricing', () => {
       (entry) => entry.id === 'gemini-4-neon' && entry.isOfficial,
     );
     expect(official.map((entry) => entry.providerId)).toEqual(['google']);
+  });
+});
+
+describe('compressionThresholdRatio', () => {
+  it('keeps every builtin card ratio within (0, 1]', () => {
+    const invalid = LOBE_DEFAULT_MODEL_LIST.filter(
+      (model) =>
+        model.compressionThresholdRatio !== undefined &&
+        !CompressionThresholdRatioSchema.safeParse(model.compressionThresholdRatio).success,
+    ).map((model) => `${model.providerId}/${model.id}`);
+
+    expect(invalid).toEqual([]);
   });
 });
