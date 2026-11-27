@@ -11,13 +11,13 @@ import BaseErrorForm from '../BaseErrorForm';
 // TODO: Optimize the Ollama setup flow - in isDesktop mode, end-to-end detection can be done directly
 const OllamaDesktopSetupGuide = memo<{ id?: string }>(({ id }) => {
   const { t } = useTranslation('components');
-  const { compact } = useDensity();
+  const { tokens } = useDensity();
 
   const [delAndRegenerateMessage] = useConversationStore((s) => [s.delAndRegenerateMessage]);
 
   return (
     <BaseErrorForm
-      avatar={<Ollama.Avatar shape={'square'} size={compact ? 32 : 40} />}
+      avatar={<Ollama.Avatar shape={'square'} size={tokens.mediaIconBox} />}
       title={t('OllamaSetupGuide.install.title')}
       action={
         <Button

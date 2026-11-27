@@ -1,11 +1,17 @@
+import { type InterfaceDensity } from '@lobechat/types';
 import { ActionIcon, Avatar, Block, cssVar, Flexbox, Text, Tooltip } from '@lobehub/ui';
 import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useDensity } from '@/styles/density';
+import { DENSITY_TOKENS, useDensity } from '@/styles/density';
 
 import type { HeterogeneousAgentStatusGuideVariant } from './types';
+
+const AVATAR_SIZE = {
+  compact: 32,
+  loose: 48,
+} as const satisfies Record<InterfaceDensity, number>;
 
 interface GuideShellProps {
   actions?: ReactNode;
@@ -36,37 +42,38 @@ const GuideShell = ({
   variant,
 }: GuideShellProps) => {
   const { t } = useTranslation('common');
-  const { compact: densityCompact } = useDensity();
-  const dense = compact || densityCompact;
+  const { density: interfaceDensity } = useDensity();
+  const density: InterfaceDensity = compact ? 'compact' : interfaceDensity;
+  const tokens = DENSITY_TOKENS[density];
   const showHeader = variant !== 'embedded';
   // Compact cards keep actions alongside the status when space permits,
   // wrapping them below it in narrow conversation panes.
   const actionsInHeader = compact && showHeader;
   const content = (
-    <Flexbox gap={dense ? 8 : 12}>
+    <Flexbox gap={tokens.contentGap}>
       {showHeader ? (
         <Flexbox
           horizontal
           align="center"
-          gap={dense ? 8 : 12}
+          gap={tokens.contentGap}
           justify="space-between"
           style={compact ? { flexWrap: 'wrap' } : undefined}
         >
           <Flexbox
             horizontal
             align="center"
-            gap={dense ? 8 : 12}
-            style={{ flex: compact ? '1 1 260px' : undefined, minWidth: 0 }}
+            gap={tokens.contentGap}
+            style={{ minWidth: 0, ...(compact && { flex: '1 1 260px' }) }}
           >
             <Avatar
               avatar={icon}
               background={cssVar.colorFillQuaternary}
               shape={'square'}
-              size={dense ? 32 : 48}
+              size={AVATAR_SIZE[density]}
               style={{ color: cssVar.colorText }}
             />
             <Flexbox gap={2} style={{ minWidth: 0 }}>
-              <Text style={{ fontSize: dense ? 14 : 16, fontWeight: 600 }}>{title}</Text>
+              <Text style={{ fontSize: tokens.pageTitleFontSize, fontWeight: 600 }}>{title}</Text>
               {headerDescription}
             </Flexbox>
           </Flexbox>
@@ -104,8 +111,8 @@ const GuideShell = ({
 
   return (
     <Block
-      gap={dense ? 12 : 16}
-      padding={dense ? 12 : 16}
+      gap={tokens.sectionGap}
+      padding={tokens.cardPadding}
       variant={'outlined'}
       style={{
         background: cssVar.colorBgElevated,

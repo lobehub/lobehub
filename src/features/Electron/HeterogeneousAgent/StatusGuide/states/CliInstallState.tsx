@@ -1,4 +1,5 @@
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
+import { type InterfaceDensity } from '@lobechat/types';
 import { Flexbox, Snippet, Text } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
@@ -8,6 +9,11 @@ import GuideActions from '../GuideActions';
 import GuideShell from '../GuideShell';
 import type { HeterogeneousAgentGuideStateProps } from '../types';
 
+const SNIPPET_SIZE = {
+  compact: { height: 32 },
+  loose: {},
+} as const satisfies Record<InterfaceDensity, { height?: number }>;
+
 const CliInstallState = ({
   config,
   error,
@@ -15,8 +21,8 @@ const CliInstallState = ({
   variant,
 }: HeterogeneousAgentGuideStateProps) => {
   const { t } = useTranslation('chat');
-  const { compact } = useDensity();
-  const snippetSize = compact ? { height: 32 } : undefined;
+  const { density } = useDensity();
+  const snippetSize = SNIPPET_SIZE[density];
   const translationPrefix = config.translationPrefix;
   const docsUrl = error?.docsUrl || config.docsUrl;
   const installCommands = error?.installCommands?.length

@@ -1,8 +1,19 @@
+import { type InterfaceDensity } from '@lobechat/types';
 import { Block, Flexbox, Text } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 
 import { useDensity } from '@/styles/density';
+
+const AVATAR_GAP = {
+  compact: 10,
+  loose: 12,
+} as const satisfies Record<InterfaceDensity, number>;
+
+const TITLE_FONT_SIZE = {
+  compact: 13,
+  loose: undefined,
+} as const satisfies Record<InterfaceDensity, number | undefined>;
 
 interface BaseErrorFormProps {
   action?: ReactNode;
@@ -11,7 +22,7 @@ interface BaseErrorFormProps {
   title?: ReactNode;
 }
 const BaseErrorForm = memo<BaseErrorFormProps>(({ title, desc, action, avatar }) => {
-  const { compact, tokens } = useDensity();
+  const { density, tokens } = useDensity();
   return (
     <Block
       horizontal
@@ -26,10 +37,10 @@ const BaseErrorForm = memo<BaseErrorFormProps>(({ title, desc, action, avatar })
         width: '100%',
       }}
     >
-      <Flexbox horizontal align="center" gap={compact ? 10 : 12}>
+      <Flexbox horizontal align="center" gap={AVATAR_GAP[density]}>
         {avatar}
         <Flexbox gap={2}>
-          <Text fontSize={compact ? 13 : undefined} weight={500}>
+          <Text fontSize={TITLE_FONT_SIZE[density]} weight={500}>
             {title}
           </Text>
           <Text fontSize={12} type={'secondary'}>
