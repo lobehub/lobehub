@@ -10,6 +10,7 @@ import { viteMarkdownImport } from '../../plugins/vite/markdownImport';
 import { viteNodeModuleStub } from '../../plugins/vite/nodeModuleStub';
 import { vitePlatformResolve } from '../../plugins/vite/platformResolve';
 import {
+  sharedRendererClientBuild,
   sharedRendererDedupe,
   sharedRendererDefine,
 } from '../../plugins/vite/sharedRendererConfig';
@@ -184,16 +185,7 @@ export const createShareRrConfig = ({
   return defineConfig({
     base: isDev ? '/' : process.env.VITE_CDN_BASE || '/',
     environments: {
-      client: {
-        build: {
-          rolldownOptions: {
-            // Shared editor and conversation chunks can form cycles even when
-            // their source modules are acyclic. Initialize imports before use.
-            output: { strictExecutionOrder: true },
-          },
-        },
-        define,
-      },
+      client: { build: sharedRendererClientBuild, define },
       ssr: { define: ssrDefine, optimizeDeps: { exclude: [...stylexTokenModules] } },
     },
     optimizeDeps: { exclude: [...stylexTokenModules] },
