@@ -65,8 +65,8 @@ export const collectDisplayedMessageIds = (displayMessages: UIChatMessage[]): Se
  * Returns:
  * - The snapshot of the latest assistant message with recorded usage. User or tool messages and
  *   usage-less replies after it (a failed or aborted run) are skipped, since that run never
- *   reached the cache. `undefined` when that reply did not ask the provider to cache, so the
- *   lifetime is unknown and nothing is guessed.
+ *   reached the cache. `undefined` when the server recorded no cache lifetime for that reply (no
+ *   caching requested, or an implicit cache of a family without a known lifetime).
  */
 export const getPromptCacheSnapshot = (
   messages: UIChatMessage[],

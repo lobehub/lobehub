@@ -16,6 +16,7 @@ import {
   isModelRefusalFinishReason,
   ModelEmptyError,
   ModelRefusalError,
+  resolveImplicitCacheTTLSeconds,
 } from '@lobechat/model-runtime';
 import type {
   AgentShareVisitorIds,
@@ -345,7 +346,13 @@ export class ServerCallLlmAttempt {
         onCompletion: async (data) => {
           this.completion = data;
           if (data.usage) this.usage = data.usage;
-          const ttlSeconds = cacheTTLToSeconds(data.pricingOptions?.lookupParams?.ttl);
+          // Providers that cache on their own (OpenAI, Kimi, ...) state no lifetime; use the
+          // family's known one, but only once the reply shows the channel actually caches.
+          const ttlSeconds =
+            cacheTTLToSeconds(data.pricingOptions?.lookupParams?.ttl) ??
+            (data.usage?.inputCachedTokens
+              ? resolveImplicitCacheTTLSeconds(this.model)
+              : undefined);
           this.promptCache = ttlSeconds ? { requestStartedAt, ttlSeconds } : undefined;
           if (data.speed) this.speed = data.speed;
           if (data.finishReason) this.finishReason = data.finishReason;

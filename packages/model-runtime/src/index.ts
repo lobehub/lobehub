@@ -101,6 +101,7 @@ export { consumeStreamUntilDone } from './utils/consumeStream';
 export { AgentRuntimeError } from './utils/createError';
 export { getModelPropertyWithFallback } from './utils/getFallbackModelProperty';
 export { getModelParameters, getModelPricing } from './utils/getModelPricing';
+export { resolveImplicitCacheTTLSeconds } from './utils/implicitCacheTTL';
 export {
   applyModelExtendParams,
   type ApplyModelExtendParamsContext,
