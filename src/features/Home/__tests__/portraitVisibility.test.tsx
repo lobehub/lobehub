@@ -253,6 +253,35 @@ describe('Home rail layout', () => {
     act(() => reportEmpty?.(false));
     expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'false');
   }, 20000);
+
+  it('takes an empty rail out of the way of the widened main column', async () => {
+    let reportEmpty: ((empty: boolean) => void) | undefined;
+    await renderHome({
+      homeInbox: () => ({
+        default: ({ onRailEmptyChange }: { onRailEmptyChange?: (empty: boolean) => void }) => {
+          reportEmpty = onRailEmptyChange;
+          return <div data-testid={'home-inbox'} />;
+        },
+      }),
+      showHomeRail: true,
+    });
+
+    const rail = screen.getByTestId('home-rail');
+    expect(rail).toHaveAttribute('data-collapsed', 'false');
+    expect(rail).not.toHaveAttribute('inert');
+
+    // The widened column now runs under the rail track; an interactive rail
+    // there swallows clicks on the column's right-hand buttons (e.g. inbox
+    // card "Dismiss" / "Approve").
+    act(() => reportEmpty?.(true));
+    expect(rail).toHaveAttribute('data-collapsed', 'true');
+    expect(rail).toHaveAttribute('inert');
+    expect(rail).toContainElement(screen.getByTestId('home-inbox'));
+
+    act(() => reportEmpty?.(false));
+    expect(rail).toHaveAttribute('data-collapsed', 'false');
+    expect(rail).not.toHaveAttribute('inert');
+  }, 20000);
 });
 
 describe('Home input banner queue', () => {
