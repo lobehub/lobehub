@@ -1,11 +1,12 @@
 import { type ModelPerformance, type ModelUsage } from '@lobechat/types';
 import { formatUsageValue, formatUsd } from '@lobechat/utils';
 import { Center, cssVar, Divider, Flexbox, Icon, Popover } from '@lobehub/ui';
-import { BadgeCent, CoinsIcon } from 'lucide-react';
+import { ArrowLeftRight, BadgeCent, CoinsIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InfoTooltip from '@/components/InfoTooltip';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -32,6 +33,7 @@ interface TokenDetailProps {
 
 const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provider, hideCost }) => {
   const { t } = useTranslation('chat');
+  const isMobile = useIsMobile();
 
   // Use systemStatus to manage short-format display state
   const isShortFormat = useGlobalStore(systemStatusSelectors.tokenDisplayFormatShort);
@@ -155,7 +157,7 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
   return (
     <Popover
       placement={'top'}
-      trigger="hover"
+      trigger={isMobile ? 'click' : 'hover'}
       content={
         <Flexbox gap={8} style={{ minWidth: 200 }}>
           {modelCard && <ModelCard {...modelCard} hideCost={hideCost} provider={provider} />}
@@ -193,9 +195,9 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
                 <TokenProgress showIcon data={outputDetails} formatValue={formatValue} />
               </Flexbox>
             )}
-            <Flexbox>
+            <Flexbox gap={4}>
               <TokenProgress showIcon data={totalDetail} formatValue={formatValue} />
-              <Divider style={{ marginBlock: 8 }} />
+              <Divider style={{ marginBlock: 6 }} />
               {cacheRate && (
                 <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
                   <div style={{ color: cssVar.colorTextSecondary }}>
@@ -210,6 +212,56 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
                 </div>
                 <div style={VALUE_STYLE}>{detailTotal}</div>
               </Flexbox>
+              {!isShowCredit && (
+                <button
+                  aria-label={t('messages.tokenDetails.format.title')}
+                  aria-pressed={isShortFormat}
+                  data-testid="token-format-toggle"
+                  type="button"
+                  style={{
+                    alignItems: 'center',
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'inherit',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    font: 'inherit',
+                    gap: 8,
+                    justifyContent: 'space-between',
+                    minHeight: isMobile ? 44 : 24,
+                    minWidth: isMobile ? 44 : undefined,
+                    padding: 0,
+                    width: '100%',
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    updateSystemStatus({ tokenDisplayFormatShort: !isShortFormat });
+                  }}
+                >
+                  <span style={{ color: cssVar.colorTextSecondary }}>
+                    {t('messages.tokenDetails.format.title')}
+                  </span>
+                  <span
+                    style={{
+                      alignItems: 'center',
+                      background: cssVar.colorFillTertiary,
+                      borderRadius: cssVar.borderRadiusSM,
+                      color: cssVar.colorText,
+                      display: 'inline-flex',
+                      fontSize: 12,
+                      fontWeight: 500,
+                      gap: 4,
+                      height: 22,
+                      paddingInline: 8,
+                    }}
+                  >
+                    <Icon icon={ArrowLeftRight} size={12} />
+                    {isShortFormat
+                      ? t('messages.tokenDetails.format.compact')
+                      : t('messages.tokenDetails.format.full')}
+                  </span>
+                </button>
+              )}
               {isShowCredit && (
                 <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
                   <div style={{ color: cssVar.colorTextSecondary }}>
@@ -249,12 +301,16 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
         horizontal
         gap={hideCost ? 4 : 2}
         style={{ cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}
-        onClick={(e) => {
-          // Prevent Popover from closing and toggle the format
-          e.preventDefault();
-          e.stopPropagation();
-          updateSystemStatus({ tokenDisplayFormatShort: !isShortFormat });
-        }}
+        onClick={
+          isMobile || isShowCredit
+            ? undefined
+            : (e) => {
+                // Prevent Popover from closing and toggle the format
+                e.preventDefault();
+                e.stopPropagation();
+                updateSystemStatus({ tokenDisplayFormatShort: !isShortFormat });
+              }
+        }
       >
         {/* A coin beside a bare number reads as money, so hidden-cost usage spells out its unit */}
         {!hideCost && <Icon icon={isShowCredit ? BadgeCent : CoinsIcon} />}

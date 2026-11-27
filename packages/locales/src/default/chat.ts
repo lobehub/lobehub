@@ -1313,6 +1313,9 @@ export default {
   'messages.tokenDetails.cliCredits.tooltip':
     'Subscription credits reported by the agent CLI for this turn. The CLI bills in credits instead of reporting tokens; this is separate from your LobeHub usage.',
   'messages.tokenDetails.cacheRate': 'Cache rate',
+  'messages.tokenDetails.format.compact': 'Compact',
+  'messages.tokenDetails.format.full': 'Full',
+  'messages.tokenDetails.format.title': 'Number format',
   'messages.tokenDetails.input': 'Input',
   'messages.tokenDetails.inputAudio': 'Audio Input',
   'messages.tokenDetails.inputCached': 'Cached Input',
