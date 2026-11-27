@@ -1,4 +1,5 @@
 import type { LobeAgentAgencyConfig } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 
 import { getAgentOwnDevice } from '@/helpers/agentOwnDevice';
 
@@ -14,8 +15,11 @@ import { getAgentOwnDevice } from '@/helpers/agentOwnDevice';
  * this server.
  *
  * Left alone: a conversation that already runs on a machine (a directory, a
- * pinned or requested device), and runs nobody started from the composer —
- * tasks, schedules, bots, share visitors — which keep the agent's own target.
+ * pinned or requested device), and runs nobody started from the composer,
+ * which keep the agent's own target. A composer send is the `chat` trigger
+ * (`startComposerRun`); channels, tasks, schedules, goals, verification and
+ * other server-started runs carry their own trigger, or are bots and share
+ * visitors.
  */
 export const projectFallsBackToSandbox = ({
   agencyConfig,
@@ -39,8 +43,8 @@ export const projectFallsBackToSandbox = ({
 
 /**
  * `agencyConfig` for this turn, moved to the sandbox when
- * {@link projectFallsBackToSandbox} says so. `run` is the turn's request: a
- * task, schedule, bot or share visitor did not come from the composer.
+ * {@link projectFallsBackToSandbox} says so. `run` is the turn's request; only
+ * a `chat` trigger outside a task, schedule, bot or share visit is a composer send.
  */
 export const withProjectSandboxFallback = (
   agencyConfig: LobeAgentAgencyConfig | undefined,
@@ -50,13 +54,19 @@ export const withProjectSandboxFallback = (
     operationTaskId?: string;
     requestedDeviceId?: string;
     shareGate?: unknown;
+    trigger?: string;
   },
   turn: { boundDeviceId: string | undefined; projectId: string | undefined },
 ): LobeAgentAgencyConfig | undefined =>
   projectFallsBackToSandbox({
     agencyConfig,
     boundDeviceId: turn.boundDeviceId,
-    interactive: !run.operationTaskId && !run.cronJobId && !run.botContext && !run.shareGate,
+    interactive:
+      run.trigger === RequestTrigger.Chat &&
+      !run.operationTaskId &&
+      !run.cronJobId &&
+      !run.botContext &&
+      !run.shareGate,
     projectId: turn.projectId,
     requestedDeviceId: run.requestedDeviceId,
   })

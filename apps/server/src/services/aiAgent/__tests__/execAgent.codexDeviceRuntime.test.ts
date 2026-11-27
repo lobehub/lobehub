@@ -343,9 +343,27 @@ describe('AiAgentService.execAgent - Codex device runtime', () => {
       agentId: 'agent-1',
       appContext: { projectId: 'project-1' },
       prompt: 'device is offline',
+      trigger: 'chat',
     });
     expect(mockSpawnHeteroSandbox).toHaveBeenCalled();
     expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+  });
+
+  /** @example A project channel's run without a picked device stays on the agent's own device. */
+  it('keeps a project channel run on the agent device', async () => {
+    Object.assign(heteroAgentConfig.agencyConfig, {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { type: 'codex' },
+    });
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { projectId: 'project-1' },
+      prompt: 'channel message',
+      trigger: 'channel',
+    });
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+    expect(mockDispatchAgentRun).toHaveBeenCalled();
   });
 
   // ROOT CAUSE:

@@ -47,9 +47,20 @@ describe('withProjectSandboxFallback', () => {
   const turn = { boundDeviceId: undefined, projectId: 'prj' };
 
   it('moves a composer turn to the sandbox and keeps a task on its device', () => {
-    expect(withProjectSandboxFallback(claudeCode, {}, turn)?.executionTarget).toBe('sandbox');
+    const chat = { trigger: 'chat' };
+    expect(withProjectSandboxFallback(claudeCode, chat, turn)?.executionTarget).toBe('sandbox');
     expect(
-      withProjectSandboxFallback(claudeCode, { operationTaskId: 'task' }, turn)?.executionTarget,
+      withProjectSandboxFallback(claudeCode, { ...chat, operationTaskId: 'task' }, turn)
+        ?.executionTarget,
     ).toBe('device');
+  });
+
+  // Review: a project channel's first run (no device picked) was forced into
+  // the sandbox instead of running where the agent's own settings say.
+  it('keeps runs another trigger started on the agent device', () => {
+    for (const trigger of ['channel', 'cron', undefined])
+      expect(withProjectSandboxFallback(claudeCode, { trigger }, turn)?.executionTarget).toBe(
+        'device',
+      );
   });
 });
