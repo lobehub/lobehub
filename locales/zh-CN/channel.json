@@ -177,6 +177,8 @@
   "message.copied": "已复制",
   "message.copy": "复制文本",
   "message.expand": "展开消息",
+  "message.postedFor": "应 {{name}} 发送",
+  "message.postedForFrom": "应 {{name}} 在 #{{channel}} 的请求发送",
   "message.relayReplyFrom": "{{name}} 在 #{{channel}} 的回复",
   "message.relayedBy": "由 {{name}} 代发",
   "moveToTrash": "移至回收站",
