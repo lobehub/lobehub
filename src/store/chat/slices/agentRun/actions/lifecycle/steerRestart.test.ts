@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { QueuedMessage } from '@/store/chat/slices/operation/types';
 import type { ChatStore } from '@/store/chat/store';
@@ -24,6 +24,9 @@ const queued = (id: string, extra: Partial<QueuedMessage> = {}): QueuedMessage =
   ...extra,
 });
 
+/** Every watch a test started, stopped after it so none carries into the next. */
+const watchers: Array<{ stop: () => void }> = [];
+
 /** A store with one running operation and a queue, notifying on every change. */
 const createHarness = (metadata: Record<string, unknown> = { steerUnsupported: true }) => {
   let queue: QueuedMessage[] = [];
@@ -43,13 +46,15 @@ const createHarness = (metadata: Record<string, unknown> = { steerUnsupported: t
     listeners.add(listener);
     return () => listeners.delete(listener);
   });
-  createSteerRestart({
-    context,
-    contextKey: 'key',
-    get: () => store,
-    operationId: 'op-1',
-    subscribe,
-  });
+  watchers.push(
+    createSteerRestart({
+      context,
+      contextKey: 'key',
+      get: () => store,
+      operationId: 'op-1',
+      subscribe,
+    }),
+  );
   return {
     listeners,
     setOperation: (patch: Partial<typeof operation>) => {
@@ -65,6 +70,12 @@ const createHarness = (metadata: Record<string, unknown> = { steerUnsupported: t
 };
 
 const sendNow = vi.mocked(sendQueuedMessagesNow);
+
+afterEach(async () => {
+  watchers.splice(0).forEach((watcher) => watcher.stop());
+  // Let a restart a test left resolving release its guard.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
 
 beforeEach(() => {
   restart.value = true;
@@ -128,6 +139,56 @@ describe('createSteerRestart', () => {
     stopping.resolve('sent');
   });
 
+  // ROOT CAUSE:
+  //
+  // The restart guard was released only when the restart's send resolved, and
+  // a local heterogeneous send resolves when its whole run ends. The run the
+  // restart started could therefore never be restarted itself: a follow-up
+  // sent during it waited for its end.
+  //
+  // Before: the guard was held until the replacement run finished.
+  // After: it is released once the replacement message is accepted.
+  it('lets the replacement run restart again once its message is accepted', async () => {
+    const first = createHarness();
+    sendNow.mockImplementationOnce(async (params) => {
+      // The restart stopped the first run before its message was accepted.
+      first.setOperation({ status: 'cancelled' });
+      params.onAccepted?.();
+      // The replacement run is still going: the send has not resolved.
+      return new Promise<'sent'>(() => {});
+    });
+    first.setQueue([queued('a')]);
+    await vi.waitFor(() => expect(sendNow).toHaveBeenCalledOnce());
+
+    // The run the restart started, unable to steer too, gets a follow-up.
+    const replacement = createHarness();
+    replacement.setQueue([queued('b')]);
+
+    await vi.waitFor(() => expect(sendNow).toHaveBeenCalledTimes(2));
+    expect(sendNow.mock.calls[1][0].msgs).toEqual([expect.objectContaining({ id: 'b' })]);
+  });
+
+  it('restarts what queued behind the replacement run before its message was accepted', async () => {
+    const accepted = Promise.withResolvers<void>();
+    const first = createHarness();
+    sendNow.mockImplementationOnce(async (params) => {
+      await accepted.promise;
+      first.setOperation({ status: 'cancelled' });
+      params.onAccepted?.();
+      return new Promise<'sent'>(() => {});
+    });
+    first.setQueue([queued('a')]);
+    await vi.waitFor(() => expect(sendNow).toHaveBeenCalledOnce());
+
+    // Queued while the guard is held: skipped then, picked up on release.
+    const replacement = createHarness();
+    replacement.setQueue([queued('b')]);
+    expect(sendNow).toHaveBeenCalledOnce();
+
+    accepted.resolve();
+    await vi.waitFor(() => expect(sendNow).toHaveBeenCalledTimes(2));
+  });
+
   it('leaves follow-ups already on their way into the run alone', () => {
     const { setQueue } = createHarness();
     setQueue([
@@ -145,6 +206,18 @@ describe('createSteerRestart', () => {
 
     setQueue([queued('a')]);
     expect(sendNow).not.toHaveBeenCalled();
+  });
+
+  it('does not retry a failed restart on its own', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    sendNow.mockRejectedValueOnce(new Error('not confirmed'));
+    const { setQueue } = createHarness();
+    setQueue([queued('a')]);
+
+    await vi.waitFor(() => expect(error).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sendNow).toHaveBeenCalledOnce();
+    error.mockRestore();
   });
 
   it('logs a failed restart; the send already put the follow-ups back', async () => {

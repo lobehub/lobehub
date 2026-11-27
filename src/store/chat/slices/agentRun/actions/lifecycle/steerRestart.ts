@@ -15,8 +15,19 @@ export interface SteerRestartOptions {
   subscribe: (listener: () => void) => () => void;
 }
 
-/** Conversations with a restart on its way: a follow-up meanwhile joins it. */
+/**
+ * Conversations with a restart on its way, until its message is accepted: a
+ * follow-up meanwhile joins it.
+ */
 const restarting = new Set<string>();
+/** Each conversation's watched runs, checked again once its restart is accepted. */
+const checks = new Map<string, Set<() => void>>();
+
+/** Let the conversation's runs restart again, and restart what waits already. */
+const release = (contextKey: string) => {
+  if (!restarting.delete(contextKey)) return;
+  for (const check of checks.get(contextKey) ?? []) check();
+};
 /** Runs already watched: `stream_start` repeats every step. */
 const watched = new Set<string>();
 
@@ -44,6 +55,7 @@ export const createSteerRestart = ({
   const stop = () => {
     ended = true;
     watched.delete(operationId);
+    checks.get(contextKey)?.delete(check);
     unsubscribe?.();
     unsubscribe = undefined;
   };
@@ -64,15 +76,21 @@ export const createSteerRestart = ({
       contextKey,
       getChat: get,
       msgs: waiting,
+      // The send resolves only when a local run ends; the run it started may
+      // need restarting before that.
+      onAccepted: () => release(contextKey),
       takeArrivals: true,
       withdraw: (msg) => get().withdrawQueuedMessage(contextKey, msg.id),
     })
-      // What was taken is back in the queue; it goes when the run ends.
+      // What was taken is back in the queue; it goes when the run ends. Not
+      // checked again: a restart that failed would only fail again.
       .catch((error) => console.error('[steerRestart] restarting the run failed:', error))
       .finally(() => restarting.delete(contextKey));
   };
 
   watched.add(operationId);
+  if (!checks.has(contextKey)) checks.set(contextKey, new Set());
+  checks.get(contextKey)!.add(check);
   unsubscribe = subscribe(check);
   check();
   // The run may have ended during the first check.

@@ -21,6 +21,11 @@ export interface SendQueuedMessagesNowParams {
   /** The queued messages to send, merged into one message. */
   msgs: QueuedMessage[];
   /**
+   * The replacement message was accepted. The send itself can resolve much
+   * later: a local heterogeneous send resolves when its whole run ends.
+   */
+  onAccepted?: () => void;
+  /**
    * Also take what was queued while the run was stopping, so it goes in the
    * same message instead of waiting behind (and interrupting) the new turn.
    */
@@ -65,6 +70,7 @@ export const sendQueuedMessagesNow = async ({
   contextKey,
   getChat,
   msgs,
+  onAccepted,
   takeArrivals,
   withdraw,
 }: SendQueuedMessagesNowParams): Promise<'delivered' | 'sent'> => {
@@ -165,6 +171,7 @@ export const sendQueuedMessagesNow = async ({
       metadata: { ...message.metadata, steer: true },
       onMessageAccepted: () => {
         accepted = true;
+        onAccepted?.();
       },
       onMessagePersisted: () => {
         persisted = true;
@@ -203,5 +210,6 @@ export const sendQueuedMessagesNow = async ({
 export const sendQueuedMessageNow = ({
   msg,
   ...params
-}: Omit<SendQueuedMessagesNowParams, 'msgs' | 'takeArrivals'> & { msg: QueuedMessage }) =>
-  sendQueuedMessagesNow({ ...params, msgs: [msg] });
+}: Omit<SendQueuedMessagesNowParams, 'msgs' | 'onAccepted' | 'takeArrivals'> & {
+  msg: QueuedMessage;
+}) => sendQueuedMessagesNow({ ...params, msgs: [msg] });
