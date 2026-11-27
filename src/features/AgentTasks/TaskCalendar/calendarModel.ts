@@ -40,7 +40,10 @@ export interface MonthGrid extends CalendarRange {
  * The weeks a month view lays out: from the week holding the 1st to the week
  * holding the last day, in the viewer's local time.
  */
-export const buildMonthGrid = (month: Dayjs, weekStartsOn: 0 | 1): MonthGrid => {
+/** First weekday of a grid row: Sunday, Monday or Saturday. */
+export type WeekStart = 0 | 1 | 6;
+
+export const buildMonthGrid = (month: Dayjs, weekStartsOn: WeekStart): MonthGrid => {
   const first = month.startOf('month');
   const lead = (first.day() - weekStartsOn + 7) % 7;
   const start = first.subtract(lead, 'day');
@@ -58,9 +61,29 @@ export const buildMonthGrid = (month: Dayjs, weekStartsOn: 0 | 1): MonthGrid => 
   };
 };
 
-/** Monday-first everywhere except the locales that start the week on Sunday. */
-export const resolveWeekStart = (locale: string): 0 | 1 =>
-  /^(en-US|en-CA|ja|ko|pt-BR|zh-TW|he|ar)/i.test(locale) ? 0 : 1;
+/** Locales whose week starts on Saturday or Sunday; every other one starts on Monday. */
+const SATURDAY_FIRST = /^(ar|fa)(-|$)/i;
+const SUNDAY_FIRST = /^(en-US|en-CA|ja|ko|pt-BR|zh-TW|he)(-|$)/i;
+
+/**
+ * The first weekday of the viewer's locale: the runtime's `weekInfo` when it
+ * has one, else a table of the supported locales that differ from Monday.
+ */
+export const resolveWeekStart = (locale: string): WeekStart => {
+  try {
+    const info = (
+      new Intl.Locale(locale) as Intl.Locale & { getWeekInfo?: () => { firstDay: number } }
+    ).getWeekInfo?.();
+    // `firstDay` is 1 (Monday) … 7 (Sunday).
+    if (info?.firstDay === 6) return 6;
+    if (info?.firstDay === 7) return 0;
+    if (info?.firstDay === 1) return 1;
+  } catch {
+    // An unknown locale tag falls through to the table.
+  }
+  if (SATURDAY_FIRST.test(locale)) return 6;
+  return SUNDAY_FIRST.test(locale) ? 0 : 1;
+};
 
 export const dayKey = (date: Date | Dayjs): string => dayjs(date).format('YYYY-MM-DD');
 
@@ -86,11 +109,23 @@ const HELD_HEALTH = new Set(['awaitingHuman', 'awaitingReview', 'stopped']);
  * answer) plans nothing. A run in flight only holds back the ticks it
  * overlaps, which the calendar cannot know, so its later slots still show.
  */
-export const expandPlannedRuns = (task: TaskListItem, range: CalendarRange, now: Date): Date[] => {
+export interface PlannedRuns {
+  runs: Date[];
+  /** The per-task cap stopped the expansion before the end of the grid. */
+  truncated: boolean;
+}
+
+const NO_PLANNED_RUNS: PlannedRuns = { runs: [], truncated: false };
+
+export const expandPlannedRuns = (
+  task: TaskListItem,
+  range: CalendarRange,
+  now: Date,
+): PlannedRuns => {
   const state = resolveScheduleState(task, now);
-  if (HELD_HEALTH.has(state.health)) return [];
+  if (HELD_HEALTH.has(state.health)) return NO_PLANNED_RUNS;
   const start = Math.max(now.getTime(), range.from.getTime());
-  if (start >= range.to.getTime()) return [];
+  if (start >= range.to.getTime()) return NO_PLANNED_RUNS;
 
   if (task.automationMode === 'schedule' && task.schedulePattern) {
     const result = validateCronPattern(task.schedulePattern, task.scheduleTimezone ?? null, {
@@ -99,38 +134,49 @@ export const expandPlannedRuns = (task: TaskListItem, range: CalendarRange, now:
       // slot exactly at the grid start is kept.
       from: new Date(start - 1),
     });
-    if (!result.valid) return [];
-    return result.nextRuns.filter((at) => at.getTime() > now.getTime() && at < range.to);
+    if (!result.valid) return NO_PLANNED_RUNS;
+    const last = result.nextRuns.at(-1);
+    return {
+      runs: result.nextRuns.filter((at) => at.getTime() > now.getTime() && at < range.to),
+      // A full batch that still ends inside the grid left its tail unexpanded.
+      truncated: result.nextRuns.length >= MAX_PLANNED_PER_TASK && !!last && last < range.to,
+    };
   }
 
   // A heartbeat re-arms an interval after each run finishes, so only its
   // pending tick is known; a running one has none until the run ends.
   if (task.automationMode === 'heartbeat') {
     const at = state.nextRunAt;
-    return at && at.getTime() >= start && at < range.to ? [at] : [];
+    return at && at.getTime() >= start && at < range.to
+      ? { runs: [at], truncated: false }
+      : NO_PLANNED_RUNS;
   }
 
-  return [];
+  return NO_PLANNED_RUNS;
 };
 
-/** A recurring task's past runs (from `rangeRuns`) and its planned ones. */
+/**
+ * Recurring tasks' past runs (from `rangeRuns`) and planned ones; `truncated`
+ * when a dense cadence could not be expanded across the whole grid.
+ */
 export const collectScheduledEntries = (
   tasks: readonly TaskListItem[],
   range: CalendarRange,
   now: Date,
-): TaskCalendarEntry[] => {
+): { entries: TaskCalendarEntry[]; truncated: boolean } => {
   const entries: TaskCalendarEntry[] = [];
+  let truncated = false;
   for (const task of tasks) {
     for (const run of task.rangeRuns ?? []) {
       const at = toDate(run.createdAt);
       if (!at || at < range.from || at >= range.to) continue;
       entries.push({ at, kind: 'run', outcome: toCalendarRunOutcome(run.status), run, task });
     }
-    for (const at of expandPlannedRuns(task, range, now)) {
-      entries.push({ at, kind: 'planned', task });
-    }
+    const planned = expandPlannedRuns(task, range, now);
+    if (planned.truncated) truncated = true;
+    for (const at of planned.runs) entries.push({ at, kind: 'planned', task });
   }
-  return entries;
+  return { entries, truncated };
 };
 
 /**
@@ -163,8 +209,15 @@ export const groupEntriesByDay = (
   return byDay;
 };
 
-/** The viewer's IANA timezone with its current UTC offset, e.g. `Asia/Shanghai (UTC+08:00)`. */
-export const formatViewerTimezone = (now: Date = new Date()): string => {
+/**
+ * The viewer's IANA timezone with the UTC offset its card times use across the
+ * displayed grid, e.g. `Asia/Shanghai (UTC+08:00)`. A grid that crosses a
+ * daylight-saving change names both offsets: `America/New_York (UTC-04:00 / -05:00)`.
+ */
+export const formatViewerTimezone = (range: CalendarRange): string => {
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  return `${zone} (UTC${dayjs(now).format('Z')})`;
+  const first = dayjs(range.from).format('Z');
+  // The last instant inside the grid, not the exclusive end.
+  const last = dayjs(range.to.getTime() - 1).format('Z');
+  return first === last ? `${zone} (UTC${first})` : `${zone} (UTC${first} / ${last})`;
 };

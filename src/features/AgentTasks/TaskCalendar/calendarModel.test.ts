@@ -9,6 +9,7 @@ import {
   collectScheduledEntries,
   dayKey,
   expandPlannedRuns,
+  formatViewerTimezone,
   groupEntriesByDay,
   MAX_PLANNED_PER_TASK,
   resolveWeekStart,
@@ -57,10 +58,18 @@ describe('buildMonthGrid', () => {
     expect(dayKey(sundayFirst.weeks.at(-1)!.at(-1)!)).toBe('2026-12-05');
   });
 
+  it('lays out Saturday-first weeks', () => {
+    const grid = buildMonthGrid(dayjs('2026-11-15'), 6);
+    expect(dayKey(grid.weeks[0][0])).toBe('2026-10-31');
+    expect(grid.weeks[0][0].day()).toBe(6);
+  });
+
   it('never exceeds the six weeks the server accepts', () => {
     for (let month = 0; month < 24; month++) {
-      const grid = buildMonthGrid(dayjs('2026-01-01').add(month, 'month'), 1);
-      expect(grid.weeks.length).toBeLessThanOrEqual(6);
+      for (const weekStart of [0, 1, 6] as const) {
+        const grid = buildMonthGrid(dayjs('2026-01-01').add(month, 'month'), weekStart);
+        expect(grid.weeks.length).toBeLessThanOrEqual(6);
+      }
     }
   });
 });
@@ -70,6 +79,11 @@ describe('resolveWeekStart', () => {
     expect(resolveWeekStart('en-US')).toBe(0);
     expect(resolveWeekStart('zh-CN')).toBe(1);
     expect(resolveWeekStart('de-DE')).toBe(1);
+  });
+
+  it('starts on Saturday for Arabic and Persian', () => {
+    expect(resolveWeekStart('ar')).toBe(6);
+    expect(resolveWeekStart('fa-IR')).toBe(6);
   });
 });
 
@@ -93,7 +107,7 @@ describe('expandPlannedRuns', () => {
 
   it('expands a cron schedule in its own timezone, from now to the end of the grid', () => {
     const now = new Date('2026-11-27T12:00:00Z');
-    const runs = expandPlannedRuns(daily, NOVEMBER_UTC, now);
+    const runs = expandPlannedRuns(daily, NOVEMBER_UTC, now).runs;
 
     // 09:00 Shanghai is 01:00 UTC; the 27th's slot has already passed.
     expect(runs.map((at) => at.toISOString())).toEqual([
@@ -105,26 +119,30 @@ describe('expandPlannedRuns', () => {
 
   it('starts at the grid for a future month and plans nothing for a past one', () => {
     const now = new Date('2026-10-15T00:00:00Z');
-    expect(expandPlannedRuns(daily, NOVEMBER_UTC, now)).toHaveLength(30);
-    expect(expandPlannedRuns(daily, NOVEMBER_UTC, new Date('2026-12-05T00:00:00Z'))).toEqual([]);
+    expect(expandPlannedRuns(daily, NOVEMBER_UTC, now).runs).toHaveLength(30);
+    expect(expandPlannedRuns(daily, NOVEMBER_UTC, new Date('2026-12-05T00:00:00Z')).runs).toEqual(
+      [],
+    );
   });
 
   it('plans nothing while the schedule is held', () => {
     const now = new Date('2026-11-01T00:00:00Z');
-    expect(expandPlannedRuns({ ...daily, status: 'paused' }, NOVEMBER_UTC, now)).toEqual([]);
-    expect(expandPlannedRuns({ ...daily, awaitingHuman: true }, NOVEMBER_UTC, now)).toEqual([]);
+    expect(expandPlannedRuns({ ...daily, status: 'paused' }, NOVEMBER_UTC, now).runs).toEqual([]);
+    expect(expandPlannedRuns({ ...daily, awaitingHuman: true }, NOVEMBER_UTC, now).runs).toEqual(
+      [],
+    );
     expect(
       expandPlannedRuns(
         { ...daily, context: { scheduler: { consecutiveFailures: 3 } } },
         NOVEMBER_UTC,
         now,
-      ),
+      ).runs,
     ).toEqual([]);
   });
 
   it('keeps the later slots of a task with a run in flight', () => {
     const now = new Date('2026-11-29T12:00:00Z');
-    const runs = expandPlannedRuns({ ...daily, status: 'running' }, NOVEMBER_UTC, now);
+    const runs = expandPlannedRuns({ ...daily, status: 'running' }, NOVEMBER_UTC, now).runs;
     expect(runs.map((at) => at.toISOString())).toEqual(['2026-11-30T01:00:00.000Z']);
   });
 
@@ -135,22 +153,32 @@ describe('expandPlannedRuns', () => {
       heartbeatInterval: 3600,
       lastHeartbeatAt: new Date('2026-11-30T19:30:00Z'),
     });
-    expect(expandPlannedRuns(heartbeat, NOVEMBER_UTC, now).map((at) => at.toISOString())).toEqual([
-      '2026-11-30T20:30:00.000Z',
-    ]);
+    expect(
+      expandPlannedRuns(heartbeat, NOVEMBER_UTC, now).runs.map((at) => at.toISOString()),
+    ).toEqual(['2026-11-30T20:30:00.000Z']);
     // A running heartbeat has no pending tick until its run ends.
-    expect(expandPlannedRuns({ ...heartbeat, status: 'running' }, NOVEMBER_UTC, now)).toEqual([]);
+    expect(expandPlannedRuns({ ...heartbeat, status: 'running' }, NOVEMBER_UTC, now).runs).toEqual(
+      [],
+    );
   });
 
   it('caps a dense cadence', () => {
     const minutely = task({ automationMode: 'schedule', schedulePattern: '* * * * *' });
-    const runs = expandPlannedRuns(minutely, NOVEMBER_UTC, new Date('2026-10-01T00:00:00Z'));
-    expect(runs).toHaveLength(MAX_PLANNED_PER_TASK);
+    const planned = expandPlannedRuns(minutely, NOVEMBER_UTC, new Date('2026-10-01T00:00:00Z'));
+    expect(planned.runs).toHaveLength(MAX_PLANNED_PER_TASK);
+    // The cap ended the expansion inside the grid, and the caller is told so.
+    expect(planned.truncated).toBe(true);
+    const daily = task({ automationMode: 'schedule', schedulePattern: '0 9 * * *' });
+    expect(expandPlannedRuns(daily, NOVEMBER_UTC, new Date('2026-10-01T00:00:00Z')).truncated).toBe(
+      false,
+    );
   });
 
   it('plans nothing for an invalid pattern', () => {
     const broken = task({ automationMode: 'schedule', schedulePattern: 'nope' });
-    expect(expandPlannedRuns(broken, NOVEMBER_UTC, new Date('2026-11-01T00:00:00Z'))).toEqual([]);
+    expect(expandPlannedRuns(broken, NOVEMBER_UTC, new Date('2026-11-01T00:00:00Z')).runs).toEqual(
+      [],
+    );
   });
 });
 
@@ -168,11 +196,12 @@ describe('collectScheduledEntries', () => {
       scheduleTimezone: 'UTC',
     });
 
-    const entries = collectScheduledEntries(
+    const { entries, truncated } = collectScheduledEntries(
       [digest],
       NOVEMBER_UTC,
       new Date('2026-11-29T10:00:00Z'),
     );
+    expect(truncated).toBe(false);
 
     expect(entries.map((entry) => [entry.kind, entry.at.toISOString()])).toEqual([
       ['run', '2026-11-02T09:00:00.000Z'],
@@ -214,5 +243,15 @@ describe('groupEntriesByDay', () => {
 
     expect(byDay.get('2026-11-02')?.map((entry) => entry.task.id)).toEqual(['b', 'a']);
     expect(byDay.get('2026-11-03')?.map((entry) => entry.task.id)).toEqual(['c']);
+  });
+});
+
+describe('formatViewerTimezone', () => {
+  it('names the zone with the offset the displayed grid uses', () => {
+    const label = formatViewerTimezone(NOVEMBER_UTC);
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    expect(label.startsWith(`${zone} (UTC`)).toBe(true);
+    // The offset comes from the grid's own dates, not from today.
+    expect(label).toContain(dayjs(NOVEMBER_UTC.from).format('Z'));
   });
 });

@@ -220,12 +220,13 @@ const TaskCalendar = memo<TaskCalendarProps>(
       range,
     });
 
-    const entriesByDay = useMemo(() => {
-      if (!data) return new Map<string, TaskCalendarEntry[]>();
-      const entries = isScheduled
+    const { entriesByDay, planTruncated } = useMemo(() => {
+      if (!data)
+        return { entriesByDay: new Map<string, TaskCalendarEntry[]>(), planTruncated: false };
+      const { entries, truncated } = isScheduled
         ? collectScheduledEntries(data.tasks, range, now)
-        : collectCompletedEntries(data.tasks, range);
-      return groupEntriesByDay(entries);
+        : { entries: collectCompletedEntries(data.tasks, range), truncated: false };
+      return { entriesByDay: groupEntriesByDay(entries), planTruncated: truncated };
     }, [data, isScheduled, now, range]);
 
     const todayKey = dayKey(now);
@@ -256,7 +257,7 @@ const TaskCalendar = memo<TaskCalendarProps>(
             </Button>
           </Flexbox>
           <Text fontSize={12} type={'secondary'}>
-            {t('taskList.calendar.timezone', { timezone: formatViewerTimezone(now) })}
+            {t('taskList.calendar.timezone', { timezone: formatViewerTimezone(range) })}
           </Text>
         </Flexbox>
         {!isScheduled && (
@@ -267,7 +268,7 @@ const TaskCalendar = memo<TaskCalendarProps>(
             </Text>
           </Flexbox>
         )}
-        {data?.truncated && (
+        {(data?.truncated || planTruncated) && (
           <Flexbox horizontal align={'center'} gap={6}>
             <Info color={cssVar.colorWarning} size={12} />
             <Text fontSize={12} type={'secondary'}>

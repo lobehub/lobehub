@@ -619,7 +619,9 @@ export class TaskTopicModel {
         agentId: topics.agentId,
         completedAt: topics.completedAt,
         createdAt: taskTopics.createdAt,
-        handoff: taskTopics.handoff,
+        // Only the two keys the note reads: `content` can hold a run's whole output.
+        handoffSummary: sql<string | null>`${taskTopics.handoff} ->> 'summary'`,
+        handoffTitle: sql<string | null>`${taskTopics.handoff} ->> 'title'`,
         seq: taskTopics.seq,
         status: taskTopics.status,
         taskId: taskTopics.taskId,
@@ -641,9 +643,13 @@ export class TaskTopicModel {
       .limit(limit + 1);
     const truncated = rows.length > limit;
 
-    for (const { handoff, taskId, ...run } of rows.slice(0, limit)) {
+    for (const { handoffSummary, handoffTitle, taskId, ...run } of rows.slice(0, limit)) {
       const runs = runsByTaskId.get(taskId) ?? [];
-      runs.push({ ...run, note: resolveRunNote(handoff as TaskTopicHandoff | null) });
+      const note = resolveRunNote({
+        summary: handoffSummary ?? undefined,
+        title: handoffTitle ?? undefined,
+      });
+      runs.push({ ...run, note });
       runsByTaskId.set(taskId, runs);
     }
     return { runsByTaskId, truncated };
