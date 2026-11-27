@@ -103,7 +103,9 @@ export class AgentAccessService {
    * The owner's answer, idempotent. Approving first grants what the request lacks (see
    * {@link grantAgentAccess}); then either answer runs the replies it holds again: queued ones
    * wake with the Channel, failed ones it named go back to the queue, where an approved requester
-   * runs and a declined one settles with the owner's refusal on its card.
+   * runs and a declined one settles with the owner's refusal on its card. Revoking an approval
+   * first takes back what it granted ({@link revokeAgentAccess}); the requester's next reply asks
+   * the owner again, and a run already admitted stops at its next step (`isRunStillAuthorized`).
    */
   decide = async (grantId: string, decision: AgentAccessDecision) => {
     const row = await findAgentAccessRequest(this.db, grantId);
@@ -126,13 +128,22 @@ export class AgentAccessService {
       });
     }
 
+    if (decision === 'revoke' && row.grant.status === 'approved' && row.requesterUserId)
+      await revokeAgentAccess(this.db, {
+        agentId: row.agentId,
+        grantId,
+        ownerId: this.userId,
+        requesterUserId: row.requesterUserId,
+        workspaceId: row.agentWorkspaceId,
+      });
+
     const { changed, grant } = await decideAgentAccessGrant(
       this.db,
       this.userId,
       grantId,
       decision,
     );
-    if (changed) {
+    if (changed && decision !== 'revoke') {
       const { jobIds } = accessRequestMetadata(grant);
       if (jobIds.length)
         await withChannelLock(this.db, grant.channelId, async (tx) => {
@@ -141,7 +152,7 @@ export class AgentAccessService {
         });
       await wakeChannel(grant.channelId);
       await notifyChannel(this.db, grant.channelId);
-    }
+    } else if (changed) await notifyChannel(this.db, grant.channelId);
     await refreshAgentAccessCard(this.db, {
       agentId: row.agentId,
       id: grant.id,
@@ -220,4 +231,33 @@ export const grantAgentAccess = async (
   // Device grants need Channels on for the owner; refuse instead of approving what cannot run.
   if (!updated || !(await evaluateShareAccess(db, updated, requesterUserId)).canUseDevice)
     throw new ChannelError('FORBIDDEN', 'Device access is not available for this Agent');
+};
+
+/**
+ * Undoes {@link grantAgentAccess} when the owner revokes an approval: withdraws the share grant
+ * that approval issued, and for a local CLI Agent takes the requester off its device allowlist. A
+ * share grant the requester holds for another reason (a card the owner sent them) stays, and so
+ * does a device listing when no grant of this approval was live, since the owner may have listed
+ * them by hand. The share's visibility is left as is. Idempotent.
+ */
+export const revokeAgentAccess = async (
+  db: LobeChatDatabase,
+  params: {
+    agentId: string;
+    grantId: string;
+    ownerId: string;
+    requesterUserId: string;
+    workspaceId: string | null;
+  },
+) => {
+  const { agentId, requesterUserId } = params;
+  const shares = new AgentShareModel(db, params.ownerId, params.workspaceId ?? undefined);
+  const withdrawn = await shares.revokeRequestGrant(agentId, requesterUserId, params.grantId);
+  if (!withdrawn) return;
+  const share = await shares.getByAgentId(agentId);
+  const { deviceAllowUserIds = [] } = share?.shareConfig ?? {};
+  if (!deviceAllowUserIds.includes(requesterUserId)) return;
+  await shares.updateConfig(agentId, {
+    deviceAllowUserIds: deviceAllowUserIds.filter((id) => id !== requesterUserId),
+  });
 };

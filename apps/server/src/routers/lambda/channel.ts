@@ -157,9 +157,12 @@ export const channelRouter = router({
       data: await agentAccessService(ctx).request(input),
       success: true,
     })),
-  /** Only the Agent's owner named on the request decides it; both decisions are idempotent. */
+  /**
+   * Only the Agent's owner named on the request decides it: approve or deny a pending one, or
+   * revoke an approval. Each is idempotent.
+   */
   decideAgentAccess: channelProcedure
-    .input(z.object({ decision: z.enum(['approve', 'deny']), grantId: z.uuid() }))
+    .input(z.object({ decision: z.enum(['approve', 'deny', 'revoke']), grantId: z.uuid() }))
     .mutation(async ({ ctx, input }) => ({
       data: await agentAccessService(ctx).decide(input.grantId, input.decision),
       success: true,

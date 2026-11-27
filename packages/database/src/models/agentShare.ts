@@ -800,6 +800,35 @@ export class AgentShareModel {
     }));
 
   /**
+   * Withdraw the grant a person holds because the owner approved their access request `grantId`
+   * ({@link grantByRequest}), as {@link revokeGrant} does. A grant that came from anything else (a
+   * card the owner sent, a later request) is left alone. Returns whether one was withdrawn.
+   */
+  revokeRequestGrant = async (agentId: string, userId: string, grantId: string): Promise<boolean> =>
+    !!(await this.withScopedAgentLock(agentId, async (tx) => {
+      const [share] = await tx
+        .select({ id: agentShares.id })
+        .from(agentShares)
+        .where(eq(agentShares.agentId, agentId))
+        .limit(1);
+      if (!share) return false;
+      const removed = await tx
+        .update(agentShareGrants)
+        .set({ revokedAt: new Date() })
+        .where(
+          and(
+            eq(agentShareGrants.shareId, share.id),
+            eq(agentShareGrants.userId, userId),
+            isNull(agentShareGrants.revokedAt),
+            sql`${agentShareGrants.source} ->> 'type' = 'request'`,
+            sql`${agentShareGrants.source} ->> 'grantId' = ${grantId}`,
+          ),
+        )
+        .returning({ id: agentShareGrants.id });
+      return removed.length > 0;
+    }));
+
+  /**
    * Resolve public share metadata and derive ownership and billing scope from
    * the Agent. Sharing prevents transfers, so no separate tenancy snapshot is needed.
    */

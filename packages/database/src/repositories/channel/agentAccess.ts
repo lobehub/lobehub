@@ -231,13 +231,22 @@ export const accessRequestMetadata = (grant: Pick<ChannelAgentGrantItem, 'metada
 const NEXT_STATUS: Record<AgentAccessDecision, ChannelAgentGrantStatus> = {
   approve: 'approved',
   deny: 'rejected',
+  revoke: 'revoked',
+};
+
+/** The status each decision may move a request from: an answer from pending, a revoke from approved. */
+const FROM_STATUS: Record<AgentAccessDecision, ChannelAgentGrantStatus> = {
+  approve: 'pending',
+  deny: 'pending',
+  revoke: 'approved',
 };
 
 /**
  * Records the Agent owner's decision on an access request, under the channel lock. Only the owner
  * named on it decides, and only while the Agent is still theirs. Idempotent: the same decision
  * again returns the grant unchanged (`changed: false`); a different one on a decided request is a
- * conflict. The share half of an approval is the caller's (`approveAgentAccess`), done first.
+ * conflict. A revoke takes back only an approval. The share half of an approval is the caller's
+ * (`grantAgentAccess`), done first, and so is undoing it on a revoke (`revokeAgentAccess`).
  */
 export const decideAgentAccessGrant = async (
   db: LobeChatDatabase,
@@ -262,13 +271,17 @@ export const decideAgentAccessGrant = async (
 
     const to = NEXT_STATUS[decision];
     if (grant.status === to) return { changed: false, grant };
-    if (grant.status !== 'pending')
+    if (grant.status !== FROM_STATUS[decision])
       throw new ChannelError('CONFLICT', `A ${grant.status} request cannot be changed that way`);
 
     const now = new Date();
     const [updated] = await tx
       .update(channelAgentGrants)
-      .set({ decidedAt: now, status: to, updatedAt: now })
+      .set(
+        decision === 'revoke'
+          ? { revokeReason: 'revoked_by_owner', revokedAt: now, status: to, updatedAt: now }
+          : { decidedAt: now, status: to, updatedAt: now },
+      )
       .where(eq(channelAgentGrants.id, grantId))
       .returning();
     await audit(tx, grant.channelId, `agent_access_${to}`, grant.id);
