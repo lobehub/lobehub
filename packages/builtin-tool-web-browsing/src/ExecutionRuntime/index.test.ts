@@ -100,6 +100,19 @@ describe('WebBrowsingExecutionRuntime', () => {
       expect(result.content).toBe('Not enough credits to read web pages.');
     });
 
+    it('should rethrow a user abort so the caller can stop the step', async () => {
+      const mockSearchService = {
+        crawlPages: vi.fn().mockRejectedValue(new DOMException('Aborted', 'AbortError')),
+        webSearch: vi.fn(),
+      };
+
+      const runtime = new WebBrowsingExecutionRuntime({ searchService: mockSearchService });
+
+      await expect(runtime.crawlSinglePage({ url: 'https://example.com/' })).rejects.toThrow(
+        'Aborted',
+      );
+    });
+
     it('should keep the failing url and guidance visible for error items', async () => {
       const mockSearchService = {
         crawlPages: vi.fn().mockResolvedValue({
