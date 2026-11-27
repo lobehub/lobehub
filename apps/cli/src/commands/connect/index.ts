@@ -51,6 +51,7 @@ import {
 } from '../../device/gatewayEndpoint';
 import { MANAGED_GATEWAY_ENV } from '../../device/managed';
 import { disposeDeviceMcp, listDeviceMcpTools } from '../../device/mcp';
+import { createNeedyExecutorDeps, createNeedyExecutorSupervisor } from '../../device/needyExecutor';
 import { resolveDevicePlatform } from '../../device/platform';
 import {
   mintWorkspaceConnectToken,
@@ -602,10 +603,15 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     shutdown: (exitCode) => shutdown(exitCode),
   });
 
+  // needy executor runners the server attaches so a needy actor elsewhere can
+  // route commands here; stopped with this process.
+  const needyExecutors = createNeedyExecutorSupervisor({ debug, info });
+
   const deviceControlDeps: DeviceControlDeps = {
     // Provider credentials the server installs for this device's agent runs;
     // `spawnHeteroAgentRun` applies them.
     ...createAgentCredentialDeps(),
+    ...createNeedyExecutorDeps(needyExecutors),
     checkCliUpdate: maintenance.check,
     ...createTerminalDeps(terminals),
     getCliUpdateState: maintenance.getState,
@@ -1065,6 +1071,8 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     // Kill every remote-terminal shell this daemon started, so a stopping
     // `lh connect` does not leave orphaned PTYs behind on the machine.
     terminals.dispose();
+    // Stop the needy runners and delete their credential files.
+    needyExecutors.dispose();
     // Close share connections but keep the persisted enrollments — the next
     // startup restores them (or clears them if revoked meanwhile).
     for (const wsId of workspaceConnections.keys()) closeWorkspaceConnection(wsId);

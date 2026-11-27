@@ -41,7 +41,12 @@ import type {
   CreateDirectoryParams,
   CreateFileParams,
 } from '@lobechat/local-file-shell/types';
-import { AGENT_CREDENTIAL_UNSUPPORTED_MESSAGE, type DeviceCliRestartParams } from '@lobechat/types';
+import {
+  AGENT_CREDENTIAL_UNSUPPORTED_MESSAGE,
+  type DeviceCliRestartParams,
+  NEEDY_EXECUTOR_ERROR_PREFIX,
+  NEEDY_EXECUTOR_UNSUPPORTED_MESSAGE,
+} from '@lobechat/types';
 
 import { toRedactedAgentCredentialError } from './agentCredentials/redact';
 import { listClaudeCodeMemory } from './claudeCodeMemory';
@@ -161,6 +166,10 @@ export const DEVICE_RPC_METHODS = [
   'installAgentCredential',
   'removeAgentCredential',
   'checkAgentCredential',
+  // A needy executor runner for a needy actor elsewhere. Server-internal only:
+  // the attach params carry a runner credential.
+  'attachNeedyExecutor',
+  'detachNeedyExecutor',
 ] as const;
 
 export type DeviceRpcMethod = (typeof DEVICE_RPC_METHODS)[number];
@@ -188,6 +197,34 @@ const runAgentCredentialRpc = async <T>(
     return await handler(params);
   } catch (error) {
     throw toRedactedAgentCredentialError(error, params);
+  }
+};
+
+export { NEEDY_EXECUTOR_UNSUPPORTED_MESSAGE };
+
+/**
+ * Run a needy executor handler so its failure carries the shared prefix and
+ * never the runner credential, even if a lower layer echoed its params.
+ */
+const runNeedyExecutorRpc = async <T>(
+  handler: ((params: unknown) => Promise<T>) | undefined,
+  params: unknown,
+): Promise<T> => {
+  if (!handler) throw new Error(NEEDY_EXECUTOR_UNSUPPORTED_MESSAGE);
+  try {
+    return await handler(params);
+  } catch (error) {
+    let message = error instanceof Error ? error.message : String(error);
+    const credential = (params as { credential?: unknown } | null)?.credential;
+    if (typeof credential === 'string' && credential.length > 0) {
+      message = message.split(credential).join('[redacted]');
+    }
+    throw new Error(
+      message.startsWith(NEEDY_EXECUTOR_ERROR_PREFIX)
+        ? message
+        : `${NEEDY_EXECUTOR_ERROR_PREFIX} ${message}`,
+      { cause: error },
+    );
   }
 };
 
@@ -669,6 +706,14 @@ export const executeDeviceRpc = async (
 
     case 'checkAgentCredential': {
       return runAgentCredentialRpc(deps.checkAgentCredential, params);
+    }
+
+    case 'attachNeedyExecutor': {
+      return runNeedyExecutorRpc(deps.attachNeedyExecutor, params);
+    }
+
+    case 'detachNeedyExecutor': {
+      return runNeedyExecutorRpc(deps.detachNeedyExecutor, params);
     }
 
     default: {

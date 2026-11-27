@@ -44,6 +44,13 @@ export interface DeviceSystemInfo {
   downloadsPath?: string;
   homePath: string;
   musicPath?: string;
+  /**
+   * What this machine can be in a needy mesh; absent on older clients.
+   * `actor`: the client runs inside a needy actor, so the commands it starts
+   * are captured and routed by needy. `executor`: the needy build it would run
+   * for `attachNeedyExecutor` (absent when needy ships none for this host).
+   */
+  needy?: { actor: boolean; executor?: { target: string } };
   picturesPath?: string;
   /** Native agent protocol versions supported by this live connection; absent on older clients.
    * `codex-app-server-v1` runs `lh hetero exec --codex-app-server` with native turn provenance.

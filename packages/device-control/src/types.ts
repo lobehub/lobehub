@@ -7,7 +7,9 @@
  */
 
 import type {
+  AttachNeedyExecutorResult,
   CheckAgentCredentialResult,
+  DetachNeedyExecutorResult,
   DeviceClient,
   DeviceCliRestartParams,
   DeviceCliUpdateState,
@@ -398,6 +400,14 @@ export interface TrashLocalFilesResult {
 
 export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps {
   /**
+   * Start (or reuse) a needy executor runner for one attachment, so a needy
+   * actor elsewhere can route commands to this machine. Takes the raw RPC
+   * params: the handler validates them itself, because they carry a runner
+   * credential and the handler builds the runner's command line from them.
+   * Optional: only `lh connect` supervises needy runners.
+   */
+  attachNeedyExecutor?: (params: unknown) => Promise<AttachNeedyExecutorResult>;
+  /**
    * Prove the installed agent credential works without spending model quota.
    * Optional like the other agent-credential handlers: a host provides them
    * only when its agent runs apply installed credentials (the desktop app and
@@ -426,6 +436,8 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
   createTerminalSession?: (
     params: CreateTerminalSessionParams,
   ) => Promise<CreateTerminalSessionResult>;
+  /** Stop the needy executor runner of one attachment; detaching twice is fine. */
+  detachNeedyExecutor?: (params: unknown) => Promise<DetachNeedyExecutorResult>;
   /**
    * Enroll this machine into a workspace pool: derive the workspace-scoped
    * deviceId and open a second gateway connection authenticated with `token`
