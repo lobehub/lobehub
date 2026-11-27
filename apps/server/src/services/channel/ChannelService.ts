@@ -190,8 +190,9 @@ export class ChannelService {
 
   /**
    * A project Channel seats only the project's own Agents. With `joinProject`, an Agent from
-   * outside joins the project first, which takes the right to manage the project's members;
-   * without it, the caller is told to add the Agent to the project.
+   * outside joins the project first; without it, the caller is told to add the Agent to the
+   * project. Any Channel member may bring an Agent in, so seating it here does not wait for the
+   * project creator or a workspace admin: anyone who can read and edit the project may.
    */
   private async seatAgentsInProject(projectId: string, agentIds: string[], joinProject?: boolean) {
     const missing: string[] = [];
@@ -199,15 +200,17 @@ export class ChannelService {
       if (!(await this.projectModel.hasAgent(projectId, agentId))) missing.push(agentId);
     if (!missing.length) return;
     if (!joinProject) throw new ChannelError('CONFLICT', 'Add the Agent to the project first');
-    const forbidden = new ChannelError(
-      'FORBIDDEN',
-      'Only the project creator or a workspace admin can add an Agent to the project',
-    );
+    const forbidden = new ChannelError('FORBIDDEN', 'You cannot add an Agent to this project');
+    // Workspace viewers edit nothing, the project included.
     if (this.projectOptions.readOnly) throw forbidden;
+    const seating = new ProjectModel(this.db, this.userId, this.workspaceId, {
+      ...this.projectOptions,
+      canManageAllMembers: true,
+    });
     for (const agentId of missing) {
       let binding: Awaited<ReturnType<ProjectModel['addAgent']>>;
       try {
-        binding = await this.projectModel.addAgent(projectId, { agentId });
+        binding = await seating.addAgent(projectId, { agentId });
       } catch (error) {
         throw new ChannelError('BAD_REQUEST', (error as Error).message);
       }
@@ -418,14 +421,11 @@ export class ChannelService {
     input: ChannelAgentSelection,
     options: { joinProject?: boolean } = {},
   ) => {
-    // Check membership before probing a device; the write rechecks the current admin role.
+    // Check membership before probing a device; the write rechecks it under the lock.
     const access = await this.repository.findAccess(channelId);
     if (!access) throw new ChannelError('NOT_FOUND', 'Channel not found');
     const agent = await this.resolveAgent(input);
     if (access.channel.projectId) {
-      // Only an admin may add, so no one else can seat an Agent in the project through here.
-      if (access.member.role === 'member')
-        throw new ChannelError('FORBIDDEN', 'Requires the admin role in this channel');
       await this.seatAgentsInProject(
         access.channel.projectId,
         [agent.agentId],

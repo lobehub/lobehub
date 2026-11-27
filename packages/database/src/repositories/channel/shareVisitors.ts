@@ -246,6 +246,7 @@ export const readShareVisitorChannel = (
       channel: {
         ...found.channel,
         canDelete: false,
+        canInvite: false,
         sharedAgent: true,
         // Every visitor's Channel is titled after the Agent; to its owner, the visitor names it.
         title: found.visitorName || found.visitorUsername || found.channel.title,

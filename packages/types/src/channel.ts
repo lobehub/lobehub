@@ -791,6 +791,11 @@ export interface ChannelListItem {
   agentIds?: string[];
   /** Server-computed for the current member. */
   canDelete: boolean;
+  /**
+   * Server-computed: every member may bring people and Agents in; a reader who has not joined
+   * may not. Absent on older payloads, where `canDelete` decided it.
+   */
+  canInvite?: boolean;
   createdAt: Date;
   /**
    * What clients show as the Channel's name, computed by the server on every read: the project's

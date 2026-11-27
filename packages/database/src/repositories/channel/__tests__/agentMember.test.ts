@@ -48,7 +48,7 @@ describe('adding an Agent to a Channel', () => {
     },
   );
 
-  it('requires a Channel admin and accepts another workspace member’s public Agent', async () => {
+  it('lets any member add another workspace member’s public Agent', async () => {
     const team = await fixture.createTeamChannel();
     const [agent] = await db
       .insert(agents)
@@ -58,10 +58,7 @@ describe('adding an Agent to a Channel', () => {
         workspaceId: fixture.workspaceId,
       })
       .returning();
-    await expect(
-      team.asMember.addAgent(team.channel.id, { agentId: agent.id }),
-    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-    const added = await team.asOwner.addAgent(team.channel.id, { agentId: agent.id });
+    const added = await team.asMember.addAgent(team.channel.id, { agentId: agent.id });
     expect(added).toMatchObject({ agentId: agent.id, config: {}, name: 'Current Agent name' });
   });
 

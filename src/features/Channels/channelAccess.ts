@@ -11,8 +11,9 @@ export const visibleChannelDetail = (cached: ChannelDetail | undefined, error: u
     : cached;
 
 /**
- * Inviting needs an admin of an open Channel; archived Channels take no new members until
+ * Any member of an open Channel may invite; archived Channels take no new members until
  * reopened. Inviting from a direct conversation starts a new group instead of joining it.
  */
-export const canInviteMembers = (channel: Pick<ChannelListItem, 'canDelete' | 'status'>) =>
-  channel.canDelete && channel.status !== 'archived';
+export const canInviteMembers = (
+  channel: Pick<ChannelListItem, 'canDelete' | 'canInvite' | 'status'>,
+) => (channel.canInvite ?? channel.canDelete) && channel.status !== 'archived';

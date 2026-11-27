@@ -213,7 +213,7 @@ const acceptsPrivateAgent = (
 ) => !channel.workspaceId || channel.agentId === agentId || !!channel.agentPairKey;
 
 /**
- * Called under the Channel lock after the caller's admin role has been checked. `inviter` is the
+ * Called under the Channel lock after the caller's membership has been checked. `inviter` is the
  * caller's own member: its person must be able to use the Agent, and the join line names it.
  */
 export const addAgentMember = async (
