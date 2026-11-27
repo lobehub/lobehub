@@ -1,4 +1,4 @@
-import type { ChannelPublicMessage, ChannelPublicThread } from '@lobechat/types';
+import type { ChannelPublicMessage, ChannelPublicThread, InterfaceDensity } from '@lobechat/types';
 import { Avatar, Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -11,27 +11,36 @@ import AgentAvatar from '@/components/AgentAvatar';
 import UserAvatar from '@/features/User/UserAvatar';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { useDensity } from '@/styles/density';
 
 import { authorAvatar, isCurrentUserAuthor } from './memberName';
 import { threadTitle } from './threadTitle';
 
 dayjs.extend(relativeTime);
 
+const CARD_SPACING = {
+  compact: { gap: 2, marginBlockStart: -4, paddingBlock: 4, paddingInline: 8 },
+  loose: { gap: 4, marginBlockStart: -6, paddingBlock: 6, paddingInline: 10 },
+} as const satisfies Record<
+  InterfaceDensity,
+  { gap: number; marginBlockStart: number; paddingBlock: number; paddingInline: number }
+>;
+
 const styles = stylex.create({
   card: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 4,
+    gap: CARD_SPACING.loose.gap,
     alignSelf: 'flex-start',
     width: '100%',
     maxWidth: 520,
     // Sit close to the message it continues: the body's 8px gap plus the paragraph's trailing
     // margin left the card looking detached.
-    marginBlockStart: -6,
+    marginBlockStart: CARD_SPACING.loose.marginBlockStart,
     marginBlockEnd: 0,
     marginInline: 0,
-    paddingBlock: 6,
-    paddingInline: 10,
+    paddingBlock: CARD_SPACING.loose.paddingBlock,
+    paddingInline: CARD_SPACING.loose.paddingInline,
     // No box at rest: the card follows the message, it is not a new one. The fill only answers
     // the pointer, to show the row opens the thread.
     borderWidth: 0,
@@ -44,6 +53,12 @@ const styles = stylex.create({
       ':hover': cssVar.colorFillTertiary,
     },
     cursor: 'pointer',
+  },
+  cardCompact: {
+    gap: CARD_SPACING.compact.gap,
+    marginBlockStart: CARD_SPACING.compact.marginBlockStart,
+    paddingBlock: CARD_SPACING.compact.paddingBlock,
+    paddingInline: CARD_SPACING.compact.paddingInline,
   },
   row: {
     display: 'flex',
@@ -119,13 +134,18 @@ export const ThreadPreviewCard = ({
   thread: ChannelPublicThread;
 }) => {
   const { t } = useTranslation('channel');
+  const { compact } = useDensity();
   const { lastReply, replyCount } = thread;
   // Same rule as the message header: the viewer's own replies use their live avatar.
   const isOwnReply = useUserStore(
     (s) => !!lastReply && isCurrentUserAuthor(lastReply.author, userProfileSelectors.userId(s)),
   );
   return (
-    <button type="button" {...stylex.props(styles.card)} onClick={onOpen}>
+    <button
+      type="button"
+      {...stylex.props(styles.card, compact && styles.cardCompact)}
+      onClick={onOpen}
+    >
       <span {...stylex.props(styles.row)}>
         {/* The sidebar's thread glyph, not a branch. */}
         <span {...stylex.props(styles.threadIcon)}>

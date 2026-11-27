@@ -1,3 +1,4 @@
+import type { InterfaceDensity } from '@lobechat/types';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
@@ -5,6 +6,16 @@ import { densityTokens } from '@/styles/density.stylex';
 import { mentionTokens } from '@/styles/mention.stylex';
 
 const HOVER = '@media (hover: hover)';
+
+const COMPOSER_ROW_PADDING_BLOCK = { compact: 6, loose: 10 } as const satisfies Record<
+  InterfaceDensity,
+  number
+>;
+
+const NOTICE_PADDING_INLINE = { compact: 10, loose: 16 } as const satisfies Record<
+  InterfaceDensity,
+  number
+>;
 
 export const styles = stylex.create({
   layout: {
@@ -94,11 +105,12 @@ export const styles = stylex.create({
   highlightedMessage: { backgroundColor: cssVar.colorInfoBg },
   /** A message still on its way shows faded instead of carrying a status line. */
   pendingMessage: { opacity: 0.6 },
-  messageAvatar: {
+  messageAvatar: (insetBlockStart: number) => ({
     position: 'absolute',
-    insetBlockStart: 8,
+    insetBlockStart,
     insetInlineStart: 0,
-  },
+  }),
+  messageIndent: (paddingInlineStart: number) => ({ paddingInlineStart }),
   // A continuation has no header for its toolbar; reserve room for both actions.
   continuationWithAction: {
     paddingInlineEnd: 88,
@@ -183,7 +195,6 @@ export const styles = stylex.create({
   /** Inline system line in the timeline, such as who joined. */
   event: {
     paddingBlock: 8,
-    paddingInlineStart: 48,
     fontSize: cssVar.fontSizeSM,
     lineHeight: 1.8,
     color: cssVar.colorTextSecondary,
@@ -226,7 +237,7 @@ export const styles = stylex.create({
   composer: {
     'position': 'relative',
     'flexShrink': 0,
-    'paddingBlockEnd': 12,
+    'paddingBlockEnd': densityTokens['--lobe-density-content-gap'],
     // The feed fades out into the composer instead of being cut at its top edge.
     '::before': {
       pointerEvents: 'none',
@@ -254,9 +265,12 @@ export const styles = stylex.create({
     alignItems: 'flex-end',
     gap: 8,
     // 10px around the 28px buttons centers a single line in the 50px card.
-    minHeight: 48,
-    paddingBlock: 10,
+    minHeight: densityTokens['--lobe-density-list-row-height'],
+    paddingBlock: COMPOSER_ROW_PADDING_BLOCK.loose,
     paddingInline: 8,
+  },
+  composerRowCompact: {
+    paddingBlock: COMPOSER_ROW_PADDING_BLOCK.compact,
   },
   composerEditor: {
     overflowY: 'auto',
@@ -273,9 +287,9 @@ export const styles = stylex.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: densityTokens['--lobe-density-content-gap'],
-    marginBlockEnd: 12,
-    paddingBlock: 8,
-    paddingInline: densityTokens['--lobe-density-card-padding'],
+    marginBlockEnd: densityTokens['--lobe-density-content-gap'],
+    paddingBlock: densityTokens['--lobe-density-card-header-padding-block'],
+    paddingInline: NOTICE_PADDING_INLINE.loose,
     borderWidth: 1,
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
@@ -283,6 +297,9 @@ export const styles = stylex.create({
     fontSize: 13,
     color: cssVar.colorTextSecondary,
     backgroundColor: cssVar.colorFillQuaternary,
+  },
+  archivedNoticeCompact: {
+    paddingInline: NOTICE_PADDING_INLINE.compact,
   },
   muted: {
     fontSize: 12,

@@ -42,6 +42,7 @@ import { AskCard } from './AskCard';
 import { authorAvatar, isCurrentUserAuthor, memberName } from './memberName';
 import { CHANNEL_MENTION_TAG, remarkChannelMentions } from './mentionMarkdown';
 import { MessageAttachments } from './MessageAttachments';
+import { useChannelMessageLayout } from './messageLayout';
 import { channelMessageTime, channelTimeFormatters } from './messagePresentation';
 import { MessageRoutingStatus } from './MessageReceipts';
 import { MessageSurfaces } from './MessageSurfaces';
@@ -120,9 +121,10 @@ export const ChannelMessage = ({
 }) => {
   const { t, i18n } = useTranslation('channel');
   const timeFormats = useMemo(() => channelTimeFormatters(i18n.language), [i18n.language]);
+  const layout = useChannelMessageLayout();
   const date = new Date(message.createdAt);
   // Unassigned requests keep their identity row and recovery affordance.
-  const compact = continuation && !isRoot && message.routingStatus !== 'unassigned';
+  const asContinuation = continuation && !isRoot && message.routingStatus !== 'unassigned';
   // A continuation sits under its header, so its hover stamp only needs the clock.
   const timestamp = (
     <time
@@ -130,7 +132,7 @@ export const ChannelMessage = ({
       title={timeFormats.full.format(date)}
       {...stylex.props(styles.messageTime)}
     >
-      {compact
+      {asContinuation
         ? timeFormats.time.format(date)
         : channelMessageTime(date, { locale: i18n.language, yesterday: t('date.yesterday') })}
     </time>
@@ -226,30 +228,30 @@ export const ChannelMessage = ({
     <div
       aria-busy={pending || undefined}
       aria-label={message.author.name || t('deletedMember')}
-      data-continuation={compact || undefined}
+      data-continuation={asContinuation || undefined}
       data-message-id={message.id}
       role="article"
       {...stylex.props(
         styles.messageRow,
-        compact && hasToolbar && styles.continuationWithAction,
+        asContinuation && hasToolbar && styles.continuationWithAction,
         highlighted && styles.highlightedMessage,
         pending && styles.pendingMessage,
         stylex.defaultMarker(),
       )}
     >
-      {compact && <span {...stylex.props(styles.continuationTime)}>{timestamp}</span>}
+      {asContinuation && <span {...stylex.props(styles.continuationTime)}>{timestamp}</span>}
       <ChatItem
         quietHeader
         showAvatar
         showTitle
         agentId={message.author.type === 'agent' ? message.author.id : undefined}
-        avatarProps={{ shape: 'circle', size: 36 }}
-        gap={4}
+        avatarProps={{ shape: 'circle', size: layout.avatarSize }}
+        gap={layout.headerGap}
         id={message.id}
-        paddingBlock={compact ? 2 : 8}
+        paddingBlock={asContinuation ? 2 : layout.paddingBlock}
         placement="left"
-        showHeader={!compact}
-        style={{ paddingInlineStart: 48 }}
+        showHeader={!asContinuation}
+        style={{ paddingInlineStart: layout.indent }}
         titleAddon={timestamp}
         avatar={{
           avatar: authorAvatar(message.author),
@@ -264,9 +266,9 @@ export const ChannelMessage = ({
           ) : undefined)
         }
         customAvatarRender={(_, avatar) => (
-          <Flexbox {...stylex.props(styles.messageAvatar)}>
+          <Flexbox {...stylex.props(styles.messageAvatar(layout.paddingBlock))}>
             {isOwnMessage ? (
-              <UserAvatar shape={'circle'} size={36} />
+              <UserAvatar shape={'circle'} size={layout.avatarSize} />
             ) : agentAuthorId ? (
               // Same profile card an Agent shows on hover in goals and tasks.
               <AgentProfilePopup
@@ -283,7 +285,7 @@ export const ChannelMessage = ({
                     agentId={agentAuthorId}
                     avatar={message.author.avatar}
                     name={message.author.name}
-                    size={36}
+                    size={layout.avatarSize}
                   />
                 </span>
               </AgentProfilePopup>

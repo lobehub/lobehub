@@ -33,6 +33,7 @@ import { homeAgentListSelectors } from '@/store/home/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { useDensity } from '@/styles/density';
 
 import { ComposerActions } from './ComposerActions';
 import { ComposerAttachments } from './ComposerAttachments';
@@ -122,6 +123,7 @@ export function Composer({
   onCancelReply?: () => void;
 } & ComposerDelivery) {
   const { t } = useTranslation('channel');
+  const { compact } = useDensity();
   const workspaceId = useActiveWorkspaceId();
   const editor = useEditor();
   const draft = useComposerDraft(editor, draftKey, starter);
@@ -309,7 +311,7 @@ export function Composer({
             ) : undefined
           }
         >
-          <div {...stylex.props(styles.composerRow)}>
+          <div {...stylex.props(styles.composerRow, compact && styles.composerRowCompact)}>
             <ComposerActions
               disabled={busy}
               upload={

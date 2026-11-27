@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WideScreenContainer from '@/features/WideScreenContainer';
+import { useDensity } from '@/styles/density';
 
 import { styles } from './styles';
 import { useChannelArchive } from './useChannelArchive';
@@ -23,6 +24,7 @@ export function ArchivedNotice({
 }) {
   const { t } = useTranslation('channel');
   const { setThreadArchived, unarchive } = useChannelArchive();
+  const { compact } = useDensity();
   const [busy, setBusy] = useState(false);
   const threadOnly = channel.status !== 'archived' && !!threadId;
 
@@ -37,7 +39,10 @@ export function ArchivedNotice({
 
   return (
     <WideScreenContainer fullWidth paddingInline={8}>
-      <div role="status" {...stylex.props(styles.archivedNotice)}>
+      <div
+        role="status"
+        {...stylex.props(styles.archivedNotice, compact && styles.archivedNoticeCompact)}
+      >
         <Flexbox horizontal align="center" gap={8} style={{ minWidth: 0 }}>
           <Icon icon={Archive} size={16} />
           <span>{t(threadOnly ? 'threadArchivedNotice' : 'archivedNotice')}</span>

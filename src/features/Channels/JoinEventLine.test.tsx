@@ -16,6 +16,7 @@ vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: unknown) => unknown) => selector({}),
 }));
 vi.mock('@/store/user/selectors', () => ({
+  userGeneralSettingsSelectors: { interfaceDensity: () => 'loose' },
   userProfileSelectors: { userId: () => 'user-1' },
 }));
 vi.mock('./MemberAvatar', () => ({ MemberAvatar: () => null }));

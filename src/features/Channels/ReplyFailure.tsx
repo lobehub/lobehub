@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import AgentAvatar from '@/components/AgentAvatar';
 import { ChatItem } from '@/features/Conversation/ChatItem';
 
+import { useChannelMessageLayout } from './messageLayout';
 import { receiptErrorText, replyEntries } from './MessageReceipts';
 import { styles } from './styles';
 
@@ -45,6 +46,7 @@ export function ReplyFailureCard({ job }: { job: ChannelPublicJob }) {
 export function ReplyFailureRow({ detail, job }: { detail: ChannelDetail; job: ChannelPublicJob }) {
   const { t } = useTranslation('channel');
   const [{ agentId, avatar, name }] = replyEntries(detail, [job], t('unnamedAgent'));
+  const layout = useChannelMessageLayout();
   return (
     <div aria-label={name} role="article" {...stylex.props(styles.messageRow)}>
       <ChatItem
@@ -53,16 +55,22 @@ export function ReplyFailureRow({ detail, job }: { detail: ChannelDetail; job: C
         showTitle
         agentId={agentId}
         avatar={{ avatar, title: name }}
-        avatarProps={{ shape: 'circle', size: 36 }}
-        gap={4}
+        avatarProps={{ shape: 'circle', size: layout.avatarSize }}
+        gap={layout.headerGap}
         id={`reply-failure-${job.id}`}
         message={<ReplyFailureCard job={job} />}
-        paddingBlock={8}
+        paddingBlock={layout.paddingBlock}
         placement="left"
-        style={{ paddingInlineStart: 48 }}
+        style={{ paddingInlineStart: layout.indent }}
         customAvatarRender={() => (
-          <Flexbox {...stylex.props(styles.messageAvatar)}>
-            <AgentAvatar agentId={agentId} avatar={avatar} name={name} shape={'circle'} size={36} />
+          <Flexbox {...stylex.props(styles.messageAvatar(layout.paddingBlock))}>
+            <AgentAvatar
+              agentId={agentId}
+              avatar={avatar}
+              name={name}
+              shape={'circle'}
+              size={layout.avatarSize}
+            />
           </Flexbox>
         )}
       />

@@ -381,7 +381,6 @@ const densityLiteralLegacyFiles = [
   'src/features/AgentViewAll/AgentViewAllPage.tsx',
   'src/features/Artboard/Verify/ReviewActions.tsx',
   'src/features/Channels/BrowseChannels.tsx',
-  'src/features/Channels/ChannelMessage.tsx',
   'src/features/Conversation/ChatItem/ChatItem.tsx',
   'src/features/Conversation/ChatItem/components/MessageContent/index.tsx',
   'src/features/Conversation/Messages/AssistantGroup/Tools.tsx',

@@ -1,5 +1,5 @@
 import { CHANNEL_URL } from '@lobechat/const';
-import type { ChannelDetail } from '@lobechat/types';
+import type { ChannelDetail, InterfaceDensity } from '@lobechat/types';
 import type { DropdownItem } from '@lobehub/ui';
 import { ActionIcon, Button, DropdownMenu, Flexbox, Popover, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useCloseOnNavigate } from '@/hooks/useCloseOnNavigate';
+import { useInterfaceDensity } from '@/styles/density';
 import { sx } from '@/styles/sx';
 
 import { openChannelAgentEnvironment } from './AgentEnvironment';
@@ -29,6 +30,11 @@ import { useChannelMenu } from './useChannelMenu';
 
 /** Header avatars before the rest fold into a count; the list shows everyone. */
 const MAX_VISIBLE = 5;
+
+const MEMBER_AVATAR_SIZE = { compact: 18, loose: 20 } as const satisfies Record<
+  InterfaceDensity,
+  number
+>;
 
 /**
  * Channel actions a direct conversation keeps. It is the chat with one Agent, so it cannot be
@@ -56,6 +62,7 @@ export function MemberStatus({
   const { t } = useTranslation('channel');
   const [open, setOpen] = useState(false);
   const popoverKey = useCloseOnNavigate(open, () => setOpen(false));
+  const density = useInterfaceDensity();
   const navigate = useWorkspaceAwareNavigate();
   const { channel, members: allMembers = [] } = detail;
   const entries = useMemberEntries(detail);
@@ -189,7 +196,7 @@ export function MemberStatus({
                   key={entry.member.id}
                   {...sx(statusStyles.memberStackItem, { zIndex: MAX_VISIBLE - index })}
                 >
-                  <StatusAvatar entry={entry} size={20} />
+                  <StatusAvatar entry={entry} size={MEMBER_AVATAR_SIZE[density]} />
                 </span>
               ))}
             </span>

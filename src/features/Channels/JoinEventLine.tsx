@@ -8,12 +8,14 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import type { ChannelJoinEvent } from './joinEvents';
 import { MemberAvatar } from './MemberAvatar';
 import { isCurrentUserMember, memberName } from './memberName';
+import { useChannelMessageLayout } from './messageLayout';
 import { styles } from './styles';
 
 /** “You invited A, B and C to the channel”, as a system line in the timeline. */
 export function JoinEventLine({ event: { inviter, members } }: { event: ChannelJoinEvent }) {
   const { t, i18n } = useTranslation('channel');
   const userId = useUserStore(userProfileSelectors.userId);
+  const { indent } = useChannelMessageLayout();
   const names = new Intl.ListFormat(i18n.language, { type: 'conjunction' }).formatToParts(
     members.map((member) => memberName(member, t('deletedMember'))),
   );
@@ -24,7 +26,7 @@ export function JoinEventLine({ event: { inviter, members } }: { event: ChannelJ
       : 'events.invitedMembers';
   let memberIndex = 0;
   return (
-    <div role="note" {...stylex.props(styles.event)}>
+    <div role="note" {...stylex.props(styles.event, styles.messageIndent(indent))}>
       <Trans
         i18nKey={key}
         ns="channel"
