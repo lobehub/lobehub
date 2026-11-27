@@ -1,6 +1,9 @@
 'use client';
 
-import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
+import {
+  MESSAGE_ACTION_BAR_HEIGHT,
+  MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES,
+} from '@/const/messageActionPortal';
 import { selectionStyles } from '@/features/Conversation/MessageForward/selectionStyles';
 import { useDensity } from '@/styles/density';
 import { sx } from '@/styles/sx';
@@ -15,7 +18,7 @@ const ActionBarHolder = ({ type }: ActionBarHolderProps) => {
   return (
     <div
       {...{ [MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES[type]]: '' }}
-      {...sx(selectionStyles.hidden, { height: compact ? undefined : '28px' })}
+      {...sx(selectionStyles.hidden, { height: compact ? undefined : MESSAGE_ACTION_BAR_HEIGHT })}
     />
   );
 };

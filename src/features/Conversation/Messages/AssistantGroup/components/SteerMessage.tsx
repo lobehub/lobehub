@@ -1,7 +1,8 @@
+import { type InterfaceDensity } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
-import { useDensity } from '@/styles/density';
+import { useInterfaceDensity } from '@/styles/density';
 
 import { dataSelectors, useConversationStore } from '../../../store';
 import UserMessage from '../../User';
@@ -13,8 +14,10 @@ import UserMessage from '../../User';
  * both rows' block padding; inside the chain only the 4px chain gap exists.
  * Compact floats the action bar instead of reserving its row, so less is needed.
  */
-const STANDALONE_ROW_SPACING = 40;
-const COMPACT_STANDALONE_ROW_SPACING = 20;
+const STANDALONE_ROW_SPACING = {
+  compact: 20,
+  loose: 40,
+} as const satisfies Record<InterfaceDensity, number>;
 
 interface SteerMessageProps {
   id: string;
@@ -28,15 +31,12 @@ interface SteerMessageProps {
  */
 const SteerMessage = memo<SteerMessageProps>(({ id }) => {
   const exists = useConversationStore((s) => !!dataSelectors.getDisplayMessageById(id)(s));
-  const { compact } = useDensity();
+  const density = useInterfaceDensity();
 
   if (!exists) return null;
 
   return (
-    <Flexbox
-      data-steer-message={id}
-      paddingBlock={compact ? COMPACT_STANDALONE_ROW_SPACING : STANDALONE_ROW_SPACING}
-    >
+    <Flexbox data-steer-message={id} paddingBlock={STANDALONE_ROW_SPACING[density]}>
       <UserMessage disableEditing id={id} index={0} />
     </Flexbox>
   );

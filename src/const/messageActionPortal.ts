@@ -15,3 +15,5 @@ export const MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES = {
   assistantGroup: 'data-assistant-group-action-bar-portal',
   user: 'data-user-action-bar-portal',
 } as const;
+
+export const MESSAGE_ACTION_BAR_HEIGHT = 28;

@@ -1,5 +1,6 @@
 'use client';
 
+import { MESSAGE_ACTION_BAR_HEIGHT } from '@/const/messageActionPortal';
 import { selectionStyles } from '@/features/Conversation/MessageForward/selectionStyles';
 import { useDensity } from '@/styles/density';
 import { sx } from '@/styles/sx';
@@ -12,7 +13,7 @@ const ActionRowSpacer = () => {
   const { compact } = useDensity();
   if (!keep || compact) return null;
 
-  return <div aria-hidden {...sx(selectionStyles.hidden, { height: '28px' })} />;
+  return <div aria-hidden {...sx(selectionStyles.hidden, { height: MESSAGE_ACTION_BAR_HEIGHT })} />;
 };
 
 export default ActionRowSpacer;

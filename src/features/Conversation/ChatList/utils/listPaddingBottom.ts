@@ -1,4 +1,4 @@
-export const FLOATING_ACTION_TOOLBAR_HEIGHT = 28;
+import { MESSAGE_ACTION_BAR_HEIGHT } from '@/const/messageActionPortal';
 
 export const resolveListPaddingBottom = (overlayHeight: number, compact: boolean) =>
-  Math.max(24, overlayHeight + 12) + (compact ? FLOATING_ACTION_TOOLBAR_HEIGHT : 0);
+  Math.max(24, overlayHeight + 12) + (compact ? MESSAGE_ACTION_BAR_HEIGHT : 0);

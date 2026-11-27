@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { memo, useLayoutEffect, useRef } from 'react';
 
 import { delayed } from '@/components/Skeleton/Delayed';
+import { MESSAGE_ACTION_BAR_HEIGHT } from '@/const/messageActionPortal';
 import type { TopicPreview } from '@/services/message/topicPreview';
 import { useDensity } from '@/styles/density';
 
@@ -45,7 +46,7 @@ const PreviewAnswer = memo<{ preview: TopicPreview }>(({ preview }) => {
   return (
     <ChatItem
       showTitle
-      actions={compact ? undefined : <div style={{ height: '28px' }} />}
+      actions={compact ? undefined : <div style={{ height: MESSAGE_ACTION_BAR_HEIGHT }} />}
       afterActions={worksAfterActions && <MessageWorkList items={worksAfterActions} />}
       avatar={avatar}
       placement={'left'}
