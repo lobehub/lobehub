@@ -1699,6 +1699,10 @@ export default {
     'Queue follow-ups while the agent runs, or steer the current run',
   'settingChatAppearance.followUpBehavior.options.queue': 'Queue',
   'settingChatAppearance.followUpBehavior.options.steer': 'Steer',
+  'settingChatAppearance.followUpBehavior.restartUnsteerable.desc':
+    'For an agent that can’t take messages mid-run, stop its current run and start again with your message, instead of waiting for the run to finish',
+  'settingChatAppearance.followUpBehavior.restartUnsteerable.title':
+    'Restart agents that can’t steer',
   'settingChatAppearance.followUpBehavior.title': 'Follow-up behavior',
   'settingChatAppearance.fontSize.desc': 'Font size of messages',
   'settingChatAppearance.fontSize.marks.normal': 'Standard',

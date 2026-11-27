@@ -1126,6 +1126,10 @@ export default {
     'Couldn’t confirm the agent got this. Send it again or delete it',
   'inputQueue.steerHint': 'Joins the current run',
   'inputQueue.steerMergeHint': 'Joins the current run as one message',
+  'inputQueue.steerRestartHint':
+    'This agent can’t take messages mid-run. Stopping it to start again with this message',
+  'inputQueue.steerRestartMergeHint':
+    'This agent can’t take messages mid-run. Stopping it to start again with these as one message',
   'inputQueue.steerUnsupportedHint':
     'This agent can’t take messages mid-run. Queued until the run finishes',
   'inputQueue.steerUnsupportedMergeHint':
