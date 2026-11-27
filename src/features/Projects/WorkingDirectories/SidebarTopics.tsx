@@ -106,7 +106,8 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
   );
   const startTopic = useStartProjectTopic(projectId);
   const fixedDeviceId = useAgentFixedDeviceId(coordinatorAgentId);
-  const ownDevice = useAgentOwnDevice(coordinatorAgentId);
+  // While it loads, the draft follows the order and Auto restages it once known.
+  const { ownDevice } = useAgentOwnDevice(coordinatorAgentId);
   const { ordered } = useProjectExecutionEnvironments(projectId);
   const { data: devices } = useDeviceList();
   return (

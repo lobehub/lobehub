@@ -28,7 +28,7 @@ export const useBlankProjectAuto = (agentId: string, projectId: string | undefin
   const { ordered } = useProjectExecutionEnvironments(projectId, !!projectId);
   const { data: devices } = useDeviceList();
   const fixedDeviceId = useAgentFixedDeviceId(agentId);
-  const ownDevice = useAgentOwnDevice(agentId);
+  const { loading: ownDeviceLoading, ownDevice } = useAgentOwnDevice(agentId);
   // The staged draft is global; only this project's draft is this composer's
   // to drive, or split panes on two projects would restage each other.
   const pending = useChatStore((s) => s.pendingNewTopicDirectory);
@@ -42,8 +42,9 @@ export const useBlankProjectAuto = (agentId: string, projectId: string | undefin
   const active = !!own?.auto;
   const staged = own ? (own.projectWorkingDirectoryId ?? 'sandbox') : undefined;
 
+  // Until the member's device pick is known, Auto does not stage anything.
   const choice =
-    projectId && ordered.length > 0
+    projectId && ordered.length > 0 && !ownDeviceLoading
       ? resolveAgentProjectRunner(ordered, undefined, {
           isAvailable: (directory) =>
             canStageDraftOn(directory, fixedDeviceId) &&

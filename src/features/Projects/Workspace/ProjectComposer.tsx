@@ -196,6 +196,7 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
   const submit: SendButtonHandler = async (params) => {
     // Auto could not start on the agent's own device: a device-only agent is
     // not sent anywhere else; one that may use the sandbox goes there, said so.
+    if (mode === 'chat' && environment.loading) return;
     const notice = mode === 'chat' && environment.auto ? environment.notice : undefined;
     if (notice?.blocked) return void toast.error(t(ownDeviceNoticeKey(notice)));
     try {
@@ -218,12 +219,13 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
 
   const sendButtonProps = useMemo(
     () => ({
-      disabled: sending || isAgentConfigLoading,
+      // In chat, Auto waits for the agent's own device to be known.
+      disabled: sending || isAgentConfigLoading || (mode === 'chat' && environment.loading),
       generating: sending,
       onStop: () => {},
       shape: 'round' as const,
     }),
-    [sending, isAgentConfigLoading],
+    [sending, isAgentConfigLoading, mode, environment.loading],
   );
 
   return (

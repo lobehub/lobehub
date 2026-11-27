@@ -7,6 +7,7 @@ import { useBlankProjectAuto } from './useBlankProjectAuto';
 
 const env = vi.hoisted(() => ({
   online: new Set<string>(['dev-a', 'dev-b']),
+  loading: false,
   ownDevice: undefined as { deviceId: string; sandboxFallback: boolean } | undefined,
 }));
 
@@ -33,7 +34,7 @@ vi.mock('@/features/Projects/WorkingDirectories/useAgentFixedDeviceId', () => ({
   useAgentFixedDeviceId: () => undefined,
 }));
 vi.mock('@/features/Projects/WorkingDirectories/useAgentOwnDevice', () => ({
-  useAgentOwnDevice: () => env.ownDevice,
+  useAgentOwnDevice: () => ({ loading: env.loading, ownDevice: env.ownDevice }),
 }));
 vi.mock('@/store/device', () => ({ useDeviceList: () => ({ data: [] }) }));
 
@@ -41,6 +42,7 @@ const pending = () => useChatStore.getState().pendingNewTopicDirectory;
 
 beforeEach(() => {
   env.online = new Set(['dev-a', 'dev-b']);
+  env.loading = false;
   env.ownDevice = undefined;
   act(() =>
     useChatStore
@@ -106,6 +108,16 @@ describe('useBlankProjectAuto', () => {
     rerender();
     expect(pending()).toEqual({ agentId: 'agt', auto: true, projectId: 'prj' });
     expect(result.current?.notice).toEqual({ blocked: true, reason: 'offline' });
+  });
+
+  // Review: a workspace member's device pick still loading read as "no own
+  // device", so Auto staged the draft on another runner before it arrived.
+  it("stages nothing while the agent's own device is still loading", () => {
+    env.loading = true;
+    const { result } = renderHook(() => useBlankProjectAuto('agt', 'prj'));
+
+    expect(result.current).toBeUndefined();
+    expect(pending()).toEqual({ agentId: 'agt', projectWorkingDirectoryId: 'dir-b' });
   });
 
   it('offers nothing without a project (a started conversation)', () => {

@@ -7,6 +7,7 @@ import {
 } from '@/helpers/agentOwnDevice';
 import { projectWorkingDirectoryService } from '@/services/projectWorkingDirectory';
 import { type PendingNewTopicDirectory } from '@/store/chat/slices/topic/initialState';
+import { deviceSelectors, getDeviceStoreState } from '@/store/device';
 import { findProjectDirectory, useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
 interface DeviceRouting {
@@ -44,8 +45,9 @@ const ownDeviceReason = (
 /**
  * An Auto draft still staged on another device's directory (the agent's own
  * device changed since it was staged) does not follow it there: it moves to
- * the own device's directory, or to the project alone, as Auto would stage it
- * now. Read from the replica; a cold one leaves the draft to the server check.
+ * the own device's directory while that device is online, or to the project
+ * alone, as Auto would stage it now. Read from the replicas; a cold one leaves
+ * the draft to the server check.
  */
 const retargetAutoDraft = (
   staged: PendingNewTopicDirectory | undefined,
@@ -54,9 +56,18 @@ const retargetAutoDraft = (
   if (!staged?.auto || !ownDevice || !staged.projectWorkingDirectoryId) return staged;
   const directory = findProjectDirectory(staged.projectWorkingDirectoryId);
   if (!directory || directory.deviceId === ownDevice.deviceId) return staged;
-  const own = (useProjectDirectoryStore.getState().directoriesMap[directory.projectId] ?? []).find(
-    (row) => row.deviceId === ownDevice.deviceId && row.runnable,
-  );
+  // Same availability Auto stages by: a ready folder on an online device. An
+  // offline one leaves the draft on the project, where the fallback or the
+  // device-only refusal applies.
+  const device = deviceSelectors
+    .deviceList(getDeviceStoreState())
+    .find((item) => item.deviceId === ownDevice.deviceId);
+  const online = !!device?.online && !device.onlineUnknown;
+  const own = online
+    ? (useProjectDirectoryStore.getState().directoriesMap[directory.projectId] ?? []).find(
+        (row) => row.deviceId === ownDevice.deviceId && row.runnable,
+      )
+    : undefined;
   return own
     ? { agentId: staged.agentId, auto: true, projectWorkingDirectoryId: own.id }
     : { agentId: staged.agentId, auto: true, projectId: directory.projectId };

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { OwnDeviceUnavailableError } from '@/helpers/agentOwnDevice';
+import { useDeviceStore } from '@/store/device';
 import type { ProjectDirectory } from '@/store/projectWorkingDirectory';
 import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
@@ -50,7 +51,10 @@ describe('resolveProjectDirectoryRun — an agent on its own device', () => {
     ({ deviceId, id, projectId: 'prj', runnable: true }) as unknown as ProjectDirectory;
   const seed = (rows: ProjectDirectory[]) =>
     useProjectDirectoryStore.setState({ directoriesMap: { prj: rows } });
-  afterEach(() => useProjectDirectoryStore.setState({ directoriesMap: {} }));
+  afterEach(() => {
+    useProjectDirectoryStore.setState({ directoriesMap: {} });
+    setOnline([]);
+  });
 
   it('runs Claude Code in the sandbox when Auto could not use its device, saying why', async () => {
     seed([directory('dir-own', 'dev-1')]);
@@ -68,8 +72,14 @@ describe('resolveProjectDirectoryRun — an agent on its own device', () => {
     );
   });
 
+  const setOnline = (deviceIds: string[]) =>
+    useDeviceStore.setState({
+      deviceListMap: { all: deviceIds.map((deviceId) => ({ deviceId, online: true })) },
+    } as never);
+
   it("does not follow a stale Auto draft onto another device's directory", async () => {
     seed([directory('dir-other', 'dev-2'), directory('dir-own', 'dev-1')]);
+    setOnline(['dev-1', 'dev-2']);
     const result = await run(
       { agentId: 'agt', auto: true, projectWorkingDirectoryId: 'dir-other' },
       claudeCode,
@@ -83,6 +93,20 @@ describe('resolveProjectDirectoryRun — an agent on its own device', () => {
       projectId: 'prj',
       projectWorkingDirectoryId: 'dir-own',
     });
+  });
+
+  // Review: the retarget took the own device's folder even with that device
+  // offline, so the server refused the send instead of the fallback applying.
+  it('falls back instead of retargeting onto an offline own device', async () => {
+    seed([directory('dir-other', 'dev-2'), directory('dir-own', 'dev-1')]);
+    setOnline(['dev-2']);
+    const result = await run(
+      { agentId: 'agt', auto: true, projectWorkingDirectoryId: 'dir-other' },
+      claudeCode,
+    );
+
+    expect(result.agencyConfig?.executionTarget).toBe('sandbox');
+    expect(result.ownDeviceFallback).toBe('offline');
   });
 
   it('keeps a fallen-back conversation in the sandbox on later sends', async () => {

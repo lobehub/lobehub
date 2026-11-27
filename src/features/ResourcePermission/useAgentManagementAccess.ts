@@ -16,10 +16,15 @@ import { userProfileSelectors } from '@/store/user/selectors';
  * ordinary members use the Agent's member-selection policy even when General
  * access grants them edit capability.
  */
-export const useAgentManagementAccess = (agentId?: string) => {
-  const agent = useAgentStore((s) =>
+export const useAgentManagementAccess = (
+  agentId?: string,
+  /** The agent's row when the caller already holds it (e.g. a project's members) and the store may not. */
+  agentRow?: { visibility?: string | null; workspaceId?: string | null },
+) => {
+  const storedAgent = useAgentStore((s) =>
     agentId ? agentByIdSelectors.getAgentById(agentId)(s) : undefined,
   );
+  const agent = storedAgent ?? agentRow;
   const isAgentLoading = !!agentId && !agent;
   const isPublicWorkspaceAgent = !!agent?.workspaceId && agent.visibility !== 'private';
   const { allowed: canEditContent } = usePermission('edit_own_content');

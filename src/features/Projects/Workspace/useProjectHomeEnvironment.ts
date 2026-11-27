@@ -22,7 +22,7 @@ export const useProjectHomeEnvironment = (projectId: string, agentId: string) =>
   const { directories, ordered } = useProjectExecutionEnvironments(projectId);
   const { data: devices } = useDeviceList();
   const fixedDeviceId = useAgentFixedDeviceId(agentId);
-  const ownDevice = useAgentOwnDevice(agentId);
+  const { loading: ownDeviceLoading, ownDevice } = useAgentOwnDevice(agentId);
   const [pickedId, setPickedId] = useState<string>();
 
   // A heterogeneous agent with a device of its own starts there first, as a
@@ -43,6 +43,8 @@ export const useProjectHomeEnvironment = (projectId: string, agentId: string) =>
     onSandbox: environment.kind === 'sandbox',
     /** Nothing picked by hand: the project's order decides where it starts. */
     auto: pickedId === undefined,
+    /** The agent's own device is still loading: Auto must not send yet. */
+    loading: pickedId === undefined && ownDeviceLoading,
     /** Auto could not start on the agent's own device: why, and whether nothing else may. */
     notice: choice.ownDeviceUnavailable
       ? { blocked: !!choice.blocked, reason: choice.ownDeviceUnavailable }
