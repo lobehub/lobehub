@@ -505,6 +505,11 @@ export const agentRouter = router({
    * Get the full curated onboarding agent catalog for the marketplace picker.
    * Proxies to GET /api/v1/agents/onboarding-full with trust-token authentication.
    * Response is keyed by MarketplaceCategory slug.
+   *
+   * Market rejects this endpoint without a trusted-client token or an OIDC
+   * access token. Self-hosted instances usually have neither, so a 401/403
+   * degrades to an empty catalog (same idea as optional Market connection
+   * lookups) and the picker can show its empty state. Other failures still throw.
    */
   getOnboardingFull: agentProcedure
     .input(z.object({ locale: z.string().optional() }).optional().default({}))
@@ -533,6 +538,19 @@ export const agentRouter = router({
 
       try {
         const response = await fetch(url, { headers, method: 'GET' });
+
+        // No usable Market credentials (missing trusted client, or no OIDC login).
+        // Do not map this onto UNAUTHORIZED: that code opens the app re-login prompt.
+        if (response.status === 401 || response.status === 403) {
+          const errorText = await response.text();
+          log(
+            'Get onboarding full unauthorized, returning empty catalog: %s %s - %s',
+            response.status,
+            response.statusText,
+            errorText,
+          );
+          return {};
+        }
 
         if (!response.ok) {
           const errorText = await response.text();
