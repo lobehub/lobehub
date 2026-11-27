@@ -292,20 +292,59 @@ describe('ViteRendererFallback', () => {
     expect((init as any).body).toBe('payload');
   });
 
-  it('returns 502 when fetch throws', async () => {
-    mockFetch.mockRejectedValue(new Error('ECONNREFUSED'));
+  describe('connection errors', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
 
-    const fallback = new ViteRendererFallback('http://localhost:5173');
-    const manager = new RendererProtocolManager({ fallback });
-    manager.registerHandler();
-    const handler = protocolHandlerRef.current;
+    afterEach(() => {
+      vi.useRealTimers();
+    });
 
-    const response = await handler({
-      headers: new Headers(),
-      method: 'GET',
-      url: 'app://renderer/@vite/client',
-    } as any);
+    const handle = (request: Record<string, unknown>) => {
+      const fallback = new ViteRendererFallback('http://localhost:5173');
+      const manager = new RendererProtocolManager({ fallback });
+      manager.registerHandler();
+      const pending = protocolHandlerRef.current({ headers: new Headers(), ...request });
+      // Flush every retry backoff.
+      return vi.runAllTimersAsync().then(() => pending);
+    };
 
-    expect(response.status).toBe(502);
+    it('retries a module request after a transient connection error', async () => {
+      mockFetch
+        .mockRejectedValueOnce(new TypeError('fetch failed', { cause: { code: 'ETIMEDOUT' } }))
+        .mockResolvedValueOnce(new Response('export {}', { status: 200 }));
+
+      const response = await handle({
+        method: 'GET',
+        url: 'app://renderer/src/store/tool/slices/builtin/executors/catalog.ts',
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe('export {}');
+    });
+
+    it('returns 502 once the retries are exhausted', async () => {
+      mockFetch.mockRejectedValue(new Error('ECONNREFUSED'));
+
+      const response = await handle({ method: 'GET', url: 'app://renderer/@vite/client' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+      expect(response.status).toBe(502);
+    });
+
+    it('does not replay a request whose body was already streamed', async () => {
+      mockFetch.mockRejectedValue(new Error('ECONNRESET'));
+
+      const response = await handle({
+        body: 'payload',
+        method: 'POST',
+        url: 'app://renderer/__hmr',
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(response.status).toBe(502);
+    });
   });
 });

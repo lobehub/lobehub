@@ -306,6 +306,18 @@ class Semaphore {
 
 const VITE_FETCH_CONCURRENCY = 64;
 
+/**
+ * Backoff before each retry of a dev-server fetch that failed at the connection
+ * level. A module request that fails once stays failed for the window's
+ * lifetime — Chromium caches it in the module map, so every later `import()` of
+ * a graph containing it rejects until a reload (e.g. the builtin tool catalog,
+ * ~1k modules on its first cold load). One transient socket error during that
+ * burst must not cost the whole window its tool runtime.
+ */
+const VITE_FETCH_RETRY_DELAYS_MS = [100, 400];
+
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 export class ViteRendererFallback implements RendererFallbackStrategy {
   private readonly viteOrigin: string;
   private readonly logger = createLogger('core:ViteRendererFallback');
@@ -335,12 +347,32 @@ export class ViteRendererFallback implements RendererFallbackStrategy {
 
     const release = await this.gate.acquire();
     try {
-      const response = await fetch(target, init);
+      // A streamed request body is consumed by the first attempt, so only
+      // body-less requests (all module and asset loads) can be replayed.
+      const response = await this.fetchWithRetry(target, init, !init.body);
       return this.releaseOnBodyDone(response, release);
     } catch (error) {
       release();
       this.logger.error(`Vite dev server fetch failed: ${target}`, error);
       return new Response('Vite Dev Server Unavailable', { status: 502 });
+    }
+  }
+
+  private async fetchWithRetry(
+    target: string,
+    init: RequestInit,
+    retryable: boolean,
+  ): Promise<Response> {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await fetch(target, init);
+      } catch (error) {
+        const delay = retryable ? VITE_FETCH_RETRY_DELAYS_MS[attempt] : undefined;
+        if (delay === undefined) throw error;
+
+        this.logger.warn(`Vite dev server fetch failed, retrying in ${delay}ms: ${target}`, error);
+        await wait(delay);
+      }
     }
   }
 
