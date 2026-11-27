@@ -40,7 +40,6 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useCodingPlansTab } from '@/business/client/hooks/useCodingPlansTab';
-import { useWorkspaceByokAccess } from '@/business/client/hooks/useWorkspaceByokAccess';
 import { type SettingsScope } from '@/features/SettingsSwitch/settingsScope';
 import { usePermission } from '@/hooks/usePermission';
 import { useElectronStore } from '@/store/electron';
@@ -112,7 +111,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   const enableWebhook = useServerConfigStore(serverConfigSelectors.enableWebhook);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const codingPlansTab = useCodingPlansTab();
-  const byokEnabled = useWorkspaceByokAccess() === true;
   const [avatar, username] = useUserStore((s) => [
     userProfileSelectors.userAvatar(s),
     userProfileSelectors.nickName(s),
@@ -260,14 +258,12 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
         {
           items: [
             // AI provider config (keys/endpoints) is shared workspace infra —
-            // Admin-or-higher, hidden from members entirely, and only listed
-            // where the workspace may bring its own keys.
-            canManageWorkspace &&
-              byokEnabled && {
-                icon: Brain,
-                key: WorkspaceSettingsTabs.Provider,
-                label: t('tab.provider'),
-              },
+            // Admin-or-higher, hidden from members entirely.
+            canManageWorkspace && {
+              icon: Brain,
+              key: WorkspaceSettingsTabs.Provider,
+              label: t('tab.provider'),
+            },
             // Service-model preferences steer the shared workspace model
             // policy — Admin-or-higher, hidden from members like Provider.
             canManageWorkspace && {
@@ -437,7 +433,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
       enableWebhook,
       enableBusinessFeatures,
       codingPlansTab,
-      byokEnabled,
       avatarUrl,
       username,
     ],

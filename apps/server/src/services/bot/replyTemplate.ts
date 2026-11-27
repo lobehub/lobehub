@@ -405,7 +405,7 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     errorNoAvailableProvider:
       "**No model provider configured.**\nThis bot's agent has no available model provider — please add an API key and enable a provider in the agent's settings, then try again.",
     errorWorkspaceByokNotEnabled:
-      "**Own provider keys are not available in this workspace.**\nThis agent's model uses a provider with your own keys, which this workspace can't use yet. Please switch the agent to a LobeHub model, or contact us to turn it on for the workspace.",
+      "**Own provider keys are not available in this workspace.**\nThis agent's model uses a provider with your own keys, which this workspace's plan doesn't include. Please switch the agent to a LobeHub model, or upgrade the workspace to Business.",
     errorWorkspaceModelRestricted:
       "**Model above your tier.**\nThis agent's model is above the highest model tier your workspace admin allows you. Please switch the agent to a lower-tier model, or ask a workspace admin to raise your tier.",
     errorPermissionDenied:
@@ -537,7 +537,7 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     errorNoAvailableProvider:
       '**未配置可用的模型 Provider**\n该机器人的 Agent 当前没有可用的模型 Provider，请在 Agent 设置中添加 API Key 并启用一个 Provider 后重试。',
     errorWorkspaceByokNotEnabled:
-      '**这个工作区还不能使用自己的服务商密钥**\n这个 Agent 的模型走的是自己配置的服务商密钥，当前工作区还没有开通。请在 Agent 设置中切换到 LobeHub 提供的模型，或联系我们为工作区开通。',
+      '**这个工作区还不能使用自己的服务商密钥**\n这个 Agent 的模型走的是自己配置的服务商密钥，当前工作区的套餐不包含此功能。请在 Agent 设置中切换到 LobeHub 提供的模型，或将工作区升级到 Business。',
     errorWorkspaceModelRestricted:
       '**模型超出了你的可用档位**\n这个 Agent 使用的模型超出了工作区管理员给你设置的最高档位。请在 Agent 设置中切换到更低档位的模型，或联系工作区管理员调高你的档位。',
     errorPermissionDenied:
@@ -637,8 +637,8 @@ const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
   NoAvailableProvider: 'errorNoAvailableProvider',
   PermissionDenied: 'errorPermissionDenied',
   QuotaLimitReached: 'errorQuotaLimitReached',
-  // The workspace is not opened for its own provider keys: switching to a
-  // LobeHub model or getting it turned on fixes it, retrying does not.
+  // The workspace's plan does not include its own provider keys: switching to
+  // a LobeHub model or upgrading the plan fixes it, retrying does not.
   WorkspaceByokNotEnabled: 'errorWorkspaceByokNotEnabled',
   // A workspace admin closed the agent's model to this member: switching the
   // model or asking an admin fixes it, retrying does not.

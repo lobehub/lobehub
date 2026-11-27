@@ -2458,10 +2458,10 @@ When I am ___, I need ___
   'workspace.byok.locked.benefits.shared.desc':
     'Set up keys once and every member of the workspace can use them.',
   'workspace.byok.locked.benefits.shared.title': 'Shared provider keys',
-  'workspace.byok.locked.cta': 'Contact us to turn it on',
+  'workspace.byok.locked.cta': 'Upgrade to Business',
   'workspace.byok.locked.desc':
-    'This workspace runs on LobeHub models. Using your own provider keys in a workspace is available on request.',
-  'workspace.byok.locked.title': 'Use your own provider keys',
+    'This workspace runs on LobeHub models. Upgrade to Business to connect your own provider keys for every member.',
+  'workspace.byok.locked.title': 'Use your own provider keys on Business',
   'workspace.create.descPlaceholder': 'Describe what this workspace is for (optional)',
   'workspace.create.namePlaceholder': 'e.g. Acme Team',
   'workspace.create.submit': 'Create workspace',
@@ -3983,6 +3983,7 @@ When I am ___, I need ___
     'On-demand usage · Auto top-up (${{price}} per $1 of balance)',
   'workspace.wizard.step2.features.free.upgradable': 'Upgrade anytime for more seats',
   'workspace.wizard.step2.features.business.auditLog': 'Audit logs',
+  'workspace.wizard.step2.features.business.byok': 'Your own provider keys',
   'workspace.wizard.step2.features.pro.adminControls': 'Centralized billing and role management',
   'workspace.wizard.step2.features.pro.apiKey': 'Workspace API keys',
   'workspace.wizard.step2.features.pro.collaboration': 'Invite members · share agents and files',

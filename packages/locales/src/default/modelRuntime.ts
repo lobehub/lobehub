@@ -120,7 +120,7 @@ export default {
   UserConfigError:
     'Provider configuration is invalid (incorrect base URL, missing environment variable, virtual-key restriction, etc.). Please review the provider settings.',
   WorkspaceByokNotEnabled:
-    'This workspace can only use LobeHub models. Using your own provider keys in a workspace is available on request: contact us to turn it on.',
+    'This workspace can only use LobeHub models. Using your own provider keys in a workspace is available on the Business plan.',
   WorkspaceModelRestricted:
     'This model is above the highest tier your workspace admin allows you. Pick a lower-tier model, or ask a workspace admin to raise your tier.',
 };
