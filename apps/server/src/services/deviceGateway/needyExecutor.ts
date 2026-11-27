@@ -98,7 +98,9 @@ export function attachNeedyExecutor(
       ttlSeconds: params.ttlSeconds,
       version: params.version,
     },
-    // A first attach downloads the needy release before the runner starts.
+    // A first attach downloads the needy release before the runner starts; the
+    // device bounds that download to 150s (`DOWNLOAD_BUDGET_MS` in the CLI), so
+    // it fails there before this wait ends rather than starting late.
     180_000,
   );
 }

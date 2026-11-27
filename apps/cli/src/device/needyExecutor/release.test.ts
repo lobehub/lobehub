@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { NeedyRelease, resolveNeedyTarget } from './release';
+import { DOWNLOAD_BUDGET_MS, NeedyRelease, resolveNeedyTarget } from './release';
 
 const ARCHIVE = Buffer.from('fake needy archive');
 const DIGEST = createHash('sha256').update(ARCHIVE).digest('hex');
@@ -168,5 +168,34 @@ describe('NeedyRelease', () => {
     await expect(release.binary('0.0.22')).resolves.toBe(path.join(cacheDir, '0.0.22', 'needy'));
     expect(archiveCalls).toBe(3);
     expect(sleep.mock.calls).toEqual([[1000], [3000]]);
+  });
+
+  // ROOT CAUSE:
+  //
+  // If GitHub stalled, three 120s attempts plus pauses could outlast the
+  // server's 180s wait, so the device could start a runner after the server had
+  // reported the attach as unavailable.
+  //
+  // Before the fix, each attempt had its own 120s timeout.
+  // The fix shares one 150s budget across attempts and skips a retry that
+  // could not start before it ends.
+  it('should give up when the download budget cannot fit another try', async () => {
+    let clock = 0;
+    const fetchImpl = vi.fn(async () => {
+      clock += DOWNLOAD_BUDGET_MS - 500;
+      throw new TypeError('The socket connection was closed unexpectedly');
+    });
+    const sleep = vi.fn(async () => {});
+    const release = new NeedyRelease({
+      cacheDir,
+      extract: fakeExtract,
+      fetch: fetchImpl as unknown as typeof fetch,
+      now: () => clock,
+      sleep,
+      target: 'x',
+    });
+
+    await expect(release.binary('0.0.22')).rejects.toThrow('socket connection was closed');
+    expect(sleep).not.toHaveBeenCalled();
   });
 });

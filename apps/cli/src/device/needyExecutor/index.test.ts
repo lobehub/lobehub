@@ -243,6 +243,40 @@ describe('NeedyExecutorSupervisor', () => {
     );
   });
 
+  // ROOT CAUSE:
+  //
+  // If attaches for different ids arrived together, each passed the
+  // four-runner check before any had recorded its runner, because locks are
+  // per id and the check came before the download.
+  //
+  // Before the fix, five concurrent attaches started five runners.
+  // The fix reserves a slot in the same step as the check.
+  it('should hold the four-runner limit when attaches for different ids arrive together', async () => {
+    let release_: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release_ = resolve;
+    });
+    release.binary.mockImplementation(async (version: string) => {
+      await gate;
+      return `/cache/${version}/needy`;
+    });
+
+    const pending = ['a', 'b', 'c', 'd', 'e'].map((id) =>
+      supervisor.attach(attachParams({ attachmentId: id })).then(
+        () => 'ok',
+        (error: Error) => error.message,
+      ),
+    );
+    release_();
+    await spawned(4);
+    await vi.advanceTimersByTimeAsync(2000);
+    const outcomes = await Promise.all(pending);
+
+    expect(outcomes.filter((outcome) => outcome === 'ok')).toHaveLength(4);
+    expect(outcomes).toContain('this device already hosts 4 needy executors');
+    expect(runners).toHaveLength(4);
+  });
+
   it('should stop every runner and delete every credential on dispose', async () => {
     await attach(attachParams({ attachmentId: 'a' }));
     await attach(attachParams({ attachmentId: 'b' }));

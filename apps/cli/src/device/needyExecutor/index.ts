@@ -106,6 +106,12 @@ export class NeedyExecutorSupervisor {
   private readonly attachments = new Map<string, Attachment>();
   /** One attach or detach at a time per id, so a retried RPC cannot start two runners. */
   private readonly locks = new Map<string, Promise<unknown>>();
+  /**
+   * Ids between the capacity check and their runner being recorded. Locks are
+   * per id, so attaches for different ids run concurrently; counting these
+   * keeps them from all passing the check before any runner is recorded.
+   */
+  private readonly starting = new Set<string>();
   private disposed = false;
 
   constructor(private readonly options: NeedyExecutorSupervisorOptions) {}
@@ -156,7 +162,6 @@ export class NeedyExecutorSupervisor {
     params: AttachNeedyExecutorParams,
   ): Promise<AttachNeedyExecutorResult> {
     if (this.disposed) throw new Error('lh connect is shutting down');
-    const now = this.options.now ?? Date.now;
     const fingerprint = createHash('sha256').update(JSON.stringify(params)).digest('hex');
 
     const existing = this.attachments.get(params.attachmentId);
@@ -165,10 +170,23 @@ export class NeedyExecutorSupervisor {
     }
     // Same id, new params (a rotated credential, another daemon): replace it.
     if (existing) await this.stop(params.attachmentId, 'replaced');
-    if (this.attachments.size >= MAX_ATTACHMENTS) {
+    // The check and the reservation run with no await between them.
+    if (this.attachments.size + this.starting.size >= MAX_ATTACHMENTS) {
       throw new Error(`this device already hosts ${MAX_ATTACHMENTS} needy executors`);
     }
+    this.starting.add(params.attachmentId);
+    try {
+      return await this.start(params, fingerprint);
+    } finally {
+      this.starting.delete(params.attachmentId);
+    }
+  }
 
+  private async start(
+    params: AttachNeedyExecutorParams,
+    fingerprint: string,
+  ): Promise<AttachNeedyExecutorResult> {
+    const now = this.options.now ?? Date.now;
     const binary = await this.options.release.binary(params.version);
     const dir = path.join(this.options.stateDir, params.attachmentId);
     await fs.rm(dir, { force: true, recursive: true });
@@ -239,6 +257,8 @@ export class NeedyExecutorSupervisor {
     };
     attachment.timer.unref?.();
     this.attachments.set(params.attachmentId, attachment);
+    // Recorded now; stop counting it twice.
+    this.starting.delete(params.attachmentId);
 
     void exited.then(() => {
       if (this.attachments.get(params.attachmentId) !== attachment) return;

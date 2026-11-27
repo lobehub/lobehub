@@ -28,8 +28,13 @@ const RELEASE_TARGETS: Record<string, string> = {
 /** A release version as needy tags it, without the `v`: `MAJOR.MINOR.PATCH`. */
 export const NEEDY_VERSION_PATTERN = /^\d{1,4}\.\d{1,4}\.\d{1,4}$/;
 
-/** Downloads and checks one archive; a stalled mirror must not hold an attach forever. */
-const DOWNLOAD_TIMEOUT_MS = 120_000;
+/**
+ * Everything one download may take, retries and pauses included. The server
+ * waits 180s for an attach (`apps/server/src/services/deviceGateway/needyExecutor.ts`),
+ * so a slow mirror fails the attach on the device before the server gives up,
+ * instead of starting a runner the server already reported as unavailable.
+ */
+export const DOWNLOAD_BUDGET_MS = 150_000;
 
 /** needy's target triple for this host, or `undefined` when it has no executor build. */
 export const resolveNeedyTarget = (
@@ -44,6 +49,8 @@ export interface NeedyReleaseOptions {
   extract?: (archive: string, member: string, destination: string) => Promise<void>;
   /** Injected for tests; defaults to the global `fetch`. */
   fetch?: typeof fetch;
+  /** Injected for tests; the clock the download budget is measured on. */
+  now?: () => number;
   /** Injected for tests; waits between download retries. */
   sleep?: (ms: number) => Promise<void>;
   target?: string;
@@ -81,13 +88,16 @@ class HttpStatusError extends Error {
 const download = async (
   fetchImpl: typeof fetch,
   url: string,
-  sleep: (ms: number) => Promise<void>,
+  deadline: number,
+  clock: { now: () => number; sleep: (ms: number) => Promise<void> },
 ): Promise<Buffer> => {
   for (let attempt = 0; ; attempt++) {
     try {
+      const remaining = deadline - clock.now();
+      if (remaining <= 0) throw new Error(`download of ${url} ran out of time`);
       const response = await fetchImpl(url, {
         redirect: 'follow',
-        signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
+        signal: AbortSignal.timeout(remaining),
       });
       if (!response.ok) throw new HttpStatusError(url, response.status);
       return Buffer.from(await response.arrayBuffer());
@@ -95,8 +105,10 @@ const download = async (
       const delay = DOWNLOAD_RETRY_DELAYS_MS[attempt];
       // A 4xx (a version that was never released) will not change on a retry.
       const permanent = error instanceof HttpStatusError && error.status < 500;
-      if (delay === undefined || permanent) throw error;
-      await sleep(delay);
+      // A retry that could not start before the deadline would only fail later.
+      const outOfTime = delay === undefined || clock.now() + delay >= deadline;
+      if (outOfTime || permanent) throw error;
+      await clock.sleep(delay);
     }
   }
 };
@@ -143,15 +155,19 @@ export class NeedyRelease {
       throw new Error(`needy has no executor build for ${process.platform}-${process.arch}`);
     }
     const fetchImpl = this.options.fetch ?? fetch;
-    const sleep =
-      this.options.sleep ??
-      ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+    const clock = {
+      now: this.options.now ?? Date.now,
+      sleep:
+        this.options.sleep ??
+        ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))),
+    };
+    const deadline = clock.now() + DOWNLOAD_BUDGET_MS;
     const archiveName = `needy-${target}.tar.gz`;
     const archiveUrl = `${RELEASE_BASE_URL}/v${version}/${archiveName}`;
 
     const [archive, checksumFile] = await Promise.all([
-      download(fetchImpl, archiveUrl, sleep),
-      download(fetchImpl, `${archiveUrl}.sha256`, sleep),
+      download(fetchImpl, archiveUrl, deadline, clock),
+      download(fetchImpl, `${archiveUrl}.sha256`, deadline, clock),
     ]);
     // The `.sha256` file holds the hex digest, optionally followed by the file name.
     const expected = checksumFile.toString('utf8').trim().split(/\s+/)[0]?.toLowerCase();
