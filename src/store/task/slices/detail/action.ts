@@ -190,6 +190,7 @@ export class TaskDetailSliceActionImpl {
       authorAgentId?: string;
       briefId?: string;
       editorData?: unknown;
+      parentCommentId?: string | null;
       topicId?: string;
     },
   ): Promise<Awaited<ReturnType<typeof taskService.addComment>>> => {
@@ -197,6 +198,7 @@ export class TaskDetailSliceActionImpl {
     // the mutation *and* the detail refetch. A comment posted on an agent's
     // behalf (client-first runtime) is left to the refetch — the store has no
     // agent identity to attribute it to.
+    const scope = cacheScope.get();
     const current = this.#get().taskDetailMap[taskId];
     const userState = useUserStore.getState();
     const actorId = userProfileSelectors.userId(userState);
@@ -214,6 +216,7 @@ export class TaskDetailSliceActionImpl {
             content,
             editorData: opts?.editorData,
             now: new Date().toISOString(),
+            parentCommentId: opts?.parentCommentId,
             topicId: opts?.topicId,
           })
         : undefined;
@@ -232,7 +235,7 @@ export class TaskDetailSliceActionImpl {
       // The send failed, so the row must go even if the network is down and
       // the server-truth refetch below cannot run — otherwise an unsaved
       // comment keeps looking posted until something else refreshes.
-      if (optimistic) {
+      if (optimistic && cacheScope.get() === scope) {
         const latest = this.#get().taskDetailMap[taskId];
         this.internal_dispatchTaskDetail({
           id: taskId,
@@ -246,7 +249,13 @@ export class TaskDetailSliceActionImpl {
       throw error;
     }
     // Post-success refresh failing is not the comment failing: it is saved.
-    await this.internal_refreshTaskDetail(taskId);
+    if (cacheScope.get() === scope) {
+      try {
+        await this.internal_refreshTaskDetail(taskId);
+      } catch (error) {
+        console.error('[task] Failed to refresh detail after saving a comment', error);
+      }
+    }
     return result;
   };
 

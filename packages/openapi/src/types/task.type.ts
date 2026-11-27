@@ -400,6 +400,7 @@ const TaskDetailActivitySchema = z
     files: z.array(ChatFileItemSchema).optional(),
     id: z.string().optional(),
     operationId: z.string().nullable().optional(),
+    parentCommentId: z.string().nullable().optional(),
     priority: z.string().nullable().optional(),
     propertyChange: z
       .union([

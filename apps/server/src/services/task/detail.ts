@@ -432,6 +432,7 @@ export class TaskDetailService {
           editorData: c.editorData ?? undefined,
           files: files.length > 0 ? files : undefined,
           id: c.id,
+          parentCommentId: c.parentCommentId ?? null,
           time: toISO(c.createdAt),
           type: 'comment' as const,
         };

@@ -155,3 +155,18 @@ export const resolveMarkdownSnapshotContent = ({
 
   return markdown;
 };
+
+/**
+ * A body a shell wrote with escaped line breaks: `lh task comment -m "a\nb"`
+ * stores the two characters `\` `n`, so the whole comment renders as one run
+ * of text. Only a body with no real line break and at least two escaped ones
+ * qualifies — one stray `\n` is more likely literal text (code, a regex) than
+ * a lost paragraph.
+ *
+ * Returns the body with real line breaks, or `undefined` when it needs none.
+ */
+export const restoreEscapedNewlines = (content?: string | null): string | undefined => {
+  if (!content || content.includes('\n')) return;
+  if (countOccurrences(content, '\\n') < 2) return;
+  return content.replaceAll('\\r\\n', '\n').replaceAll('\\n', '\n');
+};

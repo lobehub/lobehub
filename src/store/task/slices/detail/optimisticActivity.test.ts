@@ -101,6 +101,15 @@ describe('buildOptimisticCommentActivity', () => {
     expect(isOptimisticActivityId(row?.id)).toBe(true);
   });
 
+  it('carries the root linkage without changing the root comment contract', () => {
+    expect(
+      buildOptimisticCommentActivity({ actor, content: 'reply', now, parentCommentId: 'root' }),
+    ).toMatchObject({ parentCommentId: 'root', type: 'comment' });
+    expect(
+      buildOptimisticCommentActivity({ actor, content: 'root', now })?.parentCommentId,
+    ).toBeNull();
+  });
+
   it('does not invent an author when the viewer identity is unknown', () => {
     expect(buildOptimisticCommentActivity({ content: 'x', now })).toBeUndefined();
   });

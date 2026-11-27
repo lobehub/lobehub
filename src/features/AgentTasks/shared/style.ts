@@ -123,24 +123,42 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorFillTertiary};
   `,
 
-  commentCard: css`
+  /**
+   * A comment on the activity rail. No card: the author's 24px face sits on
+   * the same vertical line as the 16px marks of the lines around it (8px in +
+   * 12px to its centre = the rail's 19.5px), and the body indents under the
+   * name. Its slice of the rail runs from the face's centre, so the rail meets
+   * the face instead of overshooting the first or last item of a run.
+   */
+  commentLine: css`
     position: relative;
 
-    .comment-actions {
-      opacity: 0;
-      transition: opacity 0.15s ease;
+    padding-block: 8px;
+    padding-inline-start: 8px;
+
+    &::before {
+      content: '';
+
+      position: absolute;
+      inset-block: 0;
+      inset-inline-start: 19.5px;
+
+      width: 1px;
+
+      background: ${cssVar.colorBorderSecondary};
     }
 
-    &:hover .comment-actions,
-    &:focus-within .comment-actions {
-      opacity: 1;
+    &:first-child::before {
+      inset-block-start: 20px;
     }
-  `,
 
-  commentActions: css`
-    position: absolute;
-    inset-block-start: 8px;
-    inset-inline-end: 8px;
+    &:last-child::before {
+      inset-block-end: calc(100% - 20px);
+    }
+
+    &:only-child::before {
+      display: none;
+    }
   `,
 
   profileAuthorName: css`
@@ -149,28 +167,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 
     &:hover {
       color: ${cssVar.colorText};
-    }
-  `,
-
-  commentInputCard: css`
-    padding-block: 4px;
-    padding-inline: 8px;
-    border: 1px solid transparent;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillTertiary};
-
-    transition:
-      background 0.15s ease,
-      border-color 0.15s ease;
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-
-    &:focus-within {
-      border-color: ${cssVar.colorBorder};
-      background: ${cssVar.colorFillTertiary};
     }
   `,
 }));

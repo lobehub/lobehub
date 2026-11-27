@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveMarkdownSnapshotContent } from './commentRenderSource';
+import { resolveMarkdownSnapshotContent, restoreEscapedNewlines } from './commentRenderSource';
 
 const text = (value: string, extra: Record<string, unknown> = {}) => ({
   detail: 0,
@@ -144,5 +144,19 @@ describe('resolveMarkdownSnapshotContent', () => {
   it('keeps the snapshot when there is no markdown body or snapshot', () => {
     expect(resolveMarkdownSnapshotContent({ content: '', editorData: handBuilt })).toBeUndefined();
     expect(resolveMarkdownSnapshotContent({ content, editorData: null })).toBeUndefined();
+  });
+});
+
+describe('restoreEscapedNewlines', () => {
+  it('turns the escaped line breaks a shell wrote back into lines', () => {
+    // T-94: `lh task comment -m "…\n…"` stored backslash-n, not line breaks.
+    expect(restoreEscapedNewlines('T-94 完成。\\n\\nReview 结论\\n- 成立')).toBe(
+      'T-94 完成。\n\nReview 结论\n- 成立',
+    );
+  });
+
+  it('leaves real multi-line bodies and a lone literal \\n alone', () => {
+    expect(restoreEscapedNewlines('line one\nuse `\\n` and `\\n`')).toBeUndefined();
+    expect(restoreEscapedNewlines('split on `\\n`')).toBeUndefined();
   });
 });

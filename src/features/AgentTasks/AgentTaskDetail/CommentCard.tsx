@@ -1,253 +1,152 @@
 import type { TaskDetailActivity } from '@lobechat/types';
-import { useEditor } from '@lobehub/editor/react';
-import { LexicalRenderer } from '@lobehub/editor/renderer';
-import {
-  ActionIcon,
-  Block,
-  Button,
-  confirmModal,
-  cssVar,
-  type DropdownItem,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  Markdown,
-  Text,
-} from '@lobehub/ui';
-import { MessageCircle, MoreHorizontal, Pencil, Trash } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { ChevronDown, ChevronUp } from 'lucide-react';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Avatar from '@/components/Avatar';
-import { AttachmentUploadButton } from '@/features/AttachmentInput';
-import { mentionPlainClassName } from '@/features/ChatInput/InputEditor/mentionStyle';
-import { richTextImageRenderers } from '@/features/Conversation/Messages/User/components/richTextImageRenderers';
-import { EditorCanvas } from '@/features/EditorCanvas';
-import { seedAttachments } from '@/features/EditorCanvas/attachmentRegistry';
-import {
-  getAttachmentFileIdsFromEditor,
-  hasIncompleteEditorAttachments,
-  insertFilesIntoEditor,
-} from '@/features/EditorCanvas/editorAttachments';
-import { LinearFileCard } from '@/features/EditorCanvas/LinearFilePlugin';
-import { useWorkspaceCommentMentionOption } from '@/features/Portal/TopicComments/useWorkspaceCommentMentionOption';
 import { useActivityTime } from '@/hooks/useActivityTime';
-import { useTaskStore } from '@/store/task';
-import { isOptimisticActivityId } from '@/store/task/slices/detail/optimisticActivity';
 
-import { styles } from '../shared/style';
-import ActivityAuthorProfile from './ActivityAuthorProfile';
-import { commentMarkdownProps } from './commentMarkdown';
-import { resolveMarkdownSnapshotContent } from './commentRenderSource';
+import { styles as timelineStyles } from '../shared/style';
+import CommentInput, { type CommentReplyRequest } from './CommentInput';
+import { CommentItem } from './CommentItem';
 
-// Keep saved comments visually consistent with the editor: render FileNodes
-// as the Linear-style card on its own row instead of the default inline pill.
-const FILE_WRAPPER_STYLE = { marginBlock: 8 };
-const rendererOverrides = {
-  ...richTextImageRenderers,
-  file: (node: Record<string, any>) => (
-    <div style={FILE_WRAPPER_STYLE}>
-      <LinearFileCard node={node as Parameters<typeof LinearFileCard>[0]['node']} />
-    </div>
-  ),
-};
+const styles = stylex.create({
+  summary: { marginBlockStart: 8, marginInlineStart: 32, minWidth: 0 },
+  toggle: {
+    color: cssVar.colorTextSecondary,
+    height: 'auto',
+    maxWidth: '100%',
+    paddingBlock: 4,
+    paddingInline: 0,
+  },
+  summaryContent: { alignItems: 'center', flexWrap: 'wrap', minWidth: 0 },
+  participants: { display: 'flex', flexShrink: 0, paddingInlineStart: 6 },
+  participant: {
+    backgroundColor: cssVar.colorBgContainer,
+    borderRadius: '50%',
+    boxShadow: `0 0 0 2px ${cssVar.colorBgContainer}`,
+    display: 'flex',
+    marginInlineStart: -6,
+  },
+  thread: {
+    borderInlineStartColor: cssVar.colorBorder,
+    borderInlineStartStyle: 'solid',
+    borderInlineStartWidth: 1,
+    marginBlockStart: 16,
+    marginInlineStart: 32,
+    paddingBlockEnd: 4,
+    paddingInlineStart: { 'default': 20, '@media (max-width: 600px)': 12 },
+  },
+});
 
 interface CommentCardProps {
   activity: TaskDetailActivity;
+  readOnly?: boolean;
+  replies?: TaskDetailActivity[];
+  taskId?: string;
 }
 
-const CommentCard = memo<CommentCardProps>(({ activity }) => {
+/** The only timeline item in a thread; replies never acquire a timeline rail. */
+const CommentCard = ({ activity, readOnly, replies = [], taskId }: CommentCardProps) => {
   const { t } = useTranslation('chat');
-  const deleteComment = useTaskStore((s) => s.deleteComment);
-  const updateComment = useTaskStore((s) => s.updateComment);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [hasOpened, setHasOpened] = useState(false);
+  const [replyRequest, setReplyRequest] = useState<CommentReplyRequest>();
+  const threadId = useId();
+  const latest = replies.at(-1);
+  const { text: latestTime, title: latestTitle } = useActivityTime(latest?.time);
+  const participants = [
+    ...new Map(
+      replies.flatMap(({ author }) =>
+        author ? [[`${author.type}-${author.id}`, author] as const] : [],
+      ),
+    ).values(),
+  ].slice(0, 3);
 
-  const [isEditing, setIsEditing] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [uploadingAttachments, setUploadingAttachments] = useState(false);
-  const editor = useEditor();
-  const mentionOption = useWorkspaceCommentMentionOption();
-
-  const { text: relTime, title: relTimeTitle } = useActivityTime(activity.time);
-  const content = activity.content || t('taskDetail.activities.fallback.comment');
-  const commentId = activity.id;
-
-  const editorData = useMemo(
-    () => ({
-      content: activity.content ?? '',
-      editorData: activity.editorData,
-    }),
-    [activity.content, activity.editorData],
-  );
-  const snapshotMarkdown = useMemo(
-    () =>
-      resolveMarkdownSnapshotContent({
-        content: activity.content,
-        editorData: activity.editorData,
-      }),
-    [activity.content, activity.editorData],
-  );
-  const renderSnapshot = Boolean(activity.editorData) && snapshotMarkdown === undefined;
-
-  useEffect(() => {
-    if (activity.files && activity.files.length > 0) {
-      seedAttachments(
-        activity.files.map((f) => ({ downloadUrl: f.downloadUrl, id: f.id, url: f.url })),
-      );
-    }
-  }, [activity.files]);
-
-  const handleEdit = useCallback(() => {
-    setUploadingAttachments(false);
-    setIsEditing(true);
-  }, []);
-
-  const handleEditorChange = useCallback(() => {
-    setUploadingAttachments(hasIncompleteEditorAttachments(editor));
-  }, [editor]);
-
-  const handleCancel = useCallback(() => {
-    setIsEditing(false);
-  }, []);
-
-  const handleAttach = useCallback(
-    (files: File[]) => {
-      insertFilesIntoEditor(editor, files);
-    },
-    [editor],
-  );
-
-  const handleSave = useCallback(async () => {
-    // A still-uploading image would be saved as its local `blob:` preview URL.
-    if (!commentId || submitting || hasIncompleteEditorAttachments(editor)) return;
-    const next = String(editor?.getDocument?.('markdown') ?? '').trim();
-    const json = editor?.getDocument?.('json') as unknown;
-    const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
-    if (!next && !hasFiles) return;
-    setSubmitting(true);
-    try {
-      await updateComment(commentId, next, { editorData: json });
-      setIsEditing(false);
-    } finally {
-      setSubmitting(false);
-    }
-  }, [commentId, editor, submitting, updateComment]);
-
-  const handleDelete = useCallback(() => {
-    if (!commentId) return;
-    confirmModal({
-      content: t('taskDetail.comment.deleteConfirm.content'),
-      okButtonProps: { danger: true },
-      okText: t('taskDetail.comment.deleteConfirm.ok'),
-      onOk: () => deleteComment(commentId),
-      title: t('taskDetail.comment.deleteConfirm.title'),
-    });
-  }, [commentId, deleteComment, t]);
-
-  const menuItems = useMemo<DropdownItem[]>(
-    () => [
-      {
-        icon: <Icon icon={Pencil} />,
-        key: 'edit',
-        label: t('taskDetail.comment.edit'),
-        onClick: handleEdit,
-      },
-      {
-        danger: true,
-        icon: <Icon icon={Trash} />,
-        key: 'delete',
-        label: t('taskDetail.comment.delete'),
-        onClick: handleDelete,
-      },
-    ],
-    [t, handleEdit, handleDelete],
-  );
+  const handleReply = (comment: TaskDetailActivity) => {
+    setHasOpened(true);
+    setIsExpanded(true);
+    setReplyRequest((previous) => ({
+      author: comment.id === activity.id ? undefined : comment.author,
+      nonce: (previous?.nonce ?? 0) + 1,
+    }));
+  };
 
   return (
-    <Block
-      className={styles.commentCard}
-      gap={8}
-      paddingBlock={12}
-      paddingInline={8}
-      style={{ borderRadius: cssVar.borderRadiusLG }}
-      variant={'outlined'}
-    >
-      <Flexbox horizontal align={'center'} gap={8}>
-        {activity.author?.avatar ? (
-          <ActivityAuthorProfile author={activity.author}>
-            <Avatar avatar={activity.author.avatar} size={24} />
-          </ActivityAuthorProfile>
-        ) : (
-          <div className={styles.activityAvatar}>
-            <MessageCircle size={12} />
-          </div>
-        )}
-        <Text weight={500}>
-          <ActivityAuthorProfile author={activity.author}>
-            {activity.author?.name || t('taskDetail.activities.fallback.comment')}
-          </ActivityAuthorProfile>
-        </Text>
-        {relTime && (
-          <Text fontSize={12} title={relTimeTitle} type={'secondary'}>
-            {relTime}
-          </Text>
-        )}
-      </Flexbox>
-
-      {isEditing && (
-        <>
-          <div className={mentionPlainClassName}>
-            <EditorCanvas
-              editor={editor}
-              editorData={editorData}
-              entityId={commentId}
-              floatingToolbar={false}
-              mentionOption={mentionOption}
-              style={{ paddingBottom: 4 }}
-              onContentChange={handleEditorChange}
-            />
-          </div>
-          <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-            <AttachmentUploadButton onFiles={handleAttach} />
-            <Flexbox horizontal gap={8}>
-              <Button disabled={submitting} size={'small'} onClick={handleCancel}>
-                {t('taskDetail.comment.cancel')}
-              </Button>
-              <Button
-                disabled={uploadingAttachments}
-                loading={submitting}
-                size={'small'}
-                type={'primary'}
-                onClick={handleSave}
-              >
-                {t('taskDetail.comment.save')}
-              </Button>
+    <div className={timelineStyles.commentLine}>
+      <CommentItem
+        activity={activity}
+        hasReplies={replies.length > 0}
+        readOnly={readOnly}
+        taskId={taskId}
+        onReply={!readOnly && taskId ? handleReply : undefined}
+      />
+      {replies.length > 0 && (
+        <div {...stylex.props(styles.summary)}>
+          <Button
+            aria-controls={threadId}
+            aria-expanded={isExpanded}
+            size={'small'}
+            type={'text'}
+            {...stylex.props(styles.toggle)}
+            onClick={() => {
+              setHasOpened(true);
+              setIsExpanded((previous) => !previous);
+            }}
+          >
+            <Flexbox horizontal gap={8} {...stylex.props(styles.summaryContent)}>
+              <span aria-hidden {...stylex.props(styles.participants)}>
+                {participants.map((author) => (
+                  <span key={`${author.type}-${author.id}`} {...stylex.props(styles.participant)}>
+                    <Avatar avatar={author.avatar || author.name || ''} size={20} />
+                  </span>
+                ))}
+              </span>
+              <Text fontSize={12} weight={500}>
+                {t('taskDetail.comment.thread.replies', { count: replies.length })}
+              </Text>
+              {latestTime && (
+                <Text fontSize={12} title={latestTitle} type={'secondary'}>
+                  {t('taskDetail.comment.thread.latest', { time: latestTime })}
+                </Text>
+              )}
+              <Icon icon={isExpanded ? ChevronUp : ChevronDown} size={14} />
             </Flexbox>
-          </Flexbox>
-        </>
-      )}
-      {!isEditing && renderSnapshot && (
-        <LexicalRenderer
-          className={mentionPlainClassName}
-          overrides={rendererOverrides}
-          value={activity.editorData as Parameters<typeof LexicalRenderer>[0]['value']}
-          variant={'chat'}
-        />
-      )}
-      {!isEditing && !renderSnapshot && (
-        <Markdown fontSize={14} variant={'chat'} {...commentMarkdownProps}>
-          {snapshotMarkdown ?? content}
-        </Markdown>
-      )}
-
-      {!isEditing && commentId && !isOptimisticActivityId(commentId) && (
-        <div className={`${styles.commentActions} comment-actions`}>
-          <DropdownMenu items={menuItems}>
-            <ActionIcon icon={MoreHorizontal} size={'small'} />
-          </DropdownMenu>
+          </Button>
         </div>
       )}
-    </Block>
+      {hasOpened && (
+        <section
+          aria-label={t('taskDetail.comment.thread.label', { name: activity.author?.name ?? '' })}
+          hidden={!isExpanded}
+          id={threadId}
+          {...stylex.props(styles.thread)}
+        >
+          <Flexbox gap={20}>
+            {replies.map((reply, index) => (
+              <CommentItem
+                activity={reply}
+                key={reply.id ?? index}
+                readOnly={readOnly}
+                taskId={taskId}
+                onReply={!readOnly && taskId ? handleReply : undefined}
+              />
+            ))}
+            {!readOnly && taskId && activity.id && (
+              <CommentInput
+                parentCommentId={activity.id}
+                replyRequest={replyRequest}
+                taskId={taskId}
+              />
+            )}
+          </Flexbox>
+        </section>
+      )}
+    </div>
   );
-});
+};
 
 export default CommentCard;
