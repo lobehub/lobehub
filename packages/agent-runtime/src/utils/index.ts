@@ -1,3 +1,4 @@
+export * from './discoveredAgentFiles';
 export * from './llmCalls';
 export * from './llmErrorClassifier';
 export * from './messageSelectors';

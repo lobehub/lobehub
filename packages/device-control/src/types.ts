@@ -56,6 +56,45 @@ export interface InitWorkspaceResult {
   skills: ProjectSkillItem[];
 }
 
+export interface DiscoverAgentFilesParams {
+  /** The working directory a relative `path` resolves against, as the file tool does. */
+  cwd?: string;
+  /**
+   * Directories whose agent files the run already has (the bound working
+   * directory, its parents, and every directory an earlier discovery
+   * returned). The walk stops before reaching one.
+   */
+  knownDirs?: string[];
+  /** The path the file tool was given (absolute, relative, or `~/…`). */
+  path: string;
+  /**
+   * The run's working directory, where a walk below it stops. A target
+   * outside it is walked up to its own repository root instead.
+   */
+  root: string;
+}
+
+/**
+ * Why a discovery returned what it did, so a missing `AGENTS.md` can be told
+ * apart from a slow disk or a path that could not be resolved.
+ */
+export type DiscoverAgentFilesOutcome = 'empty' | 'failed' | 'found' | 'timed-out' | 'unresolved';
+
+export interface DiscoverAgentFilesResult {
+  /**
+   * Directories this call walked, nearest first. The caller adds them to its
+   * known set even when they held nothing, so the next call in the same
+   * directory skips the walk. Empty unless `outcome` is `found` or `empty`.
+   */
+  dirs: string[];
+  durationMs: number;
+  /** `AGENTS.md` / `CLAUDE.md` in `dirs`, root first like {@link InitWorkspaceResult}. */
+  instructions: WorkspaceInstructionsItem[];
+  outcome: DiscoverAgentFilesOutcome;
+  /** Project skills under `dirs`, nearest directory winning on a name collision. */
+  skills: ProjectSkillItem[];
+}
+
 export interface ListProjectSkillsParams {
   /** Working directory used to resolve the project root. */
   scope: string;

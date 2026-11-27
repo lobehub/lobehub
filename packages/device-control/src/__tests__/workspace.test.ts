@@ -1,11 +1,11 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import type * as NodeOs from 'node:os';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { initWorkspace, listProjectSkills } from '../workspace';
+import { discoverAgentFiles, initWorkspace, listProjectSkills } from '../workspace';
 
 let base: string;
 let home: string;
@@ -290,5 +290,170 @@ describe('listProjectSkills', () => {
         source: '.agents/skills',
       },
     ]);
+  });
+});
+
+describe('discoverAgentFiles', () => {
+  let repo: string;
+
+  beforeEach(async () => {
+    // Discovery compares real paths; the OS temp dir is a symlink on macOS.
+    base = await realpath(base);
+    home = path.join(base, 'home');
+    repo = path.join(base, 'repo');
+    await mkdir(path.join(repo, '.git'), { recursive: true });
+    await write(path.join(repo, 'AGENTS.md'), 'root rules');
+  });
+
+  it('finds a package’s agent files the first time the run touches it', async () => {
+    const pkg = path.join(repo, 'packages', 'web');
+    await write(path.join(pkg, 'AGENTS.md'), 'web rules');
+    await write(path.join(pkg, 'src', 'app.ts'), '');
+    await writeSkill(path.join(pkg, '.agents', 'skills'), 'web-design');
+
+    const result = await discoverAgentFiles({
+      knownDirs: [repo],
+      path: path.join(pkg, 'src', 'app.ts'),
+      root: repo,
+    });
+
+    expect(result).toMatchObject({
+      dirs: [path.join(pkg, 'src'), pkg, path.join(repo, 'packages')],
+      instructions: [{ content: 'web rules', path: path.join(pkg, 'AGENTS.md') }],
+      outcome: 'found',
+      skills: [{ name: 'web-design', scope: 'project' }],
+    });
+  });
+
+  it('treats a child named ..cache as inside the working directory', async () => {
+    const cache = path.join(repo, '..cache');
+    await write(path.join(cache, 'AGENTS.md'), 'cache rules');
+
+    const result = await discoverAgentFiles({
+      knownDirs: [repo],
+      path: path.join(cache, 'a.ts'),
+      root: repo,
+    });
+
+    expect(result).toMatchObject({ dirs: [cache], outcome: 'found' });
+  });
+
+  it('lets concurrent calls for one directory share a single scan', async () => {
+    const pkg = path.join(repo, 'pkg');
+    await write(path.join(pkg, 'AGENTS.md'), 'pkg rules');
+    const params = { knownDirs: [repo], root: repo };
+
+    const [first, second] = await Promise.all([
+      discoverAgentFiles({ ...params, path: path.join(pkg, 'a.ts') }),
+      discoverAgentFiles({ ...params, path: path.join(pkg, 'b.ts') }),
+    ]);
+
+    // One scan answered both: a slow one outliving its time budget is joined,
+    // not repeated beside itself.
+    expect(second.instructions).toBe(first.instructions);
+    const later = await discoverAgentFiles({ ...params, path: path.join(pkg, 'a.ts') });
+    expect(later.instructions).not.toBe(first.instructions);
+  });
+
+  // `~/…` goes through the same `resolveAgainstCwd` as the file tools.
+  it('resolves a relative path the way the file tool does', async () => {
+    const pkg = path.join(repo, 'pkg');
+    await write(path.join(pkg, 'AGENTS.md'), 'pkg rules');
+
+    const relative = await discoverAgentFiles({
+      cwd: repo,
+      knownDirs: [repo],
+      path: 'pkg/a.ts',
+      root: repo,
+    });
+    expect(relative.dirs).toEqual([pkg]);
+    expect(relative.instructions.map((item) => item.content)).toEqual(['pkg rules']);
+  });
+
+  it('walks a target outside the working directory up to its repository root', async () => {
+    const other = path.join(base, 'other');
+    await mkdir(path.join(other, '.git'), { recursive: true });
+    await write(path.join(other, 'AGENTS.md'), 'other rules');
+    await write(path.join(other, 'pkg', 'AGENTS.md'), 'other pkg rules');
+
+    const result = await discoverAgentFiles({
+      knownDirs: [repo],
+      path: path.join(other, 'pkg', 'a.ts'),
+      root: repo,
+    });
+
+    expect(result.outcome).toBe('found');
+    expect(result.dirs).toEqual([path.join(other, 'pkg'), other]);
+    expect(result.instructions.map((item) => item.content)).toEqual([
+      'other rules',
+      'other pkg rules',
+    ]);
+  });
+
+  it('scans only the touched directory outside the working directory and any repository', async () => {
+    await write(path.join(base, 'AGENTS.md'), 'base rules');
+    const loose = path.join(base, 'loose');
+    await write(path.join(loose, 'AGENTS.md'), 'loose rules');
+
+    const result = await discoverAgentFiles({
+      knownDirs: [repo],
+      path: path.join(loose, 'notes.md'),
+      root: repo,
+    });
+
+    expect(result.dirs).toEqual([loose]);
+    expect(result.instructions.map((item) => item.content)).toEqual(['loose rules']);
+  });
+
+  it('scans a symlinked directory where it really lives', async () => {
+    const other = path.join(base, 'other');
+    await write(path.join(other, 'AGENTS.md'), 'other rules');
+    await symlink(other, path.join(repo, 'linked'));
+
+    const result = await discoverAgentFiles({
+      knownDirs: [repo],
+      path: path.join(repo, 'linked', 'a.ts'),
+      root: repo,
+    });
+
+    expect(result.dirs).toEqual([other]);
+    expect(result.instructions.map((item) => item.content)).toEqual(['other rules']);
+  });
+
+  it('returns nothing to walk inside a known directory', async () => {
+    const result = await discoverAgentFiles({
+      knownDirs: [repo],
+      path: path.join(repo, 'README.md'),
+      root: repo,
+    });
+
+    expect(result).toMatchObject({ dirs: [], instructions: [], outcome: 'empty', skills: [] });
+  });
+
+  it('uses the parent of a file that does not exist yet', async () => {
+    const result = await discoverAgentFiles({
+      path: path.join(repo, 'new', 'file.ts'),
+      root: repo,
+    });
+
+    expect(result.dirs).toEqual([path.join(repo, 'new'), repo]);
+    expect(result.instructions.map((item) => item.content)).toEqual(['root rules']);
+  });
+
+  it('reads at most 150 skills', async () => {
+    const skills = path.join(repo, 'pkg', '.agents', 'skills');
+    await Promise.all(
+      Array.from({ length: 160 }, (_, index) =>
+        writeSkill(skills, `skill-${String(index).padStart(3, '0')}`),
+      ),
+    );
+
+    const result = await discoverAgentFiles({
+      knownDirs: [repo],
+      path: path.join(repo, 'pkg', 'a.ts'),
+      root: repo,
+    });
+
+    expect(result.skills).toHaveLength(150);
   });
 });

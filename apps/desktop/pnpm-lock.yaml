@@ -715,6 +715,9 @@ importers:
       '@lobechat/prompts':
         specifier: workspace:*
         version: link:../prompts
+      '@lobechat/utils':
+        specifier: workspace:*
+        version: link:../utils
       path-browserify-esm:
         specifier: '*'
         version: 1.0.6

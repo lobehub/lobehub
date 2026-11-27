@@ -1,4 +1,4 @@
-import { parseShellCommandSegments } from './shellCommandParsing';
+import { parseShellCommandSegments } from '@lobechat/utils/shellCommandParsing';
 
 /** What a successful `git push` published, as its own output reported it. */
 export interface GitPushResult {

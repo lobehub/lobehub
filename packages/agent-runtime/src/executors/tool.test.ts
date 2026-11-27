@@ -831,4 +831,41 @@ describe('single tool executors', () => {
       }),
     ]);
   });
+
+  it('shows a device file tool’s discovery to the model and records it for later steps', async () => {
+    const agentFileDiscovery = {
+      deviceId: 'device-a',
+      dirs: ['/repo/web'],
+      instructions: [{ content: 'Use pnpm.', path: '/repo/web/AGENTS.md', source: 'AGENTS.md' }],
+      skills: [{ description: 'Web', location: '/repo/web/SKILL.md', name: 'web' }],
+    };
+    runTool.mockResolvedValue({
+      attempts: 1,
+      result: { content: 'file body', state: { agentFileDiscovery }, success: true },
+    });
+
+    const result = await callTool(host)(
+      {
+        payload: {
+          parentMessageId: 'assistant-msg-1',
+          toolCalling: { ...createToolCall('read-1', 'lobe-local-system'), apiName: 'readFile' },
+        },
+        type: 'call_tool',
+      },
+      createState(),
+    );
+
+    const persisted = createToolMessage.mock.calls[0][0];
+    expect(persisted.content).toMatch(
+      /^<agent_files_discovered>[\s\S]*Use pnpm\.[\s\S]*file body$/,
+    );
+    // Run started without skills: the model is pointed at SKILL.md, not activateSkill.
+    expect(persisted.content).toContain('read its SKILL.md and follow it');
+    expect(result.newState.discoveredAgentFiles).toEqual({
+      deviceId: 'device-a',
+      dirs: ['/repo/web'],
+      instructionPaths: ['/repo/web/AGENTS.md'],
+      skills: agentFileDiscovery.skills,
+    });
+  });
 });
