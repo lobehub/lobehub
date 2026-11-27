@@ -692,6 +692,9 @@ export default {
   'plans.limits.earlyAccess.unlimited': 'Early access to new features',
   'plans.limits.embeddingVectors': '{{value}} vector entries',
   'plans.limits.fileStorage': '{{value}} file storage',
+  'plans.limits.messageChannels.tooltip':
+    'Free plan bots go to sleep after two weeks without use, except in Webhook mode. Bots on a paid plan stay online.',
+  'plans.limits.messageChannels.unlimited': 'Always-on IM bots',
   'plans.limits.modelUsage': 'Up to {{amount}} of AI model service a month',
   'plans.limits.monthlyCreditGrant': '{{value}} monthly credit',
   'plans.limits.monthlyCreditGrant.runs': 'About {{runs}} agent tasks a month',
@@ -779,6 +782,7 @@ export default {
   'plans.message.count': 'Approximately {{number}} messages',
   'plans.message.more': 'More models in plan comparison',
   'plans.message.tooltip': 'Estimated based on average {{number}} tokens per message',
+  'plans.messageChannels.alwaysOn': 'Always-on IM bots',
   'plans.messageChannels.monitoring': 'Message monitoring',
   'plans.messageChannels.title': 'Message channels',
   'plans.messageChannels.wechat': 'WeChat channel',

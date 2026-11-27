@@ -931,9 +931,9 @@ export default {
   'channel.sleep.title.failed':
     "This bot is asleep and couldn't be woken up. Refresh the page to try again.",
   'channel.sleep.desc':
-    'Free plan bots go to sleep automatically after 14 days without use. Upgrade to a paid plan to keep it always on.',
+    'Free plan bots go to sleep automatically after two weeks without use. Upgrade to a paid plan to keep it always on.',
   'channel.sleep.descWithWebhook':
-    'Free plan bots go to sleep automatically after 14 days without use. Upgrade to a paid plan or switch to Webhook mode to keep it always on.',
+    'Free plan bots go to sleep automatically after two weeks without use. Upgrade to a paid plan or switch to Webhook mode to keep it always on.',
   'channel.statusFailed': 'Failed',
   'channel.statusQueued': 'Queued',
   'channel.statusStarting': 'Starting',
