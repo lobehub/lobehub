@@ -1001,4 +1001,29 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 默认值：未设置，使用内置示例模型列表，示例默认不启用；不保证这些模型已在本地安装，也不会改变已有的模型选择。
 - 示例：`-all,+your-local-model-id=Local Model`
 
+## ProxyStacks
+
+接入 [ProxyStacks Relay](https://proxystacks.com)。详细配置步骤请参阅 [ProxyStacks 提供商配置](/zh/docs/usage/providers/proxystacks)。
+
+### `PROXYSTACKS_API_KEY`
+
+- 类型：部署时可选；需要提供共享服务端访问时设置。用户也可以在服务商设置中自行填写密钥。
+- 描述：在 ProxyStacks 控制台创建的 API 密钥。设置非空值后会在服务端配置中启用该服务商（`ENABLED_PROXYSTACKS` 由该密钥自动派生）。
+- 默认值：`-`
+- 示例：`sk-xxxxxx...xxxxxx`
+
+### `PROXYSTACKS_PROXY_URL`
+
+- 类型：可选
+- 描述：覆盖 ProxyStacks 网关的基础地址（例如切换至香港低延迟推理边缘入口）。
+- 默认值：`https://proxystacks.com/v1`
+- 示例：`https://hk.proxystacks.com/v1`
+
+### `PROXYSTACKS_MODEL_LIST`
+
+- 类型：可选
+- 描述：使用共享的[模型列表语法][model-list]控制 ProxyStacks 模型列表：`+` 增加模型，`-` 隐藏模型，`模型ID=显示名称` 自定义展示名称，多个条目以英文逗号分隔。
+- 默认值：`-`
+- 示例：`+deepseek-v4.1-flash,+glm-5.3=GLM 5.3`
+
 [model-list]: /zh/docs/self-hosting/advanced/model-list

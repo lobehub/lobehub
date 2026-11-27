@@ -1009,4 +1009,29 @@ Connect to your own Unsloth Studio instance. See [Using Unsloth in LobeHub](/doc
 - Default: Unset; the browser sends the requests.
 - Example: `http://magpie.example.com:3425/v1`
 
+## ProxyStacks
+
+Connect to [ProxyStacks Relay](https://proxystacks.com). See [ProxyStacks Provider Configuration](/docs/usage/providers/proxystacks) for setup details.
+
+### `PROXYSTACKS_API_KEY`
+
+- Type: Optional for the deployment; set when providing shared server-configured access. Users can also supply their own key in provider settings.
+- Description: API key from the ProxyStacks console. Setting a non-empty value enables ProxyStacks in server configuration (`ENABLED_PROXYSTACKS` is derived from this key).
+- Default: `-`
+- Example: `sk-xxxxxx...xxxxxx`
+
+### `PROXYSTACKS_PROXY_URL`
+
+- Type: Optional
+- Description: Overrides the ProxyStacks gateway base URL (for example, to route server requests through the APAC Hong Kong edge).
+- Default: `https://proxystacks.com/v1`
+- Example: `https://hk.proxystacks.com/v1`
+
+### `PROXYSTACKS_MODEL_LIST`
+
+- Type: Optional
+- Description: Customizes the ProxyStacks model list using the shared [model-list syntax][model-list]: `+` adds a model, `-` hides a model, and `model_id=display_name` renames a model. Separate entries with commas.
+- Default: `-`
+- Example: `-all,+deepseek-v4.1-flash,+glm-5.3=GLM 5.3`
+
 [model-list]: /docs/self-hosting/advanced/model-list

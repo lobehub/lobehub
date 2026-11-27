@@ -59,6 +59,7 @@ export enum ModelProvider {
   OpenRouter = 'openrouter',
   Perplexity = 'perplexity',
   PPIO = 'ppio',
+  ProxyStacks = 'proxystacks',
   Qiniu = 'qiniu',
   Qwen = 'qwen',
   Replicate = 'replicate',

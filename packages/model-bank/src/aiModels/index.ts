@@ -60,6 +60,7 @@ import { default as opencodezen } from './opencodeZen';
 import { default as openrouter } from './openrouter';
 import { default as perplexity } from './perplexity';
 import { default as ppio } from './ppio';
+import { default as proxystacks } from './proxystacks';
 import { default as qiniu } from './qiniu';
 import { default as qwen } from './qwen';
 import { default as replicate } from './replicate';
@@ -177,6 +178,7 @@ const staticModelMap: ModelsMap = {
   openrouter,
   perplexity,
   ppio,
+  proxystacks,
   qiniu,
   qwen,
   replicate,
@@ -300,6 +302,7 @@ export { default as opencodezen } from './opencodeZen';
 export { default as openrouter } from './openrouter';
 export { default as perplexity } from './perplexity';
 export { default as ppio } from './ppio';
+export { default as proxystacks } from './proxystacks';
 export { default as qiniu } from './qiniu';
 export { default as qwen } from './qwen';
 export { default as replicate } from './replicate';

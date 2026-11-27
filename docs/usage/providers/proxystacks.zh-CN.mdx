@@ -1,0 +1,71 @@
+---
+title: ProxyStacks 提供商配置
+description: 学习如何在 LobeHub 中配置和使用 ProxyStacks Relay 提供商
+tags:
+  - ProxyStacks
+  - 提供商配置
+  - 配置指南
+---
+
+# ProxyStacks 提供商配置
+
+[ProxyStacks Relay](https://proxystacks.com) 是多协议 AI 推理网关，通过统一的 API 密钥支持 OpenAI Chat Completions、OpenAI Responses 与 Anthropic Messages 协议，采用按量美元计费并提供全球主站与香港低延迟边缘接入。
+
+在 LobeHub 中配置时，打开 **应用设置 → AI 服务商**，选择 **ProxyStacks** 并开启右侧开关。
+
+## 前置条件
+
+在使用 ProxyStacks 之前，您需要：
+
+1. **注册或登录账户**
+   - 访问 [ProxyStacks 官网](https://proxystacks.com) 并在 [控制台登录页](https://proxystacks.com/login) 完成登录。
+
+2. **创建 API 密钥**
+   - 在工作区控制台中进入 **API Keys** 页面，创建具备推理（`inference`）权限的密钥。
+   - 确保工作区余额充足（按实际 Token 用量以美元计费，实时费率见 [ProxyStacks 定价页](https://proxystacks.com/en/pricing)）。
+
+## 配置方式
+
+### 界面配置
+
+1. 打开 **应用设置 → AI 服务商 → ProxyStacks**。
+2. 在 **API Key** 输入框中填写您的密钥。
+3. API 代理地址保持默认 `https://proxystacks.com/v1` 即可；国内及亚太用户可填写香港边缘入口 `https://hk.proxystacks.com/v1` 以降低首字延迟。
+4. 点击 **连通性检查**（默认使用 `deepseek-v4.1-flash`）或点击 **获取模型列表** 从 `/v1/models` 同步最新可用模型。
+
+### 环境变量配置
+
+自托管部署可在 `.env` 中配置以下环境变量：
+
+```bash
+# ProxyStacks API 密钥（设置非空值后服务端自动启用该提供商）
+PROXYSTACKS_API_KEY=your_proxystacks_api_key
+
+# 可选：自定义接入点（例如切换至香港低延迟边缘节点）
+# PROXYSTACKS_PROXY_URL=https://hk.proxystacks.com/v1
+```
+
+### 可用模型
+
+ProxyStacks 提供多款前沿推理、编程与多模态模型，包括 `deepseek-v4.1-flash`、`glm-5.3`、`kimi-k3`、`qwen4-max`、`gpt-6.1-sol`、`gpt-6-luna`、`claude-opus-5-5` 与 `claude-sonnet-5-5` 等。完整可服务模型清单与实时价格请参考 [ProxyStacks 模型目录](https://proxystacks.com/en/models)。
+
+## 协议路由与注意事项
+
+- **多协议自动路由**：LobeHub 运行时会将 Anthropic 系列模型自动路由至 Anthropic Messages 协议，DeepSeek 系列模型使用 DeepSeek 兼容适配器，OpenAI 及其他模型通过 `/v1`（支持 Responses API）调用。
+- **自定义端点归一化**：无论填写 `https://hk.proxystacks.com` 还是 `https://hk.proxystacks.com/v1`，运行时都会自动归一化基础路径，避免重复拼接 `/v1`。
+
+## 常见问题排查
+
+1. **401 未授权错误**
+   - 请确认 API 密钥未失效，且包含 `inference` 权限范围（或未限制权限范围）。
+2. **402 余额或限额不足**
+   - 请前往控制台检查工作区余额或是否触发了工作区日消费上限。
+3. **404 模型不存在**
+   - 请在服务商设置中点击 **获取模型列表**，或在 [ProxyStacks 模型目录](https://proxystacks.com/en/models) 核对当前可服务的模型 ID。
+
+## 相关资源
+
+- [ProxyStacks 官方网站](https://proxystacks.com)
+- [ProxyStacks 开发文档](https://proxystacks.com/en/docs)
+- [ProxyStacks 模型目录](https://proxystacks.com/en/models)
+- [ProxyStacks 价格说明](https://proxystacks.com/en/pricing)
