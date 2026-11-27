@@ -17,6 +17,7 @@ import type {
   KimiCodeQuotaSnapshot,
 } from '@lobechat/heterogeneous-agents/quota';
 import type {
+  AgentRunCredential,
   CodexCollaborationMode,
   DeviceClient,
   DeviceUnavailableErrorData,
@@ -170,6 +171,8 @@ export async function dispatchAgentRun(
     prompt: string;
     resumeFallbackSystemContext?: string;
     resumeSessionId?: string;
+    /** Credential for this run only; see the request message. Never log it. */
+    runCredential?: AgentRunCredential;
     systemContext?: string;
     topicId: string;
     userId: string;

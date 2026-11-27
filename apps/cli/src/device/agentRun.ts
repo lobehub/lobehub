@@ -1,6 +1,9 @@
 import { spawn } from 'node:child_process';
 
-import { resolveAgentCredentialSpawnEnv } from '@lobechat/device-control/agent-credentials';
+import {
+  resolveAgentCredentialSpawnEnv,
+  resolveRunCredentialSpawnEnv,
+} from '@lobechat/device-control/agent-credentials';
 import {
   listDefaultClaudeLogin,
   resolveClaudeAccountSpawnEnv,
@@ -14,7 +17,11 @@ import {
 } from '@lobechat/heterogeneous-agents/protocol';
 import type { ClaudeCodeAccountRouting } from '@lobechat/heterogeneous-agents/quota';
 import { resolveHeteroSpawnCwd } from '@lobechat/heterogeneous-agents/workingDirectory';
-import type { CodexCollaborationMode, HeteroPermissionMode } from '@lobechat/types';
+import type {
+  AgentRunCredential,
+  CodexCollaborationMode,
+  HeteroPermissionMode,
+} from '@lobechat/types';
 
 import { getTask, removeTask, saveTask } from '../daemon/taskRegistry';
 import { agentCredentialRootDir } from './agentCredentials';
@@ -43,6 +50,12 @@ export interface SpawnHeteroAgentRunParams {
   /** System context used only by the automatic retry without native resume. */
   resumeFallbackSystemContext?: string;
   resumeSessionId?: string;
+  /**
+   * Credential the server sent for this run only (Claude Code). It outranks
+   * an installed credential and account routing, reaches the child through
+   * its env alone, and is never logged or saved to the task registry.
+   */
+  runCredential?: AgentRunCredential;
   serverUrl: string;
   systemContext?: string;
   topicId: string;
@@ -84,22 +97,28 @@ export function spawnHeteroAgentRun(
     return spawnWithAccountRouting(params, logger);
   }
 
-  // Precedence: a credential the server installed on this device wins over
-  // both the device's own login and Claude Code account routing; an expired or
-  // unreadable one fails the run rather than falling back to another login.
-  return resolveAgentCredentialSpawnEnv(params.agentType, {
-    rootDir: agentCredentialRootDir(),
-  }).then((credential) => {
-    if (credential.kind === 'none') return spawnWithAccountRouting(params, logger);
-    if (credential.kind === 'reject') {
-      logger?.error?.(`hetero exec rejected (op=${params.operationId}): ${credential.reason}`);
-      return { reason: credential.reason, status: 'rejected' as const };
-    }
-    logger?.info?.(
-      `hetero exec uses the installed ${params.agentType} credential (op=${params.operationId})`,
-    );
-    return startHeteroAgentRun(params, credential.env, logger, credential.unsetEnv);
-  });
+  // Precedence: a credential the server sent with this run, then one it
+  // installed on this device, win over both the device's own login and Claude
+  // Code account routing; an expired or unreadable one fails the run rather
+  // than falling back to another login.
+  const options = { rootDir: agentCredentialRootDir() };
+  return resolveRunCredentialSpawnEnv(params.agentType, params.runCredential, options)
+    .then((fromRun) =>
+      fromRun.kind === 'none' ? resolveAgentCredentialSpawnEnv(params.agentType, options) : fromRun,
+    )
+    .then((credential) => {
+      if (credential.kind === 'none') return spawnWithAccountRouting(params, logger);
+      if (credential.kind === 'reject') {
+        logger?.error?.(`hetero exec rejected (op=${params.operationId}): ${credential.reason}`);
+        return { reason: credential.reason, status: 'rejected' as const };
+      }
+      const source =
+        params.runCredential && params.agentType === 'claude-code' ? 'run' : 'installed';
+      logger?.info?.(
+        `hetero exec uses the ${source} ${params.agentType} credential (op=${params.operationId})`,
+      );
+      return startHeteroAgentRun(params, credential.env, logger, credential.unsetEnv);
+    });
 }
 
 function spawnWithAccountRouting(

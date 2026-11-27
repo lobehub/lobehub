@@ -398,6 +398,12 @@ export interface TrashLocalFilesResult {
 
 export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps {
   /**
+   * The agent-credential store (`~/.lobehub/agent-credentials`) file RPCs must
+   * never enter. Defaults to the OS home's store; the desktop passes the one
+   * under Electron's home path.
+   */
+  agentCredentialRootDir?: string;
+  /**
    * Prove the installed agent credential works without spending model quota.
    * Optional like the other agent-credential handlers: a host provides them
    * only when its agent runs apply installed credentials (the desktop app and

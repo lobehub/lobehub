@@ -117,7 +117,10 @@ export function removeAgentCredential(
   );
 }
 
-/** Ask the device to prove its installed credential works, spending no model quota. */
+/**
+ * Ask the device to prove a credential works, spending no model quota: its
+ * installed one, or `params.secret` without installing it.
+ */
 export function checkAgentCredential(
   getClient: DeviceClientGetter,
   address: AgentCredentialRpcAddress,
@@ -127,7 +130,7 @@ export function checkAgentCredential(
     getClient,
     'checkAgentCredential',
     address,
-    { provider: params.provider },
+    { provider: params.provider, ...(params.secret && { secret: params.secret }) },
     // The device makes one provider call with its own 15s budget.
     30_000,
   );

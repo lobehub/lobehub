@@ -26,6 +26,17 @@ export type DeviceAgentCredentialSecret =
   | { expiresAt: string; token: string; type: 'claude-oauth-token' }
   | { authJson: string; type: 'codex-auth-json' };
 
+/**
+ * A credential the server hands one agent run instead of installing it on the
+ * device. The device uses it for that run only: it is never written to disk,
+ * logged, or echoed back, and it outranks an installed credential and Claude
+ * Code account routing. An expired one rejects the run.
+ */
+export interface AgentRunCredential {
+  provider: 'claude-code';
+  secret: { expiresAt: string; token: string; type: 'claude-oauth-token' };
+}
+
 export interface InstallAgentCredentialParams {
   provider: DeviceAgentCredentialProvider;
   secret: DeviceAgentCredentialSecret;
@@ -52,10 +63,24 @@ export interface RemoveAgentCredentialResult {
 
 export interface CheckAgentCredentialParams {
   provider: DeviceAgentCredentialProvider;
+  /**
+   * A secret to check instead of the installed one. The device probes it
+   * without reading or changing its credential store; `installed` in the
+   * result still reports whether a credential is installed on disk. Only
+   * `claude-oauth-token` is supported; any other secret answers `ok: false`.
+   */
+  secret?: DeviceAgentCredentialSecret;
 }
 
 export interface CheckAgentCredentialResult {
   checkedAt: string;
+  /**
+   * `true` only when the device checked the `secret` passed in the params
+   * rather than its installed store. Lets the server tell a client that
+   * understands per-run credentials from an older one that ignored `secret`
+   * and checked its store instead.
+   */
+  checkedProvidedSecret?: true;
   /** ISO date the installed credential stops working, when it declares one. */
   expiresAt?: string;
   installed: boolean;
