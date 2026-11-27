@@ -15,20 +15,24 @@ import {
 import { isRtlLang } from 'rtl-detect';
 
 import ErrorCapture, { type ErrorType } from '@/components/Error';
+import { AppOriginContext } from '@/hooks/appOriginContext';
 import { resolveRequestLocale } from '@/locales/requestLocale';
 import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
 
 import { parseAcceptanceEmbedConfig } from '../src/shell/acceptanceEmbed';
 import AcceptanceEmbedShell from '../src/shell/AcceptanceEmbedShell';
 import { loadWorkbenchResources } from '../src/shell/createWorkbenchI18n';
+import { cloudflareContext } from './lib/cloudflareContext';
 import { buildPageMeta, workbenchMetaDescription } from './lib/seo';
 
-export const loader = async ({ request }: LoaderFunctionArgs) => {
+export const loader = async ({ context, request }: LoaderFunctionArgs) => {
+  const appHome = context.get(cloudflareContext).env.WORKBENCH_APP_HOME as string | undefined;
   const locale = resolveRequestLocale(request);
   const resources = await loadWorkbenchResources(locale);
   const embedConfig = parseAcceptanceEmbedConfig(request.url);
 
   return {
+    appOrigin: new URL(appHome || request.url).origin,
     dir: isRtlLang(locale) ? 'rtl' : 'ltr',
     embedConfig,
     locale,
@@ -68,7 +72,7 @@ export const Layout = ({ children }: PropsWithChildren) => {
         <style dangerouslySetInnerHTML={{ __html: bodyBackground }} />
       </head>
       <body>
-        {children}
+        <AppOriginContext value={data?.appOrigin}>{children}</AppOriginContext>
         <ScrollRestoration />
         <Scripts />
       </body>
