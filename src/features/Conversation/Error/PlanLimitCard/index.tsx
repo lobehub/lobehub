@@ -1,11 +1,12 @@
 import { BRANDING_URL } from '@lobechat/business-const';
-import { ChatErrorType, Plans } from '@lobechat/types';
-import { Avatar, Button, Center, Flexbox, Text } from '@lobehub/ui';
+import { ChatErrorType, type InterfaceDensity, Plans } from '@lobechat/types';
+import { Avatar, Button, type ButtonProps, Center, Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useDensity } from '@/styles/density';
 import { densityTokens } from '@/styles/density.stylex';
 
 import {
@@ -29,7 +30,19 @@ const PLAN_TITLE_KEYS = {
   [Plans.Ultimate]: 'plans.plan.ultimate.title',
 } as const satisfies Record<Plans, string>;
 
+const ACTION_SIZE = {
+  compact: 'middle',
+  loose: 'large',
+} as const satisfies Record<InterfaceDensity, ButtonProps['size']>;
+
+const ACTION_HEIGHT = {
+  compact: '32px',
+  loose: null,
+} as const satisfies Record<InterfaceDensity, string | null>;
+
 const styles = stylex.create({
+  action: { height: ACTION_HEIGHT.loose },
+  actionCompact: { height: ACTION_HEIGHT.compact },
   centered: { textAlign: 'center', textWrap: 'balance' },
   fact: {
     display: 'flex',
@@ -87,6 +100,9 @@ interface PlanLimitCardProps {
  */
 const PlanLimitCard = memo<PlanLimitCardProps>(({ errorBody, errorType, onRetry }) => {
   const { t } = useTranslation('subscription');
+  const { compact, density, tokens } = useDensity();
+  const actionSize = ACTION_SIZE[density];
+  const actionClassName = stylex.props(styles.action, compact && styles.actionCompact).className;
 
   const context = getBudgetContextFromErrorBody(errorBody);
   const isInsufficientBudget = errorType === ChatErrorType.InsufficientBudgetForModel;
@@ -123,7 +139,7 @@ const PlanLimitCard = memo<PlanLimitCardProps>(({ errorBody, errorType, onRetry 
 
   return (
     <Center paddingBlock={12} width={'100%'}>
-      <Flexbox className={stylex.props(styles.form).className} gap={16}>
+      <Flexbox className={stylex.props(styles.form).className} gap={tokens.sectionGap}>
         <Center gap={8}>
           <Avatar animation avatar={'💰'} background={'transparent'} size={40} />
           <Center gap={4}>
@@ -161,16 +177,17 @@ const PlanLimitCard = memo<PlanLimitCardProps>(({ errorBody, errorType, onRetry 
           {BRANDING_URL.subscription && (
             <Button
               block
+              className={actionClassName}
               href={BRANDING_URL.subscription}
               rel={'noopener noreferrer'}
-              size={'large'}
+              size={actionSize}
               target={'_blank'}
               type={'primary'}
             >
               {upgradeLabel}
             </Button>
           )}
-          <Button block size={'large'} onClick={onRetry}>
+          <Button block className={actionClassName} size={actionSize} onClick={onRetry}>
             {t('limitation.insufficientBudget.retry')}
           </Button>
         </Flexbox>

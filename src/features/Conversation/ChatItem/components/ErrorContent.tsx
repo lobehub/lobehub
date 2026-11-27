@@ -1,3 +1,4 @@
+import { type InterfaceDensity } from '@lobechat/types';
 import { Alert, Button, cx, Skeleton } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { RotateCcw } from 'lucide-react';
@@ -9,15 +10,46 @@ import {
   messageStateSelectors,
   useConversationStore,
 } from '@/features/Conversation/store';
+import { useDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { type ChatItemProps } from '../type';
 
 const NARROW = '@media (width <= 480px)';
 
+const CLOSE_SIZE = {
+  compact: '24px',
+  loose: null,
+} as const satisfies Record<InterfaceDensity, string | null>;
+
+const EXTRA_HEADER_PADDING_BLOCK = {
+  compact: '4px',
+  loose: null,
+} as const satisfies Record<InterfaceDensity, string | null>;
+
+const EXTRA_HEADER_PADDING_INLINE = {
+  compact: '10px',
+  loose: null,
+} as const satisfies Record<InterfaceDensity, string | null>;
+
+const ROOT_PADDING_BLOCK = {
+  compact: '6px',
+  loose: null,
+} as const satisfies Record<InterfaceDensity, string | null>;
+
+const ROOT_PADDING_INLINE = {
+  compact: '10px',
+  loose: null,
+} as const satisfies Record<InterfaceDensity, string | null>;
+
 const styles = stylex.create({
   close: {
-    width: { default: null, [NARROW]: '24px' },
-    height: { default: null, [NARROW]: '24px' },
+    width: { default: CLOSE_SIZE.loose, [NARROW]: '24px' },
+    height: { default: CLOSE_SIZE.loose, [NARROW]: '24px' },
+  },
+  closeCompact: {
+    width: CLOSE_SIZE.compact,
+    height: CLOSE_SIZE.compact,
   },
   extraContent: {
     padding: 0,
@@ -26,11 +58,25 @@ const styles = stylex.create({
     marginInline: { default: null, [NARROW]: '8px' },
   },
   extraHeader: {
-    paddingInline: { default: null, [NARROW]: '8px' },
+    paddingBlock: EXTRA_HEADER_PADDING_BLOCK.loose,
+    paddingInline: { default: EXTRA_HEADER_PADDING_INLINE.loose, [NARROW]: '8px' },
+  },
+  extraHeaderCompact: {
+    minHeight: 'auto',
+    paddingBlock: EXTRA_HEADER_PADDING_BLOCK.compact,
+    paddingInline: { default: EXTRA_HEADER_PADDING_INLINE.compact, [NARROW]: '8px' },
   },
   root: {
     gap: { default: null, [NARROW]: '6px' },
-    paddingInline: { default: null, [NARROW]: '8px' },
+    paddingBlock: ROOT_PADDING_BLOCK.loose,
+    paddingInline: { default: ROOT_PADDING_INLINE.loose, [NARROW]: '8px' },
+  },
+  rootCompact: {
+    paddingBlock: ROOT_PADDING_BLOCK.compact,
+    paddingInline: { default: ROOT_PADDING_INLINE.compact, [NARROW]: '8px' },
+  },
+  title: {
+    fontSize: densityTokens['--lobe-density-font-size'],
   },
 });
 
@@ -43,6 +89,7 @@ export interface ErrorContentProps {
 
 const ErrorContent = memo<ErrorContentProps>(({ customErrorRender, error, id, onRegenerate }) => {
   const { t } = useTranslation('common');
+  const { compact } = useDensity();
   const [deleteMessage, updateMessageError] = useConversationStore((s) => [
     s.deleteMessage,
     s.updateMessageError,
@@ -100,13 +147,23 @@ const ErrorContent = memo<ErrorContentProps>(({ customErrorRender, error, id, on
       }}
       classNames={{
         ...error.classNames,
-        close: cx(stylex.props(styles.close).className, error.classNames?.close),
+        close: cx(
+          stylex.props(styles.close, compact && styles.closeCompact).className,
+          error.classNames?.close,
+        ),
         extraContent: cx(
           stylex.props(styles.extraContent).className,
           error.classNames?.extraContent,
         ),
-        extraHeader: cx(stylex.props(styles.extraHeader).className, error.classNames?.extraHeader),
-        root: cx(stylex.props(styles.root).className, error.classNames?.root),
+        extraHeader: cx(
+          stylex.props(styles.extraHeader, compact && styles.extraHeaderCompact).className,
+          error.classNames?.extraHeader,
+        ),
+        root: cx(
+          stylex.props(styles.root, compact && styles.rootCompact).className,
+          error.classNames?.root,
+        ),
+        title: cx(stylex.props(styles.title).className, error.classNames?.title),
       }}
       style={{
         overflow: 'hidden',

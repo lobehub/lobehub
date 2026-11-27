@@ -389,7 +389,6 @@ const densityLiteralLegacyFiles = [
   'src/features/Conversation/Messages/AssistantGroup/components/ContentBlocksScroll.tsx',
   'src/features/Conversation/Messages/AssistantGroup/components/ProcessFold.tsx',
   'src/features/Conversation/components/StepStatusBox.tsx',
-  'src/features/Electron/HeterogeneousAgent/StatusGuide/GuideShell.tsx',
   'src/features/EnvironmentManager/EnvironmentItem.tsx',
   'src/features/FileViewer/Renderer/Image/Tools/Resize/index.tsx',
   'src/features/Home/AgentSelect/AgentList.tsx',
