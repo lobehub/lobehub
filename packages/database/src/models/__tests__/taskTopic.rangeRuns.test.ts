@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { taskTopics, topics, users } from '../../schemas';
+import { agents, taskTopics, topics, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { TaskModel } from '../task';
 import { resolveRunNote, TaskTopicModel } from '../taskTopic';
@@ -13,8 +13,8 @@ const serverDB: LobeChatDatabase = await getTestDB();
 const userId = 'task-range-runs-user';
 const otherUserId = 'task-range-runs-other-user';
 
-const createTopic = async (id: string, uid = userId) => {
-  await serverDB.insert(topics).values({ id, userId: uid }).onConflictDoNothing();
+const createTopic = async (id: string, uid = userId, agentId?: string) => {
+  await serverDB.insert(topics).values({ agentId, id, userId: uid }).onConflictDoNothing();
   return id;
 };
 
@@ -40,6 +40,7 @@ describe('TaskTopicModel.findRunsInRange', () => {
     const taskModel = new TaskModel(serverDB, userId);
     const topicModel = new TaskTopicModel(serverDB, userId);
     const digest = await taskModel.create({ instruction: 'Inbox digest' });
+    await serverDB.insert(agents).values({ id: 'agt_range_runs', userId });
 
     const runs = [
       ['tpc_oct', '2026-10-31T23:59:00Z', 'completed'],
@@ -48,7 +49,7 @@ describe('TaskTopicModel.findRunsInRange', () => {
       ['tpc_dec', '2026-12-01T00:00:00Z', 'completed'],
     ] as const;
     for (const [index, [topicId, at, status]] of runs.entries()) {
-      await topicModel.add(digest.id, await createTopic(topicId), {
+      await topicModel.add(digest.id, await createTopic(topicId, userId, 'agt_range_runs'), {
         seq: index + 1,
         trigger: 'schedule',
       });
@@ -65,6 +66,8 @@ describe('TaskTopicModel.findRunsInRange', () => {
     // The window is half-open: Oct 31 and Dec 1 00:00 both fall outside it.
     expect(result.get(digest.id)).toEqual([
       expect.objectContaining({
+        // The agent the run wrote to, whoever the task is assigned to now.
+        agentId: 'agt_range_runs',
         completedAt: expect.any(Date),
         note: 'Gmail rejected the token.',
         status: 'failed',

@@ -613,6 +613,7 @@ export class TaskTopicModel {
 
     const rows = await this.db
       .select({
+        agentId: topics.agentId,
         completedAt: topics.completedAt,
         createdAt: taskTopics.createdAt,
         handoff: taskTopics.handoff,

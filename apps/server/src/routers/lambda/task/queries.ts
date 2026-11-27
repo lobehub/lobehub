@@ -199,8 +199,9 @@ export const queriesRouter = router({
             : [],
           recentRuns ? ctx.taskTopicModel.findRecentRunsByTaskIds(taskIds, recentRuns) : undefined,
           // Same rule the schedule and heartbeat ticks skip on: an urgent brief
-          // that is not an error is a question only the user can answer.
-          recentRuns
+          // that is not an error is a question only the user can answer. The
+          // calendar needs it too: a held schedule plans no future runs.
+          recentRuns || runsBetween
             ? ctx.briefModel.findTaskIdsWithUnresolvedUrgent(taskIds, { excludeTypes: ['error'] })
             : undefined,
           runsBetween
@@ -240,13 +241,10 @@ export const queriesRouter = router({
           }
         }
         const item: TaskListItem = { ...task, participants };
+        if (awaitingHumanTaskIds) item.awaitingHuman = awaitingHumanTaskIds.has(task.id);
         if (rangeRunsByTaskId) item.rangeRuns = rangeRunsByTaskId.get(task.id) ?? [];
-        if (!runsByTaskId || !awaitingHumanTaskIds) return item;
-        return {
-          ...item,
-          awaitingHuman: awaitingHumanTaskIds.has(task.id),
-          recentRuns: runsByTaskId.get(task.id) ?? [],
-        };
+        if (runsByTaskId) item.recentRuns = runsByTaskId.get(task.id) ?? [];
+        return item;
       });
 
       return { data, success: true, total: result.total };

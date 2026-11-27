@@ -121,12 +121,16 @@ export const CalendarEntryCard = memo<CalendarEntryCardProps>(({ entry, routeSco
   const status = entryStatus(entry);
   const visual = STATUS_VISUALS[status];
   const statusLabel = t(STATUS_LABEL_KEYS[status]);
-  const agent = task.participants.find((participant) => participant.type === 'agent');
+  const assignee = task.participants.find((participant) => participant.type === 'agent');
+  // A past run belongs to the agent that ran it, which a reassignment since
+  // then does not change.
+  const runAgentId = entry.kind === 'run' ? (entry.run.agentId ?? task.assigneeAgentId) : null;
+  const agentId = runAgentId ?? assignee?.id;
+  const agent = assignee && assignee.id === agentId ? assignee : undefined;
   const name = task.name?.trim() || task.identifier;
   const time = dayjs(entry.at).format('HH:mm');
   const note = entry.kind === 'run' ? entry.run.note : null;
   const runTopicId = entry.kind === 'run' ? entry.run.topicId : null;
-  const runAgentId = task.assigneeAgentId;
 
   const handleClick = useCallback(() => {
     if (runTopicId && runAgentId) {
@@ -161,11 +165,11 @@ export const CalendarEntryCard = memo<CalendarEntryCardProps>(({ entry, routeSco
         <span {...stylex.props(styles.head)}>
           <Icon color={visual.color} icon={visual.icon} size={12} spin={status === 'running'} />
           <span {...stylex.props(styles.time)}>{time}</span>
-          {agent && (
+          {agentId && (
             <AgentAvatar
-              agentId={agent.id}
-              avatar={agent.avatar}
-              name={agent.title}
+              agentId={agentId}
+              avatar={agent?.avatar}
+              name={agent?.title}
               shape={'circle'}
               size={16}
               style={{ flex: 'none' }}

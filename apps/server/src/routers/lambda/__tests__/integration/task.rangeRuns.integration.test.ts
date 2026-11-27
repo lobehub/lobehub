@@ -5,6 +5,7 @@ import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { BriefModel } from '@/database/models/brief';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 
 import { taskRouter } from '../../task';
@@ -70,6 +71,40 @@ describe('Task Router list runsBetween', () => {
     ]);
     // `runsBetween` alone does not opt into the scheduled table's fields.
     expect(list.data[0]).not.toHaveProperty('recentRuns');
+  });
+
+  it('flags a schedule held by an unanswered urgent brief, so the calendar plans nothing', async () => {
+    const held = (
+      await caller.create({
+        automationMode: 'schedule',
+        instruction: 'Held on a question',
+        schedulePattern: '0 9 * * *',
+        scheduleTimezone: 'UTC',
+      })
+    ).data;
+    await new BriefModel(serverDB, userId).create({
+      priority: 'urgent',
+      summary: 'Which channel?',
+      taskId: held.id,
+      title: 'Needs an answer',
+      type: 'decision',
+    });
+
+    const list = await caller.list({ automated: true, runsBetween: NOVEMBER });
+
+    expect(list.data[0]).toMatchObject({ awaitingHuman: true, rangeRuns: [] });
+  });
+
+  it('accepts a six-week grid that gains an hour at a daylight-saving rollback', async () => {
+    // October 2026 in America/New_York: Sep 27 00:00 EDT to Nov 8 00:00 EST, 1009 hours.
+    const list = await caller.list({
+      runsBetween: {
+        from: new Date('2026-09-27T04:00:00Z'),
+        to: new Date('2026-11-08T05:00:00Z'),
+      },
+    });
+
+    expect(list.success).toBe(true);
   });
 
   it('rejects a backward window and one longer than a month grid', async () => {

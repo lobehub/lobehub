@@ -426,6 +426,11 @@ export interface TaskRecentRun {
  * note its handoff left (its title, else the first sentence of its summary).
  */
 export interface TaskCalendarRun extends TaskRecentRun {
+  /**
+   * The agent whose topic the run wrote to. A task can be reassigned after it
+   * ran, so links to the run use this, not the task's current assignee.
+   */
+  agentId: string | null;
   note: string | null;
 }
 

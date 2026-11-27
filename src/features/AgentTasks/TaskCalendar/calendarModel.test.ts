@@ -25,6 +25,7 @@ const task = (fields: Partial<TaskListItem>): TaskListItem =>
   }) as TaskListItem;
 
 const run = (fields: Partial<NonNullable<TaskListItem['rangeRuns']>[number]>) => ({
+  agentId: 'agt_1',
   completedAt: null,
   createdAt: new Date('2026-11-02T09:00:00Z'),
   note: null,

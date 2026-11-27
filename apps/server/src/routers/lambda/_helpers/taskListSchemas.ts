@@ -28,18 +28,21 @@ const filterDate = z.object({
 
 const filterId = z.string().min(1).max(255);
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * Longest elapsed span of a calendar window. The grid is bounded in local days,
+ * and a grid that crosses a daylight-saving rollback lasts one hour longer than
+ * that many 24-hour days, so the bound allows that hour.
+ */
+const CALENDAR_WINDOW_MAX_MS = (TASK_CALENDAR_MAX_RANGE_DAYS * 24 + 1) * HOUR_MS;
 
 /** A forward `[from, to)` window no longer than the Tasks calendar's month grid. */
 const calendarWindow = z
   .object({ from: z.coerce.date(), to: z.coerce.date() })
-  .refine(
-    ({ from, to }) =>
-      to > from && to.getTime() - from.getTime() <= TASK_CALENDAR_MAX_RANGE_DAYS * DAY_MS,
-    {
-      message: `the window must run forward and span at most ${TASK_CALENDAR_MAX_RANGE_DAYS} days`,
-    },
-  );
+  .refine(({ from, to }) => to > from && to.getTime() - from.getTime() <= CALENDAR_WINDOW_MAX_MS, {
+    message: `the window must run forward and span at most ${TASK_CALENDAR_MAX_RANGE_DAYS} days`,
+  });
 
 /**
  * The Tasks page filter (`TaskListFilter` in `@lobechat/types`). Ids may hold
