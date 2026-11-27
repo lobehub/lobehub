@@ -23,8 +23,17 @@ export interface StreamingBudget extends ScenarioBudget {
  * | ---------- | -------------- | ------------------ | ------------------ | --------- | ----------- |
  * | bigstream  | 32–33× 18–41ms | 358–364× 286–588ms | 251–257× 203–407ms | 67–233ms  | 10.9–11.7MB |
  * | toolstorm  | 21–23× 18–34ms | 101–107× 101–219ms | 83–84× 47–105ms    | 67–183ms  | 23.4–23.6MB |
- * | richreply  | 28× 23–32ms    | 216–224× 341–496ms | 162–172× 260–381ms | 283–400ms | 11.0–13.2MB |
  * | background | 18× 5–7ms      | 9–10× 7–10ms       | 5× 1–2ms           | 17ms      | 1.8–2.7MB   |
+ *
+ * richreply was re-measured on 2026-11-27 (M5 Max, 3 rounds of 3 runs) after
+ * code blocks stopped replaying their fade when a reply finishes (T-14992).
+ * The "before" row is canary at that date; it already renders more than the
+ * 2026-11-13 run (messages 214× vs 172×), so the render ceilings were rebased:
+ *
+ * | richreply | sidebar      | conversation       | messages           | frame gap  | heap        |
+ * | --------- | ------------ | ------------------ | ------------------ | ---------- | ----------- |
+ * | before    | 26× 13–16ms  | 251–259× 244–294ms | 207–214× 187–224ms | 150–200ms  | 13.7–14.7MB |
+ * | after     | 26× 13–19ms  | 243–267× 214–317ms | 201–220× 159–226ms | 100–133ms  | 15.3–15.8MB |
  *
  * Render counts barely move between runs because the mock streams on a
  * wall-clock schedule, so their ceilings sit about 20% above the highest p50
@@ -55,11 +64,11 @@ const LOCAL: Record<StreamingScenario, StreamingBudget> = {
   },
   richreply: {
     heapGrowthMb: 18,
-    maxFrameGapMs: 800,
+    maxFrameGapMs: 270,
     regions: {
-      conversation: { actualDurationMs: 1000, renders: 270 },
-      messages: { actualDurationMs: 770, renders: 210 },
-      sidebar: { actualDurationMs: 65, renders: 34 },
+      conversation: { actualDurationMs: 640, renders: 320 },
+      messages: { actualDurationMs: 450, renders: 265 },
+      sidebar: { actualDurationMs: 40, renders: 32 },
     },
   },
   toolstorm: {
