@@ -1,3 +1,5 @@
+import { LOBOT_OIDC_CLIENT_IDS } from '@lobechat/const/desktop';
+
 const ONBOARDING_PATH = '/onboarding';
 const CALLBACK_STORAGE_KEY = 'onboarding-callback-url';
 
@@ -47,13 +49,31 @@ export const sanitizeRedirectPath = (url: string | null | undefined, fallback = 
 };
 
 /**
- * Build the first-hop URL for a freshly signed-up user. New users always land
- * on onboarding first; the original target (if any) is threaded through the
- * `callbackUrl` query param and restored when onboarding finishes.
+ * Build the first-hop URL for a freshly signed-up user. New users land on
+ * onboarding first; the original target (if any) is threaded through the
+ * `callbackUrl` query param and restored when onboarding finishes. Sign-ups
+ * coming from a Lobot app skip onboarding and continue the authorization.
  */
+/**
+ * Whether `path` continues an OIDC authorization for a Lobot app. Those users signed up to
+ * use Lobot, which has its own first-run flow, so they go straight back to the app.
+ */
+const isLobotAuthorization = (path: string): boolean => {
+  try {
+    const url = new URL(path, 'http://localhost');
+    return (
+      url.pathname === '/oidc/auth' &&
+      LOBOT_OIDC_CLIENT_IDS.includes(url.searchParams.get('client_id') ?? '')
+    );
+  } catch {
+    return false;
+  }
+};
+
 export const buildOnboardingRedirectUrl = (callbackUrl?: string | null): string => {
   const target = callbackUrl && toRelativePath(callbackUrl);
   if (!target || target === '/' || !isSafeRedirectPath(target)) return ONBOARDING_PATH;
+  if (isLobotAuthorization(target)) return target;
   if (target.startsWith(ONBOARDING_PATH)) return target;
   return `${ONBOARDING_PATH}?callbackUrl=${encodeURIComponent(target)}`;
 };

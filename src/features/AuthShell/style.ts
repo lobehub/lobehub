@@ -1,6 +1,11 @@
 import { createStaticStyles } from '@lobehub/ui';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
+  embeddedContainer: css`
+    overflow: auto;
+    background: ${cssVar.colorBgContainer};
+  `,
+
   innerContainerDark: css`
     position: relative;
 
