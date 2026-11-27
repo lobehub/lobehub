@@ -34,6 +34,12 @@ export interface StreamingBudget extends ScenarioBudget {
  * | --------- | ------------ | ------------------ | ------------------ | ---------- | ----------- |
  * | before    | 26× 13–16ms  | 251–259× 244–294ms | 207–214× 187–224ms | 150–200ms  | 13.7–14.7MB |
  * | after     | 26× 13–19ms  | 243–267× 214–317ms | 201–220× 159–226ms | 100–133ms  | 15.3–15.8MB |
+ * | ui 6.23.1 | 26× 14–18ms  | 328–350× 230–299ms | 282–302× 169–212ms | 67–133ms   | 15.2–15.7MB |
+ *
+ * `@lobehub/ui` 6.23.1 releases each streamed code token's fade span once it
+ * finishes, one commit per faded line. That adds about 85 renders and removes
+ * the forwards-filled animations that made frames slow, so the render
+ * ceilings follow the last row while the timing ceilings stay:
  *
  * Render counts barely move between runs because the mock streams on a
  * wall-clock schedule, so their ceilings sit about 20% above the highest p50
@@ -66,8 +72,8 @@ const LOCAL: Record<StreamingScenario, StreamingBudget> = {
     heapGrowthMb: 18,
     maxFrameGapMs: 270,
     regions: {
-      conversation: { actualDurationMs: 640, renders: 320 },
-      messages: { actualDurationMs: 450, renders: 265 },
+      conversation: { actualDurationMs: 640, renders: 420 },
+      messages: { actualDurationMs: 450, renders: 365 },
       sidebar: { actualDurationMs: 40, renders: 32 },
     },
   },
