@@ -6,6 +6,7 @@ import { memo, useLayoutEffect, useRef } from 'react';
 
 import { delayed } from '@/components/Skeleton/Delayed';
 import type { TopicPreview } from '@/services/message/topicPreview';
+import { useDensity } from '@/styles/density';
 
 import WideScreenContainer from '../../../../WideScreenContainer';
 import { ChatItem } from '../../../ChatItem';
@@ -19,6 +20,7 @@ import { formatReasoningDuration } from '../../../Messages/AssistantGroup/toolDi
 import EditedFilesCard from '../../../Messages/EditedFilesCard';
 import GoalTaskCard from '../../../Messages/GoalTaskCard';
 import { MessageWorkList } from '../../../Messages/MessageWorks';
+import { resolveListPaddingBottom } from '../../utils/listPaddingBottom';
 import {
   groupAnswerProps,
   resolvePreviewLayout,
@@ -38,11 +40,12 @@ const PreviewAnswer = memo<{ preview: TopicPreview }>(({ preview }) => {
   const avatar = useAgentMeta(message.agentId);
   const { cardsBelow, showModelLine, worksAfterActions } = resolvePreviewLayout(preview);
   const process = resolvePreviewProcess(preview);
+  const { compact } = useDensity();
 
   return (
     <ChatItem
       showTitle
-      actions={<div style={{ height: '28px' }} />}
+      actions={compact ? undefined : <div style={{ height: '28px' }} />}
       afterActions={worksAfterActions && <MessageWorkList items={worksAfterActions} />}
       avatar={avatar}
       placement={'left'}
@@ -98,7 +101,8 @@ PreviewAnswer.displayName = 'PreviewAnswer';
 
 // Paints the final answer where the real list will put it, so the swap only adds rows above.
 const PreviewTail = memo<PreviewTailProps>(({ headerSlot, overlayHeight, preview }) => {
-  const paddingBottom = Math.max(24, overlayHeight + 12);
+  const { compact } = useDensity();
+  const paddingBottom = resolveListPaddingBottom(overlayHeight, compact);
   const leading = resolveWholeTopicLeading(preview);
   const viewportRef = useRef<HTMLDivElement>(null);
 

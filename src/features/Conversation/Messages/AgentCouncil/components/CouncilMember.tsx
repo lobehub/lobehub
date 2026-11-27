@@ -5,30 +5,21 @@ import { type MouseEventHandler } from 'react';
 import { memo, useCallback } from 'react';
 
 import { LOADING_FLAT } from '@/const/message';
-import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import { ChatItem } from '@/features/Conversation/ChatItem';
 import ErrorMessageExtra, { useErrorContent } from '@/features/Conversation/Error';
-import { selectionStyles } from '@/features/Conversation/MessageForward/selectionStyles';
 import { AssistantMessageExtra } from '@/features/Conversation/Messages/Assistant/Extra';
 import { normalizeThinkTags, processWithArtifact } from '@/features/Conversation/utils/markdown';
-import { sx } from '@/styles/sx';
 import { type UIChatMessage } from '@/types/index';
 
 import { useAgentMeta } from '../../../hooks';
 import { messageStateSelectors, useConversationStore } from '../../../store';
 import MessageContent from '../../Assistant/components/MessageContent';
+import ActionBarHolder from '../../components/ActionBarHolder';
 import {
   useSetMessageItemActionElementPortialContext,
   useSetMessageItemActionTypeContext,
 } from '../../Contexts/message-action-context';
 import AutoScrollShadow from './AutoScrollShadow';
-
-const actionBarHolder = (
-  <div
-    {...{ [MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES.assistant]: '' }}
-    {...sx(selectionStyles.hidden, { height: '28px' })}
-  />
-);
 
 interface CouncilMemberProps {
   index: number;
@@ -72,7 +63,7 @@ const CouncilMember = memo<CouncilMemberProps>(({ item, index }) => {
     <ChatItem
       showTitle
       aboveMessage={null}
-      actions={actionBarHolder}
+      actions={<ActionBarHolder type={'assistant'} />}
       agentId={agentId ?? null}
       avatar={avatar}
       customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}

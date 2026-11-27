@@ -8,10 +8,8 @@ import type { MouseEventHandler, ReactNode } from 'react';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import AgentGroupAvatar from '@/features/AgentGroupAvatar';
 import { ChatItem } from '@/features/Conversation/ChatItem';
-import { selectionStyles } from '@/features/Conversation/MessageForward/selectionStyles';
 import { useMessageCommentCount } from '@/features/TopicComment/hooks';
 import MessageCommentBadge from '@/features/TopicComment/MessageCommentBadge';
 import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
@@ -23,7 +21,6 @@ import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGlobalStore } from '@/store/global';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
-import { sx } from '@/styles/sx';
 
 import { ReactionDisplay } from '../../components/Reaction';
 import { useAgentMeta } from '../../hooks';
@@ -35,6 +32,7 @@ import {
 } from '../../store';
 import type { SteerContinuation } from '../../store/slices/data/steerChains';
 import InterruptedHint from '../Assistant/components/InterruptedHint';
+import ActionBarHolder from '../components/ActionBarHolder';
 import ActionRowSpacer from '../components/ActionRowSpacer';
 import Usage from '../components/Extras/Usage';
 import MessageBranch from '../components/MessageBranch';
@@ -58,13 +56,6 @@ import { buildContinuationChains, collectSignalCallbacks } from './utils/continu
 const EditState = dynamic(() => import('./components/EditState'), {
   ssr: false,
 });
-
-const actionBarHolder = (
-  <div
-    {...{ [MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES.assistantGroup]: '' }}
-    {...sx(selectionStyles.hidden, { height: '28px' })}
-  />
-);
 
 interface GroupMessageProps {
   /** Later turns steered onto this one, rendered as one continuous chain. */
@@ -319,7 +310,7 @@ const GroupMessage = memo<GroupMessageProps>(
                     messageId={id}
                   />
                 )}
-                {actionBarHolder}
+                <ActionBarHolder type={'assistantGroup'} />
               </>
             )}
             {/* Model + token usage rides the action row instead of claiming a

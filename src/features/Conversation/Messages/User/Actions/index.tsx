@@ -3,12 +3,11 @@ import { Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 
-import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
-import { selectionStyles } from '@/features/Conversation/MessageForward/selectionStyles';
-import { sx } from '@/styles/sx';
+import { useDensity } from '@/styles/density';
 
 import { revealStyles } from '../../../ChatItem/revealStyles';
 import { type MessageActionsConfig } from '../../../types';
+import ActionBarHolder from '../../components/ActionBarHolder';
 import ActionRowSpacer from '../../components/ActionRowSpacer';
 import {
   MessageActionBar,
@@ -62,15 +61,9 @@ interface ActionsProps {
   id: string;
 }
 
-const actionBarHolder = (
-  <div
-    {...{ [MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES.user]: '' }}
-    {...sx(selectionStyles.hidden, { height: '28px' })}
-  />
-);
-
 const Actions = memo<ActionsProps>(({ id, data, disableEditing }) => {
   const { branch } = data;
+  const { compact } = useDensity();
 
   if (!shouldShowUserActions(data)) return null;
 
@@ -79,8 +72,12 @@ const Actions = memo<ActionsProps>(({ id, data, disableEditing }) => {
       {disableEditing ? (
         <ActionRowSpacer />
       ) : (
-        <Flexbox align={'flex-start'} role="menubar" {...stylex.props(revealStyles.menubar)}>
-          {actionBarHolder}
+        <Flexbox
+          align={'flex-start'}
+          role="menubar"
+          {...stylex.props(!compact && revealStyles.menubar)}
+        >
+          <ActionBarHolder type={'user'} />
         </Flexbox>
       )}
       {branch && (
