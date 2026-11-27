@@ -8,6 +8,7 @@ import { lobeIconImports } from './lobeIconImports';
 import { lobeUiImports } from './lobeUiImports';
 import { viteMarkdownImport } from './markdownImport';
 import { viteNodeModuleStub } from './nodeModuleStub';
+import { optionalPeerDepAssets } from './optionalPeerDepAssets';
 import { vitePlatformResolve } from './platformResolve';
 import { stylexPlugin, stylexTokenModules } from './stylex';
 
@@ -624,6 +625,7 @@ export const sharedOptimizeDeps = {
     'ahooks',
     'motion/react',
   ],
+  rolldownOptions: { plugins: [optionalPeerDepAssets()] },
 };
 
 // Workspace packages can resolve @lobehub/editor through different peer-dependency
