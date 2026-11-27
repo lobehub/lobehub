@@ -397,6 +397,8 @@
   "deepseek-v3.2-thinking.description": "DeepSeek-V3.2 Thinking是DeepSeek-V3.2的思维模式变体，专注于推理任务。",
   "deepseek-v3.2.description": "DeepSeek-V3.2是DeepSeek最新的编程模型，具备强大的推理能力。",
   "deepseek-v3.description": "DeepSeek-V3 是一款强大的 MoE 模型，总参数量为 671B，每个 token 激活参数为 37B。",
+  "deepseek-v4-1-flash-economy.description": "以更低价格的经济档位提供的 DeepSeek V4.1 Flash。",
+  "deepseek-v4-1-flash.description": "DeepSeek V4.1 Flash 是 V4 系列最新推出的快速、高性价比成员，拥有 100 万 token 上下文窗口和混合思考能力。",
   "deepseek-v4-flash-0731.description": "DeepSeek V4 Flash 0731是V4 Flash模型的7月31日快照版本。它是V4系列中快速且成本高效的成员，支持1M上下文窗口和混合思维。",
   "deepseek-v4-flash-ga.description": "DeepSeek-V4-Flash GA是DeepSeek高效模型在火山方舟上的正式发布版本，显著增强了代理能力，兼具速度和成本的平衡，并在日常问答、轻量级代理和高并发场景中表现出色的推理能力。",
   "deepseek-v4-flash-vision-exp.description": "DeepSeek V4 Flash Vision Exp 是基于 V4 Flash 构建的实验性多模态模型。它在文本处理上与 V4 Flash 相当，并增加了对视觉代理工作流的原生图像理解功能，计费标准相同。",

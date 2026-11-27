@@ -975,6 +975,29 @@ NewAPI is a multi-provider model aggregation service that supports automatic mod
 - Default: `-`
 - Example: `-all,+straico-model-1,+straico-model-2=straico-special`
 
+## API Store
+
+### `APISTORE_API_KEY`
+
+- Type: Required
+- Description: The API key you created on the API Store API keys page. Setting it enables the API Store provider in server configuration.
+- Default: -
+- Example: `sk-xxxxxx...xxxxxx`
+
+### `APISTORE_PROXY_URL`
+
+- Type: Optional
+- Description: Overrides the OpenAI-compatible API base URL. Leave it unset to use the official endpoint.
+- Default: `https://api.apistore.cloud/v1`
+- Example: `https://your-apistore-proxy.example.com/v1`
+
+### `APISTORE_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to control the API Store model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model. Separate multiple entries with commas. The definition syntax follows the same rules as other providers' model lists.
+- Default: `-`
+- Example: `-all,+claude-sonnet-5-5,+gpt-6.2-sol=GPT-6.2 Sol`
+
 ## Unsloth
 
 Connect to your own Unsloth Studio instance. See [Using Unsloth in LobeHub](/docs/usage/providers/unsloth) for browser authentication and desktop CORS limitations.

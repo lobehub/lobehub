@@ -1,0 +1,57 @@
+---
+title: Using API Store in LobeHub
+description: >-
+  Learn how to configure your API Store API key in LobeHub to chat with
+  Claude, GPT, Gemini, and DeepSeek models through one provider.
+tags:
+  - LobeHub
+  - API Store
+  - API Key
+  - Web UI
+---
+
+# Using API Store in LobeHub
+
+[API Store](https://apistore.cloud) serves Claude, GPT, Gemini, and DeepSeek chat models through one OpenAI-compatible Chat Completions API. A single API key reaches every model, and usage is charged per token from a prepaid balance.
+
+This guide walks you through using API Store in LobeHub.
+
+<Steps>
+  ### Step 1: Get an API Store API key
+
+  - Sign up or log in at [API Store](https://apistore.cloud).
+  - Open the API keys page and create a new key.
+  - Copy the key (it starts with `sk-`) and keep it somewhere safe.
+
+  <Callout type={'info'}>
+    A key can be limited to your own IP addresses on the API keys page. If you set that limit,
+    include the address your LobeHub server sends requests from, or requests are refused with
+    `403 ip_not_allowed`.
+  </Callout>
+
+  ### Step 2: Configure API Store in LobeHub
+
+  - Open **App Settings → AI Providers** in LobeHub.
+  - Find **API Store** in the provider list and turn on its switch.
+  - Paste your API key into the API Key field. Leave the API proxy address empty to use the default endpoint, `https://api.apistore.cloud/v1`.
+  - Click **Check** to verify the connection.
+
+  ### Step 3: Choose a model and start chatting
+
+  - LobeHub ships with API Store's current chat models. Click **Fetch models** to refresh the list from API Store; image and video models are left out because LobeHub uses API Store for chat only.
+  - Pick a model in the chat model selector and start the conversation.
+
+  <Callout type={'warning'}>
+    API usage is charged by API Store. See the [API Store pricing page](https://apistore.cloud/pricing) for current per-token prices.
+  </Callout>
+</Steps>
+
+## Capabilities
+
+- Every model supports tool (function) calling and streaming.
+- Claude, GPT, and Gemini models accept image input.
+- Reasoning effort can be set for every model. Claude models return their reasoning text, which LobeHub shows as the thinking section of the reply.
+
+## Self-hosting
+
+On a self-hosted deployment you can provide the key from the server instead of entering it in the UI. See the `APISTORE_API_KEY`, `APISTORE_PROXY_URL`, and `APISTORE_MODEL_LIST` entries in [Model provider environment variables](/docs/self-hosting/environment-variables/model-provider#api-store).
