@@ -125,7 +125,8 @@ const PlatformCard = memo<PlatformCardProps>(({ onSelect, platform, status }) =>
       case BOT_RUNTIME_STATUSES.starting: {
         return theme.colorInfo;
       }
-      case BOT_RUNTIME_STATUSES.dormant: {
+      case BOT_RUNTIME_STATUSES.dormant:
+      case BOT_RUNTIME_STATUSES.sleeping: {
         return theme.colorWarning;
       }
       case BOT_RUNTIME_STATUSES.disconnected: {
@@ -153,6 +154,9 @@ const PlatformCard = memo<PlatformCardProps>(({ onSelect, platform, status }) =>
       }
       case BOT_RUNTIME_STATUSES.dormant: {
         return t('channel.statusDormant');
+      }
+      case BOT_RUNTIME_STATUSES.sleeping: {
+        return t('channel.statusSleeping');
       }
       case BOT_RUNTIME_STATUSES.disconnected: {
         return t('channel.runtimeDisconnected');

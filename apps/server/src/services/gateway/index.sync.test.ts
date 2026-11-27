@@ -7,6 +7,7 @@ import {
   mockGatewayClient,
   mockGatewayEnv,
   mockGetBotRuntimeStatus,
+  mockGetBotSleepState,
   mockIsBotFeatureAccessAllowed,
   mockResolveConnectionMode,
   mockUpdateBotRuntimeStatus,
@@ -31,6 +32,9 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () =>
 vi.mock('./runtimeStatus', () => import('./testUtils').then((m) => m.runtimeStatusModule()));
 vi.mock('@/business/server/bot/featureAccess', () =>
   import('./testUtils').then((m) => m.featureAccessModule()),
+);
+vi.mock('@/business/server/bot/sleep', () =>
+  import('./testUtils').then((m) => m.botSleepSlotModule()),
 );
 vi.mock('@/server/services/messenger/installations', () =>
   import('./testUtils').then((m) => m.messengerInstallationsModule()),
@@ -172,6 +176,60 @@ describe('GatewayService', () => {
       expect(mockUpdateBotRuntimeStatus).not.toHaveBeenCalledWith(
         expect.objectContaining({ status: 'starting' }),
       );
+    });
+
+    it('disconnects a bot that fell asleep from disuse and labels it sleeping', async () => {
+      const lastActiveAt = new Date('2026-10-01T00:00:00.000Z');
+      mockFindEnabledByPlatform.mockImplementation(async (_db, platform) =>
+        platform === 'discord' ? [{ ...createGatewayProvider(), lastActiveAt }] : [],
+      );
+      mockResolveConnectionMode.mockReturnValue('websocket');
+      mockGetBotSleepState.mockResolvedValue({ asleep: true, message: 'Asleep from disuse.' });
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: ['prov-1'] });
+
+      await service.ensureRunning();
+
+      expect(mockGetBotSleepState).toHaveBeenCalledWith({
+        applicationId: 'app-1',
+        lastActiveAt,
+        platform: 'discord',
+        userId: 'u1',
+        workspaceId: undefined,
+      });
+      expect(mockGatewayClient.disconnect).toHaveBeenCalledWith('prov-1');
+      expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+      expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          applicationId: 'app-1',
+          errorMessage: 'Asleep from disuse.',
+          platform: 'discord',
+          status: 'sleeping',
+        }),
+      );
+    });
+
+    it('keeps a bot connected when the sleep check fails', async () => {
+      mockFindEnabledByPlatform.mockImplementation(async (_db, platform) =>
+        platform === 'discord' ? [createGatewayProvider()] : [],
+      );
+      mockResolveConnectionMode.mockReturnValue('websocket');
+      mockGetBotSleepState.mockRejectedValue(new Error('plan lookup down'));
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.connect).toHaveBeenCalled();
+      expect(mockUpdateBotRuntimeStatus).not.toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'sleeping' }),
+      );
+    });
+
+    it('never asks whether a webhook bot is asleep', async () => {
+      mockFindEnabledByPlatform.mockResolvedValue([createGatewayProvider()]);
+      mockResolveConnectionMode.mockReturnValue('webhook');
+
+      await service.ensureRunning();
+
+      expect(mockGetBotSleepState).not.toHaveBeenCalled();
     });
 
     it('disconnects paid-only WeChat providers when the owner is on a free plan', async () => {

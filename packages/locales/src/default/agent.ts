@@ -925,6 +925,19 @@ export default {
   'channel.statusConnected': 'Connected',
   'channel.statusDisconnected': 'Disconnected',
   'channel.statusDormant': 'Dormant',
+  'channel.statusSleeping': 'Asleep',
+  'channel.sleep.title.waking': 'This bot fell asleep from disuse. Waking it up…',
+  'channel.sleep.title.woke': 'This bot fell asleep from disuse and has been woken up',
+  'channel.sleep.title.failed':
+    "This bot is asleep and couldn't be woken up. Refresh the page to try again.",
+  'channel.sleep.desc':
+    'Free plan bots go to sleep after two weeks without use; paid plans extend that to a month.',
+  'channel.sleep.descWithWebhook':
+    'Free plan bots go to sleep after two weeks without use; paid plans extend that to a month. Switch to Webhook mode to keep it always on.',
+  'channel.sleep.descLongest':
+    'Bots go to sleep after a month without use. Opening this page wakes it up.',
+  'channel.sleep.descLongestWithWebhook':
+    'Bots go to sleep after a month without use. Opening this page wakes it up; switch to Webhook mode to keep it always on.',
   'channel.statusFailed': 'Failed',
   'channel.statusQueued': 'Queued',
   'channel.statusStarting': 'Starting',
