@@ -214,6 +214,26 @@ describe('internal_executeClientTool', () => {
       });
     });
 
+    it('relays the structured error body so diagnostics survive into the persisted error', async () => {
+      hasExecutorMock.mockReturnValue(true);
+      const body = { code: 'CREDS_INPUT_ACCESS_DENIED', httpStatus: 403, reason: 'not_onboarded' };
+      invokeExecutorMock.mockResolvedValue({
+        content: 'Could not confirm credential',
+        error: { body, message: 'Request blocked.', type: 'CheckCredentialFailed' },
+        success: false,
+      });
+      const { action, sendToolResult } = setup();
+
+      await action.internal_executeClientTool(makeData(), { operationId: 'op-1' });
+
+      expect(sendToolResult).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: { body, message: 'Request blocked.', type: 'CheckCredentialFailed' },
+          success: false,
+        }),
+      );
+    });
+
     it('passes {} to executor when arguments is empty', async () => {
       hasExecutorMock.mockReturnValue(true);
       invokeExecutorMock.mockResolvedValue({ content: 'ok', success: true });

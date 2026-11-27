@@ -119,11 +119,18 @@ export interface RequestCredsInputParams {
 }
 
 /**
- * Plugin state of an approved `requestCredsInput` call. Carries the key only:
- * the values went from the form to the credential store directly.
+ * Plugin state of an approved `requestCredsInput` call. Carries no values: they
+ * went from the form to the credential store directly.
  */
 export interface RequestCredsInputState {
   key: string;
+  /** Tool call id of the request; the secure form and its approval are keyed on it. */
+  requestId?: string;
+  /**
+   * `saved`: the key exists after approval. `not_saved`: the lookup answered
+   * without it. `unconfirmed`: the lookup itself failed.
+   */
+  status: 'not_saved' | 'saved' | 'unconfirmed';
 }
 
 // ==================== Composio Service Types ====================

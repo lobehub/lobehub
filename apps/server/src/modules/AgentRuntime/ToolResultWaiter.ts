@@ -7,6 +7,7 @@ const log = debug('lobe-server:agent-runtime:tool-result-waiter');
 export interface ToolResultPayload {
   content: string | null;
   error?: {
+    body?: any;
     message: string;
     type?: string;
   };

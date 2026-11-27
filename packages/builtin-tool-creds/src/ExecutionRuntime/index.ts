@@ -6,7 +6,10 @@ import {
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import { buildInjectCredsResult } from '../injectResult';
-import { buildRequestCredsInputResult } from '../requestCredsInput';
+import {
+  buildRequestCredsInputCheckFailure,
+  buildRequestCredsInputResult,
+} from '../requestCredsInput';
 import type {
   ConnectComposioServiceParams,
   InitiateOAuthConnectParams,
@@ -283,19 +286,21 @@ export class CredsExecutionRuntime {
    * values to the credential store, so this only confirms the key exists and
    * reports it — the values never pass through the agent run.
    */
-  async requestCredsInput(args: RequestCredsInputParams): Promise<BuiltinServerRuntimeOutput> {
+  async requestCredsInput(
+    args: RequestCredsInputParams,
+    callContext?: { toolCallId?: string },
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const meta = { requestId: callContext?.toolCallId };
+
     try {
       const { data } = await this.credsService.listCreds();
-      return buildRequestCredsInputResult(args, !!data?.some((cred) => cred.key === args.key));
+      return buildRequestCredsInputResult(
+        args,
+        !!data?.some((cred) => cred.key === args.key),
+        meta,
+      );
     } catch (error) {
-      return {
-        content: `Failed to check credential "${args.key}": ${error instanceof Error ? error.message : 'Unknown error'}`,
-        error: {
-          message: error instanceof Error ? error.message : 'Failed to check credential',
-          type: 'CheckCredentialFailed',
-        },
-        success: false,
-      };
+      return buildRequestCredsInputCheckFailure(args, error, meta);
     }
   }
 }

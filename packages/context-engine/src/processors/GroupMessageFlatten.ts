@@ -125,6 +125,9 @@ export class GroupMessageFlattenProcessor extends BaseProcessor {
                     type: tool.type,
                   },
                   pluginError: tool.result.error || undefined,
+                  // Keeps an unanswered approval/form distinguishable from an
+                  // empty result for ToolCallProcessor.
+                  pluginIntervention: tool.intervention || undefined,
                   pluginState: tool.result.state || undefined,
                   role: 'tool',
                   tool_call_id: tool.id,

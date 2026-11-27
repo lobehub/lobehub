@@ -12,7 +12,10 @@ import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
 import { buildInjectCredsResult } from '../injectResult';
 import { CredsIdentifier } from '../manifest';
-import { buildRequestCredsInputResult } from '../requestCredsInput';
+import {
+  buildRequestCredsInputCheckFailure,
+  buildRequestCredsInputResult,
+} from '../requestCredsInput';
 import type {
   ConnectComposioServiceParams,
   InitiateOAuthConnectParams,
@@ -379,24 +382,20 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
    */
   requestCredsInput = async (
     params: RequestCredsInputParams,
-    _ctx?: BuiltinToolContext,
+    ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
+    const meta = { requestId: ctx?.toolCallId };
+
     try {
       const { data } = await lambdaClient.market.creds.listForContext.query();
       return buildRequestCredsInputResult(
         params,
         data.some((cred) => cred.key === params.key),
+        meta,
       );
     } catch (error) {
       log('[CredsExecutor] requestCredsInput - error:', error);
-      return {
-        content: `Failed to check credential "${params.key}": ${error instanceof Error ? error.message : 'Unknown error'}`,
-        error: {
-          message: error instanceof Error ? error.message : 'Failed to check credential',
-          type: 'CheckCredentialFailed',
-        },
-        success: false,
-      };
+      return buildRequestCredsInputCheckFailure(params, error, meta);
     }
   };
 }
