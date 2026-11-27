@@ -87,8 +87,13 @@ const useMarketMentionScope = () => {
  * on each fetch-lifecycle flip (hydrated, validating, settled), and the editor
  * is the most expensive component of the composer. `useMentionCategories`
  * reads the synced rows from the stores, so only real data changes reach it.
+ *
+ * The syncs stay off until `enabled`: the editor turns it on when the mention
+ * menu first opens, so a conversation that never uses `@` fetches none of
+ * these lists. That first menu shows no Market entries yet; typing re-queries
+ * the menu once the rows have arrived.
  */
-export const useMentionSourceSync = () => {
+export const useMentionSourceSync = (enabled: boolean) => {
   const { agentsEnabled, skillsEnabled } = useMarketMentionScope();
   // The market lists are keyed by UI language, read when the sync runs. The
   // editor re-renders on a language switch through `useTranslation`; this
@@ -99,16 +104,16 @@ export const useMentionSourceSync = () => {
   // without it here, a Market skill installed from this menu (or anywhere
   // else) would keep being offered as not installed after a reload.
   const useFetchAgentSkills = useToolStore((s) => s.useFetchAgentSkills);
-  useFetchAgentSkills(true);
+  useFetchAgentSkills(enabled);
 
   const useAssistantList = useDiscoverStore((s) => s.useFetchAssistantList);
   const useSkillList = useDiscoverStore((s) => s.useFetchSkillList);
-  useAssistantList(MARKET_AGENT_QUERY, { enabled: agentsEnabled });
-  useSkillList(MARKET_SKILL_QUERY, { enabled: skillsEnabled });
+  useAssistantList(MARKET_AGENT_QUERY, { enabled: enabled && agentsEnabled });
+  useSkillList(MARKET_SKILL_QUERY, { enabled: enabled && skillsEnabled });
 };
 
-export const MentionSourceSync = memo(() => {
-  useMentionSourceSync();
+export const MentionSourceSync = memo<{ enabled: boolean }>(({ enabled }) => {
+  useMentionSourceSync(enabled);
   return null;
 });
 

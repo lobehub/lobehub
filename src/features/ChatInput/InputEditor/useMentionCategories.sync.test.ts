@@ -106,7 +106,7 @@ describe('mention sources', () => {
   });
 
   it('starts the installed-skill and market syncs from the sync hook', () => {
-    renderHook(() => useMentionSourceSync());
+    renderHook(() => useMentionSourceSync(true));
 
     expect(mocks.useFetchAgentSkills).toHaveBeenCalledWith(true);
     expect(mocks.discoverState.useFetchAssistantList).toHaveBeenCalledWith(
@@ -119,10 +119,36 @@ describe('mention sources', () => {
     );
   });
 
+  it('fetches nothing until the mention menu first opens', () => {
+    // Mentions are rare; a conversation that never opens the menu must not
+    // pay for the installed-skill and market fetches (or their re-renders).
+    const { rerender } = renderHook(({ enabled }) => useMentionSourceSync(enabled), {
+      initialProps: { enabled: false },
+    });
+
+    expect(mocks.useFetchAgentSkills).toHaveBeenLastCalledWith(false);
+    expect(mocks.discoverState.useFetchAssistantList).toHaveBeenLastCalledWith(expect.anything(), {
+      enabled: false,
+    });
+    expect(mocks.discoverState.useFetchSkillList).toHaveBeenLastCalledWith(expect.anything(), {
+      enabled: false,
+    });
+
+    rerender({ enabled: true });
+
+    expect(mocks.useFetchAgentSkills).toHaveBeenLastCalledWith(true);
+    expect(mocks.discoverState.useFetchAssistantList).toHaveBeenLastCalledWith(expect.anything(), {
+      enabled: true,
+    });
+    expect(mocks.discoverState.useFetchSkillList).toHaveBeenLastCalledWith(expect.anything(), {
+      enabled: true,
+    });
+  });
+
   it('keeps market syncs off without install permission', () => {
     mocks.canInstall = false;
 
-    renderHook(() => useMentionSourceSync());
+    renderHook(() => useMentionSourceSync(true));
 
     expect(mocks.discoverState.useFetchAssistantList).toHaveBeenCalledWith(expect.anything(), {
       enabled: false,
@@ -142,7 +168,7 @@ describe('useMentionSourceSync language', () => {
       languages.push((mocks.globalStore!.getState() as { language: string }).language);
       return {};
     });
-    renderHook(() => useMentionSourceSync());
+    renderHook(() => useMentionSourceSync(true));
 
     act(() => mocks.globalStore!.setState({ language: 'zh-CN' }));
 

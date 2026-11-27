@@ -15,7 +15,7 @@ import { createStaticStyles, cx } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import Fuse from 'fuse.js';
 import { KEY_ESCAPE_COMMAND } from 'lexical';
-import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePasteFile, useUploadFiles } from '@/components/DragUploadZone';
@@ -151,6 +151,9 @@ const InputEditor = memo<{
 
   // --- Category-based mention system ---
   const { categories, market } = useMentionCategories();
+  // Mentions are rare, so their source lists load on the first menu open
+  // instead of with every conversation (see `MentionSourceSync`).
+  const [mentionSourcesRequested, setMentionSourcesRequested] = useState(false);
 
   // Get agent's model info for vision support check and handle paste upload
   const { model, provider } = useEffectiveModel(agentId);
@@ -189,6 +192,7 @@ const InputEditor = memo<{
     async (
       search: { leadOffset: number; matchingString: string; replaceableString: string } | null,
     ) => {
+      setMentionSourcesRequested(true);
       if (search?.matchingString) {
         const [localFileItems, mentionItems, marketResult] = await Promise.all([
           searchLocalFiles(search.matchingString),
@@ -598,7 +602,7 @@ const InputEditor = memo<{
 
   return (
     <>
-      <MentionSourceSync />
+      <MentionSourceSync enabled={mentionSourcesRequested} />
       <InputHistoryPopup
         activeIndex={inputHistory.popup.activeIndex}
         container={(slashMenuRef as any)?.current ?? null}

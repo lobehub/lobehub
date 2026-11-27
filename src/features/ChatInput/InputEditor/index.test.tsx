@@ -1,5 +1,5 @@
 import { RequestTrigger } from '@lobechat/types';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import InputEditor from './index';
@@ -42,6 +42,12 @@ const mocks = vi.hoisted(() => {
       enabled: false,
       model: 'gpt-4o-mini',
       provider: 'openai',
+    },
+    mention: {
+      /** Offer Market skills, which turns the mention menu on. */
+      marketSkills: false,
+      /** `enabled` of every `MentionSourceSync` render, in order. */
+      syncEnabled: [] as boolean[],
     },
     recordTracingFeedback: vi.fn(),
   };
@@ -269,7 +275,10 @@ vi.mock('./marketMentionItems', () => ({
   toMarketSkillItem: vi.fn(),
 }));
 vi.mock('./useMentionCategories', () => ({
-  MentionSourceSync: () => null,
+  MentionSourceSync: ({ enabled }: { enabled: boolean }) => {
+    mocks.mention.syncEnabled.push(enabled);
+    return null;
+  },
   useMentionCategories: () => ({
     categories: [],
     market: {
@@ -279,7 +288,7 @@ vi.mock('./useMentionCategories', () => ({
       installedAgentSources: new Set(),
       installedSkills: new Set(),
       skillCategory: { icon: null, id: 'skill', label: 'Skills' },
-      skills: false,
+      skills: mocks.mention.marketSkills,
     },
   }),
 }));
@@ -291,6 +300,8 @@ describe('ChatInput InputEditor', () => {
     platform.isMobile = false;
     userSettings.enablePasteAutoConvert = true;
     mocks.inputCompletionConfig.enabled = false;
+    mocks.mention.marketSkills = false;
+    mocks.mention.syncEnabled = [];
     mocks.inputCompletionConfig.model = 'gpt-4o-mini';
     mocks.inputCompletionConfig.provider = 'openai';
     mocks.chatInputState.inputCompletionError = undefined;
@@ -360,6 +371,24 @@ describe('ChatInput InputEditor', () => {
     render(<InputEditor />);
 
     expect((await getEditorStyle())?.fontSize).toBeUndefined();
+  });
+
+  it('starts the mention source syncs only when the mention menu first opens', async () => {
+    // Mentions are rare; opening a conversation must not fetch the menu's
+    // market and installed-skill lists or re-render the editor for them.
+    mocks.mention.marketSkills = true;
+    render(<InputEditor />);
+
+    expect(mocks.mention.syncEnabled).not.toContain(true);
+
+    const { mentionOption } = (await getEditorProps()) as {
+      mentionOption?: { items: (search: null) => Promise<unknown> };
+    };
+    await act(async () => {
+      await mentionOption!.items(null);
+    });
+
+    expect(mocks.mention.syncEnabled.at(-1)).toBe(true);
   });
 
   it('tags autocomplete requests with the input completion trigger', async () => {
