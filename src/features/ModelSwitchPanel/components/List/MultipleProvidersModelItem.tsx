@@ -80,6 +80,8 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
     const defaultDisabledReason = defaultProvider
       ? disabledReasonOf(defaultProvider.id)
       : undefined;
+    const popupProvider = activeProvider ?? data.providers[0];
+    const popupDisabledReason = popupProvider ? disabledReasonOf(popupProvider.id) : undefined;
     const allDisabled =
       !!getDisabledReason &&
       data.providers.length > 0 &&
@@ -147,11 +149,9 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
         <DropdownMenuPortal>
           <DropdownMenuPositioner anchor={null} placement="right" sideOffset={12}>
             <DropdownMenuPopup className={cx(styles.detailPopup, styles.dropdownMenu)}>
-              {defaultDisabledReason && <DisabledModelReason reason={defaultDisabledReason} />}
-              <ModelDetailPanel
-                model={data.model.id}
-                provider={(activeProvider ?? data.providers[0]).id}
-              />
+              {/* The reason of the provider whose details this popup shows. */}
+              {popupDisabledReason && <DisabledModelReason reason={popupDisabledReason} />}
+              <ModelDetailPanel model={data.model.id} provider={popupProvider.id} />
               <DropdownMenuGroup>
                 <DropdownMenuGroupLabel>
                   {t('ModelSwitchPanel.useModelFrom')}
@@ -160,12 +160,15 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
                   const key = menuKey(p.id, data.model.id);
                   const isProviderActive = isActive ? activeKey === key : p.id === 'lobehub';
                   const providerRestricted = isModelRestricted?.(data.model.id, p.id);
-                  const providerDisabled = !!disabledReasonOf(p.id);
+                  const providerDisabledReason = disabledReasonOf(p.id);
+                  const providerDisabled = !!providerDisabledReason;
 
                   return (
                     <DropdownMenuItem
+                      aria-description={providerDisabledReason}
                       disabled={providerDisabled}
                       key={key}
+                      title={providerDisabledReason}
                       onClick={() => {
                         if (providerDisabled) return;
                         if (providerRestricted) {

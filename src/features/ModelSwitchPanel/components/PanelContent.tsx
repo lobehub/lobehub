@@ -1,16 +1,19 @@
 import { Flexbox } from '@lobehub/ui';
 import { type ComponentType, type FC, type ReactNode } from 'react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Rnd } from 'react-rnd';
 
+import { useBusinessModelListGuard } from '@/business/client/hooks/useBusinessModelListGuard';
 import { useBusinessModelPricingPrefetch } from '@/business/client/hooks/useBusinessModelPricing';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
+import { filterHiddenModels } from '@/utils/filterHiddenModels';
 
 import { ENABLE_RESIZING, MAX_WIDTH } from '../const';
 import { usePanelSize } from '../hooks/usePanelSize';
 import { usePanelState } from '../hooks/usePanelState';
 import { usePanelWidthConstraints } from '../hooks/usePanelWidthConstraints';
+import { resolvePanelHiddenPredicate } from '../utils';
 import { List } from './List';
 import type { PricingMode } from './ModelDetailPanel';
 import { Toolbar } from './Toolbar';
@@ -43,9 +46,20 @@ export const PanelContent: FC<PanelContentProps> = ({
   // listed (dimmed) while leaving out the ones it hides.
   const chatEnabledList = useEnabledChatModels();
   const enabledList = enabledListProp ?? chatEnabledList;
+  const { getModelDisabledReason, isModelHidden } = useBusinessModelListGuard();
+  // Size the panel from what `List` will render, so a guard that hides every model still
+  // gets the compact empty panel.
+  const listedProviderCount = useMemo(
+    () =>
+      filterHiddenModels(
+        enabledList,
+        resolvePanelHiddenPredicate(isModelHidden, getModelDisabledReason),
+      ).length,
+    [enabledList, getModelDisabledReason, isModelHidden],
+  );
   const [searchKeyword, setSearchKeyword] = useState('');
   const { groupMode, handleGroupModeChange } = usePanelState();
-  const { panelHeight, panelWidth, handlePanelWidthChange } = usePanelSize(enabledList.length);
+  const { panelHeight, panelWidth, handlePanelWidthChange } = usePanelSize(listedProviderCount);
   const {
     constrainedWidth,
     maxWidth: constrainedMaxWidth,

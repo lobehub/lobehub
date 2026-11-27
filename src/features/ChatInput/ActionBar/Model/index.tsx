@@ -7,6 +7,7 @@ import { useBusinessModelListGuard } from '@/business/client/hooks/useBusinessMo
 import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import { SkeletonBar } from '@/components/Skeleton';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
+import { resolveModelDisabledReason } from '@/features/ModelSwitchPanel/utils';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -57,8 +58,13 @@ const ModelSwitch = memo(() => {
   const lockTooltip = useModelLockTooltip(displayName, selectionLockReason);
   // The selected model may be one the viewer can no longer run (e.g. a workspace admin
   // lowered their tier): the chip says why, the way the panel row does.
-  const { getModelDisabledReason } = useBusinessModelListGuard();
-  const disabledReason = getModelDisabledReason?.(model, provider);
+  // Same precedence as the panel row: a restricted model shows its upsell, not a lock.
+  const { getModelDisabledReason, isModelRestricted } = useBusinessModelListGuard();
+  const disabledReason = resolveModelDisabledReason(
+    { getDisabledReason: getModelDisabledReason, isModelRestricted },
+    model,
+    provider,
+  );
   // Reasoning effort rides along with the model trigger instead of claiming a
   // second action slot. Like the model, it pins to the composer's topic when
   // there is one and edits the user's per-model default otherwise.

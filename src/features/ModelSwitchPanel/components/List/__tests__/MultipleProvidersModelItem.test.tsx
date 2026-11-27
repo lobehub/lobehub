@@ -284,6 +284,24 @@ describe('MultipleProvidersModelItem', () => {
       );
     });
 
+    it("explains the provider whose details the popup shows, not the default one's", () => {
+      render(
+        <MultipleProvidersModelItem
+          activeKey="anthropic-claude-opus-4-7"
+          data={data}
+          getDisabledReason={(_, providerId) => (providerId === 'lobehub' ? reason : undefined)}
+          newLabel="new"
+          onClose={vi.fn()}
+          onModelChange={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByTestId('model-detail-panel')).toHaveTextContent(
+        'anthropic/claude-opus-4-7',
+      );
+      expect(screen.queryByRole('note')).toBeNull();
+    });
+
     it('dims the row only when every provider is disabled', () => {
       render(
         <MultipleProvidersModelItem
