@@ -120,6 +120,11 @@ export interface ConnectorExecContext extends ConnectorToolSyncContext {
   serverDB?: LobeChatDatabase;
   /** `userId` decides the caller's `mcp_apps` flag. */
   userId?: string | null;
+  /**
+   * The workspace the call is made in. A view's device named by the caller
+   * must be in the caller's own pool or this one, as a run's device is.
+   */
+  workspaceId?: string | null;
 }
 
 /**
@@ -268,6 +273,15 @@ const resolveConnectorDevice = async (
     throw new ConnectorToolCallError(
       'FORBIDDEN',
       'This view came from another device than the connector runs on now',
+    );
+  }
+  // The device a caller names gets the connector's credentials, so it is held
+  // to what a run of theirs may route to (`resolveMcpTunnelTarget`): their own
+  // device, or one in the workspace the call is made in. Never another pool.
+  if (!binding && viewDevice?.workspaceId && viewDevice.workspaceId !== ctx.workspaceId) {
+    throw new ConnectorToolCallError(
+      'FORBIDDEN',
+      "This view came from a device outside this conversation's workspace",
     );
   }
   const { serverDB, userId } = ctx;
@@ -419,8 +433,14 @@ export const callConnectorToolById = async (
   // A personal row a private agent's workspace run resolved refreshes through
   // its own scope (`connectorSyncContextForRow`).
   try {
-    // A view's calls (a poll many times a second) leave the refresh to its other calls
-    const refreshContext = params.fromApp
+    // A view relayed to a device polls many times a second; its connector's
+    // other calls keep the tool list fresh
+    const relayedViewCall =
+      params.fromApp &&
+      shouldConnectViaDevice(connectorMcpEndpoint(connector), {
+        deviceGatewayConfigured: deviceGateway.isConfigured,
+      });
+    const refreshContext = relayedViewCall
       ? undefined
       : connectorSyncContextForRow(ctx, connector, ctx.serverDB);
     if (refreshContext) {
@@ -455,9 +475,10 @@ export const callConnectorToolById = async (
     // view's call runs where its result came from: the binding, or the device
     // the view names.
     const binding = connectorDeviceBinding(connector);
-    const viewDevice = viewDeviceOf(params);
+    // An entrypoint opens with no result yet, so only a binding names its device
+    const viewDevice = params.fromApp ? viewDeviceOf(params) : undefined;
     const viewCall = !!(params.fromApp || params.fromEntrypoint);
-    if (deviceGateway.isConfigured && (binding || (viewCall && viewDevice))) {
+    if (deviceGateway.isConfigured && (binding || viewDevice)) {
       if (viewCall) assertDeviceViewCall(tool, params, mcpApps);
       return runConnectorToolOnDevice(
         connector,

@@ -77,8 +77,9 @@ const tools = [
     toolName: 'show_screen',
   },
 ];
-const ctx = (row = connector()) =>
+const ctx = (row = connector(), workspaceId?: string) =>
   ({
+    workspaceId,
     agentModel: { existsById: vi.fn().mockResolvedValue(true) },
     connectorModel: {
       forRow() {
@@ -91,7 +92,7 @@ const ctx = (row = connector()) =>
     serverDB: {},
     userId: 'u1',
   }) as any;
-const call = async (over: Record<string, unknown> = {}, row = connector()) =>
+const call = async (over: Record<string, unknown> = {}, row = connector(), workspaceId?: string) =>
   callConnectorToolById(
     {
       args: '{}',
@@ -101,7 +102,7 @@ const call = async (over: Record<string, unknown> = {}, row = connector()) =>
       toolName: 'screen_read',
       ...over,
     },
-    ctx(row),
+    ctx(row, workspaceId),
   );
 const sent = () => vi.mocked(deviceGateway.executeMcpCall).mock.calls[0][0];
 
@@ -145,12 +146,40 @@ describe("callConnectorToolById — an MCP App view's call relayed to a device",
   });
 
   it("runs an unbound connector's view call on the device its view names", async () => {
-    await call({ relayDeviceId: 'laptop', relayWorkspaceId: 'ws1' }, connector(null));
+    await call({ relayDeviceId: 'laptop', relayWorkspaceId: 'ws1' }, connector(null), 'ws1');
 
     expect(resolveBoundMcpDevice).toHaveBeenCalledWith(
       expect.objectContaining({ binding: { deviceId: 'laptop', workspaceId: 'ws1' } }),
     );
     expect(sent()).toMatchObject({ deviceId: 'laptop', workspaceId: 'ws1' });
+  });
+
+  it("refuses a view's device in another workspace's pool than the call's", async () => {
+    // The device a run could use is the caller's own or one in the run's workspace
+    await expect(
+      call({ relayDeviceId: 'their-nas', relayWorkspaceId: 'ws-other' }, connector(null), 'ws1'),
+    ).rejects.toHaveProperty('code', 'FORBIDDEN');
+    await expect(
+      call({ relayDeviceId: 'their-nas', relayWorkspaceId: 'ws-other' }, connector(null)),
+    ).rejects.toHaveProperty('code', 'FORBIDDEN');
+    expect(resolveBoundMcpDevice).not.toHaveBeenCalled();
+    expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+  });
+
+  it('opens an entrypoint only on a bound device, never on one the caller names', async () => {
+    await expect(
+      call(
+        {
+          fromApp: undefined,
+          fromEntrypoint: true,
+          relayDeviceId: 'laptop',
+          server: undefined,
+          toolName: 'show_screen',
+        },
+        connector(null),
+      ),
+    ).rejects.toHaveProperty('code', 'BAD_REQUEST');
+    expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
   });
 
   it('refuses an unbound connector view call that names no device, instead of guessing one', async () => {
