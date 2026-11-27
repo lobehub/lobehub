@@ -268,11 +268,7 @@ export function Composer({
   );
   return (
     <WideScreenContainer fullWidth paddingInline={8} style={{ maxWidth }}>
-      <Flexbox
-        {...stylex.props(styles.composer, compact && styles.composerCompact)}
-        gap={4}
-        {...getContainerProps()}
-      >
+      <Flexbox {...stylex.props(styles.composer)} gap={4} {...getContainerProps()}>
         {/* Without an activity line the input meets the feed directly, with no empty strip. */}
         {activity != null && (
           <div {...stylex.props(styles.composerStatus)}>

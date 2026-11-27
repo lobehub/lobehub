@@ -1,3 +1,4 @@
+import type { InterfaceDensity } from '@lobechat/types';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
@@ -5,6 +6,16 @@ import { densityTokens } from '@/styles/density.stylex';
 import { mentionTokens } from '@/styles/mention.stylex';
 
 const HOVER = '@media (hover: hover)';
+
+const COMPOSER_ROW_PADDING_BLOCK = { compact: 6, loose: 10 } as const satisfies Record<
+  InterfaceDensity,
+  number
+>;
+
+const NOTICE_PADDING_INLINE = { compact: 10, loose: 16 } as const satisfies Record<
+  InterfaceDensity,
+  number
+>;
 
 export const styles = stylex.create({
   layout: {
@@ -226,7 +237,7 @@ export const styles = stylex.create({
   composer: {
     'position': 'relative',
     'flexShrink': 0,
-    'paddingBlockEnd': 12,
+    'paddingBlockEnd': densityTokens['--lobe-density-content-gap'],
     // The feed fades out into the composer instead of being cut at its top edge.
     '::before': {
       pointerEvents: 'none',
@@ -237,9 +248,6 @@ export const styles = stylex.create({
       height: 24,
       backgroundImage: `linear-gradient(to top, ${cssVar.colorBgContainer}, transparent)`,
     },
-  },
-  composerCompact: {
-    paddingBlockEnd: 8,
   },
   /** Typing activity above the input; rendered only while someone is replying. */
   composerStatus: {
@@ -257,13 +265,12 @@ export const styles = stylex.create({
     alignItems: 'flex-end',
     gap: 8,
     // 10px around the 28px buttons centers a single line in the 50px card.
-    minHeight: 48,
-    paddingBlock: 10,
+    minHeight: densityTokens['--lobe-density-list-row-height'],
+    paddingBlock: COMPOSER_ROW_PADDING_BLOCK.loose,
     paddingInline: 8,
   },
   composerRowCompact: {
-    minHeight: 40,
-    paddingBlock: 6,
+    paddingBlock: COMPOSER_ROW_PADDING_BLOCK.compact,
   },
   composerEditor: {
     overflowY: 'auto',
@@ -280,9 +287,9 @@ export const styles = stylex.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: densityTokens['--lobe-density-content-gap'],
-    marginBlockEnd: 12,
-    paddingBlock: 8,
-    paddingInline: densityTokens['--lobe-density-card-padding'],
+    marginBlockEnd: densityTokens['--lobe-density-content-gap'],
+    paddingBlock: densityTokens['--lobe-density-card-header-padding-block'],
+    paddingInline: NOTICE_PADDING_INLINE.loose,
     borderWidth: 1,
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
@@ -292,9 +299,7 @@ export const styles = stylex.create({
     backgroundColor: cssVar.colorFillQuaternary,
   },
   archivedNoticeCompact: {
-    marginBlockEnd: 8,
-    paddingBlock: 6,
-    paddingInline: 10,
+    paddingInline: NOTICE_PADDING_INLINE.compact,
   },
   muted: {
     fontSize: 12,

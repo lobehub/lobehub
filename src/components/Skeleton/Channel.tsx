@@ -5,7 +5,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
 import { useChannelMessageLayout } from '@/features/Channels/messageLayout';
-import { useDensity } from '@/styles/density';
+import { useDensityTokens } from '@/styles/density';
 
 import SkeletonBar from './Bar';
 
@@ -82,7 +82,7 @@ interface ChannelConversationSkeletonProps {
  * share one shape.
  */
 export const ChannelConversationSkeleton = ({ maxWidth }: ChannelConversationSkeletonProps) => {
-  const { compact } = useDensity();
+  const { contentGap } = useDensityTokens();
   return (
     <div aria-busy {...stylex.props(styles.root, !!maxWidth && styles.column(maxWidth))}>
       <Flexbox flex={1} paddingBlock={'16px 24px'} paddingInline={16} style={{ minHeight: 0 }}>
@@ -90,7 +90,7 @@ export const ChannelConversationSkeleton = ({ maxWidth }: ChannelConversationSke
           <MessageRowSkeleton key={index} {...row} />
         ))}
       </Flexbox>
-      <Flexbox flex={'none'} gap={4} paddingBlock={compact ? '0 8px' : '0 12px'} paddingInline={8}>
+      <Flexbox flex={'none'} gap={4} paddingBlock={`0 ${contentGap}px`} paddingInline={8}>
         <Flexbox height={24} />
         <Flexbox
           horizontal

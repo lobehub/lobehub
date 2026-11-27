@@ -124,7 +124,7 @@ export const ChannelMessage = ({
   const layout = useChannelMessageLayout();
   const date = new Date(message.createdAt);
   // Unassigned requests keep their identity row and recovery affordance.
-  const compact = continuation && !isRoot && message.routingStatus !== 'unassigned';
+  const asContinuation = continuation && !isRoot && message.routingStatus !== 'unassigned';
   // A continuation sits under its header, so its hover stamp only needs the clock.
   const timestamp = (
     <time
@@ -132,7 +132,7 @@ export const ChannelMessage = ({
       title={timeFormats.full.format(date)}
       {...stylex.props(styles.messageTime)}
     >
-      {compact
+      {asContinuation
         ? timeFormats.time.format(date)
         : channelMessageTime(date, { locale: i18n.language, yesterday: t('date.yesterday') })}
     </time>
@@ -228,18 +228,18 @@ export const ChannelMessage = ({
     <div
       aria-busy={pending || undefined}
       aria-label={message.author.name || t('deletedMember')}
-      data-continuation={compact || undefined}
+      data-continuation={asContinuation || undefined}
       data-message-id={message.id}
       role="article"
       {...stylex.props(
         styles.messageRow,
-        compact && hasToolbar && styles.continuationWithAction,
+        asContinuation && hasToolbar && styles.continuationWithAction,
         highlighted && styles.highlightedMessage,
         pending && styles.pendingMessage,
         stylex.defaultMarker(),
       )}
     >
-      {compact && <span {...stylex.props(styles.continuationTime)}>{timestamp}</span>}
+      {asContinuation && <span {...stylex.props(styles.continuationTime)}>{timestamp}</span>}
       <ChatItem
         quietHeader
         showAvatar
@@ -248,9 +248,9 @@ export const ChannelMessage = ({
         avatarProps={{ shape: 'circle', size: layout.avatarSize }}
         gap={layout.headerGap}
         id={message.id}
-        paddingBlock={compact ? 2 : layout.paddingBlock}
+        paddingBlock={asContinuation ? 2 : layout.paddingBlock}
         placement="left"
-        showHeader={!compact}
+        showHeader={!asContinuation}
         style={{ paddingInlineStart: layout.indent }}
         titleAddon={timestamp}
         avatar={{
