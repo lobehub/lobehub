@@ -280,6 +280,8 @@ const SectionLabel = memo<{ children: ReactNode }>(({ children }) => (
   </Text>
 ));
 
+const SKELETON_WIDTHS = [90, 70, 110, 80, 100, 75, 95];
+
 const SkeletonRow = memo<{ squareIcon?: boolean; width: number }>(({ squareIcon, width }) => (
   <div className={`${styles.row} ${styles.rowStatic}`}>
     <div
@@ -890,9 +892,15 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
     // ── Step 2: auto-scanned agent inventory ──
     if (step === 1 && target) {
       const scanning = scanState.status === 'scanning';
+      const foundRows = inventory.filter(({ status }) => status?.available);
       const pendingCount = inventory.length
         ? inventory.filter((entry) => !entry.status).length
         : CONNECTABLE_PROVIDERS.length;
+      // Keep the scanning list as tall as the full skeleton so the modal never shrinks mid-scan.
+      const skeletonCount = Math.max(
+        Math.min(pendingCount, 1),
+        SKELETON_WIDTHS.length - foundRows.length,
+      );
       const renderAgentRow = ({ provider, status }: (typeof inventory)[number]) => (
         <AgentScanRow
           key={provider.type}
@@ -951,9 +959,9 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
               <SectionLabel>{t('connectAgent.create.scanning')}</SectionLabel>
               <ScrollableAgentList>
                 {/* Found agents show (and can be picked) while slower probes finish. */}
-                {inventory.filter(({ status }) => status?.available).map(renderAgentRow)}
-                {[90, 70, 110, 80, 100, 75, 95].slice(0, pendingCount).map((width, i) => (
-                  <SkeletonRow key={i} width={width} />
+                {foundRows.map(renderAgentRow)}
+                {Array.from({ length: skeletonCount }, (_, i) => (
+                  <SkeletonRow key={i} width={SKELETON_WIDTHS[i % SKELETON_WIDTHS.length]} />
                 ))}
               </ScrollableAgentList>
             </Flexbox>
