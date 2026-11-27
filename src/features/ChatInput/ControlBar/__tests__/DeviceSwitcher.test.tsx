@@ -8,7 +8,14 @@ const state = vi.hoisted(() => ({
   pendingNewTopicDirectory: undefined as
     { agentId: string; projectWorkingDirectoryId: string } | undefined,
   setPendingNewTopicDirectory: vi.fn(),
-  topics: {} as Record<string, { projectId?: string; projectWorkingDirectoryId?: string }>,
+  topics: {} as Record<
+    string,
+    {
+      metadata?: { boundDeviceId?: string };
+      projectId?: string;
+      projectWorkingDirectoryId?: string;
+    }
+  >,
 }));
 
 const directoryState = vi.hoisted(() => ({
@@ -127,5 +134,27 @@ describe('DeviceSwitcher', () => {
     render(<DeviceSwitcher agentId="agent-1" />);
 
     expect(screen.getByText('general-picker')).toBeInTheDocument();
+  });
+
+  // Acceptance (T-14984): a project conversation running on the agent's own
+  // device, in its own working directory, read 云端沙箱 on its chip.
+  it('shows the machine a project conversation without a folder ran on', () => {
+    state.activeTopicId = 'topic-1';
+    state.topics = {
+      'topic-1': { metadata: { boundDeviceId: 'device-a' }, projectId: 'project-1' },
+    };
+
+    render(<DeviceSwitcher agentId="agent-1" />);
+
+    expect(screen.getByText('general-picker')).toBeInTheDocument();
+  });
+
+  it('keeps a sandbox project conversation on the project picker', () => {
+    state.activeTopicId = 'topic-1';
+    state.topics = { 'topic-1': { projectId: 'project-1' } };
+
+    render(<DeviceSwitcher agentId="agent-1" />);
+
+    expect(screen.queryByText('general-picker')).not.toBeInTheDocument();
   });
 });

@@ -65,13 +65,19 @@ const ProjectTopicDeviceSwitcher = ({ agentId, topicId }: { agentId: string; top
   );
 };
 
-/** The project a conversation without a folder belongs to: its topic's, or its blank draft's. */
+/**
+ * The project a conversation without a folder belongs to: its topic's, or its
+ * blank draft's. A started one that already ran on a machine — an agent on
+ * its own device, in its own working directory — is not a sandbox
+ * conversation: it keeps the general picker, which shows that machine.
+ */
 const useProjectWithoutFolder = (agentId: string) => {
   const topicId = useTopicId();
   const topicProjectId = useChatStore((s) => {
     if (!topicId) return undefined;
     const topic = topicSelectors.getTopicById(topicId)(s);
-    return topic?.projectId && !topic.projectWorkingDirectoryId ? topic.projectId : undefined;
+    if (!topic?.projectId || topic.projectWorkingDirectoryId) return undefined;
+    return topic.metadata?.boundDeviceId ? undefined : topic.projectId;
   });
   const draftProjectId = useChatStore((s) => {
     const pending = s.pendingNewTopicDirectory;
