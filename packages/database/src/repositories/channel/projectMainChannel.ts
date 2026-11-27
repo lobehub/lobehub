@@ -2,15 +2,7 @@ import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { and, asc, eq, exists, inArray, isNull, ne, not, notExists, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
-import { PROJECT_AGENT_LABEL } from '../../models/projectMainAgent';
-import {
-  agentLabelAssignments,
-  agentLabels,
-  agents,
-  channelMembers,
-  channels,
-  projects,
-} from '../../schemas';
+import { agents, channelMembers, channels, projects } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
 import { buildWorkspaceWhere } from '../../utils/workspace';
@@ -24,9 +16,9 @@ const otherProject = alias(projects, 'other_project');
  * of the project that Agent leads, with the Agent still seated in it, that the person belongs to or
  * may open. That is the project's General Channel unless it was archived or the Agent left it.
  *
- * Only an Agent made for its project counts: one the project created (it carries the shared
- * project label, or is a virtual coordinator from before main agents became ordinary agents),
- * that is not a built-in assistant and leads no other project. Any other Agent, such as the
+ * Only an Agent made for its project counts: one created together with this project (or a virtual
+ * coordinator from before main agents became ordinary agents), that is not a built-in assistant
+ * and leads no other project. Any other Agent, such as the
  * workspace's Lobe AI or an existing Agent picked to lead a project, has a life outside the
  * project, so opening it is a direct conversation.
  *
@@ -48,22 +40,12 @@ export const findProjectMainChannelId = async (
         eq(projects.coordinatorAgentId, agentId),
         // Built-in assistants (Lobe AI and the like) are everyone's own, never one project's.
         or(isNull(agents.slug), not(inArray(agents.slug, BUILTIN_SLUGS))),
-        // Created for a project: today's main agents wear the project label, earlier ones are virtual.
-        or(
-          eq(agents.virtual, true),
-          exists(
-            db
-              .select({ id: agentLabelAssignments.labelId })
-              .from(agentLabelAssignments)
-              .innerJoin(agentLabels, eq(agentLabels.id, agentLabelAssignments.labelId))
-              .where(
-                and(
-                  eq(agentLabelAssignments.agentId, agentId),
-                  eq(agentLabels.name, PROJECT_AGENT_LABEL),
-                ),
-              ),
-          ),
-        ),
+        // Created for this very project. `ProjectRepository.create` writes the main agent it makes
+        // and the project in one transaction, and both take `created_at` from the database's
+        // `now()`, which is fixed for a transaction. An agent made for another project, or picked
+        // as an existing agent, was created at another time. Projects from before main agents
+        // became ordinary agents were led by virtual coordinators instead.
+        or(eq(agents.virtual, true), eq(agents.createdAt, projects.createdAt)),
         // Leading a second project makes it no single project's Agent.
         notExists(
           db

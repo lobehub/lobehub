@@ -3,15 +3,8 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { PROJECT_AGENT_LABEL } from '../../../models/projectMainAgent';
-import {
-  agentLabelAssignments,
-  agentLabels,
-  agents,
-  channelMembers,
-  projects,
-  workspaceMembers,
-} from '../../../schemas';
+import { releaseProjectEnvironment } from '../../../models/utils/projectEnvironmentCleanup';
+import { agents, channelMembers, projects, workspaceMembers } from '../../../schemas';
 import { ChannelRepository } from '..';
 import { findProjectMainChannelId } from '../projectMainChannel';
 import { createChannelFixture } from './testUtils';
@@ -26,7 +19,12 @@ beforeEach(async () => {
   ]);
 });
 afterEach(async () => {
-  await db.delete(agentLabels).where(eq(agentLabels.workspaceId, fixture.workspaceId));
+  // The environment a repository-made project gets holds on to it.
+  const made = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .where(eq(projects.workspaceId, fixture.workspaceId));
+  for (const { id } of made) await releaseProjectEnvironment(db, id);
   await db.delete(projects).where(eq(projects.workspaceId, fixture.workspaceId));
   await db.delete(agents).where(eq(agents.workspaceId, fixture.workspaceId));
   await fixture.cleanup();
@@ -34,34 +32,12 @@ afterEach(async () => {
 
 type MainAgentKind = 'builtin' | 'dedicated' | 'existing' | 'legacy';
 
-/** The project label every Agent a project creates for itself wears. */
-const labelAsProjectAgent = async (agentId: string) => {
-  let [label] = await db
-    .select()
-    .from(agentLabels)
-    .where(eq(agentLabels.workspaceId, fixture.workspaceId));
-  if (!label) {
-    [label] = await db
-      .insert(agentLabels)
-      .values({
-        name: PROJECT_AGENT_LABEL,
-        userId: fixture.ownerId,
-        workspaceId: fixture.workspaceId,
-      })
-      .returning();
-  }
-  await db.insert(agentLabelAssignments).values({
-    agentId,
-    labelId: label.id,
-    userId: fixture.ownerId,
-    workspaceId: fixture.workspaceId,
-  });
-};
-
 const insertMainAgent = async (kind: MainAgentKind) => {
   const [agent] = await db
     .insert(agents)
     .values({
+      // Millisecond precision, so the Date read back writes the same `created_at` on its project.
+      createdAt: new Date(),
       slug: kind === 'builtin' ? 'inbox' : undefined,
       title: 'Apollo',
       userId: fixture.ownerId,
@@ -69,19 +45,22 @@ const insertMainAgent = async (kind: MainAgentKind) => {
       workspaceId: fixture.workspaceId,
     })
     .returning();
-  if (kind === 'dedicated') await labelAsProjectAgent(agent.id);
   return agent;
 };
 
 /** A project led by a main Agent, with the General Channel it starts with. */
 const projectLedBy = async (
   agent: typeof agents.$inferSelect,
-  visibility: 'private' | 'public' = 'public',
+  {
+    createdAt,
+    visibility = 'public',
+  }: { createdAt?: Date; visibility?: 'private' | 'public' } = {},
 ) => {
   const [project] = await db
     .insert(projects)
     .values({
       coordinatorAgentId: agent.id,
+      createdAt,
       name: 'Apollo',
       userId: fixture.ownerId,
       visibility,
@@ -97,9 +76,14 @@ const projectLedBy = async (
   return { agent, channel, owner, project };
 };
 
-/** A project led by the main Agent it created for itself. */
-const projectWithGeneral = async (visibility: 'private' | 'public' = 'public') =>
-  projectLedBy(await insertMainAgent('dedicated'), visibility);
+/**
+ * A project led by the main Agent it created for itself: `ProjectRepository.create` writes both in
+ * one transaction, so they share the transaction's `created_at`.
+ */
+const projectWithGeneral = async (visibility: 'private' | 'public' = 'public') => {
+  const agent = await insertMainAgent('dedicated');
+  return projectLedBy(agent, { createdAt: agent.createdAt, visibility });
+};
 
 const find = (userId: string, agentId: string) =>
   findProjectMainChannelId(db, userId, fixture.workspaceId, agentId);
@@ -160,6 +144,24 @@ describe("a project's main Agent", () => {
   });
 });
 
+describe('a project created through the repository', () => {
+  it("routes the main Agent it created to the project's General Channel", async () => {
+    const { ProjectRepository } = await import('../../project');
+    const project = await new ProjectRepository(db, fixture.ownerId, fixture.workspaceId).create({
+      name: 'Hermes',
+      visibility: 'public',
+    });
+    const owner = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    const { channel } = await owner.create({
+      agents: [{ agentId: project.coordinatorAgentId!, name: 'Hermes' }],
+      projectId: project.id,
+      title: 'General',
+    });
+
+    expect(await find(fixture.ownerId, project.coordinatorAgentId!)).toBe(channel.id);
+  });
+});
+
 describe('an Agent that is not dedicated to one project', () => {
   it('is nothing when it is the built-in Lobe AI leading a project', async () => {
     const { agent } = await projectLedBy(await insertMainAgent('builtin'));
@@ -171,6 +173,14 @@ describe('an Agent that is not dedicated to one project', () => {
     const { agent } = await projectLedBy(await insertMainAgent('existing'));
 
     expect(await find(fixture.ownerId, agent.id)).toBeUndefined();
+  });
+
+  it('is nothing when the Agent another project created is picked to lead this one', async () => {
+    const { agent, project: first } = await projectWithGeneral();
+    await db.delete(projects).where(eq(projects.id, first.id));
+    const { agent: lead } = await projectLedBy(agent);
+
+    expect(await find(fixture.ownerId, lead.id)).toBeUndefined();
   });
 
   it('is nothing when a project Agent leads a second project', async () => {
