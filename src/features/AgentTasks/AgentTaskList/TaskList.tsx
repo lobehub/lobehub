@@ -1,19 +1,5 @@
 import { matchesTaskListFilter, type TaskListFilter } from '@lobechat/types';
-import {
-  AccordionHeader,
-  AccordionItem,
-  AccordionRoot,
-  AccordionTrigger,
-  ActionIcon,
-  Block,
-  Center,
-  cssVar,
-  Divider,
-  Empty,
-  Flexbox,
-  Text,
-} from '@lobehub/ui';
-import * as stylex from '@stylexjs/stylex';
+import { ActionIcon, Block, Center, Divider, Empty, Flexbox, Text } from '@lobehub/ui';
 import { ClipboardCheckIcon, Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo, useRef } from 'react';
@@ -27,18 +13,16 @@ import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import { COMPLETE_TASK_LIST_MAX_ITEMS } from '@/store/task/slices/list/action';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
-import { DENSITY_TOKENS, useInterfaceDensity } from '@/styles/density';
 
 import { createTaskModal } from '../CreateTaskModal';
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
-import AccordionArrowIcon from '../shared/AccordionArrowIcon';
 import {
   getKanbanCreateTaskModalProps,
   getTaskGroupCreateDefaults,
   getTaskSubGroupCreateDefaults,
 } from './kanbanBoardModel';
-import type { TaskGroupBy, TaskGroupMeta, TaskListViewOptions } from './listViewOptions';
+import type { TaskListViewOptions } from './listViewOptions';
 import {
   buildTaskRows,
   collapseSubTasks,
@@ -52,14 +36,12 @@ import TaskBulkActionBar from './selection/TaskBulkActionBar';
 import { useTaskListSelection } from './selection/useTaskListSelection';
 import TaskGroupLabel from './TaskGroupLabel';
 import TaskItemSkeleton from './TaskItemSkeleton';
+import TaskListGroupHeader from './TaskListGroupHeader';
 import type { TaskListGroupEntry, TaskListVirtualItem } from './taskListVirtualModel';
 import { flattenTaskListEntries } from './taskListVirtualModel';
 import TaskRowIndent from './TaskRowIndent';
 import { useClosestScrollParent } from './useClosestScrollParent';
 import { useTaskListGroupCollapse } from './useTaskListGroupCollapse';
-
-/** Space above a non-first top-level group header; Compact stacks them like Linear. */
-const GROUP_GAP = { compact: 4, loose: 16 } as const;
 
 /** Scope inherited by tasks created from a group header. */
 export interface TaskListCreateScope {
@@ -119,51 +101,9 @@ interface TaskListProps {
 /** Row height the window sizes itself by before it has measured real rows. */
 const DEFAULT_ROW_HEIGHT = 52;
 
-const styles = stylex.create({
-  // A flex box centres the icon instead of a transform on the icon itself,
-  // which its own pressed / focused styles would override.
-  action: {
-    alignItems: 'center',
-    display: 'flex',
-    insetBlock: 0,
-    insetInlineEnd: 10,
-    position: 'absolute',
-  },
-  header: {
-    position: 'relative',
-  },
-});
-
-/** Room kept at the title's end for the create entry, so a sub-group rule stops before it. */
-const CREATE_ENTRY_GUTTER = 28;
-
-const renderGroupTitle = (
-  group: TaskGroupMeta,
-  count: number,
-  fontSize: number,
-  sub?: boolean,
-  withCreateEntry?: boolean,
-) => (
-  <Flexbox
-    horizontal
-    align={'center'}
-    gap={8}
-    justify={'space-between'}
-    style={withCreateEntry ? { marginInlineEnd: CREATE_ENTRY_GUTTER } : undefined}
-  >
-    <TaskGroupLabel listHeader group={group} />
-    {/* Same size as the title, muted by color only (like Linear). */}
-    <Text fontSize={fontSize} type={'secondary'}>
-      {count}
-    </Text>
-    {sub ? <Divider style={{ borderColor: cssVar.colorBorder, flex: 1 }} /> : <Flexbox flex={1} />}
-  </Flexbox>
-);
-
 /**
- * Group / sub-group header as a standalone (context-free) AccordionItem so the
- * virtual list keeps the Accordion look while owning the expand state itself.
- * It renders no content: the rows it opens are the sibling virtual items.
+ * Group / sub-group header of the virtual list. It renders no content: the
+ * rows it opens are the sibling virtual items.
  */
 const TaskGroupHeader = memo<{
   createScope?: TaskListCreateScope;
@@ -171,8 +111,6 @@ const TaskGroupHeader = memo<{
   onToggle: (key: string) => void;
 }>(({ createScope, item, onToggle }) => {
   const { t } = useTranslation('chat');
-  const density = useInterfaceDensity();
-  const { fontSize } = DENSITY_TOKENS[density];
   const sub = item.kind === 'subGroup';
   const createDefaults = !createScope
     ? undefined
@@ -185,48 +123,28 @@ const TaskGroupHeader = memo<{
   }, [createDefaults, createScope]);
 
   return (
-    <div style={{ paddingTop: item.first ? 0 : sub ? 6 : GROUP_GAP[density] }}>
-      <div {...stylex.props(styles.header)}>
-        {/* The built-in chevron is hidden for the small filled triangle the task
-            detail sections and the sidebar use (like Linear). */}
-        <AccordionRoot
-          hideIndicator
-          value={item.collapsed ? [] : [item.key]}
-          variant={sub ? 'borderless' : 'filled'}
-          onValueChange={() => onToggle(item.key)}
-        >
-          <AccordionItem value={item.key}>
-            <AccordionHeader>
-              <AccordionTrigger style={{ paddingBlock: sub ? 6 : 8, paddingInline: 10 }}>
-                <Flexbox horizontal align={'center'} flex={1} gap={6}>
-                  <AccordionArrowIcon
-                    isOpen={!item.collapsed}
-                    size={16}
-                    style={{ color: cssVar.colorTextDescription }}
-                  />
-                  <Flexbox flex={1}>
-                    {renderGroupTitle(item.meta, item.count, fontSize, sub, !!createDefaults)}
-                  </Flexbox>
-                </Flexbox>
-              </AccordionTrigger>
-            </AccordionHeader>
-          </AccordionItem>
-        </AccordionRoot>
-        {createDefaults && (
-          // Outside the trigger so clicking it opens the modal without toggling
+    <TaskListGroupHeader
+      collapsed={item.collapsed}
+      count={item.count}
+      first={item.first}
+      groupKey={item.key}
+      sub={sub}
+      title={<TaskGroupLabel listHeader group={item.meta} />}
+      action={
+        createDefaults && (
+          // Outside the toggle so clicking it opens the modal without folding
           // the group; the collapse indicator sits at the start (like Linear),
           // so the entry takes the header's far end.
-          <div {...stylex.props(styles.action)}>
-            <ActionIcon
-              icon={Plus}
-              size={'small'}
-              title={t('taskList.kanban.addTask')}
-              onClick={openCreate}
-            />
-          </div>
-        )}
-      </div>
-    </div>
+          <ActionIcon
+            icon={Plus}
+            size={'small'}
+            title={t('taskList.kanban.addTask')}
+            onClick={openCreate}
+          />
+        )
+      }
+      onToggle={() => onToggle(item.key)}
+    />
   );
 });
 
