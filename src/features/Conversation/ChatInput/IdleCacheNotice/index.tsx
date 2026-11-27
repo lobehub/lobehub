@@ -36,9 +36,14 @@ const NOTICE_EVENTS = {
 } as const;
 
 /**
- * Tells the user, in plain words, that the conversation's next reply costs more because they were
- * away long enough for the provider to drop the prompt cache, and offers a fresh conversation for
- * a new question. It never blocks the send: continuing here is a valid choice.
+ * Tells the user, in plain words, that the long conversation's next reply costs more, and offers a
+ * fresh conversation for a new question. It never blocks the send: continuing here is a valid
+ * choice.
+ *
+ * The line leads with what people can see, a long conversation and the price; why it costs more
+ * right now (they paused long enough for the provider to drop the prompt cache) lives in the
+ * tooltip. The button states the action and its effect but no amount: a fresh conversation's own
+ * cost (system prompt, tools, attachments) is not estimated, so a precise saving would overclaim.
  */
 const IdleCacheNotice = memo(() => {
   const { t } = useTranslation('chat');
@@ -49,7 +54,7 @@ const IdleCacheNotice = memo(() => {
     s.dismissIdleCacheNotice,
   ]);
   const [opening, setOpening] = useState(false);
-  // A phone has room for one line above the keyboard; the title alone carries the decision.
+  // A tooltip has no hover on a phone; the title and the button carry the decision alone.
   const isMobile = useIsMobile();
   const { analytics } = useAnalytics();
   const shownMessageId = notice?.snapshot.messageId;
@@ -97,20 +102,20 @@ const IdleCacheNotice = memo(() => {
             {t('input.idleCache.newTopic')}
           </Button>
         }
-        description={
-          isMobile ? undefined : (
-            <Flexbox horizontal align={'center'} gap={4}>
-              <span>{t('input.idleCache.desc')}</span>
-              <Tooltip title={t('input.idleCache.info')}>
+        title={
+          <Flexbox horizontal align={'center'} gap={4}>
+            <span>
+              {t('input.idleCache.title', { amount: formatAmount(notice.cost.coldCost) })}
+            </span>
+            {!isMobile && (
+              <Tooltip
+                title={t('input.idleCache.info', { usual: formatAmount(notice.cost.warmCost) })}
+              >
                 <Icon icon={InfoIcon} size={14} style={{ cursor: 'help', flex: 'none' }} />
               </Tooltip>
-            </Flexbox>
-          )
+            )}
+          </Flexbox>
         }
-        title={t('input.idleCache.title', {
-          amount: formatAmount(notice.cost.coldCost),
-          usual: formatAmount(notice.cost.warmCost),
-        })}
         onClose={() => {
           track(NOTICE_EVENTS.dismissed);
           dismiss(notice.snapshot.messageId);
