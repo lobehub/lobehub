@@ -10,6 +10,7 @@ import type {
   OnFinishData,
 } from '@lobechat/model-runtime';
 import {
+  cacheTTLToSeconds,
   consumeStreamUntilDone,
   isEmptyModelCompletion,
   isModelRefusalFinishReason,
@@ -21,6 +22,7 @@ import type {
   ChatImageItem,
   ChatToolPayload,
   GroundingSearch,
+  MessagePromptCache,
   MessageToolCall,
   ModelPerformance,
   ModelReasoning,
@@ -208,6 +210,7 @@ export class ServerCallLlmAttempt {
   private readonly onFirstChunk: () => void;
   private readonly operationLogId: string;
   private readonly provider: string;
+  private promptCache?: MessagePromptCache;
   private reasoning?: ModelReasoning;
   private readonly reasoningPartEvents: ContentPartData[] = [];
   private readonly resolved: ServerCallLlmTooling['resolved'];
@@ -331,6 +334,7 @@ export class ServerCallLlmAttempt {
       this.chatPayload.tools?.length ?? 0,
     );
 
+    const requestStartedAt = Date.now();
     const chatOptions: ChatMethodOptions = {
       callback: {
         onBase64Image: async ({ image }) => {
@@ -341,6 +345,8 @@ export class ServerCallLlmAttempt {
         onCompletion: async (data) => {
           this.completion = data;
           if (data.usage) this.usage = data.usage;
+          const ttlSeconds = cacheTTLToSeconds(data.pricingOptions?.lookupParams?.ttl);
+          this.promptCache = ttlSeconds ? { requestStartedAt, ttlSeconds } : undefined;
           if (data.speed) this.speed = data.speed;
           if (data.finishReason) this.finishReason = data.finishReason;
           if (data.reasoning) this.reasoning = data.reasoning;
@@ -475,6 +481,7 @@ export class ServerCallLlmAttempt {
       hasContentImages: this.streamSink.hasContentImages,
       hasReasoningImages: this.streamSink.hasReasoningImages,
       imageList: [...this.imageList],
+      promptCache: this.promptCache,
       reasoning: this.reasoning,
       reasoningParts: [...this.streamSink.reasoningParts],
       speed: this.speed,

@@ -8,6 +8,8 @@ import type { ContextSelection } from './contextSelection';
 import { ContextSelectionSchema } from './contextSelection';
 import type { PageSelection } from './pageSelection';
 import { PageSelectionSchema } from './pageSelection';
+import type { MessagePromptCache } from './promptCache';
+import { MessagePromptCacheSchema } from './promptCache';
 
 const ToolWorkRegistrationSchema: z.ZodType<WorkRegistrationIntent> = z.union([
   z.object({
@@ -457,6 +459,8 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   // Server-computed estimate of the request behind an assistant message. Listed
   // so client-runtime writes through UpdateMessageParamsSchema keep it.
   contextAccounting: MessageContextAccountingSchema.optional(),
+  // Server-written prompt-cache lifetime of the request behind an assistant message.
+  promptCache: MessagePromptCacheSchema.optional(),
   contextSelections: z.array(ContextSelectionSchema).optional(),
   // Hetero-agent (Claude Code) per-message provenance. Listed here so zod does
   // NOT strip them from writes going through UpdateMessageParamsSchema /
@@ -714,11 +718,11 @@ export interface MessageMetadata {
   isSupervisor?: boolean;
   /** @deprecated use `metadata.performance` instead */
   latency?: number;
-
   /**
    * Local-system tool snapshots materialized when the user sent @file mentions.
    */
   localSystemToolSnapshots?: LocalSystemToolSnapshot[];
+
   /**
    * Present on a user message an MCP App view posted into the conversation
    * (`ui/message`). The bubble names the view, so the message reads as a
@@ -762,6 +766,13 @@ export interface MessageMetadata {
    * Flag indicating if message is pinned (excluded from compression)
    */
   pinned?: boolean;
+  /**
+   * Prompt-cache lifetime of the request that produced this assistant message,
+   * written by the agent runtime. The chat input reads the latest one to tell
+   * the user when an idle conversation's next reply re-reads the whole history;
+   * see {@link MessagePromptCache}.
+   */
+  promptCache?: MessagePromptCache;
   /**
    * Emoji reactions on this message
    */

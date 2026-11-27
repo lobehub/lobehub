@@ -1078,6 +1078,12 @@ export default {
     'Estimated from current context, tools, and model pricing. Actual cost may vary.',
   'input.disclaimer': 'Agents can make mistakes. Use your judgment for critical info.',
   'input.errorMsg': 'Send failed: {{errorMsg}}. Retry, or send again later.',
+  'input.idleCache.desc': 'If what comes next is a new question, a new conversation costs less.',
+  'input.idleCache.info':
+    'AI providers briefly keep a conversation they just read, and reusing it within a few minutes is much cheaper. After that, the next reply reads the whole conversation again at the full price. Amounts are estimates.',
+  'input.idleCache.newTopic': 'New conversation',
+  'input.idleCache.title':
+    "You've been away for a while. The next reply in this long conversation costs about {{amount}} (usually about {{usual}}).",
   'input.inputCompletionError.retry': 'Retry',
   'input.inputCompletionError.settings': 'Settings',
   'input.inputCompletionError.title': 'Input suggestions paused',

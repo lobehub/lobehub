@@ -880,6 +880,27 @@ describe('callLlmFinalizer', () => {
     );
   });
 
+  it('persists the prompt-cache lifetime the request asked for', async () => {
+    const promptCache = { requestStartedAt: 1_700_000_000_000, ttlSeconds: 300 };
+    const messages = createMessageTransport();
+
+    await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-final',
+      events: [],
+      host: createHost(messages),
+      model: 'claude-sonnet',
+      output: createOutput({ promptCache }),
+      provider: 'anthropic',
+      shouldReplayAssistantReasoning: false,
+      state: AgentRuntime.createInitialState({ operationId: 'operation-1' }),
+    });
+
+    expect(messages.update).toHaveBeenLastCalledWith(
+      'assistant-final',
+      expect.objectContaining({ metadata: expect.objectContaining({ promptCache }) }),
+    );
+  });
+
   it('persists partial interrupted output and skips empty interruptions', async () => {
     const messages = createMessageTransport();
     const host = createHost(messages);

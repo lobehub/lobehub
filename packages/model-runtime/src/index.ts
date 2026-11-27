@@ -9,6 +9,7 @@ export type { ModelRuntimeHooks } from './core/ModelRuntime';
 export { describeGenerateObjectError, ModelRuntime } from './core/ModelRuntime';
 export { createOpenAICompatibleRuntime } from './core/openaiCompatible';
 export { StructuredOutputError } from './core/openaiCompatible/structuredOutput';
+export { cacheTTLToSeconds } from './core/protocols/anthropicMessages/resolveCacheTTL';
 export * from './core/RouterRuntime';
 export { createCallbacksTransformer } from './core/streams/protocol';
 export * from './core/usageConverters';

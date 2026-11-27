@@ -28,8 +28,11 @@ vi.mock('@lobechat/model-runtime', async () => {
     await import('../../../../../../packages/model-runtime/src/errors/modelRefusal');
   const { consumeStreamUntilDone } =
     await import('../../../../../../packages/model-runtime/src/utils/consumeStream');
+  const { cacheTTLToSeconds } =
+    await import('../../../../../../packages/model-runtime/src/core/protocols/anthropicMessages/resolveCacheTTL');
 
   return {
+    cacheTTLToSeconds,
     consumeStreamUntilDone,
     isEmptyModelCompletion,
     isModelRefusalFinishReason,
@@ -195,6 +198,40 @@ describe('ServerCallLlmAttempt', () => {
       2,
       expect.objectContaining({ chunkType: 'tools_calling' }),
     );
+  });
+
+  it('records the requested prompt-cache lifetime from the completion pricing options', async () => {
+    vi.useFakeTimers({ now: 1_700_000_000_000, toFake: ['Date'] });
+    try {
+      const { attempt } = createAttempt(async ({ callback }) => {
+        await callback?.onText?.('Answer');
+        await callback?.onCompletion?.({
+          pricingOptions: { lookupParams: { ttl: '1h' } },
+          text: '',
+          usage: { totalOutputTokens: 1 },
+        });
+      });
+
+      await attempt.execute();
+
+      expect(attempt.snapshot().promptCache).toEqual({
+        requestStartedAt: 1_700_000_000_000,
+        ttlSeconds: 3600,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('records no prompt-cache lifetime when the request did not ask for caching', async () => {
+    const { attempt } = createAttempt(async ({ callback }) => {
+      await callback?.onText?.('Answer');
+      await callback?.onCompletion?.({ text: '', usage: { totalOutputTokens: 1 } });
+    });
+
+    await attempt.execute();
+
+    expect(attempt.snapshot().promptCache).toBeUndefined();
   });
 
   it('forwards clientIp / userAgent into the chat call metadata when provided', async () => {
