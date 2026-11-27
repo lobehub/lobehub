@@ -34,7 +34,9 @@ const useProjectAgents = (projectId?: string) => {
   );
   useProjectStore((s) => s.useFetchProjectDetail)(projectId && !detail ? projectId : undefined);
   return {
-    canAddToProject: detail?.permissions?.canManageMembers ?? false,
+    // Seating an Agent through a Channel needs only edit rights on the project, not member
+    // management: the server lets anyone but a workspace viewer do it (`seatAgentsInProject`).
+    canAddToProject: detail?.permissions?.canManage ?? false,
     memberIds: projectMemberAgentIds(detail),
     priorityIds: projectAgentIds(detail),
     projectName: detail?.project.name,
