@@ -471,14 +471,14 @@ export class ChannelRepository {
       const access = await this.memberAccess(tx, channelId);
       if (!access) return;
       if (access.channel.isDeleted) throw new ChannelError('NOT_FOUND', 'Channel not found');
-      const canDelete = hasRole(access.member.role, 'admin');
+      const admin = hasRole(access.member.role, 'admin');
       const notificationsMuted = access.member.metadata?.notificationsMuted === true;
       const view = await readChannelView(tx, channelId, options, this.userId);
       const shared = await sharedAgentView(tx, access.channel, this.userId);
       return {
         channel: {
           ...access.channel,
-          canDelete,
+          canDelete: admin,
           canInvite: true,
           notificationsMuted,
           ...shared.channel,
