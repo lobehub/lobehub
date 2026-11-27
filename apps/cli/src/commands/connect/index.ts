@@ -82,6 +82,7 @@ import { closeBrowserSessions, resolveBrowserDevice } from '../../tools/browser'
 import { resolveComputerUseDevice } from '../../tools/computerUse';
 import { cleanupAllProcesses, getActiveShellCount } from '../../tools/shell';
 import { log, setVerbose } from '../../utils/logger';
+import { loadPty } from '../../utils/pty';
 import { sweepLocalTraces } from '../../utils/traceMaintenance';
 import { restartConnector } from '../connectRestart';
 import { printConnectStatus } from '../connectStatus';
@@ -587,7 +588,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     // Lazy: the CLI bundle is embedded in contexts that have no `node_modules`
     // at all (the desktop app runs it from `Resources/bin`), so a static import
     // would fail every one of them at startup.
-    loadPty: () => import('@lydell/node-pty'),
+    loadPty,
     logger: { warn: (message) => info(message) },
   });
 
