@@ -7,6 +7,7 @@ import type { LocalHeterogeneousAgentType } from '../config';
 import { HETEROGENEOUS_AGENT_CONFIGS } from '../config';
 import { resolveCliSpawnPlan } from './cliSpawn';
 import { findCommandInUserBinDirs } from './userBinDirs';
+import type { WslDistroScope } from './wsl';
 import { findWslCommandCandidates, invalidateWslCache, isWslCommand } from './wsl';
 
 /**
@@ -223,11 +224,14 @@ const getCurrentLoginShellPath = async (): Promise<string | undefined> => {
 /**
  * Drop the cached login-shell PATH so the next probe re-reads it, and disown
  * any probe already running so its result cannot satisfy or repopulate the
- * fresh scan.
+ * fresh scan. `keepWslCache` keeps what was learned inside WSL: re-probing a
+ * distro runs its shell start-up files again, which only a Rescan should pay.
  */
-export const invalidateLoginShellPathCache = (): void => {
+export const invalidateLoginShellPathCache = ({
+  keepWslCache = false,
+}: { keepWslCache?: boolean } = {}): void => {
   // A Rescan must also see agents installed inside WSL since the last scan.
-  invalidateWslCache();
+  if (!keepWslCache) invalidateWslCache();
   cachedShellPath = undefined;
   shellPathGeneration += 1;
   shellPathPromise = undefined;
@@ -979,10 +983,16 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
   }
 };
 
+export interface HeterogeneousDetectOptions {
+  /** Which WSL distros the last-resort lookup may probe; see `WslDistroScope`. */
+  wslScope?: WslDistroScope;
+}
+
 export const detectHeterogeneousCliCommand = async (
   agentType: HeterogeneousCliAgentType,
   command: string,
   probeEnv?: NodeJS.ProcessEnv,
+  { wslScope }: HeterogeneousDetectOptions = {},
 ): Promise<CliCommandStatus> => {
   const validator = HETEROGENEOUS_CLI_AGENT_OPTIONS[agentType];
   if (!validator) return { available: false };
@@ -1002,7 +1012,7 @@ export const detectHeterogeneousCliCommand = async (
     probeEnv,
   );
   const swept = await detectInUserBinDirs(status, names, validator, probeEnv);
-  return detectInWslWhenMissing(swept, names, validator);
+  return detectInWslWhenMissing(swept, names, validator, { wslScope });
 };
 
 // Other names an agent's installer gives the default binary. Cursor's creates
@@ -1071,11 +1081,14 @@ export const detectInWslWhenMissing = async (
   status: CliCommandStatus,
   commandNames: string[],
   options: ValidateOptions,
+  { wslScope }: HeterogeneousDetectOptions = {},
 ): Promise<CliCommandStatus> => {
   if (status.available || !isWindows()) return status;
 
   const candidates: string[] = [];
-  for (const name of commandNames) candidates.push(...(await findWslCommandCandidates(name)));
+  for (const name of commandNames) {
+    candidates.push(...(await findWslCommandCandidates(name, { scope: wslScope })));
+  }
   if (candidates.length === 0) return status;
 
   const wslStatus = await detectValidatedCommandCandidates(candidates, options);

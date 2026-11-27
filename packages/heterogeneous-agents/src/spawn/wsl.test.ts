@@ -5,6 +5,7 @@ import { PassThrough } from 'node:stream';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { invalidateLoginShellPathCache } from './resolveCliCommand';
 import {
   buildWslSpawnPlan,
   decodeWslOutput,
@@ -308,5 +309,65 @@ describe('findWslCommandCandidates', () => {
     await expect(findWslCommandCandidates('agent')).resolves.toEqual([
       'wsl://Ubuntu/usr/local/bin/agent',
     ]);
+  });
+});
+
+describe('findWslCommandCandidates scope', () => {
+  const twoDistros = () =>
+    fakeWsl((args) => {
+      if (args[0] === '--list') {
+        // Ubuntu is installed but stopped; only Debian is running.
+        return { stdout: args.includes('--running') ? 'Debian\n' : 'Ubuntu\nDebian\n' };
+      }
+      return { stdout: probeOutput([`__LOBEHUB_WSL_CMD__=agent=/opt/${args[1]}/agent`]) };
+    });
+  const probesOf = (runs: FakeWslRun[], distro: string) =>
+    runs.filter((run) => run.args[0] === '--distribution' && run.args[1] === distro);
+
+  it('never boots a stopped distro when only running distros may be probed', async () => {
+    const runs = twoDistros();
+
+    await expect(findWslCommandCandidates('agent', { scope: 'running' })).resolves.toEqual([
+      'wsl://Debian/opt/Debian/agent',
+    ]);
+    expect(probesOf(runs, 'Ubuntu')).toHaveLength(0);
+  });
+
+  it('reuses what a full lookup learned from a stopped distro without probing it again', async () => {
+    const runs = twoDistros();
+
+    await findWslCommandCandidates('agent');
+    await expect(findWslCommandCandidates('agent', { scope: 'running' })).resolves.toEqual([
+      'wsl://Ubuntu/opt/Ubuntu/agent',
+      'wsl://Debian/opt/Debian/agent',
+    ]);
+    expect(probesOf(runs, 'Ubuntu')).toHaveLength(1);
+  });
+
+  it('probes nothing when no distro is running', async () => {
+    const runs = fakeWsl((args) =>
+      args.includes('--running')
+        ? // wsl.exe exits non-zero when nothing runs.
+          { code: 1 }
+        : args[0] === '--list'
+          ? { stdout: 'Ubuntu\n' }
+          : { stdout: probeOutput(['__LOBEHUB_WSL_CMD__=agent=/usr/bin/agent']) },
+    );
+
+    await expect(findWslCommandCandidates('agent', { scope: 'running' })).resolves.toEqual([]);
+    expect(probesOf(runs, 'Ubuntu')).toHaveLength(0);
+  });
+
+  it('keeps WSL knowledge across a PATH refresh, and drops it on a full one', async () => {
+    const runs = twoDistros();
+
+    await findWslCommandCandidates('agent');
+    invalidateLoginShellPathCache({ keepWslCache: true });
+    await findWslCommandCandidates('agent');
+    expect(probesOf(runs, 'Ubuntu')).toHaveLength(1);
+
+    invalidateLoginShellPathCache();
+    await findWslCommandCandidates('agent');
+    expect(probesOf(runs, 'Ubuntu')).toHaveLength(2);
   });
 });

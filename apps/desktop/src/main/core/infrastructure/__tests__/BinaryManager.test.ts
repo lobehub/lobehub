@@ -138,6 +138,38 @@ describe('BinaryManager', () => {
       await mgr.detectAll();
       expect(invalidateSpy).not.toHaveBeenCalled();
     });
+
+    it('leaves the refresh to the scan when a forced detect opts out of it', async () => {
+      const mgr = new BinaryManager(stubApp);
+      mgr.register(spec, 'content-search');
+
+      await mgr.detect('probe-target', true, { refreshEnvironment: false });
+      expect(invalidateSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('running-distros-only lookups', () => {
+    it('does not record a miss that a full WSL lookup might not have', async () => {
+      const detect = vi.fn(async () => ({ available: false }) as BinaryStatus);
+      const mgr = new BinaryManager(stubApp);
+      mgr.register({ detect, name: 'codex' }, 'cli-agents');
+
+      await mgr.detect('codex', true, { wslScope: 'running' });
+
+      // Launch preflight reads the cache; it must run its own full detection.
+      expect(mgr.getStatus('codex')).toBeUndefined();
+      expect(detect).toHaveBeenCalledWith({ wslScope: 'running' });
+    });
+
+    it('records what it found', async () => {
+      const found: BinaryStatus = { available: true, path: '/usr/bin/codex' };
+      const mgr = new BinaryManager(stubApp);
+      mgr.register({ detect: async () => found, name: 'codex' }, 'cli-agents');
+
+      await mgr.detect('codex', true, { wslScope: 'running' });
+
+      expect(mgr.getStatus('codex')).toMatchObject(found);
+    });
   });
 
   describe('detect', () => {

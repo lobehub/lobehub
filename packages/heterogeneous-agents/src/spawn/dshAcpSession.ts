@@ -11,7 +11,11 @@ import {
 } from './acpAgentSession';
 import type { AcpRpcMessage } from './acpStdioClient';
 import { AcpServerRequestError } from './acpStdioClient';
-import type { CliCommandStatus, ResolvedHeteroCommand } from './resolveCliCommand';
+import type {
+  CliCommandStatus,
+  HeterogeneousDetectOptions,
+  ResolvedHeteroCommand,
+} from './resolveCliCommand';
 import {
   detectInUserBinDirs,
   detectInWslWhenMissing,
@@ -64,6 +68,7 @@ const isSupportedDshVersion = (version: string | undefined): boolean => {
 export const detectDshCommand = async (
   command: string = DSH_COMMAND,
   env?: NodeJS.ProcessEnv,
+  options: HeterogeneousDetectOptions = {},
 ): Promise<CliCommandStatus> => {
   const isDefaultCommand = command.trim() === DSH_COMMAND;
   const validation = { validatePattern: DSH_VERSION_PATTERN };
@@ -73,6 +78,7 @@ export const detectDshCommand = async (
         await detectInUserBinDirs(nativeStatus, [DSH_COMMAND], validation, env),
         [DSH_COMMAND],
         validation,
+        options,
       )
     : nativeStatus;
   if (!status.available || isSupportedDshVersion(status.version)) return status;

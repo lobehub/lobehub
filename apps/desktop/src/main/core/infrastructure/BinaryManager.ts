@@ -6,6 +6,7 @@ import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 
+import type { HeterogeneousDetectOptions } from '@lobechat/heterogeneous-agents/resolveCliCommand';
 import { invalidateLoginShellPathCache } from '@lobechat/heterogeneous-agents/resolveCliCommand';
 import { app } from 'electron';
 
@@ -108,8 +109,8 @@ export interface BinaryManageSpec {
 export interface BinarySpec {
   /** Human-readable description */
   description?: string;
-  /** Detection method */
-  detect: () => Promise<BinaryStatus>;
+  /** Detection method. Specs that don't look inside WSL ignore the options. */
+  detect: (options?: HeterogeneousDetectOptions) => Promise<BinaryStatus>;
   /** Optional install/upgrade lifecycle */
   manage?: BinaryManageSpec;
   /** Binary name, e.g., 'rg', 'mdfind', 'agent-browser' */
@@ -244,14 +245,24 @@ export class BinaryManager {
    * previously-installed managed copy wins over a stale `which` result.
    * @param name Binary name
    * @param force Force detection, bypass cache
+   * @param options.refreshEnvironment Re-read PATH and WSL first (default: `force`).
+   *   A scan that refreshed them once for all its agents passes `false`.
+   * @param options.wslScope Which WSL distros the lookup may probe.
    */
-  async detect(name: string, force = false): Promise<BinaryStatus> {
+  async detect(
+    name: string,
+    force = false,
+    {
+      refreshEnvironment = force,
+      ...detectOptions
+    }: HeterogeneousDetectOptions & { refreshEnvironment?: boolean } = {},
+  ): Promise<BinaryStatus> {
     // `force` is what Rescan means: the user just installed something, so the
     // login-shell PATH cached for this process may predate the edit. Hooked
     // here because this is the one method `detectAll` and `detectCategory`
     // both route through — wiring the callers individually is how the first
     // version of this fix missed the path that actually mattered.
-    if (force) invalidateLoginShellPathCache();
+    if (refreshEnvironment) invalidateLoginShellPathCache();
 
     const spec = this.specs.get(name);
     if (!spec) {
@@ -287,14 +298,19 @@ export class BinaryManager {
 
     try {
       logger.debug(`Detecting binary: ${name}`);
-      const detected = await spec.detect();
+      const detected = await spec.detect(detectOptions);
       const status: BinaryStatus = {
         ...detected,
         lastChecked: new Date(),
         manageable,
         source: detected.available ? 'system' : undefined,
       };
-      this.statusCache.set(name, status);
+      // A running-distros-only lookup can miss an agent inside a stopped WSL
+      // distro. Launch preflight reads this cache, so keeping that miss would
+      // refuse an agent the full lookup finds: only a complete answer is kept.
+      if (detected.available || detectOptions.wslScope !== 'running') {
+        this.statusCache.set(name, status);
+      }
 
       logger.debug(`Binary ${name} detection result:`, {
         available: status.available,

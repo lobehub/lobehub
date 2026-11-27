@@ -46,10 +46,12 @@ describe('scanLocal', () => {
     expect(detectHeterogeneousAgentCommand).toHaveBeenCalledWith({
       agentType: 'openclaw',
       command: 'openclaw',
+      scan: expect.objectContaining({ rescan: false }),
     });
     expect(detectHeterogeneousAgentCommand).toHaveBeenCalledWith({
       agentType: 'hermes',
       command: 'hermes',
+      scan: expect.objectContaining({ rescan: false }),
     });
   });
 
@@ -65,6 +67,7 @@ describe('scanLocal', () => {
     expect(detectHeterogeneousAgentCommand).toHaveBeenCalledWith({
       agentType: 'deepseek-harness',
       command: 'dsh',
+      scan: expect.objectContaining({ rescan: false }),
     });
     expect(agents['deepseek-harness']).toMatchObject({
       available: false,
@@ -92,6 +95,26 @@ describe('scanLocal', () => {
       available: false,
       reason: 'hermes scan timed out',
     });
+  });
+});
+
+describe('scanLocal scan identity', () => {
+  beforeEach(() => {
+    detectHeterogeneousAgentCommand.mockReset();
+    detectHeterogeneousAgentCommand.mockResolvedValue({ available: false });
+  });
+
+  it('tags every probe with one scan id, so the desktop refreshes once per scan', async () => {
+    await scanLocal();
+    await scanLocal({ rescan: true });
+
+    const scans = detectHeterogeneousAgentCommand.mock.calls.map(([params]) => params.scan);
+    const half = scans.length / 2;
+    expect(new Set(scans.slice(0, half).map((scan) => scan.id)).size).toBe(1);
+    expect(new Set(scans.slice(half).map((scan) => scan.id)).size).toBe(1);
+    expect(scans[0].id).not.toBe(scans[half].id);
+    expect(scans[0].rescan).toBe(false);
+    expect(scans[half].rescan).toBe(true);
   });
 });
 
@@ -209,6 +232,49 @@ describe('useAgentScan', () => {
 
     await waitFor(() => expect(result.current.state).toEqual({ agents, status: 'success' }));
     expect(scanAgents).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows each local agent as it is found, before the slowest probe settles', async () => {
+    let releaseSlow: (status: { available: boolean }) => void = () => {};
+    detectHeterogeneousAgentCommand.mockReset();
+    detectHeterogeneousAgentCommand.mockImplementation(async ({ agentType }) => {
+      if (agentType === 'codex') return { available: true, version: '0.50.0' };
+      if (agentType === 'claude-code') {
+        return new Promise((resolve) => {
+          releaseSlow = resolve;
+        });
+      }
+      return { available: false };
+    });
+
+    const { result } = renderHook(() => useAgentScan({ kind: 'local' }), { wrapper });
+
+    await waitFor(() =>
+      expect(result.current.state).toMatchObject({
+        agents: { codex: { available: true, version: '0.50.0' } },
+        status: 'scanning',
+      }),
+    );
+    expect(result.current.state.agents?.['claude-code']).toBeUndefined();
+
+    act(() => releaseSlow({ available: true }));
+    await waitFor(() => expect(result.current.state.status).toBe('success'));
+    expect(result.current.state.agents?.['claude-code']).toMatchObject({ available: true });
+  });
+
+  it('marks only the explicit rescan as one', async () => {
+    detectHeterogeneousAgentCommand.mockReset();
+    detectHeterogeneousAgentCommand.mockResolvedValue({ available: false });
+
+    const { result } = renderHook(() => useAgentScan({ kind: 'local' }), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('success'));
+    expect(detectHeterogeneousAgentCommand.mock.calls[0][0].scan.rescan).toBe(false);
+
+    detectHeterogeneousAgentCommand.mockClear();
+    act(() => result.current.rescan());
+    await waitFor(() => expect(detectHeterogeneousAgentCommand).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.state.status).toBe('success'));
+    expect(detectHeterogeneousAgentCommand.mock.calls[0][0].scan.rescan).toBe(true);
   });
 
   it('does not re-probe on its own when the connection comes back', async () => {

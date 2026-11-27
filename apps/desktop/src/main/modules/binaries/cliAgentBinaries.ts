@@ -60,7 +60,7 @@ const defineValidatedBinary = (options: ValidatedBinaryOptions): BinarySpec => {
  */
 export const claudeCodeBinary: BinarySpec = {
   description: 'Claude Code - Anthropic official agentic coding CLI',
-  detect: () => detectHeterogeneousCliCommand('claude-code', 'claude'),
+  detect: (options) => detectHeterogeneousCliCommand('claude-code', 'claude', undefined, options),
   name: 'claude',
   priority: 1,
 };
@@ -68,7 +68,7 @@ export const claudeCodeBinary: BinarySpec = {
 /** Tencent CodeBuddy CLI @see https://www.codebuddy.ai/docs/cli/installation */
 export const codeBuddyBinary: BinarySpec = {
   description: 'CodeBuddy - Tencent agentic coding CLI',
-  detect: () => detectHeterogeneousCliCommand('codebuddy', 'codebuddy'),
+  detect: (options) => detectHeterogeneousCliCommand('codebuddy', 'codebuddy', undefined, options),
   name: 'codebuddy',
   priority: 2,
 };
@@ -83,7 +83,7 @@ export const codeBuddyBinary: BinarySpec = {
  */
 export const codexBinary: BinarySpec = {
   description: 'Codex - OpenAI agentic coding CLI',
-  detect: () => detectHeterogeneousCliCommand('codex', 'codex'),
+  detect: (options) => detectHeterogeneousCliCommand('codex', 'codex', undefined, options),
   name: 'codex',
   priority: 2,
 };
@@ -91,7 +91,7 @@ export const codexBinary: BinarySpec = {
 /** GitHub Copilot CLI @see https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli */
 export const copilotBinary: BinarySpec = {
   description: 'GitHub Copilot - GitHub official agentic coding CLI',
-  detect: () => detectHeterogeneousCliCommand('copilot', 'copilot'),
+  detect: (options) => detectHeterogeneousCliCommand('copilot', 'copilot', undefined, options),
   name: 'copilot',
   priority: 3,
 };
@@ -99,7 +99,7 @@ export const copilotBinary: BinarySpec = {
 /** Cursor Agent CLI @see https://cursor.com/docs/cli/installation */
 export const cursorBinary: BinarySpec = {
   description: 'Cursor - Cursor agentic coding CLI',
-  detect: () => detectHeterogeneousCliCommand('cursor', 'agent'),
+  detect: (options) => detectHeterogeneousCliCommand('cursor', 'agent', undefined, options),
   name: 'agent',
   priority: 3,
 };
@@ -107,14 +107,14 @@ export const cursorBinary: BinarySpec = {
 /** Factory Droid CLI @see https://docs.factory.ai/cli/getting-started/quickstart */
 export const droidBinary: BinarySpec = {
   description: 'Factory Droid - Factory agentic coding CLI',
-  detect: () => detectHeterogeneousCliCommand('droid', 'droid'),
+  detect: (options) => detectHeterogeneousCliCommand('droid', 'droid', undefined, options),
   name: 'droid',
   priority: 3,
 };
 
 export const devinBinary: BinarySpec = {
   description: 'Devin - Cognition agentic coding CLI',
-  detect: () => detectHeterogeneousCliCommand('devin', 'devin'),
+  detect: (options) => detectHeterogeneousCliCommand('devin', 'devin', undefined, options),
   name: 'devin',
   priority: 3,
 };
@@ -122,7 +122,7 @@ export const devinBinary: BinarySpec = {
 /** xAI Grok Build CLI @see https://docs.x.ai/build/overview */
 export const grokBuildBinary: BinarySpec = {
   description: 'Grok Build - xAI agentic coding CLI',
-  detect: () => detectHeterogeneousCliCommand('grok-build', 'grok'),
+  detect: (options) => detectHeterogeneousCliCommand('grok-build', 'grok', undefined, options),
   name: 'grok',
   priority: 3,
 };
@@ -133,7 +133,7 @@ export const grokBuildBinary: BinarySpec = {
  */
 export const ampBinary: BinarySpec = {
   description: 'Amp - Sourcegraph agentic coding CLI',
-  detect: () => detectHeterogeneousCliCommand('amp', 'amp'),
+  detect: (options) => detectHeterogeneousCliCommand('amp', 'amp', undefined, options),
   name: 'amp',
   priority: 3,
 };
@@ -144,7 +144,7 @@ export const ampBinary: BinarySpec = {
  */
 export const opencodeBinary: BinarySpec = {
   description: 'OpenCode - Open source agentic coding CLI',
-  detect: () => detectHeterogeneousCliCommand('opencode', 'opencode'),
+  detect: (options) => detectHeterogeneousCliCommand('opencode', 'opencode', undefined, options),
   name: 'opencode',
   priority: 4,
 };
@@ -155,7 +155,7 @@ export const opencodeBinary: BinarySpec = {
  */
 export const piBinary: BinarySpec = {
   description: 'Pi - Minimal coding agent CLI',
-  detect: () => detectHeterogeneousCliCommand('pi', 'pi'),
+  detect: (options) => detectHeterogeneousCliCommand('pi', 'pi', undefined, options),
   name: 'pi',
   priority: 5,
 };
@@ -163,7 +163,7 @@ export const piBinary: BinarySpec = {
 /** Qoder CLI @see https://docs.qoder.com/cli/install.md */
 export const qoderBinary: BinarySpec = {
   description: 'Qoder - AI coding agent CLI',
-  detect: () => detectHeterogeneousCliCommand('qoder', 'qodercli'),
+  detect: (options) => detectHeterogeneousCliCommand('qoder', 'qodercli', undefined, options),
   name: 'qodercli',
   priority: 6,
 };
@@ -171,7 +171,7 @@ export const qoderBinary: BinarySpec = {
 /** TRAE Enterprise CLI, capability-checked against its ACP runtime. */
 export const traeBinary: BinarySpec = {
   description: 'TRAE CLI - ByteDance enterprise agentic coding CLI',
-  detect: () => detectHeterogeneousCliCommand('trae', 'traecli'),
+  detect: (options) => detectHeterogeneousCliCommand('trae', 'traecli', undefined, options),
   name: 'traecli',
   priority: 7,
 };
@@ -206,7 +206,7 @@ export const qwenCodeBinary: BinarySpec = defineValidatedBinary({
  */
 export const kimiCliBinary: BinarySpec = {
   description: 'Kimi Code - Moonshot AI agentic coding CLI',
-  detect: () => detectHeterogeneousCliCommand('kimi-code', 'kimi'),
+  detect: (options) => detectHeterogeneousCliCommand('kimi-code', 'kimi', undefined, options),
   name: 'kimi',
   priority: 10,
 };
@@ -227,7 +227,7 @@ export const aiderBinary: BinarySpec = defineCommandBinary('aider', {
 export const heterogeneousCliAgentBinaries = {
   'antigravity': {
     description: 'Antigravity CLI - Google agentic coding CLI',
-    detect: () => detectHeterogeneousCliCommand('antigravity', 'agy'),
+    detect: (options) => detectHeterogeneousCliCommand('antigravity', 'agy', undefined, options),
     name: 'agy',
     priority: 8,
   },
