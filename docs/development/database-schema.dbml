@@ -1750,6 +1750,7 @@ table channel_members {
   role text
   last_read_sequence integer
   section_id uuid
+  section_sort integer
   pinned boolean [not null, default: false]
   hidden boolean [not null, default: false]
   pinned_at "timestamp with time zone"

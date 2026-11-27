@@ -545,7 +545,11 @@ export class ChannelRepository {
       channelId,
       async (tx, { member }) => {
         if (sectionId) await this.sections.assertOwned(tx, sectionId);
-        await tx.update(channelMembers).set({ sectionId }).where(eq(channelMembers.id, member.id));
+        // A new section starts the conversation unordered, so it leads that section until dragged.
+        await tx
+          .update(channelMembers)
+          .set({ sectionId, sectionSort: null })
+          .where(eq(channelMembers.id, member.id));
         return sectionId;
       },
       { allowArchived: true, allowTrashed: true, joinOpen: sectionId !== null },
@@ -588,6 +592,7 @@ export class ChannelRepository {
         pinnedAt: Date | null;
         replyJobs: ChannelReplyJob[];
         sectionId: string | null;
+        sectionSort: number | null;
         sharedAgentHandle: string | null;
         threadMentions: ChannelThreadMention[];
         unreadCount: number;
@@ -608,6 +613,7 @@ export class ChannelRepository {
         pinnedAt: channelMembers.pinnedAt,
         role: this.callerRole(),
         sectionId: channelMembers.sectionId,
+        sectionSort: channelMembers.sectionSort,
         shareId: agentShares.id,
         shareSlug: sql<string | null>`${agentShares.shareConfig} ->> 'slug'`,
       })
@@ -708,6 +714,7 @@ export class ChannelRepository {
         pinnedAt,
         role,
         sectionId,
+        sectionSort,
         shareId,
         shareSlug,
         ...agent
@@ -728,6 +735,7 @@ export class ChannelRepository {
           pinnedAt,
           replyJobs: replyJobsOf.get(channel.id) ?? [],
           sectionId,
+          sectionSort,
           threadMentions: threadMentionsOf.get(channel.id) ?? [],
           lastReadSequence: lastReadSequence ?? 0,
           unreadCount: unreadCountOf.get(channel.id) ?? 0,
@@ -755,6 +763,7 @@ export class ChannelRepository {
         pinnedAt: null,
         replyJobs: [],
         sectionId: null,
+        sectionSort: null,
         threadMentions: [],
         unreadCount: 0,
       })),

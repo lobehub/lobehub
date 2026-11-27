@@ -1617,6 +1617,13 @@
       "when": 1795541757594,
       "tag": "0230_custom_emoji_and_reactions",
       "breakpoints": true
+    },
+    {
+      "idx": 231,
+      "version": "7",
+      "when": 1795756320694,
+      "tag": "0231_channel_section_sort",
+      "breakpoints": true
     }
   ],
   "version": "6"

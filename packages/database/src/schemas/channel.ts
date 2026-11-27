@@ -189,6 +189,12 @@ export const channelMembers = pgTable(
     /** This person's sidebar section; NULL falls back to the built-in section. */
     sectionId: uuid('section_id').references(() => channelSections.id, { onDelete: 'set null' }),
     /**
+     * This person's own order of the conversation inside its section, ascending; NULL until they
+     * drag it, and cleared when it moves to another section. Unordered rows lead the section by
+     * latest activity.
+     */
+    sectionSort: integer('section_sort'),
+    /**
      * @deprecated Unused duplicate of `pinnedAt`, which carries both the pin and its order. Kept
      * only so dropping it needs no migration; read and write `pinnedAt` instead.
      */

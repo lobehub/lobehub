@@ -71,6 +71,27 @@ export class ChannelSectionRepository {
           .where(eq(channelSections.id, id));
     });
 
+  /**
+   * Sets the caller's own order of the conversations inside one of their sections to
+   * `channelIds`. A conversation no longer filed there (moved away meanwhile) is skipped, and one
+   * left out keeps its own position.
+   */
+  reorderChannels = (sectionId: string, channelIds: string[]): Promise<void> =>
+    this.db.transaction(async (tx) => {
+      await this.requireOwned(tx, [sectionId]);
+      for (const [sectionSort, channelId] of channelIds.entries())
+        await tx
+          .update(channelMembers)
+          .set({ sectionSort })
+          .where(
+            and(
+              eq(channelMembers.channelId, channelId),
+              eq(channelMembers.userId, this.userId),
+              eq(channelMembers.sectionId, sectionId),
+            ),
+          );
+    });
+
   /** Deletes a section; its conversations fall back to the built-in sections. */
   remove = async (id: string): Promise<void> => {
     const [removed] = await this.db
