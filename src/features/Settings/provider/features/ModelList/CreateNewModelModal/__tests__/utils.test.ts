@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildTTSVoiceOptions, CUSTOM_MODEL_TYPES, hasDuplicateModelId } from '../utils';
+import {
+  buildTTSVoiceOptions,
+  CUSTOM_MODEL_TYPES,
+  hasDuplicateModelId,
+  setReasoningEffortControlsThinking,
+  updateReasoningEffortLevels,
+} from '../utils';
 
 describe('CUSTOM_MODEL_TYPES', () => {
   it('should not offer image or video, which require a parameters schema', () => {
@@ -48,5 +54,47 @@ describe('buildTTSVoiceOptions', () => {
 
   it('returns no options for a model without a catalog, so the free voice id input is shown', () => {
     expect(buildTTSVoiceOptions(undefined)).toEqual([]);
+  });
+});
+
+describe('updateReasoningEffortLevels', () => {
+  it('removes the control when every level is cleared', () => {
+    expect(updateReasoningEffortLevels({ default: 'high', levels: ['high'] }, [])).toBeUndefined();
+  });
+
+  it('keeps the chosen default and the thinking flag while the default is still offered', () => {
+    expect(
+      updateReasoningEffortLevels(
+        { controlsThinking: true, default: 'high', levels: ['none', 'high'] },
+        ['max', 'none', 'high'],
+      ),
+    ).toEqual({ controlsThinking: true, default: 'high', levels: ['none', 'high', 'max'] });
+  });
+
+  it('clears the default when it is unchecked, so it resolves at runtime', () => {
+    expect(
+      updateReasoningEffortLevels({ default: 'max', levels: ['low', 'high', 'max'] }, [
+        'low',
+        'medium',
+        'high',
+      ]),
+    ).toEqual({ levels: ['low', 'medium', 'high'] });
+  });
+});
+
+describe('setReasoningEffortControlsThinking', () => {
+  const spec = { default: 'high' as const, levels: ['none' as const, 'high' as const] };
+
+  it('lets a custom model couple its effort with thinking', () => {
+    expect(setReasoningEffortControlsThinking(spec, true)).toEqual({
+      ...spec,
+      controlsThinking: true,
+    });
+  });
+
+  it('drops the flag when unchecked', () => {
+    expect(setReasoningEffortControlsThinking({ ...spec, controlsThinking: true }, false)).toEqual(
+      spec,
+    );
   });
 });

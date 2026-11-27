@@ -273,39 +273,11 @@ export const CONTENDER_SETTING_KEYS = [
   'enableReasoning',
   'enableAdaptiveThinking',
   'reasoningEffort',
-  'gpt5ReasoningEffort',
-  'gpt5_1ReasoningEffort',
-  'gpt5_2ReasoningEffort',
-  'gpt5_2ProReasoningEffort',
-  'gpt5_6ReasoningEffort',
-  'gpt6ReasoningEffort',
-  'codexMaxReasoningEffort',
-  'deepseekV4ReasoningEffort',
-  'deepseekV4GAReasoningEffort',
-  'glm5_2ReasoningEffort',
-  'glm5_3ReasoningEffort',
-  'grok4_3ReasoningEffort',
-  'grok4_5ReasoningEffort',
-  'grok4_6ReasoningEffort',
-  'grok4_7ReasoningEffort',
-  'grok4_20ReasoningEffort',
-  'hy3ReasoningEffort',
-  'kimiK3ReasoningEffort',
-  'qwen38ReasoningEffort',
-  'ring2_6ReasoningEffort',
-  'step3_5ReasoningEffort',
-  'effort',
-  'opus47Effort',
   'reasoningMode',
   'reasoningBudgetToken',
   'reasoningBudgetToken32k',
   'reasoningBudgetToken80k',
   'thinking',
-  'thinkingLevel',
-  'thinkingLevel2',
-  'thinkingLevel3',
-  'thinkingLevel4',
-  'thinkingLevel5',
   'thinkingBudget',
   'preserveThinking',
   'textVerbosity',
@@ -338,10 +310,9 @@ export const describeSettings = (
     else if (key === 'disableContextCaching') {
       if (value) parts.push('context caching off');
     } else if (key === 'preserveThinking') parts.push(`keep thinking ${value ? 'on' : 'off'}`);
-    else if (/effort$/i.test(key)) parts.push(`${reasoning} ${value}`);
+    else if (key === 'reasoningEffort') parts.push(`${reasoning} ${value}`);
     else if (key.startsWith('reasoningBudgetToken')) parts.push(`reasoning budget ${value}`);
     else if (key === 'reasoningMode') parts.push(`${reasoning} mode ${value}`);
-    else if (key.startsWith('thinkingLevel')) parts.push(`thinking level ${value}`);
     else if (key === 'thinkingBudget') parts.push(`thinking budget ${value}`);
     else if (key === 'thinking') parts.push(`thinking ${value}`);
     else if (key === 'textVerbosity') parts.push(`verbosity ${value}`);

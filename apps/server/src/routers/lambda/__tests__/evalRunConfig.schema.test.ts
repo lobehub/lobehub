@@ -98,18 +98,15 @@ describe('evalRunChatConfigSchema', () => {
   it('accepts the model settings the chat model-params panel offers', () => {
     const input = {
       enableReasoning: true,
-      gpt5_6ReasoningEffort: 'max',
-      glm5_3ReasoningEffort: 'low',
+      reasoningEffort: 'max',
       textVerbosity: 'low',
-      thinkingLevel3: 'medium',
     };
     expect(evalRunChatConfigSchema.parse(input)).toEqual(input);
   });
 
   it('rejects values a model setting does not have, and fields that are not model settings', () => {
-    expect(evalRunChatConfigSchema.safeParse({ glm5_3ReasoningEffort: 'medium' }).success).toBe(
-      false,
-    );
+    expect(evalRunChatConfigSchema.safeParse({ reasoningEffort: 'extreme' }).success).toBe(false);
+    expect(evalRunChatConfigSchema.safeParse({ gpt6ReasoningEffort: 'high' }).success).toBe(false);
     expect(evalRunChatConfigSchema.safeParse({ systemRole: 'x' }).success).toBe(false);
   });
 });

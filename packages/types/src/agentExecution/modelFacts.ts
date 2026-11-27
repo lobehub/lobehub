@@ -1,4 +1,8 @@
-import type { AiModelReasoningConfig, ModelAbilities } from 'model-bank';
+import type {
+  AiModelReasoningConfig,
+  AiModelReasoningEffortSettings,
+  ModelAbilities,
+} from 'model-bank';
 
 /** The subset of a model card the model-parameter rules read (bundled bank or user-enabled list). */
 export interface ModelCardFacts {
@@ -12,6 +16,8 @@ export interface ModelCardFacts {
   /** Largest output the card declares; the server runtime caps a step's default `max_tokens` from it. */
   maxOutput?: number | null;
   providerId: string;
+  /** The card's reasoning effort control (`settings.reasoningEffort`). */
+  reasoningEffort?: AiModelReasoningEffortSettings | null;
 }
 
 /** The user's own row for the model, when they edited or created one. */
@@ -29,6 +35,8 @@ export interface UserModelRowFacts {
   displayName?: string | null;
   /** `[]` is an explicit opt-out from the card's params; absent falls back to the cards. */
   extendParams?: string[] | null;
+  /** The row's own reasoning effort control (`settings.reasoningEffort`); absent falls back to the cards. */
+  reasoningEffort?: AiModelReasoningEffortSettings | null;
 }
 
 /** What a model can take natively, as the run decided it. */
