@@ -52,7 +52,6 @@ import {
   setSidebarSectionHidden,
   SIDEBAR_ACCORDION_KEYS,
 } from '@/store/global/selectors/systemStatus';
-import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { densityTokens } from '@/styles/density.stylex';
 
 // ---------------------------------------------------------------------------
@@ -72,7 +71,6 @@ export interface SidebarItemConfig {
 
 const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
   { id: 'tasks', labelKey: 'tab.goalsAndTasks', labelNs: 'chat', routeId: 'tasks' },
-  { id: 'dashboard', labelKey: 'tab.dashboard', routeId: 'dashboard' },
   { id: 'favorites', labelKey: 'favorite.section' },
   { id: 'recents', labelKey: 'recents' },
   { id: 'project', labelKey: 'tab.projects', routeId: 'project' },
@@ -85,16 +83,14 @@ const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
 
 interface SidebarItemAvailability {
   channelsEnabled?: boolean;
-  dashboardEnabled?: boolean;
 }
 
 export const getAvailableSidebarItems = (
   isWorkspaceMode: boolean,
-  { channelsEnabled = false, dashboardEnabled = false }: SidebarItemAvailability = {},
+  { channelsEnabled = false }: SidebarItemAvailability = {},
 ): SidebarItemConfig[] =>
   ALL_SIDEBAR_ITEMS.filter((item) => {
     if (item.id === 'channels' && !channelsEnabled) return false;
-    if (item.id === 'dashboard' && (!dashboardEnabled || isWorkspaceMode)) return false;
     return true;
   });
 
@@ -311,15 +307,10 @@ const CustomizeSidebarContent = memo(() => {
   );
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const isWorkspaceMode = !!useActiveWorkspaceSlug();
-  const dashboardEnabled = useServerConfigStore(serverConfigSelectors.enableDashboard);
   const channelsEnabled = useChannelsEnabled();
   const sortableItemIds = useMemo(
-    () =>
-      getSortableSidebarItemIds(isWorkspaceMode, {
-        channelsEnabled,
-        dashboardEnabled,
-      }),
-    [isWorkspaceMode, channelsEnabled, dashboardEnabled],
+    () => getSortableSidebarItemIds(isWorkspaceMode, { channelsEnabled }),
+    [isWorkspaceMode, channelsEnabled],
   );
   const filteredStoreItems = useMemo(
     () => storeItems.filter((id) => sortableItemIds.has(id)),

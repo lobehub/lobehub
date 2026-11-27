@@ -1,4 +1,4 @@
-import { Button, Flexbox, SplitButton, Text, toast } from '@lobehub/ui';
+import { Button, SplitButton, toast } from '@lobehub/ui';
 import { CalendarOffIcon, PlayIcon, RotateCcwIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -41,18 +41,63 @@ export const shouldPersistFallbackAssignee = (
   inboxAgentId?: string | null,
 ) => !assigneeAgentId && !assigneeUserId && !!inboxAgentId;
 
-const TaskDetailRunPauseAction = memo(() => {
-  const { t } = useTranslation('chat');
-  const { allowed: canEditTask, reason } = usePermission('create_content');
-  const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
-  const canRun = useTaskStore(taskDetailSelectors.canRunActiveTask);
-  const canPause = useTaskStore(taskDetailSelectors.canPauseActiveTask);
+/** Time left until a scheduled task's next firing, ticking each second; `null` otherwise. */
+export const useNextRunCountdown = (): CountdownDisplay | null => {
   const status = useTaskStore(taskDetailSelectors.activeTaskStatus);
   const detail = useTaskStore(taskDetailSelectors.activeTaskDetail);
   const automationMode = useTaskStore(taskDetailSelectors.activeTaskAutomationMode);
   const interval = useTaskStore(taskDetailSelectors.activeTaskPeriodicInterval);
   const schedulePattern = useTaskStore(taskDetailSelectors.activeTaskSchedulePattern);
   const scheduleTimezone = useTaskStore(taskDetailSelectors.activeTaskScheduleTimezone);
+  const isScheduled = status === 'scheduled';
+
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!isScheduled) return;
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [isScheduled]);
+
+  return useMemo(() => {
+    if (!isScheduled) return null;
+    let next = null;
+    if (automationMode === 'heartbeat') {
+      next = nextHeartbeatFiring(
+        detail?.heartbeat?.scheduledAt ?? detail?.heartbeat?.lastAt,
+        interval,
+      );
+    } else if (automationMode === 'schedule' && schedulePattern) {
+      next = nextScheduleFiring(schedulePattern, scheduleTimezone);
+    }
+    if (!next) return null;
+    return formatCountdown(next.toDate().getTime() - nowMs);
+  }, [
+    isScheduled,
+    automationMode,
+    detail?.heartbeat?.lastAt,
+    detail?.heartbeat?.scheduledAt,
+    interval,
+    schedulePattern,
+    scheduleTimezone,
+    nowMs,
+  ]);
+};
+
+interface TaskDetailRunPauseActionProps {
+  /**
+   * Whether Run is the page's primary action. It steps back when the status
+   * strip already holds a more urgent one (reviewing a delivery).
+   */
+  emphasis?: 'default' | 'primary';
+}
+
+const TaskDetailRunPauseAction = memo<TaskDetailRunPauseActionProps>(({ emphasis = 'primary' }) => {
+  const { t } = useTranslation('chat');
+  const { allowed: canEditTask, reason } = usePermission('create_content');
+  const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
+  const canRun = useTaskStore(taskDetailSelectors.canRunActiveTask);
+  const canPause = useTaskStore(taskDetailSelectors.canPauseActiveTask);
+  const status = useTaskStore(taskDetailSelectors.activeTaskStatus);
   const assigneeAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
   const assigneeUserId = useTaskStore(taskDetailSelectors.activeTaskAssigneeUserId);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
@@ -146,72 +191,30 @@ const TaskDetailRunPauseAction = memo(() => {
     }
   }, [canEditTask, taskId, setAutomationMode, updateTaskStatus, status]);
 
-  const isScheduled = status === 'scheduled';
-
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    if (!isScheduled) return;
-    const id = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [isScheduled]);
-
-  const countdownText = useMemo(() => {
-    if (!isScheduled) return null;
-    let next = null;
-    if (automationMode === 'heartbeat') {
-      next = nextHeartbeatFiring(
-        detail?.heartbeat?.scheduledAt ?? detail?.heartbeat?.lastAt,
-        interval,
-      );
-    } else if (automationMode === 'schedule' && schedulePattern) {
-      next = nextScheduleFiring(schedulePattern, scheduleTimezone);
-    }
-    if (!next) return null;
-    return formatCountdown(next.toDate().getTime() - nowMs);
-  }, [
-    isScheduled,
-    automationMode,
-    detail?.heartbeat?.lastAt,
-    detail?.heartbeat?.scheduledAt,
-    interval,
-    schedulePattern,
-    scheduleTimezone,
-    nowMs,
-  ]);
-
-  if (isScheduled) {
+  if (status === 'scheduled') {
     return (
-      <Flexbox horizontal align={'center'} gap={12}>
-        <SplitButton disabled={!canEditTask || isCancellingSchedule} loading={isRunningNow}>
-          <SplitButton.Main
-            disabled={!canEditTask || isRunningNow}
-            icon={CalendarOffIcon}
-            loading={isCancellingSchedule}
-            title={canEditTask ? undefined : reason}
-            onClick={handleCancelSchedule}
-          >
-            {t('taskDetail.cancelSchedule')}
-          </SplitButton.Main>
-          <SplitButton.Menu
-            items={[
-              {
-                disabled: !canEditTask || isRunningNow || isCancellingSchedule,
-                icon: PlayIcon,
-                key: 'runNow',
-                label: t('taskDetail.runNow'),
-                onClick: handleRunNow,
-              },
-            ]}
-          />
-        </SplitButton>
-        {countdownText && (
-          <Text fontSize={12} type={'secondary'}>
-            {countdownText.type === 'days'
-              ? t('taskDetail.nextRunCountdownDays', countdownText)
-              : t('taskDetail.nextRunCountdown', countdownText)}
-          </Text>
-        )}
-      </Flexbox>
+      <SplitButton disabled={!canEditTask || isCancellingSchedule} loading={isRunningNow}>
+        <SplitButton.Main
+          disabled={!canEditTask || isRunningNow}
+          icon={CalendarOffIcon}
+          loading={isCancellingSchedule}
+          title={canEditTask ? undefined : reason}
+          onClick={handleCancelSchedule}
+        >
+          {t('taskDetail.cancelSchedule')}
+        </SplitButton.Main>
+        <SplitButton.Menu
+          items={[
+            {
+              disabled: !canEditTask || isRunningNow || isCancellingSchedule,
+              icon: PlayIcon,
+              key: 'runNow',
+              label: t('taskDetail.runNow'),
+              onClick: handleRunNow,
+            },
+          ]}
+        />
+      </SplitButton>
     );
   }
 
@@ -247,7 +250,7 @@ const TaskDetailRunPauseAction = memo(() => {
       disabled={!canEditTask}
       icon={runIcon}
       title={canEditTask ? undefined : reason}
-      type={'primary'}
+      type={emphasis === 'primary' ? 'primary' : 'default'}
       onClick={handleRunOrPause}
     >
       {runLabel}

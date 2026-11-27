@@ -124,7 +124,7 @@ export const ChannelManifest: BuiltinToolManifest = {
     {
       name: ChannelApiName.listChannels,
       description:
-        "List the Channels your requester belongs to, newest first, with each Channel's Agent members (agentId, name, description). Use it to find where to reach another Agent before sendMessage. The Channel you are answering in is marked current. Filter with agentId (Channels that Agent is in) or query (Channel title or Agent name). Default 10, maximum 20.",
+        "List the Channels your requester belongs to, newest first, with each Channel's Agent members (agentId, name, description) and people (their names). Use it to find where to reach another Agent before sendMessage, or a person before postMessage. When you answer someone through your owner's share, it lists your owner's Channels you are a member of instead. The Channel you are answering in is marked current. Filter with agentId (Channels that Agent is in) or query (Channel title, Agent or person name). Default 10, maximum 20.",
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -135,7 +135,8 @@ export const ChannelManifest: BuiltinToolManifest = {
           },
           query: {
             type: 'string',
-            description: 'Case-insensitive match on the Channel title or an Agent member name.',
+            description:
+              'Case-insensitive match on the Channel title, an Agent member name or a person name.',
           },
           limit: {
             type: 'integer',
@@ -384,7 +385,7 @@ export const ChannelManifest: BuiltinToolManifest = {
     {
       name: ChannelApiName.postMessage,
       description:
-        'Post a message as yourself somewhere other than where you are answering: the main timeline or a Thread of the current Channel, or another Channel you are an active member of (from listChannels). It carries the cards you drew earlier in this run (lobe-a2ui renderUI) and have not posted yet, unless includeCards is false, so to put a card somewhere else, draw it first, then post it here; with cards, content may be empty. A card it posts is not posted again, neither by a later postMessage nor with your final answer; to post one again (say, redrawn with newer data), name it in surfaceIds. Use it when asked to publish a result elsewhere, e.g. a Thread run asked to post its summary on the main timeline, or a report that belongs in another Channel. It wakes no one and answers no request; your final answer still goes where you are answering, so do not post there with this. Each call posts once.',
+        'Post a message as yourself somewhere other than where you are answering: the main timeline or a Thread of the current Channel, or another Channel you are an active member of (from listChannels). It carries the cards you drew earlier in this run (lobe-a2ui renderUI) and have not posted yet, unless includeCards is false, so to put a card somewhere else, draw it first, then post it here; with cards, content may be empty. A card it posts is not posted again, neither by a later postMessage nor with your final answer; to post one again (say, redrawn with newer data), name it in surfaceIds. Use it when asked to publish a result elsewhere, e.g. a Thread run asked to post its summary on the main timeline, or a report that belongs in another Channel, or to say something to a person in a Channel you share with them (find it with listChannels by their name). When you answer someone through a share of your owner, the post shows whom it was sent for. It wakes no one and answers no request; your final answer still goes where you are answering, so do not post there with this. Each call posts once.',
       parameters: {
         type: 'object',
         additionalProperties: false,

@@ -9,6 +9,7 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 
 import { canvasRuntimeEntries } from '../../plugins/vite/canvasRuntime';
 import { devLoadingProgress } from '../../plugins/vite/devLoadingProgress';
+import { viteRootInstallResolve } from '../../plugins/vite/rootInstallResolve';
 import {
   createSharedRolldownOutput,
   sharedModulePreload,
@@ -257,6 +258,8 @@ export default defineConfig(async (env) => {
     plugins: [
       isCloudDesktop && cloudTsconfigPathsPlugin(),
       isCloudDesktop && cloudDesktopBusinessConstPlugin(),
+      // The renderer serves root code; keep the desktop install's copies out of the dev graph.
+      viteRootInstallResolve({ rootDir: ROOT_DIR }),
       electronDesktopHtmlPlugin(),
       devLoadingProgress(),
       reactDevtoolsPlugin(),

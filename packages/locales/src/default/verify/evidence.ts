@@ -75,6 +75,7 @@ export const verifyEvidenceMessages = {
   'report.terminal.copyCommand': 'Copy command',
   'report.terminal.download': 'Download',
   'report.terminal.downloadRecording': 'Download recording',
+  'report.terminal.downloadTranscript': 'Download transcript',
   'report.terminal.env.hide': 'Hide',
   'report.terminal.error.hide': 'Hide details',
   'report.terminal.error.show': 'Show details',
@@ -107,6 +108,8 @@ export const verifyEvidenceMessages = {
   'report.terminal.output.lines_other': '{{count}} lines',
   'report.terminal.output.loadFailed':
     "Couldn't load this output. Try the Transcript view or download the file.",
+  'report.terminal.output.streamTooLarge': 'File is too large to preview',
+  'report.terminal.output.streamUnavailable': "Couldn't load this stream",
   'report.terminal.output.tooLarge':
     'Too large to preview here. Download it to read the full output.',
   'report.terminal.output.unavailable': "The output files aren't available.",

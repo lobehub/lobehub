@@ -310,6 +310,31 @@ describe('afterToolCall control pipeline', () => {
     expect(result.newState.messages[0].content).toBe('archived preview');
   });
 
+  it('reviews discovered agent files as the model sees them, then lets the run render them', async () => {
+    const fixture = setup([control()]);
+    fixture.execute.mockResolvedValue({
+      content: 'file body',
+      state: {
+        agentFileDiscovery: {
+          deviceId: 'device-a',
+          dirs: ['/repo/web'],
+          instructions: [
+            { content: 'Use pnpm.', path: '/repo/web/AGENTS.md', source: 'AGENTS.md' },
+          ],
+          skills: [],
+        },
+      },
+      success: true,
+    });
+
+    await fixture.step();
+
+    const reviewed = JSON.parse(fetchHook.mock.calls[0][1].body).result;
+    expect(reviewed.content).toMatch(/^<agent_files_discovered>[\s\S]*Use pnpm\.[\s\S]*file body$/);
+    expect(reviewed.state).not.toHaveProperty('agentFileDiscovery');
+    expect(fixture.rows[0].content).toMatch(/^<agent_files_discovered>[\s\S]*file body$/);
+  });
+
   it('holds all model-facing output while the result decision is pending', async () => {
     let resolve!: (value: Response) => void;
     fetchHook.mockImplementation(

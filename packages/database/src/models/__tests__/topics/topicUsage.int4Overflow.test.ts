@@ -76,8 +76,8 @@ describe('topic usage rollup past int4', () => {
     expect(reply.usage).toEqual(usage);
 
     const [topic] = await serverDB.select().from(topics).where(eq(topics.id, topicId));
-    // Overflowing columns keep their previous value; the one that fits advances.
-    expect(topic.totalTokens).toBe(PREVIOUS_TOTAL);
+    // bigint columns hold totals past the int4 limit (2,147,483,647).
+    expect(topic.totalTokens).toBe(PREVIOUS_TOTAL + 901_000);
     expect(topic.totalInputTokens).toBe(2_100_900_000);
     expect(topic.totalOutputTokens).toBe(47_001_000);
     // The jsonb rollup and cost still carry the true totals.

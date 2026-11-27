@@ -1,6 +1,6 @@
 // @vitest-environment node
 import type { LobeChatDatabase } from '@lobechat/database';
-import { agents, knowledgeBases, workspaces } from '@lobechat/database/schemas';
+import { agents, knowledgeBases, topics, workspaces } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -102,6 +102,32 @@ describe('Project Router Integration', () => {
 
     const reopened = await caller.reopen({ id: created.data.id });
     expect(reopened.data.status).toBe('active');
+  });
+
+  it('keeps a former main agent out once it is removed, even with project topics', async () => {
+    const project = await caller.create({ identifier: 'HAND', name: 'Handoff' });
+    const [former, successor] = await serverDB
+      .insert(agents)
+      .values([
+        { title: 'Former lead', userId },
+        { title: 'Successor', userId },
+      ])
+      .returning();
+    await caller.replaceCoordinator({ agentId: former.id, id: project.data.id });
+    // The topics it ran as main agent stay with the project after the handover.
+    await serverDB
+      .insert(topics)
+      .values({ agentId: former.id, projectId: project.data.id, title: 'Plan', userId });
+    await caller.replaceCoordinator({ agentId: successor.id, id: project.data.id });
+
+    await caller.removeAgent({ agentId: former.id, id: project.data.id });
+
+    for (let visit = 0; visit < 2; visit++) {
+      const detail = await caller.detail({ id: project.data.id });
+      const memberIds = detail.data.agents?.map(({ agent }) => agent.id);
+      expect(memberIds).toContain(successor.id);
+      expect(memberIds).not.toContain(former.id);
+    }
   });
 
   it('rejects cross-project task dependencies', async () => {

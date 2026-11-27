@@ -264,6 +264,7 @@ table agent_bot_providers {
   credentials text
   settings jsonb [default: `{}`]
   enabled boolean [not null, default: true]
+  last_active_at "timestamp with time zone" [not null, default: `now()`]
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -333,7 +334,7 @@ table agent_deliveries {
   shots integer
   frictions jsonb
   total_cost "numeric(20, 6)"
-  total_tokens integer
+  total_tokens bigint
   tool_calls integer
   user_messages integer
   agent_messages integer
@@ -934,9 +935,9 @@ table agent_operations {
   error jsonb
   total_cost "numeric(20, 6)"
   currency text [not null, default: 'USD']
-  total_input_tokens integer
-  total_output_tokens integer
-  total_tokens integer
+  total_input_tokens bigint
+  total_output_tokens bigint
+  total_tokens bigint
   llm_calls integer
   tool_calls integer
   human_interventions integer
@@ -5181,9 +5182,9 @@ table topics {
   status text
   completed_at "timestamp with time zone"
   total_cost "numeric(20, 6)"
-  total_input_tokens integer
-  total_output_tokens integer
-  total_tokens integer
+  total_input_tokens bigint
+  total_output_tokens bigint
+  total_tokens bigint
   cost jsonb
   usage jsonb
   model text
@@ -5233,9 +5234,9 @@ table topic_analyses {
   provider text
   topic_model text
   topic_provider text
-  total_tokens integer
-  total_input_tokens integer
-  total_output_tokens integer
+  total_tokens bigint
+  total_input_tokens bigint
+  total_output_tokens bigint
   total_cost "numeric(20, 6)"
   llm_calls integer
   tool_calls integer

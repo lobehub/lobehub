@@ -41,6 +41,21 @@ describe('agent credential relays', () => {
     );
   });
 
+  it('checks a provided secret without installing it, and the installed one otherwise', async () => {
+    const invokeRpc = vi.fn(async () => ({
+      data: { checkedAt: 'now', checkedProvidedSecret: true, installed: false, ok: true },
+      success: true,
+    }));
+
+    await checkAgentCredential(clientWith(invokeRpc), address, { provider: 'claude-code', secret });
+    await checkAgentCredential(clientWith(invokeRpc), address, { provider: 'claude-code' });
+
+    expect(invokeRpc.mock.calls.map(([, call]) => call)).toEqual([
+      { method: 'checkAgentCredential', params: { provider: 'claude-code', secret } },
+      { method: 'checkAgentCredential', params: { provider: 'claude-code' } },
+    ]);
+  });
+
   it('reports a client without credential support as unsupported', async () => {
     const invokeRpc = vi.fn(async () => ({
       error: 'Unknown device RPC method: removeAgentCredential',

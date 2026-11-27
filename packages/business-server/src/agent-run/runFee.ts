@@ -1,4 +1,11 @@
+import type { AgentShareVisitorIds } from '@lobechat/types';
+
 export interface HoldAgentRunFeeParams {
+  /**
+   * Set on a shared Agent's visitor run, so the deployment pays the fee from what funds that
+   * share's visitor runs.
+   */
+  agentShare?: AgentShareVisitorIds;
   /** The run's operation id, or a provisional id later moved with {@link rebindAgentRunFee}. */
   holderId: string;
   /**

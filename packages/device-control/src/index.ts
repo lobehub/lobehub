@@ -43,4 +43,10 @@ export {
 } from './projectFileIndex';
 export { defaultSkillCacheRoot, prepareSkillDirectory } from './skillDirectory';
 export * from './types';
-export { browseDirectory, initWorkspace, listProjectSkills, statPath } from './workspace';
+export {
+  browseDirectory,
+  discoverAgentFiles,
+  initWorkspace,
+  listProjectSkills,
+  statPath,
+} from './workspace';

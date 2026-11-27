@@ -17,7 +17,10 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { useFetchFavorites } from '@/features/Favorites';
-import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
+import SectionTitle, {
+  sectionItemClassName,
+  useSectionTriggerStyle,
+} from '@/features/NavPanel/components/SectionTitle';
 import { useHomeStore } from '@/store/home';
 import { favoriteSelectors } from '@/store/home/selectors';
 
@@ -46,7 +49,7 @@ const Favorites = memo<FavoritesProps>(({ itemKey }) => {
   if (!loadFailed && (!list || list.length === 0)) return null;
 
   return (
-    <AccordionItem value={itemKey}>
+    <AccordionItem className={sectionItemClassName} value={itemKey}>
       <ContextMenuTrigger items={menuItems}>
         <AccordionHeader>
           <AccordionTrigger style={sectionTriggerStyle}>

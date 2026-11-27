@@ -149,3 +149,40 @@ describe('isQueueDrainedAtRunEnd', () => {
     expect(operationSelectors.isQueueDrainedAtRunEnd(context)(result.current)).toBe(false);
   });
 });
+
+describe('isRunSteerUnsupported', () => {
+  beforeEach(() => {
+    useChatStore.setState(useChatStore.getInitialState());
+  });
+
+  const startRun = (metadata?: OperationMetadata) => {
+    const { result } = renderHook(() => useChatStore());
+    act(() => {
+      result.current.startOperation({ context, metadata, type: 'execHeterogeneousAgent' });
+    });
+    return result;
+  };
+
+  it('is true only for a running run known to be unable to steer', () => {
+    expect(
+      operationSelectors.isRunSteerUnsupported(context)(
+        startRun({ steerUnsupported: true }).current,
+      ),
+    ).toBe(true);
+  });
+
+  // A run whose ability is not known yet must never be stopped for a restart.
+  it('is false for a CLI run that has not said it cannot steer', () => {
+    expect(operationSelectors.isRunSteerUnsupported(context)(startRun().current)).toBe(false);
+  });
+
+  it('is false once the run ended', () => {
+    const result = startRun({ steerUnsupported: true });
+    act(() => {
+      const [id] = Object.keys(result.current.operations);
+      result.current.completeOperation(id);
+    });
+
+    expect(operationSelectors.isRunSteerUnsupported(context)(result.current)).toBe(false);
+  });
+});

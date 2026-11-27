@@ -16,6 +16,7 @@ instructions merely to learn how to submit an artifact.
 | `video`        | A longer animation, transition, gesture, or multi-step flow needs a player and better compression |
 | `audio`        | The deliverable is something the user **hears** — TTS output, a voice reply, an alert tone        |
 | `transcript`   | A conversation, event stream, or request log is itself the proof                                  |
+| `terminal`     | One command execution — published from a `capture`/`import` bundle, never by hand                 |
 
 The declared `requiredEvidence` type is binding. Do not replace a required video
 with a final screenshot or a required DOM snapshot with prose.
@@ -68,6 +69,13 @@ separate `text` artifacts on the same check:
 
 Keep both artifacts in the current immutable round. Do not ask a reviewer to
 join an explanation from an older round with fresh execution output.
+
+With an `lh` that has `acceptance run evidence capture`, publish the
+execution artifact as `terminal` evidence (see the CLI surface guide): its record
+carries the exact command, cwd, exit status and timing, so the reasoning
+artifact stays the only place for interpretation. A `terminal` evidence stands
+in for a required `text` or `transcript`; a requirement with
+`"provenance": "execution"` accepts only a `captured` or `imported` one.
 
 ## File versus inline content
 

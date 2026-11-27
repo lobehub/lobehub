@@ -1,6 +1,6 @@
 import { useEditor } from '@lobehub/editor/react';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { Paperclip } from 'lucide-react';
+import { AlignLeftIcon, Paperclip } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,6 +15,7 @@ import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import { TASK_INSTRUCTION_EDITOR_PROPS } from './taskInstructionPlugins';
+import TaskSectionHeader from './TaskSectionHeader';
 import { useTaskInstructionAutosave } from './useTaskInstructionAutosave';
 
 // Stable lock RPC binding for the task resource.
@@ -119,6 +120,20 @@ const TaskInstruction = memo(() => {
 
   return (
     <Flexbox gap={4}>
+      <TaskSectionHeader
+        icon={AlignLeftIcon}
+        title={t('taskDetail.instruction')}
+        extra={
+          showAttach ? (
+            <ActionIcon
+              icon={Paperclip}
+              size={'small'}
+              title={t('upload.action.tooltip')}
+              onClick={handleAttach}
+            />
+          ) : undefined
+        }
+      />
       <EditingIndicator
         holderId={lock.lockedByOther ? lock.holderId : null}
         pending={canEditTask && lock.pending}
@@ -147,14 +162,6 @@ const TaskInstruction = memo(() => {
           />
         </div>
       </CollapsibleContent>
-      {showAttach && (
-        <ActionIcon
-          icon={Paperclip}
-          size={'small'}
-          title={t('upload.action.tooltip')}
-          onClick={handleAttach}
-        />
-      )}
     </Flexbox>
   );
 });

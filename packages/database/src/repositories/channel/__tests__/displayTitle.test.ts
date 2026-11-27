@@ -5,7 +5,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../../core/getTestDB';
 import { channels, projects, workspaceMembers } from '../../../schemas';
 import { trashStamp } from '../../../utils/softDelete';
-import { ChannelRepository, projectDefaultChannelMetadata, withDisplayTitle } from '..';
+import { ProjectRepository } from '../../project';
+import {
+  ChannelRepository,
+  projectChannelIds,
+  projectDefaultChannelMetadata,
+  withDisplayTitle,
+} from '..';
 import { createChannelFixture } from './testUtils';
 
 const db = await getTestDB();
@@ -118,5 +124,32 @@ describe('Channel display titles', () => {
       expect.objectContaining({ displayTitle: 'Lobot', id: channel.id, title: 'General' }),
     ]);
     expect(joinable[0]).not.toHaveProperty('metadata');
+  });
+
+  it("names a deleted project's General Channels after it, keeping renamed ones", async () => {
+    const { main, other, project } = await lobot();
+    const { channel: renamed } = await owner().create({ projectId: project.id, title: 'Lobby' });
+    const { channel: elsewhere } = await owner().create({ title: 'General' });
+    const updatedAt = new Date('2026-01-02T03:04:05Z');
+    await db.update(channels).set({ updatedAt }).where(eq(channels.id, main.id));
+    // What the delete flow reads first, to tell these Channels' members afterwards.
+    expect((await projectChannelIds(db, project.id)).toSorted()).toEqual(
+      [main.id, other.id, renamed.id].toSorted(),
+    );
+
+    await new ProjectRepository(db, fixture.ownerId, fixture.workspaceId).delete(project.id);
+
+    const list = await owner().list();
+    const byId = new Map(list.map((channel) => [channel.id, channel]));
+    expect(byId.get(main.id)).toMatchObject({
+      displayTitle: 'Lobot',
+      projectId: null,
+      title: 'Lobot',
+    });
+    expect(byId.get(other.id)).toMatchObject({ projectId: null, title: 'Lobot' });
+    expect(byId.get(renamed.id)).toMatchObject({ projectId: null, title: 'Lobby' });
+    expect(byId.get(elsewhere.id)?.title).toBe('General');
+    // Taking the name is no activity, so a sort by last activity does not move it.
+    expect(new Date(byId.get(main.id)!.updatedAt!).toISOString()).toBe(updatedAt.toISOString());
   });
 });

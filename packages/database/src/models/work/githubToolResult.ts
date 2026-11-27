@@ -5,9 +5,9 @@ import type {
   WorkDisplayField,
   WorkVersionMetadata,
 } from '@lobechat/types';
+import { parseShellCommandSegments } from '@lobechat/utils/shellCommandParsing';
 
 import { WORK_DESCRIPTION_PREVIEW_LENGTH } from './internal';
-import { parseShellCommandSegments } from './shellCommandParsing';
 import {
   type ExternalToolWorkOperation,
   fromRecord,

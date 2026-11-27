@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -200,5 +200,110 @@ describe('checkAgentCredential', () => {
 
     expect(result.ok).toBe(false);
     expect(result.reason).not.toContain(TOKEN);
+  });
+});
+
+describe('checkAgentCredential with a given secret', () => {
+  const RUN_TOKEN = 'sk-ant-oat01-run-token-value';
+  const withSecret = (expiresAt = '2026-07-01T00:00:00.000Z') => ({
+    provider: 'claude-code',
+    secret: { expiresAt, token: RUN_TOKEN, type: 'claude-oauth-token' },
+  });
+
+  it('probes the given token, not the installed one, and leaves the store alone', async () => {
+    await installClaude();
+    const credentialFile = path.join(rootDir, 'claude-code', 'credential.json');
+    const before = await readFile(credentialFile, 'utf8');
+    const fetch = vi.fn(async () => jsonResponse(200, { input_tokens: 9 }));
+
+    const result = await checkAgentCredential(withSecret(), { fetch, now: () => NOW, rootDir });
+
+    expect(result).toEqual({
+      checkedAt: '2026-06-01T00:00:00.000Z',
+      checkedProvidedSecret: true,
+      expiresAt: '2026-07-01T00:00:00.000Z',
+      installed: true,
+      ok: true,
+    });
+    const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(init.headers).toMatchObject({ Authorization: `Bearer ${RUN_TOKEN}` });
+    expect(await readFile(credentialFile, 'utf8')).toBe(before);
+  });
+
+  it('reports installed: false when nothing is on disk, and writes nothing', async () => {
+    const fetch = vi.fn(async () => jsonResponse(200, { input_tokens: 9 }));
+
+    const result = await checkAgentCredential(withSecret(), { fetch, now: () => NOW, rootDir });
+
+    expect(result).toMatchObject({ installed: false, ok: true });
+    expect(await readdir(rootDir)).toEqual([]);
+  });
+
+  it('rejects an expired secret without calling the provider', async () => {
+    const fetch = vi.fn();
+
+    const result = await checkAgentCredential(withSecret('2026-05-01T00:00:00.000Z'), {
+      fetch,
+      now: () => NOW,
+      rootDir,
+    });
+
+    expect(result).toMatchObject({ installed: false, ok: false });
+    expect(result.reason).toContain('expired');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps the token out of a provider rejection', async () => {
+    const fetch = vi.fn(async () =>
+      jsonResponse(401, { error: { message: `Invalid bearer token ${RUN_TOKEN}` } }),
+    );
+
+    const result = await checkAgentCredential(withSecret(), { fetch, now: () => NOW, rootDir });
+
+    expect(result.ok).toBe(false);
+    expect(JSON.stringify(result)).not.toContain(RUN_TOKEN);
+  });
+
+  it('answers ok: false for a Codex secret', async () => {
+    const fetch = vi.fn();
+
+    const result = await checkAgentCredential(
+      { provider: 'codex', secret: { authJson: '{}', type: 'codex-auth-json' } },
+      { fetch, now: () => NOW, rootDir },
+    );
+
+    expect(result).toMatchObject({ checkedProvidedSecret: true, installed: false, ok: false });
+    expect(result.reason).toContain('not supported');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('marks only a check of the provided secret, never one of the installed store', async () => {
+    await installClaude();
+    const fetch = vi.fn(async () => jsonResponse(200, { input_tokens: 9 }));
+
+    const installed = await checkAgentCredential(
+      { provider: 'claude-code' },
+      { fetch, now: () => NOW, rootDir },
+    );
+    const provided = await checkAgentCredential(withSecret('2026-05-01T00:00:00.000Z'), {
+      fetch,
+      now: () => NOW,
+      rootDir,
+    });
+
+    expect(installed).not.toHaveProperty('checkedProvidedSecret');
+    expect(provided.checkedProvidedSecret).toBe(true);
+  });
+
+  it('refuses a malformed secret by naming the field only', async () => {
+    await expect(
+      checkAgentCredential(
+        {
+          provider: 'claude-code',
+          secret: { expiresAt: 'x', token: RUN_TOKEN, type: 'claude-oauth-token' },
+        },
+        { fetch: vi.fn(), now: () => NOW, rootDir },
+      ),
+    ).rejects.toThrow('secret.expiresAt must be an ISO date');
   });
 });

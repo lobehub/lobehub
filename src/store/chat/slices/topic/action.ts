@@ -685,7 +685,7 @@ export class ChatTopicActionImpl {
     provider: string;
   }): Promise<AiModelReasoningConfig | undefined> => {
     const aiInfraStore = getAiInfraStoreState();
-    if (!aiModelSelectors.isModelHasReasoningExtendParams(model, provider)(aiInfraStore)) return;
+    if (!aiModelSelectors.isModelHasReasoningControls(model, provider)(aiInfraStore)) return;
 
     await aiInfraStore.ensureModelReasoningConfig(model, provider);
     return aiModelSelectors.modelReasoningConfig(model, provider)(getAiInfraStoreState()) ?? {};

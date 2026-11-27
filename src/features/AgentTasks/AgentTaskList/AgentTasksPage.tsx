@@ -685,6 +685,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
           >
             {isScheduledCollection ? (
               <ScheduledTaskTable
+                collapseScope={taskListCollapseScopeKey(pageScope, 'scheduled')}
                 data={isCollectionListInit || undefined}
                 emptyDescription={filterEmptyDescription}
                 error={collectionSWR.error}

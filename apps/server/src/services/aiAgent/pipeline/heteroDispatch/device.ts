@@ -3,6 +3,7 @@ import type { ExecAgentResult } from '@lobechat/types';
 import { getWorkingDirSessionPath } from '@lobechat/types';
 import debug from 'debug';
 
+import { resolveDeviceAgentRunCredential } from '@/business/server/deviceAgentRunCredential';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DeviceModel } from '@/database/models/device';
 import type { ExecutionPlan } from '@/helpers/executionTarget';
@@ -304,6 +305,21 @@ export const dispatchToCliDevice = async (
     return undefined;
   }
 
+  // A credential the deployment supplies for this run travels with the
+  // request, so the device never has to store it. Resolved last, right before
+  // the dispatch, so it is never fetched for a run that does not go out.
+  const runCredential = authorizationError
+    ? undefined
+    : await traceHeteroStage('device run_credential', () =>
+        resolveDeviceAgentRunCredential({
+          agentId: resolvedAgentId,
+          agentType: deviceHeteroParams.agentType,
+          deviceId: dispatchDeviceId,
+          userId: deps.userId,
+          ...(dispatchWorkspaceId ? { workspaceId: dispatchWorkspaceId } : {}),
+        }),
+      );
+
   // Anything that touches the run after this instant proves it started.
   const dispatchedAt = new Date();
   const result = authorizationError
@@ -320,6 +336,7 @@ export const dispatchToCliDevice = async (
           cwd: deviceCwd,
           deviceId: dispatchDeviceId,
           resumeFallbackSystemContext: deviceResumeFallbackSystemContext,
+          ...(runCredential && { runCredential }),
           systemContext: deviceSystemContext,
           // Route to the workspace pool when this is a workspace device; the
           // operation JWT stays member-scoped (the run belongs to the member).

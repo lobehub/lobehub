@@ -10,6 +10,7 @@ const detail = (
   sharedAgentOwner: typeof owner | null = owner,
 ) =>
   ({
+    channel: { agentId: 'agent' },
     jobs: [{ id: 'job', messageId: 'msg', ...job }],
     sharedAgentOwner,
   }) as never;
@@ -39,6 +40,22 @@ describe('shareRefusalOf', () => {
         'msg',
       ),
     ).toEqual({ errorType: ChatErrorType.ShareHeterogeneousAgentUnsupported, owner });
+  });
+
+  // A tip lifts it, and the visitor can give one themselves; asking the owner is not the way on.
+  it('offers a tip to the Agent, not the owner, when its funds for visitors ran out', () => {
+    expect(
+      shareRefusalOf(
+        detail({ errorType: ChatErrorType.ShareFundingExhausted, status: 'failed' }),
+        'msg',
+      ),
+    ).toEqual({ errorType: ChatErrorType.ShareFundingExhausted, tipAgentId: 'agent' });
+    expect(
+      shareRefusalOf(
+        detail({ errorType: ChatErrorType.ShareSpendLimitExceeded, status: 'failed' }),
+        'msg',
+      ),
+    ).not.toHaveProperty('tipAgentId');
   });
 
   it('only explains a message that is too long, which the visitor fixes themselves', () => {

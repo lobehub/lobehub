@@ -263,6 +263,11 @@ export const compressContext =
       }
 
       newState.messages = compressedMessages;
+      // Mid-run agent files live only in the tool result that found them, and
+      // the summary may have replaced it. Forget them so the next file tool in
+      // those directories shows them again; the start-of-run ones are in the
+      // system prompt and unaffected.
+      newState.discoveredAgentFiles = undefined;
 
       if (summaryResult.usage) {
         const { usage, cost } = UsageCounter.accumulateLLM({

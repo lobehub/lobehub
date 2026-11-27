@@ -329,6 +329,35 @@ export const channelMessageEditedAt = (
   return typeof editedAt === 'string' ? new Date(editedAt) : null;
 };
 
+/**
+ * `metadata.postedFor` of a post a shared Agent made for a visitor in one of its owner's Channels
+ * the visitor is not in (`lobe-channel.postMessage`): who asked, and, when they asked in a public
+ * Channel, a link back to it. Shown after the author's name, as "sent at <name>'s request".
+ */
+export interface ChannelMessagePostedFor {
+  name: string;
+  /** Where they asked; set only when that Channel is public, so its readers can open it. */
+  source?: { channelId: string; title: string; url: string };
+  userId: string;
+}
+
+/** `metadata.postedFor` of an Agent's post, or undefined for anything else. */
+export const channelMessagePostedFor = (
+  metadata: ChannelMessageMetadata | null | undefined,
+): ChannelMessagePostedFor | undefined => {
+  const postedFor = metadata?.postedFor as Partial<ChannelMessagePostedFor> | undefined;
+  if (typeof postedFor?.userId !== 'string' || typeof postedFor.name !== 'string') return;
+  const source = postedFor.source;
+  return {
+    name: postedFor.name,
+    userId: postedFor.userId,
+    ...(typeof source?.channelId === 'string' &&
+      typeof source.url === 'string' && {
+        source: { channelId: source.channelId, title: source.title ?? '', url: source.url },
+      }),
+  };
+};
+
 /** `metadata.via` of a relayed request, or undefined for anything else. */
 export const channelMessageVia = (
   metadata: ChannelMessageMetadata | null | undefined,
@@ -525,6 +554,8 @@ export interface ChannelDirectoryEntry {
    * other; `group`: everything else.
    */
   kind: 'agents' | 'direct' | 'group';
+  /** The people in it, by the names the Channel shows, so an Agent finds where it reaches someone. */
+  people?: string[];
   projectId: string | null;
   title: string;
 }
@@ -938,6 +969,8 @@ export interface ChannelPublicMessage {
   /** What the message is; its payload, if any, is in the field named after it. */
   kind?: ChannelMessageKind;
   mentions: string[];
+  /** The visitor a shared Agent posted this for, in a Channel they are not in; null otherwise. */
+  postedFor?: ChannelMessagePostedFor | null;
   /** Another Channel's reply this request brings back to the relaying Agent; null otherwise. */
   receipt?: ChannelMessageReceipt | null;
   recipientMemberIds: string[];

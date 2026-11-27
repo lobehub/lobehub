@@ -8,6 +8,11 @@ export interface ModelPricingContext {
 
 /** Request-scoped data available to dynamic model router resolution. */
 export interface RouterRuntimeRequestContext {
+  /**
+   * Caller metadata of the request being routed (for example its topic id), so a router can
+   * derive per-request channel options such as a sticky-session header.
+   */
+  metadata?: Record<string, unknown>;
   model?: string;
   pricingContext?: ModelPricingContext;
 }

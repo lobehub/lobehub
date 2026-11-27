@@ -45,6 +45,7 @@ import { MessageAttachments } from './MessageAttachments';
 import { channelMessageTime, channelTimeFormatters } from './messagePresentation';
 import { MessageRoutingStatus } from './MessageReceipts';
 import { MessageSurfaces } from './MessageSurfaces';
+import PostedForLabel from './PostedForLabel';
 import { ReplyFailureCard } from './ReplyFailure';
 import { showsReplyQuote } from './replyQuote';
 import type { ReplyTopic } from './ReplyTopicPanel';
@@ -122,7 +123,9 @@ export const ChannelMessage = ({
   const timeFormats = useMemo(() => channelTimeFormatters(i18n.language), [i18n.language]);
   const date = new Date(message.createdAt);
   // Unassigned requests keep their identity row and recovery affordance.
-  const compact = continuation && !isRoot && message.routingStatus !== 'unassigned';
+  // A post for someone outside this Channel keeps its header, which says whom it is for.
+  const compact =
+    continuation && !isRoot && message.routingStatus !== 'unassigned' && !message.postedFor;
   // A continuation sits under its header, so its hover stamp only needs the clock.
   const timestamp = (
     <time
@@ -250,7 +253,6 @@ export const ChannelMessage = ({
         placement="left"
         showHeader={!compact}
         style={{ paddingInlineStart: 48 }}
-        titleAddon={timestamp}
         avatar={{
           avatar: authorAvatar(message.author),
           title: message.author.name || t('deletedMember'),
@@ -379,6 +381,16 @@ export const ChannelMessage = ({
               />
             )}
           </Flexbox>
+        }
+        titleAddon={
+          message.postedFor ? (
+            <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
+              {timestamp}
+              <PostedForLabel postedFor={message.postedFor} />
+            </Flexbox>
+          ) : (
+            timestamp
+          )
         }
       />
       {hasToolbar && (

@@ -925,6 +925,19 @@ export default {
   'channel.statusConnected': 'Connected',
   'channel.statusDisconnected': 'Disconnected',
   'channel.statusDormant': 'Dormant',
+  'channel.statusSleeping': 'Asleep',
+  'channel.sleep.title.waking': 'This bot fell asleep from disuse. Waking it up…',
+  'channel.sleep.title.woke': 'This bot fell asleep from disuse and has been woken up',
+  'channel.sleep.title.failed':
+    "This bot is asleep and couldn't be woken up. Refresh the page to try again.",
+  'channel.sleep.desc':
+    'Free plan bots go to sleep after two weeks without use; paid plans extend that to a month.',
+  'channel.sleep.descWithWebhook':
+    'Free plan bots go to sleep after two weeks without use; paid plans extend that to a month. Switch to Webhook mode to keep it always on.',
+  'channel.sleep.descLongest':
+    'Bots go to sleep after a month without use. Opening this page wakes it up.',
+  'channel.sleep.descLongestWithWebhook':
+    'Bots go to sleep after a month without use. Opening this page wakes it up; switch to Webhook mode to keep it always on.',
   'channel.statusFailed': 'Failed',
   'channel.statusQueued': 'Queued',
   'channel.statusStarting': 'Starting',
@@ -954,6 +967,8 @@ export default {
   'share.settings.limits.monthlySpendLimit': 'Monthly spend cap',
   'share.settings.limits.monthlySpendLimitHint':
     'Visitor runs stop once this month’s spend on this Agent reaches the cap. Resets on the 1st of each month (UTC).',
+  'share.settings.limits.monthlySpendLimitTipsHint':
+    'Caps what you pay for visitor runs each month. Visitors’ tips are spent first and don’t count toward it; set 0 to run on tips only. Resets on the 1st of each month (UTC).',
   'share.settings.limits.monthlySpendLimitUnit': 'USD',
   'share.settings.limits.saved': 'Limits saved',
   'share.settings.limits.title': 'Limits',
@@ -1089,6 +1104,16 @@ export default {
   'share.settings.tabs.access': 'Access',
   'share.settings.tabs.profile': 'Public profile',
   'share.settings.tabs.stats': 'Stats',
+  'share.settings.tips.desc':
+    'Visitors can tip this Agent $5, $10 or $20. Tips pay for visitor runs before your own credits. They can’t be withdrawn, expire 6 months after they’re given, and are lost if you permanently delete the Agent.',
+  'share.settings.tips.emptyForfeit':
+    'The Agents being deleted still hold {{amount}} in visitor tips. Emptying the trash forfeits them, and they can’t be refunded.',
+  'share.settings.tips.enabled': 'Show the tip button',
+  'share.settings.tips.enabledHint':
+    'Turning it off only hides the button. Tips already given keep paying for visitor runs.',
+  'share.settings.tips.purgeForfeit':
+    'This Agent still holds {{amount}} in visitor tips. Deleting it permanently forfeits them, and they can’t be refunded.',
+  'share.settings.tips.title': 'Visitor tips',
   'share.settings.title': 'Share Agent',
   'share.settings.tools.autoGranted': 'Open automatically because it’s turned on in this Agent',
   'share.settings.usage.conversations': 'Topics',
@@ -1107,6 +1132,16 @@ export default {
   'share.settings.usage.spendOfLimit': '${{spend}} of ${{limit}}',
   'share.settings.usage.spendOfLimitCredits': '{{spend}} of {{limit}}',
   'share.settings.usage.title': 'Usage',
+  'share.settings.usage.tips.balance': 'Tips left',
+  'share.settings.usage.tips.balanceHint': 'Spent on visitor runs before your own credits.',
+  'share.settings.usage.tips.desc':
+    'What visitors have tipped this Agent. You never see who tipped.',
+  'share.settings.usage.tips.lifetime': 'Tipped in total',
+  'share.settings.usage.tips.lifetimeHint': 'Refunded and disputed tips excluded.',
+  'share.settings.usage.tips.loadFailed': 'Tips could not be loaded',
+  'share.settings.usage.tips.monthSpend': 'Paid by tips this month',
+  'share.settings.usage.tips.monthSpendHint': 'Not counted toward your monthly spend cap.',
+  'share.settings.usage.tips.title': 'Tips',
   'share.settings.usage.views': 'Page views',
   'share.settings.usage.viewsHint': 'Repeat views included. Your own previews are excluded.',
   'share.settings.usage.visitors': 'Users',
@@ -1236,6 +1271,20 @@ export default {
   'share.visitor.profile.terms.visibilityCreator':
     'The creator has turned on topic access and may read the messages in your topics.',
   'share.visitor.profile.terms.visibilityPrivate': 'Only you can see your topics.',
+  'share.visitor.tip.action': 'Tip',
+  'share.visitor.tip.checkoutFailed': 'Couldn’t open the payment page. Please try again.',
+  'share.visitor.tip.confirmFailed':
+    'We couldn’t confirm your tip yet. If it doesn’t show up soon, contact support.',
+  'share.visitor.tip.continue': 'Leave a tip',
+  'share.visitor.tip.desc':
+    'Your tip pays for the conversations visitors have with this Agent, yours included. Tips can’t be withdrawn and expire 6 months after payment.',
+  'share.visitor.tip.processing': 'Your payment is processing. The tip is added once it clears.',
+  'share.visitor.tip.refunded':
+    'This Agent was deleted before your payment went through, so it has been refunded.',
+  'share.visitor.tip.thanks': 'Thanks for your tip! The Agent can keep replying to visitors.',
+  'share.visitor.tip.tipped': 'You’ve tipped {{amount}} so far',
+  'share.visitor.tip.title': 'Tip this Agent',
+  'share.visitor.tip.unavailable': 'This Agent isn’t accepting tips right now.',
   'share.visitor.topBar.home': 'Go to my LobeHub',
   'share.visitor.upload.creatorStorageBlocked':
     "This Agent's upload space is full. Ask its creator to free up room or raise the cap.",

@@ -234,7 +234,7 @@ describe('AgentEvalRunService case Agents', () => {
     ]);
 
     const service = new AgentEvalRunService(serverDB, userId);
-    const chatConfig = { enableReasoning: true, gpt5_6ReasoningEffort: 'high' as const };
+    const chatConfig = { enableReasoning: true, reasoningEffort: 'high' as const };
     const run = await service.createRun({
       config: { chatConfig, model: 'gpt-6.1-terra', provider: 'openrouter' },
       datasetId: dataset.id,

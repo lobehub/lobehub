@@ -63,6 +63,10 @@ const workflowStreamingExpandLevel = (s: UserStore) =>
 const followUpBehavior = (s: UserStore): FollowUpBehavior =>
   generalConfig(s).followUpBehavior ?? DEFAULT_FOLLOW_UP_BEHAVIOR;
 
+/** Whether Steer stops a run that can't take messages mid-run and restarts with them. */
+const restartUnsteerableRun = (s: UserStore): boolean =>
+  generalConfig(s).restartUnsteerableRun ?? false;
+
 export const userGeneralSettingsSelectors = {
   animationMode,
   config: generalConfig,
@@ -81,6 +85,7 @@ export const userGeneralSettingsSelectors = {
   currentResponseLanguage,
   currentTimezone,
   responseLanguage,
+  restartUnsteerableRun,
   showImageReadPreview,
   showMessageUsage,
   telemetry,

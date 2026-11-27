@@ -1,17 +1,5 @@
 import { matchesTaskListFilter, type TaskListFilter } from '@lobechat/types';
-import {
-  AccordionHeader,
-  AccordionItem,
-  AccordionRoot,
-  AccordionTrigger,
-  Center,
-  Divider,
-  Empty,
-  Flexbox,
-  Icon,
-  Skeleton,
-  Text,
-} from '@lobehub/ui';
+import { Center, Divider, Empty, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { CalendarClockIcon, CircleAlert } from 'lucide-react';
@@ -27,10 +15,12 @@ import { sx } from '@/styles/sx';
 import SelectableTaskRow from '../AgentTaskList/selection/SelectableTaskRow';
 import TaskBulkActionBar from '../AgentTaskList/selection/TaskBulkActionBar';
 import { useTaskListSelection } from '../AgentTaskList/selection/useTaskListSelection';
+import TaskListGroupHeader from '../AgentTaskList/TaskListGroupHeader';
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import { ScheduledTaskRow } from './ScheduledTaskRow';
 import { groupScheduleRows, type ScheduleGroupKey } from './scheduleState';
 import { scheduleTableStyles } from './style';
+import { useScheduleSectionCollapse } from './useScheduleSectionCollapse';
 
 // The header and the skeleton line up with the row content: the same 2px row
 // inset, then the 20px selection gutter `SelectableTaskRow` reserves.
@@ -49,10 +39,14 @@ const GROUP_LABEL_KEYS = {
   scheduled: 'taskList.scheduled.group.scheduled',
 } as const satisfies Record<ScheduleGroupKey, string>;
 
+/**
+ * Section icons. Like the ordinary task list headers, only the section that
+ * needs the user keeps its color; the others are muted so the stack stays quiet.
+ */
 const GROUP_VISUALS: Record<ScheduleGroupKey, ExecutionStatusVisual> = {
   attention: { color: cssVar.colorWarning, icon: CircleAlert },
-  running: TASK_STATUS_VISUALS.running,
-  scheduled: TASK_STATUS_VISUALS.scheduled,
+  running: { ...TASK_STATUS_VISUALS.running, color: cssVar.colorTextDescription },
+  scheduled: { ...TASK_STATUS_VISUALS.scheduled, color: cssVar.colorTextDescription },
 };
 
 /** How often the table re-reads the clock: next runs, elapsed times and sections follow it. */
@@ -103,6 +97,11 @@ const ScheduledTaskTableSkeleton = () => {
 
 interface ScheduledTaskTableProps {
   /**
+   * The view this table renders (`taskListCollapseScopeKey`). Folded sections
+   * are remembered per view, across navigation and reloads.
+   */
+  collapseScope: string;
+  /**
    * Settled signal: truthy once the page behind `tasks` has a value in the
    * store, `undefined` while unsettled.
    */
@@ -134,6 +133,7 @@ interface ScheduledTaskTableProps {
  * the waiting ones ordered by when they fire.
  */
 export const ScheduledTaskTable = ({
+  collapseScope,
   data,
   emptyAction,
   emptyDescription,
@@ -155,16 +155,8 @@ export const ScheduledTaskTable = ({
   );
   const groups = useMemo(() => groupScheduleRows(tasks, now), [tasks, now]);
 
-  const [collapsedKeys, setCollapsedKeys] = useState<ReadonlySet<ScheduleGroupKey>>(
-    () => new Set(),
-  );
-  const toggleCollapsed = (key: ScheduleGroupKey) =>
-    setCollapsedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  const { collapsedKeys, toggleCollapsed } = useScheduleSectionCollapse(collapseScope);
+  const { fontSize, lineHeight } = useDensityTokens();
 
   // Display order, collapsed sections included: ⌘A selects every task the table lists.
   const selectableIds = useMemo(
@@ -208,32 +200,32 @@ export const ScheduledTaskTable = ({
             <span style={{ textAlign: 'end' }}>{t('taskList.scheduled.columns.assignee')}</span>
           </div>
         </div>
-        <Flexbox gap={16}>
-          {groups.map((group) => {
+        <div>
+          {groups.map((group, groupIndex) => {
             const collapsed = collapsedKeys.has(group.key);
             const visual = GROUP_VISUALS[group.key];
             return (
               <section key={group.key}>
-                <AccordionRoot
-                  indicatorPlacement={'start'}
-                  value={collapsed ? [] : [group.key]}
-                  variant={'filled'}
-                  onValueChange={() => toggleCollapsed(group.key)}
-                >
-                  <AccordionItem value={group.key}>
-                    <AccordionHeader>
-                      <AccordionTrigger style={{ paddingBlock: 8, paddingInline: 14 }}>
-                        <Flexbox horizontal align={'center'} gap={8}>
-                          <Icon color={visual.color} icon={visual.icon} size={16} />
-                          <Text weight={500}>{t(GROUP_LABEL_KEYS[group.key])}</Text>
-                          <Text fontSize={12} type={'secondary'}>
-                            {group.rows.length}
-                          </Text>
-                        </Flexbox>
-                      </AccordionTrigger>
-                    </AccordionHeader>
-                  </AccordionItem>
-                </AccordionRoot>
+                <TaskListGroupHeader
+                  collapsed={collapsed}
+                  count={group.rows.length}
+                  first={groupIndex === 0}
+                  groupKey={group.key}
+                  title={
+                    <Flexbox horizontal align={'center'} flex={'none'} gap={6}>
+                      <Icon color={visual.color} icon={visual.icon} size={16} />
+                      <Text
+                        ellipsis
+                        fontSize={fontSize}
+                        style={{ lineHeight: `${lineHeight}px` }}
+                        weight={500}
+                      >
+                        {t(GROUP_LABEL_KEYS[group.key])}
+                      </Text>
+                    </Flexbox>
+                  }
+                  onToggle={() => toggleCollapsed(group.key)}
+                />
                 {!collapsed &&
                   group.rows.map(({ state, task }, index) => (
                     // Matches the 2px row gap of the ordinary task list.
@@ -257,7 +249,7 @@ export const ScheduledTaskTable = ({
               </section>
             );
           })}
-        </Flexbox>
+        </div>
       </div>
     </AsyncBoundary>
   );

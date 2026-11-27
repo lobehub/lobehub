@@ -17,6 +17,7 @@ import type {
   KimiCodeQuotaSnapshot,
 } from '@lobechat/heterogeneous-agents/quota';
 import type {
+  AgentRunCredential,
   CodexCollaborationMode,
   DeviceClient,
   DeviceUnavailableErrorData,
@@ -24,6 +25,7 @@ import type {
   HeteroPermissionMode,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
+import type { ReadResourceResult } from '@modelcontextprotocol/client';
 import debug from 'debug';
 
 import type { McpTool } from '@/libs/mcp/types';
@@ -170,6 +172,8 @@ export async function dispatchAgentRun(
     prompt: string;
     resumeFallbackSystemContext?: string;
     resumeSessionId?: string;
+    /** Credential for this run only; see the request message. Never log it. */
+    runCredential?: AgentRunCredential;
     systemContext?: string;
     topicId: string;
     userId: string;
@@ -345,6 +349,51 @@ export async function listMcpTools(
     throw new Error(message);
   }
 
+  return result.data;
+}
+
+/**
+ * Read an MCP Apps `ui://` resource on the device that ran the tool, for a
+ * view the chat renders from a result relayed from there (a stdio or
+ * local-network server the cloud can't reach). Read on the client the calls
+ * run on (`clientKinds`), so a stdio server serves its view from the process
+ * its tool calls use.
+ *
+ * Throws with a reason: no gateway, a client too old to serve views, or the
+ * device's own error.
+ */
+export async function readMcpUiResource(
+  getClient: DeviceClientGetter,
+  params: {
+    clientKinds?: DeviceClient[];
+    deviceId: string;
+    params: GatewayMcpParams;
+    timeout?: number;
+    uri: string;
+    userId: string;
+    workspaceId?: string;
+  },
+): Promise<ReadResourceResult> {
+  const { clientKinds, deviceId, params: connection, timeout = 30_000, uri, userId } = params;
+  const client = getClient();
+  if (!client) throw new Error('Device gateway is not configured');
+
+  log('readMcpUiResource: userId=%s, deviceId=%s, mcp=%s', userId, deviceId, connection.name);
+
+  const result = await client.invokeRpc<ReadResourceResult>(
+    { clientKinds, deviceId, timeout, userId, workspaceId: params.workspaceId },
+    { method: 'readMcpUiResource', params: { params: connection, uri } },
+  );
+  if (!result.success || !result.data) {
+    const message = result.error || 'The device did not return the view';
+    log('readMcpUiResource: failed for deviceId=%s — %s', deviceId, message);
+    if (message.includes('Unknown device RPC method')) {
+      throw new Error(
+        'The app on this device is too old to show interactive views. Update the desktop app or the `lh` CLI, then try again.',
+      );
+    }
+    throw new Error(message);
+  }
   return result.data;
 }
 

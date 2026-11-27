@@ -2,15 +2,12 @@ import isEqual from 'fast-deep-equal';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import {
-  type EffortKey,
-  resolveReasoningEffortValue,
-} from '@/features/ChatInput/hooks/useReasoningEffortControl';
+import { resolveReasoningEffortValue } from '@/features/ChatInput/hooks/useReasoningEffortControl';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 /**
  * The reasoning effort a model would run at if picked now: the user's saved
- * per-model default, else the model's fallback level. Returns `undefined` for
+ * per-model pick, else the card default. Returns `undefined` for
  * models without an effort param and while the saved value is still loading,
  * so a row never flashes the fallback before the real value arrives.
  *
@@ -21,26 +18,23 @@ import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
  */
 export const useModelEffortLabel = (model: string, provider: string): string | undefined => {
   const { t } = useTranslation('chat');
-  const reasoningParams = useAiInfraStore(
-    aiModelSelectors.modelReasoningExtendParams(model, provider),
+  const effortSettings = useAiInfraStore(
+    aiModelSelectors.modelReasoningEffortSettings(model, provider),
     isEqual,
   );
-  // modelReasoningExtendParams only returns reasoning-family params, so every
-  // entry other than reasoningMode is an effort key
-  const effortKey = reasoningParams.find((param) => param !== 'reasoningMode') as
-    EffortKey | undefined;
+  const hasEffort = !!effortSettings;
 
   const ensureModelReasoningConfig = useAiInfraStore((s) => s.ensureModelReasoningConfig);
   useEffect(() => {
-    if (effortKey) void ensureModelReasoningConfig(model, provider);
-  }, [effortKey, ensureModelReasoningConfig, model, provider]);
+    if (hasEffort) void ensureModelReasoningConfig(model, provider);
+  }, [hasEffort, ensureModelReasoningConfig, model, provider]);
 
   const loaded = useAiInfraStore(aiModelSelectors.isModelReasoningConfigLoaded(model, provider));
   const config = useAiInfraStore(aiModelSelectors.modelReasoningConfig(model, provider), isEqual);
 
-  if (!effortKey || !loaded) return undefined;
+  if (!hasEffort || !loaded) return undefined;
 
-  const value = resolveReasoningEffortValue(model, effortKey, config);
+  const value = resolveReasoningEffortValue(effortSettings, config);
 
   return value ? t(`reasoningEffort.levels.${value}`) : undefined;
 };

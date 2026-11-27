@@ -8,6 +8,8 @@ interface RenderHomeOptions {
   hiddenWidgets?: string[];
   /** Module factory for the rail inbox. */
   homeInbox?: () => { default: ComponentType<any> };
+  /** Persisted "rail settled empty" answers, keyed by cache scope. */
+  homeRailEmptyByScope?: Record<string, boolean>;
   isLogin?: boolean;
   portalViewType?: PortalViewType;
   promo?: ReactNode;
@@ -38,12 +40,26 @@ const portraitBubbleStub = {
   default: ({ promo }: { promo?: ReactNode }) => <div data-testid={'portrait-bubble'}>{promo}</div>,
 };
 
+type RailContentState = 'empty' | 'filled' | 'pending';
+
+/** Rail inbox stub that hands its state callback to the test. */
+const capturingInbox = (capture: (report: (state: RailContentState) => void) => void) => () => ({
+  default: ({ onRailStateChange }: { onRailStateChange: (state: RailContentState) => void }) => {
+    capture(onRailStateChange);
+    return <div data-testid={'home-inbox'} />;
+  },
+});
+
 function translate() {
   return { i18n: { language: 'en-US' }, t: (key: string) => key };
 }
 
+const CACHE_SCOPE = 'user_1:personal';
+const updateSystemStatus = vi.fn();
+
 const renderHome = async ({
   hiddenWidgets = [],
+  homeRailEmptyByScope,
   homeInbox = () => stub('home-inbox'),
   isLogin = true,
   portalViewType,
@@ -66,6 +82,7 @@ const renderHome = async ({
     useHomePromoLine: vi.fn(() => promo),
   }));
   vi.doMock('@/features/HomeInbox', homeInbox);
+  vi.doMock('@/libs/swr/useCacheScope', () => ({ useCacheScope: () => CACHE_SCOPE }));
   function selectFromChatStore(selector: (state: unknown) => unknown) {
     return selector({ portalViewType });
   }
@@ -79,9 +96,15 @@ const renderHome = async ({
   }));
   function selectFromGlobalStore(selector: (state: unknown) => unknown) {
     return selector({
-      status: { hiddenHomeWidgets: hiddenWidgets, showHomePortrait, showHomeRail },
+      status: {
+        hiddenHomeWidgets: hiddenWidgets,
+        homeRailEmptyByScope,
+        showHomePortrait,
+        showHomeRail,
+      },
     });
   }
+  selectFromGlobalStore.getState = () => ({ updateSystemStatus });
   vi.doMock('@/store/global', () => ({ useGlobalStore: selectFromGlobalStore }));
   function selectFromUserStore(selector: (state: unknown) => unknown) {
     return selector({ isSignedIn: isLogin });
@@ -105,6 +128,8 @@ afterEach(() => {
   vi.doUnmock('../AcceptancePortalDrawer');
   vi.doUnmock('@/business/client/features/useHomePromoLine');
   vi.doUnmock('@/features/HomeInbox');
+  vi.doUnmock('@/libs/swr/useCacheScope');
+  updateSystemStatus.mockClear();
   vi.doUnmock('@/store/chat');
   vi.doUnmock('@/store/chat/selectors');
   vi.doUnmock('@/store/global');
@@ -234,24 +259,74 @@ describe('Home rail layout', () => {
   }, 20000);
 
   it('hands the rail space to the main column only once the inbox reports it empty', async () => {
-    let reportEmpty: ((empty: boolean) => void) | undefined;
+    let report: ((state: RailContentState) => void) | undefined;
+    await renderHome({ homeInbox: capturingInbox((fn) => (report = fn)), showHomeRail: true });
+
+    expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'false');
+
+    act(() => report?.('empty'));
+    expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'true');
+    expect(updateSystemStatus).toHaveBeenLastCalledWith({
+      homeRailEmptyByScope: { [CACHE_SCOPE]: true },
+    });
+
+    act(() => report?.('filled'));
+    expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'false');
+    expect(updateSystemStatus).toHaveBeenLastCalledWith({
+      homeRailEmptyByScope: { [CACHE_SCOPE]: false },
+    });
+  }, 20000);
+
+  /** @example Every reload of an empty rail showed skeletons beside a narrowed page, then slid back. */
+  it('starts in one column while loading when the rail settled empty last time', async () => {
+    let report: ((state: RailContentState) => void) | undefined;
     await renderHome({
-      homeInbox: () => ({
-        default: ({ onRailEmptyChange }: { onRailEmptyChange?: (empty: boolean) => void }) => {
-          reportEmpty = onRailEmptyChange;
-          return <div data-testid={'home-inbox'} />;
-        },
-      }),
+      homeInbox: capturingInbox((fn) => (report = fn)),
+      homeRailEmptyByScope: { [CACHE_SCOPE]: true },
+      showHomeRail: true,
+    });
+
+    expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'true');
+    expect(screen.getByTestId('home-rail')).toHaveAttribute('data-collapsed', 'true');
+
+    act(() => report?.('pending'));
+    expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'true');
+    expect(updateSystemStatus).not.toHaveBeenCalled();
+
+    act(() => report?.('filled'));
+    expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'false');
+    expect(screen.getByTestId('home-rail')).toHaveAttribute('data-collapsed', 'false');
+  }, 20000);
+
+  it('ignores an empty answer remembered for another scope', async () => {
+    await renderHome({
+      homeInbox: capturingInbox(() => {}),
+      homeRailEmptyByScope: { 'user_1:ws_other': true },
       showHomeRail: true,
     });
 
     expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'false');
+  }, 20000);
 
-    act(() => reportEmpty?.(true));
-    expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'true');
+  it('takes an empty rail out of the way of the widened main column', async () => {
+    let report: ((state: RailContentState) => void) | undefined;
+    await renderHome({ homeInbox: capturingInbox((fn) => (report = fn)), showHomeRail: true });
 
-    act(() => reportEmpty?.(false));
-    expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'false');
+    const rail = screen.getByTestId('home-rail');
+    expect(rail).toHaveAttribute('data-collapsed', 'false');
+    expect(rail).not.toHaveAttribute('inert');
+
+    // The widened column now runs under the rail track; an interactive rail
+    // there swallows clicks on the column's right-hand buttons (e.g. inbox
+    // card "Dismiss" / "Approve").
+    act(() => report?.('empty'));
+    expect(rail).toHaveAttribute('data-collapsed', 'true');
+    expect(rail).toHaveAttribute('inert');
+    expect(rail).toContainElement(screen.getByTestId('home-inbox'));
+
+    act(() => report?.('filled'));
+    expect(rail).toHaveAttribute('data-collapsed', 'false');
+    expect(rail).not.toHaveAttribute('inert');
   }, 20000);
 });
 

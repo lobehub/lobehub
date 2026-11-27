@@ -8,6 +8,7 @@ import MaxTokenSlider from '@/components/MaxTokenSlider';
 import { type ChatModelCard } from '@/types/llm';
 
 import ExtendParamsSelect from './ExtendParamsSelect';
+import ReasoningEffortSettingsField from './ReasoningEffortSettingsField';
 import TTSVoiceSelect from './TTSVoiceSelect';
 import { CUSTOM_MODEL_TYPES, hasDuplicateModelId } from './utils';
 
@@ -131,6 +132,13 @@ const ModelConfigForm = memo<ModelConfigFormProps>(
             name={'settings.extendParams'}
           >
             <ExtendParamsSelect />
+          </Form.Field>
+          <Form.Field
+            extra={t('providerModels.item.modelConfig.reasoningEffort.extra')}
+            label={t('providerModels.item.modelConfig.reasoningEffort.title')}
+            name={'settings.reasoningEffort'}
+          >
+            <ReasoningEffortSettingsField disabled={disabled} />
           </Form.Field>
           <Form.Field
             desc={t('providerModels.item.modelConfig.functionCall.extra')}

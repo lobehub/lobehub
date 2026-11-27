@@ -186,12 +186,12 @@ describe('experiment draft validation', () => {
   it("keeps every contender setting, so a restored draft runs the model's newer reasoning effort", () => {
     const gpt = {
       ...contender,
-      chatConfig: { gpt6ReasoningEffort: 'high' as const },
+      chatConfig: { reasoningEffort: 'high' as const },
       name: 'GPT-6.1 Sol · reasoning high',
     };
     const deepseek = {
       ...contender,
-      chatConfig: { deepseekV4GAReasoningEffort: 'max' as const },
+      chatConfig: { reasoningEffort: 'max' as const },
       id: 'contender-2',
     };
     const draft = { ...initial('bench-1'), contenders: [gpt, deepseek] };

@@ -23,6 +23,19 @@ export const LOBOT_DESKTOP_CLIENT_ID = 'lobot-desktop';
 /** OIDC client the Lobot iOS app signs in with, through an HTTPS universal-link callback. */
 export const LOBOT_MOBILE_CLIENT_ID = 'lobot-mobile';
 
+/** Lobot apps (desktop and iOS). Their new users skip LobeHub's web onboarding. */
+export const LOBOT_OIDC_CLIENT_IDS: readonly string[] = [
+  LOBOT_DESKTOP_CLIENT_ID,
+  LOBOT_MOBILE_CLIENT_ID,
+];
+
+/**
+ * Token Lobot appends to the user agent of its in-app sign-in window. Auth pages that see
+ * it drop the parts that only make sense on the website (logo, language and theme
+ * switches, footer links) so they read as part of Lobot.
+ */
+export const LOBOT_EMBEDDED_AUTH_UA_TOKEN = 'LobotAuthWindow';
+
 /** Desktop apps that sign in through the `/oidc/callback/desktop` handoff. */
 export const DESKTOP_OIDC_CLIENT_IDS: readonly string[] = [
   LOBEHUB_DESKTOP_CLIENT_ID,

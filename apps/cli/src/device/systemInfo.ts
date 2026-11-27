@@ -120,6 +120,9 @@ export async function collectSystemInfo(
     musicPath: path.join(home, 'Music'),
     picturesPath: path.join(home, 'Pictures'),
     supportedAgentRuntimes: await nativeRuntimes.get(),
+    // Tunneled MCP calls run with their MCP Apps options, and views are read
+    // here (`readMcpUiResource`), so the server keeps a result's view.
+    supportedMcpFeatures: ['apps'],
     // Tunneled MCP calls (stdio / local-network servers) run on this machine.
     supportedToolCallTypes: ['tool', 'mcp'],
     ...(supportedTools.length > 0 && { supportedTools }),

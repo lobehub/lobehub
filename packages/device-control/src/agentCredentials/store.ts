@@ -416,5 +416,31 @@ export const readInstalledAgentCredential = async (
   return { codexHome: paths.codexHome, provider, status: 'installed' };
 };
 
+/**
+ * Whether anything is installed for `provider`, without reading the secret:
+ * only the presence of its files is checked.
+ */
+export const hasInstalledAgentCredential = async (
+  provider: DeviceAgentCredentialProvider,
+  options: AgentCredentialStoreOptions,
+): Promise<boolean> => {
+  const paths = agentCredentialPaths(options.rootDir, provider);
+  if (await pathExists(paths.metadataFile)) return true;
+  return provider === 'codex' && (await pathExists(paths.codexAuthFile));
+};
+
+/**
+ * Create (owner-only) and return the Claude Code profile dir that runs on a
+ * server credential use, the same one an installed credential runs in, so
+ * sessions resume across both. Writes no secret.
+ */
+export const prepareClaudeCredentialConfigDir = async (rootDir: string): Promise<string> => {
+  const paths = agentCredentialPaths(rootDir, 'claude-code');
+  await ensurePrivateDir(rootDir);
+  await ensurePrivateDir(paths.dir);
+  await ensurePrivateDir(paths.claudeConfigDir);
+  return paths.claudeConfigDir;
+};
+
 export const isAgentCredentialExpired = (expiresAt: string, now: number) =>
   Date.parse(expiresAt) <= now;

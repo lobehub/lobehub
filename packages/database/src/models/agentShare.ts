@@ -35,6 +35,7 @@ const DEFAULT_AGENT_SHARE_CONFIG = {
   maxFileStorage: AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
   maxMessagesPerVisitor: AGENT_SHARE_DEFAULT_MAX_MESSAGES_PER_VISITOR,
   monthlySpendLimit: AGENT_SHARE_DEFAULT_MONTHLY_SPEND_LIMIT,
+  tipsEnabled: true,
   toolGrants: [],
 } satisfies AgentShareConfig;
 
@@ -64,6 +65,7 @@ const normalizeAgentShareConfig = (
   skillGrants: config?.skillGrants,
   seedDefaultGrants: config?.seedDefaultGrants,
   slug: config?.slug,
+  tipsEnabled: config?.tipsEnabled ?? DEFAULT_AGENT_SHARE_CONFIG.tipsEnabled,
   toolGrants: config?.toolGrants ?? DEFAULT_AGENT_SHARE_CONFIG.toolGrants,
 });
 
@@ -540,7 +542,8 @@ export class AgentShareModel {
    * owner just made is always the number actually enforced, not a stale value
    * read earlier in the request. `shareId` is returned alongside for the same
    * staleness reason: it identifies which live share instance a newly created
-   * visitor topic should be scoped to.
+   * visitor topic should be scoped to. `tipsEnabled` rides along so a charge
+   * that refuses a run names the refusal the share's current setting implies.
    *
    * Falls back to `normalizeAgentShareConfig`'s defaults exactly like every
    * other reader of `agentShares.shareConfig`.
@@ -549,7 +552,10 @@ export class AgentShareModel {
     db: LobeChatDatabase,
     agentId: string,
   ): Promise<
-    Pick<NormalizedAgentShareConfig, 'maxMessagesPerVisitor' | 'monthlySpendLimit'> & {
+    Pick<
+      NormalizedAgentShareConfig,
+      'maxMessagesPerVisitor' | 'monthlySpendLimit' | 'tipsEnabled'
+    > & {
       shareId: string | null;
       workspaceId: string | null;
     }
@@ -569,6 +575,7 @@ export class AgentShareModel {
       maxMessagesPerVisitor: normalized.maxMessagesPerVisitor,
       monthlySpendLimit: normalized.monthlySpendLimit,
       shareId: row?.id ?? null,
+      tipsEnabled: normalized.tipsEnabled,
       workspaceId: row?.workspaceId ?? null,
     };
   };

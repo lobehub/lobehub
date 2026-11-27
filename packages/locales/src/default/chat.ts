@@ -593,9 +593,6 @@ export default {
   'extendParams.disableContextCaching.desc':
     'Reduce by up to 90% of the cost of generating a single conversation and bring a max of 4x speed. <1>Learn more</1>',
   'extendParams.disableContextCaching.title': 'Enable Context Caching',
-  'extendParams.effort.desc':
-    'Control how many tokens Claude uses when responding with the effort parameter.',
-  'extendParams.effort.title': 'Effort',
   'extendParams.enableAdaptiveThinking.desc':
     'Let Claude dynamically decide when and how much to think with adaptive thinking mode.',
   'extendParams.enableAdaptiveThinking.title': 'Enable Adaptive Thinking',
@@ -615,7 +612,6 @@ export default {
   'extendParams.textVerbosity.title': 'Output Text Detail Level',
   'extendParams.thinking.title': 'Deep Thinking Switch',
   'extendParams.thinkingBudget.title': 'Thinking Budget',
-  'extendParams.thinkingLevel.title': 'Level of Thinking',
   'extendParams.title': 'Model Extension Features',
   'extendParams.urlContext.desc':
     'When enabled, web links will be automatically parsed to retrieve the actual webpage context content',
@@ -1078,6 +1074,12 @@ export default {
     'Estimated from current context, tools, and model pricing. Actual cost may vary.',
   'input.disclaimer': 'Agents can make mistakes. Use your judgment for critical info.',
   'input.errorMsg': 'Send failed: {{errorMsg}}. Retry, or send again later.',
+  'input.idleCache.draftNotMoved':
+    "Couldn't carry your message to a new conversation. It's still here; try again.",
+  'input.idleCache.info':
+    'Right after a reply, the model can reuse what it just read, so continuing costs about {{usual}}. After a longer pause it has to read the whole conversation again. For a new question, a new conversation costs less, and what you typed comes along. Amounts are estimates.',
+  'input.idleCache.newTopic': 'New conversation to save',
+  'input.idleCache.title': 'This conversation is long: the next reply costs about {{amount}}',
   'input.inputCompletionError.retry': 'Retry',
   'input.inputCompletionError.settings': 'Settings',
   'input.inputCompletionError.title': 'Input suggestions paused',
@@ -1126,6 +1128,10 @@ export default {
     'Couldn’t confirm the agent got this. Send it again or delete it',
   'inputQueue.steerHint': 'Joins the current run',
   'inputQueue.steerMergeHint': 'Joins the current run as one message',
+  'inputQueue.steerRestartHint':
+    'This agent can’t take messages mid-run. Stopping it to start again with this message',
+  'inputQueue.steerRestartMergeHint':
+    'This agent can’t take messages mid-run. Stopping it to start again with these as one message',
   'inputQueue.steerUnsupportedHint':
     'This agent can’t take messages mid-run. Queued until the run finishes',
   'inputQueue.steerUnsupportedMergeHint':
@@ -2297,6 +2303,7 @@ export default {
   'taskDetail.acceptance.retry': 'Retry',
   'taskDetail.acceptance.requiredEvidence': 'Required evidence',
   'taskDetail.acceptance.reviewError': 'Could not save this review.',
+  'taskDetail.acceptance.showEarlierRounds': 'Show {{count}} earlier rounds',
   'taskDetail.acceptance.title': 'Acceptance',
   'taskDetail.acceptance.verifier': 'Verification method',
   'taskDetail.acceptanceState.accepted': 'Accepted',
@@ -2376,6 +2383,7 @@ export default {
   'taskDetail.reportedByAgent': 'the agent',
   'taskDetail.runFollowUp': 'Ask a follow-up',
   'taskDetail.runFollowUpPlaceholder': 'Ask a follow-up about this run...',
+  'taskDetail.executionGroup': 'Execution',
   'taskDetail.find.close': 'Close find',
   'taskDetail.find.empty': 'No results',
   'taskDetail.find.next': 'Next match',
@@ -2415,6 +2423,7 @@ export default {
   'taskDetail.rerunTask': 'Re-run task',
   'taskDetail.runNow': 'Run now',
   'taskDetail.runTask': 'Run',
+  'taskDetail.statusStrip.openAcceptance': 'Open acceptance',
   'taskDetail.stopTask': 'Stop task',
   'taskDetail.navigation': 'Navigation',
   'taskDetail.closeDetail': 'Close detail',
@@ -4679,6 +4688,7 @@ export default {
   'verifyConfig.empty.title': 'Acceptance',
   'verifyConfig.empty.subtitle':
     'Describe how you want to accept the result in one sentence, and AI will turn it into an editable checklist.',
+  'verifyConfig.emptyState': 'No acceptance criteria yet.',
   'verifyConfig.enable': 'Enable acceptance check',
   'verifyConfig.fromTemplate': 'Pick from template',
   'verifyConfig.generate': 'Generate acceptance plan',

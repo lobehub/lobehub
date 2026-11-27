@@ -40,11 +40,20 @@ export class LarkApiClient {
   // Messages
   // ------------------------------------------------------------------
 
-  async sendMessage(chatId: string, text: string): Promise<{ messageId: string; raw: any }> {
-    const data = await this.call('POST', '/im/v1/messages?receive_id_type=chat_id', {
+  /**
+   * Send a text message. `receiveIdType` says what `receiveId` is: a chat
+   * (`chat_id`, the default) or a user (`open_id`, which opens the bot's
+   * private chat with them).
+   */
+  async sendMessage(
+    receiveId: string,
+    text: string,
+    receiveIdType: 'chat_id' | 'open_id' = 'chat_id',
+  ): Promise<{ messageId: string; raw: any }> {
+    const data = await this.call('POST', `/im/v1/messages?receive_id_type=${receiveIdType}`, {
       content: JSON.stringify({ text: this.truncateText(text) }),
       msg_type: 'text',
-      receive_id: chatId,
+      receive_id: receiveId,
     });
     return { messageId: data.data.message_id, raw: data.data };
   }

@@ -163,6 +163,22 @@ export interface ServerAgentMemberRunner {
   run: (params: ServerAgentMemberRunParams) => Promise<ServerAgentMemberRunResult>;
 }
 
+/** What the run already has on the active device, built from its state. */
+export interface RunAgentFiles {
+  /** The device the record below describes; discovery on another device starts over. */
+  deviceId?: string;
+  /**
+   * Skill ids the agent has turned off (`project:<name>` for a filesystem
+   * skill), so a discovered skill the user disabled is never offered.
+   */
+  disabledSkillIds?: string[];
+  instructionPaths: string[];
+  /** The bound working directory, its scanned parents, and every directory walked mid-run. */
+  knownDirs: string[];
+  /** Every skill name in the run's pool, so a discovered skill never shadows one. */
+  skillNames: string[];
+}
+
 export interface ToolExecutionContext {
   abortSignal?: AbortSignal;
   /**
@@ -185,6 +201,12 @@ export interface ToolExecutionContext {
    * mid-run activation always picks from the workspace pool).
    */
   activeDeviceScope?: 'personal' | 'workspace';
+  /**
+   * Agent files the run already has on the active device: the start-of-run
+   * scan plus every mid-run discovery. File tools compare against it before
+   * asking the device for a directory's `AGENTS.md` and skills.
+   */
+  agentFiles?: RunAgentFiles;
   /** Agent ID executing the tool call */
   agentId?: string;
   /**
