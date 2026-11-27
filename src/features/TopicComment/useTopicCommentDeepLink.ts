@@ -5,7 +5,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useChatStore } from '@/store/chat';
 
 const COMMENT_QUERY = 'comment';
-const COMMENT_THREAD_QUERY = 'commentThread';
+export const COMMENT_THREAD_QUERY = 'commentThread';
 
 /** Opens a notification deep link once topic route hydration has completed. */
 export const useTopicCommentDeepLink = (topicId?: string) => {

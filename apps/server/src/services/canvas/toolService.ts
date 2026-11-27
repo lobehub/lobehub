@@ -1,4 +1,5 @@
 import type {
+  CanvasLinks,
   CanvasReadOutcome,
   CanvasSaveOutcome,
   CanvasSummary,
@@ -27,6 +28,7 @@ interface CanvasToolServiceDeps {
   agentId?: string | null;
   findGuideState: () => Promise<unknown>;
   resolveFileRefs?: CanvasFileRefResolver;
+  resolveOpenUrl?: (canvasId: string) => Promise<string | undefined>;
   storage: CanvasStorageService;
   storageFor: (ownerId: string) => CanvasStorageService;
   topicId?: string | null;
@@ -143,6 +145,18 @@ export class CanvasToolServiceImpl implements CanvasToolService {
       files: Object.entries(manifest.files).map(([path, entry]) => ({ path, size: entry.size })),
       texts,
       title: current.work.title,
+    };
+  };
+
+  resolveLinks = async (canvasId: string): Promise<CanvasLinks> => {
+    const [openUrl, current] = await Promise.all([
+      this.deps.resolveOpenUrl?.(canvasId),
+      this.deps.workModel.findCanvas(canvasId),
+    ]);
+
+    return {
+      ...(openUrl ? { openUrl } : {}),
+      ...(current?.work.url ? { publishedUrl: current.work.url } : {}),
     };
   };
 

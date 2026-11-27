@@ -15,6 +15,7 @@ import { ComposioService } from '@/server/services/composio';
 import { MarketService } from '@/server/services/market';
 
 import { getServerRuntime, hasServerRuntime } from './serverRuntimes';
+import { recoverSurplusClosingBrace, type ToolParametersShape } from './surplusBraceArguments';
 import { type IToolExecutor, type ToolExecutionContext, type ToolExecutionResult } from './types';
 import { resolveBuiltinToolWorkIntent } from './workRegistration';
 
@@ -46,18 +47,27 @@ const getManifestApiNames = (identifier: string): string[] =>
   );
 
 /**
- * Required parameter names declared by a builtin API. Prefers the manifest the
- * run was assembled with, falling back to the static builtin manifest.
+ * Parameter schema declared by a builtin API. Prefers the manifest the run was
+ * assembled with, falling back to the static builtin manifest.
  */
+const getApiParameters = (
+  identifier: string,
+  apiName: string,
+  context: ToolExecutionContext,
+): ToolParametersShape | undefined => {
+  const manifest =
+    context.toolManifestMap?.[identifier] ??
+    builtinTools.find((tool) => tool.identifier === identifier)?.manifest;
+  return manifest?.api?.find((api) => api.name === apiName)?.parameters as
+    ToolParametersShape | undefined;
+};
+
 const getRequiredParams = (
   identifier: string,
   apiName: string,
   context: ToolExecutionContext,
 ): string[] => {
-  const manifest =
-    context.toolManifestMap?.[identifier] ??
-    builtinTools.find((tool) => tool.identifier === identifier)?.manifest;
-  const required = manifest?.api?.find((api) => api.name === apiName)?.parameters?.required;
+  const required = getApiParameters(identifier, apiName, context)?.required;
   return Array.isArray(required) ? required : [];
 };
 
@@ -144,7 +154,11 @@ export class BuiltinToolsExecutor implements IToolExecutor {
       }
     }
 
-    const parsed = safeParseJSON(argsStr);
+    const strictParsed = safeParseJSON(argsStr);
+    const parsed =
+      strictParsed === undefined && argsStr
+        ? recoverSurplusClosingBrace(argsStr, getApiParameters(identifier, apiName, context))
+        : strictParsed;
 
     // When JSON.parse fails, return a dedicated error rather than silently
     // falling back to `{}`. Passing `{}` to the tool produced generic

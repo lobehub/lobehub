@@ -4,6 +4,7 @@ import { type FC, memo } from 'react';
 import { useParams } from 'react-router';
 
 import { useClearActiveTopicUnread } from '@/features/Conversation/hooks';
+import { useCanvasDeepLink } from '@/features/Conversation/WorkingSidebar/Canvas/useCanvasDeepLink';
 import { useTopicCommentDeepLink } from '@/features/TopicComment/useTopicCommentDeepLink';
 
 import { useChatRouteSync } from './useChatRouteSync';
@@ -20,6 +21,7 @@ const ChatHydration: FC<ChatHydrationProps> = memo(({ getConversationPath, getTo
 
   useClearActiveTopicUnread();
   useTopicCommentDeepLink(routeTopicId);
+  useCanvasDeepLink(routeTopicId);
   useChatRouteSync({ getConversationPath, getTopicPath });
 
   return null;
