@@ -62,11 +62,15 @@ export function isAutoUpdatableInstall(entry = process.argv[1]): boolean {
  * would only slow it down.
  */
 export function isAutoUpdateEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return isAutoUpdateAllowedByEnv(env) && loadSettings()?.autoUpdates !== false;
+}
+
+/** The fixed part of {@link isAutoUpdateEnabled}: what the environment allows, without the setting. */
+export function isAutoUpdateAllowedByEnv(env: NodeJS.ProcessEnv = process.env): boolean {
   if (isAutoUpdateDisabledByEnv()) return false;
   if (env.CI || isInsideAgentRun(env)) return false;
   // Managed cloud devices run the version their platform installs.
-  if (env.LOBEHUB_MANAGED_DEVICE_ID) return false;
-  return loadSettings()?.autoUpdates !== false;
+  return !env.LOBEHUB_MANAGED_DEVICE_ID;
 }
 
 interface AutoUpdateState {

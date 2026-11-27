@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { isGlobalInstall } from '../commands/update';
 import {
   isAutoUpdatableInstall,
+  isAutoUpdateAllowedByEnv,
   isAutoUpdateEnabled,
   isInstallLockHeld,
 } from '../utils/autoUpdate';
@@ -39,9 +40,13 @@ export class DaemonAutoUpdater {
     },
   ) {}
 
-  /** Whether this process should update itself; checked once, the install layout cannot change. */
+  /**
+   * Whether this process may ever update itself. The install layout and environment are fixed for
+   * its lifetime; the saved `lh update --auto` setting is read on every tick instead, so turning it
+   * back on reaches a connection started while it was off.
+   */
   static applies(): boolean {
-    return isAutoUpdateEnabled() && isAutoUpdatableInstall();
+    return isAutoUpdateAllowedByEnv() && isAutoUpdatableInstall();
   }
 
   start() {

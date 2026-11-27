@@ -54,6 +54,16 @@ afterEach(() => {
 });
 
 describe('DaemonAutoUpdater', () => {
+  it('runs for a connection started with automatic updates turned off in settings', () => {
+    vi.spyOn(autoUpdate, 'isAutoUpdateAllowedByEnv').mockReturnValue(true);
+    vi.spyOn(autoUpdate, 'isAutoUpdatableInstall').mockReturnValue(true);
+    vi.mocked(autoUpdate.isAutoUpdateEnabled).mockReturnValue(false);
+    expect(DaemonAutoUpdater.applies()).toBe(true);
+
+    vi.mocked(autoUpdate.isAutoUpdateAllowedByEnv).mockReturnValue(false);
+    expect(DaemonAutoUpdater.applies()).toBe(false);
+  });
+
   it('installs a found release through the maintenance flow when idle', async () => {
     const { maintenance, updater } = setup();
     await updater.tick();
