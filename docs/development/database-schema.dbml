@@ -264,6 +264,7 @@ table agent_bot_providers {
   credentials text
   settings jsonb [default: `{}`]
   enabled boolean [not null, default: true]
+  last_active_at "timestamp with time zone" [not null, default: `now()`]
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]

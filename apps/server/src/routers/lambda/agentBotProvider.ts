@@ -42,7 +42,7 @@ import { flattenBotWakeSettings } from '@/server/services/conversationWake/confi
 import { GatewayService } from '@/server/services/gateway';
 import { isMessageGatewayHostingUnavailable } from '@/server/services/gateway/nodeGatewayOnly';
 import { getReplyConnectionUnavailableReason } from '@/server/services/gateway/replyConnectionHost';
-import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
+import { BOT_RUNTIME_STATUSES, getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 
 import {
   agentBotProviderProcedure,
@@ -433,10 +433,41 @@ export const agentBotProviderRouter = router({
         workspaceId: ctx.workspaceId ?? undefined,
       });
 
+      // Connecting by hand is its owner using it: restart its idle clock, which
+      // also wakes a bot that was put to sleep for being idle.
+      await ctx.agentBotProviderModel.markActive(input.platform, input.applicationId);
+
       const service = new GatewayService();
       const status = await service.startClient(input.platform, input.applicationId, ctx.userId);
 
       return { status };
+    }),
+
+  /**
+   * Wake a bot put to sleep for being idle: its owner opening the bot is
+   * activity, so the idle clock restarts and the connection comes back now
+   * instead of on the next sync. A bot that is not asleep only gets its clock
+   * restarted.
+   */
+  wakeBot: agentBotProviderProcedureWrite
+    .input(z.object({ applicationId: z.string(), platform: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const marked = await ctx.agentBotProviderModel.markActive(
+        input.platform,
+        input.applicationId,
+      );
+      if (!marked) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `No bot found for ${input.platform}/${input.applicationId}`,
+        });
+      }
+
+      const current = await getBotRuntimeStatus(input.platform, input.applicationId);
+      if (current.status !== BOT_RUNTIME_STATUSES.sleeping) return { woke: false };
+
+      await new GatewayService().startClient(input.platform, input.applicationId, ctx.userId);
+      return { woke: true };
     }),
 
   testConnection: agentBotProviderProcedureWrite
@@ -708,7 +739,11 @@ export const agentBotProviderRouter = router({
         }
       }
 
-      const result = await ctx.agentBotProviderModel.update(id, value);
+      // Configuring a bot is its owner using it: restart its idle clock.
+      const result = await ctx.agentBotProviderModel.update(id, {
+        ...value,
+        lastActiveAt: new Date(),
+      });
 
       if (existing) {
         await invalidateBotAfterUpdate(

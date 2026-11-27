@@ -260,6 +260,7 @@ export class BotCallbackService {
         finished &&
         (noReply?.reason === 'stand_down' || extractStandDown(body.lastAssistantContent).standDown);
       await this.recordWakeOutcome(body, settings, platform, finished && !noReply, standDown);
+      await this.recordBotActivity(body, platform);
       if (noReply) {
         await this.labelNoReply(body, noReply, platform, workspaceId);
       } else {
@@ -278,6 +279,23 @@ export class BotCallbackService {
         messengerInstallationKey,
         body.operationId ?? randomUUID(),
       );
+    }
+  }
+
+  /**
+   * A completed run means someone triggered the bot and it answered (an error or a stop notice is
+   * an answer too; a run that chose not to reply still had someone addressing the bot): restart
+   * its idle clock. Only per-agent bots have one; System Bot connections
+   * (`messengerInstallationKey`) are shared and never idle out. Best-effort: a missed write costs
+   * at most an hour of idle time, never the reply.
+   */
+  private async recordBotActivity(body: BotCallbackBody, platform: string): Promise<void> {
+    if (body.messengerInstallationKey) return;
+
+    try {
+      await AgentBotProviderModel.touchActivity(this.db, platform, body.applicationId);
+    } catch (error) {
+      log('recordBotActivity: failed for %s:%s: %O', platform, body.applicationId, error);
     }
   }
 

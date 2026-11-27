@@ -17,6 +17,7 @@ import {
 } from '@/server/services/bot/platforms';
 import { GatewayService } from '@/server/services/gateway';
 import { BotConnectQueue } from '@/server/services/gateway/botConnectQueue';
+import { isBotAsleep } from '@/server/services/gateway/botSleep';
 import {
   BOT_RUNTIME_STATUSES,
   updateBotRuntimeStatus,
@@ -244,6 +245,9 @@ export async function gatewayCron(c: Context): Promise<Response> {
       }
 
       if (!(await ensureBotFeatureAccess(platform.id, provider, 'runtime'))) continue;
+      // Kept down while asleep for being idle. Queued connects below are
+      // owner-initiated and restarted the idle clock, so they are not asked.
+      if (await isBotAsleep(platform.id, provider)) continue;
 
       platformTotal++;
       total++;

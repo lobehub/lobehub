@@ -6,6 +6,11 @@ export const BOT_RUNTIME_STATUSES = {
   dormant: 'dormant',
   failed: 'failed',
   queued: 'queued',
+  // Disconnected on purpose because the bot sat idle past the deployment's
+  // idle limit; `errorMessage` says why. Unlike `dormant`, nothing listens for
+  // messages: the bot stays off until its owner comes back or the limit no
+  // longer applies (see `@/business/server/bot/sleep`).
+  sleeping: 'sleeping',
   starting: 'starting',
 } as const;
 

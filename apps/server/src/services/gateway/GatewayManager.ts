@@ -15,8 +15,10 @@ import {
   type PlatformClient,
   type PlatformDefinition,
   resolveBotProviderConfig,
+  resolveConnectionMode,
 } from '@/server/services/bot/platforms';
 
+import { isBotAsleep } from './botSleep';
 import { BOT_RUNTIME_STATUSES, updateBotRuntimeStatus } from './runtimeStatus';
 
 const log = debug('lobe-server:bot-gateway');
@@ -223,6 +225,24 @@ export class GatewayManager {
           status: BOT_RUNTIME_STATUSES.failed,
         });
         log('Sync: feature access denied for %s', key);
+        continue;
+      }
+
+      // Webhook bots hold no connection, so only persistent ones are put to sleep.
+      const definition = this.definitionByPlatform.get(platform);
+      if (
+        resolveConnectionMode(definition, provider.settings) !== 'webhook' &&
+        (await isBotAsleep(platform, provider))
+      ) {
+        const asleep = this.clients.get(key);
+        if (asleep) {
+          await asleep.stop();
+          this.clients.delete(key);
+          // Platform clients record `disconnected` when they stop, overwriting
+          // the `sleeping` label just written; ask again so it is restored.
+          await isBotAsleep(platform, provider);
+        }
+        log('Sync: %s is asleep, not connecting', key);
         continue;
       }
 
