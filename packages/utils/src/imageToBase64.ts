@@ -64,6 +64,13 @@ export const imageUrlToBase64 = async (
       ? await import('@lobechat/ssrf-safe-fetch').then((m) => m.ssrfSafeFetch(imageUrl))
       : await fetch(imageUrl);
 
+    // An error page is not an image: without this check the 404/500 body is
+    // sniffed for a MIME type and handed to the model as base64. The sibling
+    // `videoUrlToBase64` already rejects a non-ok response.
+    if (!res.ok) {
+      throw new Error(`Failed to fetch image: ${res.status} ${res.statusText}`);
+    }
+
     const blob = options.maxBytes
       ? await readBlobWithLimit(res, options.maxBytes)
       : await res.blob();
