@@ -42,6 +42,12 @@ const decodeBase64 = (base64: string): string => {
   return new TextDecoder().decode(bytes);
 };
 
+type UnloadCloser = (input: {
+  client?: DeviceClient;
+  deviceId: string;
+  id: string;
+}) => Promise<unknown>;
+
 interface DeviceTerminalInfo {
   /** The device client hosting the shell; every later call is kept on it. */
   client?: DeviceClient;
@@ -81,18 +87,13 @@ export class DeviceTerminalSession {
   private pendingInput = '';
   private sendingInput = false;
 
-  /** Set once ready: ends the shell from `pagehide` (see {@link disposeOnUnload}). */
-  private closeOnUnload?: (input: {
-    client?: DeviceClient;
-    deviceId: string;
-    id: string;
-  }) => Promise<unknown>;
-
   private constructor(
     readonly deviceId: string,
     readonly info: DeviceTerminalInfo,
     /** Pins every call to the device's scope; absent follows the active workspace. */
     private readonly scope?: DeviceScope,
+    /** Ends the shell from `pagehide` (see {@link disposeOnUnload}); absent if it failed to prepare. */
+    private readonly closeOnUnload?: UnloadCloser,
   ) {}
 
   /**
@@ -105,17 +106,21 @@ export class DeviceTerminalSession {
     params: { cols: number; cwd?: string; rows: number },
     options: { scope?: DeviceScope } = {},
   ): Promise<DeviceTerminalSession> {
-    const info = (await deviceService.createTerminalSession(
-      { ...params, deviceId },
-      options.scope,
-    )) as DeviceTerminalInfo;
-    const session = new DeviceTerminalSession(deviceId, info, options.scope);
-    // Ready before anyone can close the page on this shell. Without it the
-    // unload close falls back to the idle sweep, so a failure only costs that.
-    void deviceService
-      .prepareCloseTerminalOnUnload(options.scope)
-      .then((close) => (session.closeOnUnload = close))
-      .catch((error) => log('preparing the unload close failed: %O', error));
+    // The unload closer is prepared alongside the shell and the session is only
+    // handed out once both are ready, so a page closed right after the shell
+    // opens still ends it. A closer that fails to prepare is not fatal:
+    // `disposeOnUnload` then falls back to an ordinary close.
+    const [info, closeOnUnload] = await Promise.all([
+      deviceService.createTerminalSession(
+        { ...params, deviceId },
+        options.scope,
+      ) as Promise<DeviceTerminalInfo>,
+      deviceService.prepareCloseTerminalOnUnload(options.scope).catch((error): undefined => {
+        log('preparing the unload close failed: %O', error);
+        return undefined;
+      }),
+    ]);
+    const session = new DeviceTerminalSession(deviceId, info, options.scope, closeOnUnload);
     // Registered before the first poll so input typed during the initial read
     // is not dropped.
     xtermManager.setSessionSink(info.id, session.sink);
@@ -201,12 +206,13 @@ export class DeviceTerminalSession {
    */
   disposeOnUnload(): void {
     if (!this.stop()) return;
-    const close = this.closeOnUnload;
-    if (!close) {
-      log('closeTerminal %s on unload skipped: closer not ready', this.info.id);
-      return;
-    }
-    void close({ ...this.target, id: this.info.id }).catch((error) =>
+    const input = { ...this.target, id: this.info.id };
+    // Without a prepared closer the ordinary close is the best left: it may
+    // still go out before the page is gone.
+    const request = this.closeOnUnload
+      ? this.closeOnUnload(input)
+      : deviceService.closeTerminal(input, { scope: this.scope });
+    void request.catch((error) =>
       log('closeTerminal %s on unload failed: %O', this.info.id, error),
     );
   }

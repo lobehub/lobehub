@@ -8,6 +8,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   closeOnUnload: vi.fn(async () => ({ closed: true })),
+  prepareCloseTerminalOnUnload: vi.fn(),
   closeTerminal: vi.fn(async () => ({ closed: true })),
   createTerminalSession: vi.fn(async () => ({
     cwd: '/root',
@@ -27,7 +28,7 @@ vi.mock('@/services/device', () => ({
   deviceService: {
     closeTerminal: mocks.closeTerminal,
     createTerminalSession: mocks.createTerminalSession,
-    prepareCloseTerminalOnUnload: async () => mocks.closeOnUnload,
+    prepareCloseTerminalOnUnload: () => mocks.prepareCloseTerminalOnUnload(),
     readTerminal: mocks.readTerminal,
     resizeTerminal: mocks.resizeTerminal,
     writeTerminal: mocks.writeTerminal,
@@ -48,6 +49,7 @@ describe('DeviceTerminalSession polling', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    mocks.prepareCloseTerminalOnUnload.mockImplementation(async () => mocks.closeOnUnload);
   });
 
   afterEach(() => {
@@ -142,6 +144,37 @@ describe('DeviceTerminalSession polling', () => {
     expect(mocks.closeOnUnload).toHaveBeenCalledTimes(1);
     expect(mocks.closeTerminal).not.toHaveBeenCalled();
     expect(mocks.readTerminal.mock.calls.length).toBe(before);
+  });
+
+  it('hands out the session only once its unload close is ready', async () => {
+    // Regression: a page closed right after the shell opened found no closer,
+    // skipped the close, and left the PTY to the idle sweep.
+    let ready!: (close: typeof mocks.closeOnUnload) => void;
+    mocks.prepareCloseTerminalOnUnload.mockReturnValueOnce(new Promise((r) => (ready = r)));
+    mocks.readTerminal.mockResolvedValue({ chunk: '', exited: false, nextCursor: 0 });
+
+    let session: DeviceTerminalSession | undefined;
+    void open().then((opened) => (session = opened));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session).toBeUndefined();
+
+    ready(mocks.closeOnUnload);
+    await vi.advanceTimersByTimeAsync(0);
+    session!.disposeOnUnload();
+    expect(mocks.closeOnUnload).toHaveBeenCalledWith({ deviceId: 'dev-1', id: 'term_1' });
+  });
+
+  it('falls back to an ordinary close when the unload close could not be prepared', async () => {
+    mocks.prepareCloseTerminalOnUnload.mockRejectedValueOnce(new Error('offline'));
+    mocks.readTerminal.mockResolvedValue({ chunk: '', exited: false, nextCursor: 0 });
+
+    const session = await open();
+    session.disposeOnUnload();
+
+    expect(mocks.closeTerminal).toHaveBeenCalledWith(
+      { deviceId: 'dev-1', id: 'term_1' },
+      { scope: undefined },
+    );
   });
 
   it("routes every call through the device's own scope", async () => {
