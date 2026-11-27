@@ -835,7 +835,9 @@ export const marketRouter = router({
    * tree is this conversation's and no other's. A conversation that keeps its
    * files on the drive is browsed through `sandboxStorage` instead.
    */
-  listEphemeralSandboxFiles: marketToolProcedure
+  // A listing runs a command in the sandbox — it can keep one alive or start
+  // one — so it is gated like the other sandbox calls, even as a query.
+  listEphemeralSandboxFiles: marketToolWriteProcedure
     .input(z.object({ topicId: z.string().min(1) }))
     .query(async ({ input: { topicId }, ctx }): Promise<EphemeralSandboxFilesResult> => {
       const { placement, service } = await openTopicSandbox(ctx, topicId, { activity: 'viewer' });

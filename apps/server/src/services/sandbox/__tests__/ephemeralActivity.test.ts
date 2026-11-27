@@ -128,17 +128,44 @@ describe('SandboxMiddlewareService — temporary sandbox activity', () => {
     expect(redis.recordAgentActivity).not.toHaveBeenCalled();
   });
 
-  it('records nothing for a folder on the drive, or a call that failed', async () => {
+  it('records nothing for a folder on the drive', async () => {
     await serviceWith(ok, { sandboxMode: 'drive' }).service.callTool('runCommand', {
       command: 'ls',
     });
-    await serviceWith({ error: { message: 'x' }, result: null, success: false }).service.callTool(
-      'runCommand',
-      { command: 'ls' },
+    await serviceWith(ok, { activity: 'viewer', sandboxMode: 'drive' }).service.callTool(
+      'readLocalFile',
+      { path: 'a.md' },
     );
 
     expect(redis.recordAgentActivity).not.toHaveBeenCalled();
     expect(redis.recordAlive).not.toHaveBeenCalled();
+  });
+
+  it('marks the sandbox in use before a long first call runs, not after', async () => {
+    const order: string[] = [];
+    redis.recordAgentActivity.mockImplementationOnce(async () => {
+      order.push('recorded');
+    });
+    const { callTool, service } = serviceWith(ok);
+    callTool.mockImplementationOnce(async () => {
+      order.push('tool ran');
+      return ok;
+    });
+
+    await service.callTool('runCommand', { command: 'npm install' });
+
+    expect(order).toEqual(['recorded', 'tool ran']);
+  });
+
+  it('still counts a failed agent call as the agent working there', async () => {
+    await serviceWith({ error: { message: 'x' }, result: null, success: false }).service.callTool(
+      'runCommand',
+      { command: 'false' },
+    );
+
+    expect(redis.recordAgentActivity).toHaveBeenCalledWith('user-1', 'topic-1', {
+      keepAliveUntil: undefined,
+    });
   });
 
   it('never fails the call when recording does', async () => {

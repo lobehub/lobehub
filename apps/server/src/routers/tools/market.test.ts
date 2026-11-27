@@ -79,6 +79,24 @@ vi.mock('@/server/services/sandbox', () => ({
   resolveSandboxSessionConfig: mockResolveSandboxSessionConfig,
 }));
 
+// The open-source role gate is a no-op; this stand-in refuses a caller marked
+// as a viewer, so a test can see which procedures are behind the gate.
+vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const { TRPCError } = await import('@trpc/server');
+  const { trpc } = await import('@/libs/trpc/lambda/init');
+  return {
+    ...actual,
+    requireWorkspaceRoleWhenScoped: () =>
+      trpc.middleware(async (opts) => {
+        if ((opts.ctx as { testRole?: string }).testRole === 'viewer') {
+          throw new TRPCError({ code: 'FORBIDDEN' });
+        }
+        return opts.next();
+      }),
+  };
+});
+
 const mockEphemeralActivity = vi.hoisted(() => ({ read: vi.fn() }));
 vi.mock('@/server/services/redis', () => ({
   redisService: { ephemeralSandbox: mockEphemeralActivity },
@@ -486,6 +504,20 @@ describe('tools marketRouter', () => {
       await expect(
         caller().listEphemeralSandboxFiles({ topicId: 'topic-1' }),
       ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    });
+
+    it('refuses a read-only workspace viewer, like the other sandbox calls', async () => {
+      const viewer = marketRouter.createCaller({
+        serverDB: {},
+        testRole: 'viewer',
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+      } as any);
+
+      await expect(viewer.listEphemeralSandboxFiles({ topicId: 'topic-1' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      expect(mockSandboxCallTool).not.toHaveBeenCalled();
     });
 
     it('refuses a conversation that keeps its files on the drive', async () => {

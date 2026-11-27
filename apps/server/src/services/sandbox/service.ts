@@ -63,6 +63,13 @@ export class SandboxMiddlewareService implements SandboxService {
     toolName: string,
     params: Record<string, unknown>,
   ): Promise<SandboxCallToolResult> {
+    // Before the work, not after: a first call can spend minutes cloning the
+    // environment or running a long command, and the Files panel must see a
+    // sandbox that is in use for all of it, not one that has "not started".
+    // Awaited so a serverless request ending here cannot freeze it, bounded so
+    // a slow Redis never holds up a step of the agent's run.
+    await withinActivityBudget(this.recordAgentActivity(toolName, params));
+
     // A viewer only reads what the agent left. Preparing a sandbox for work —
     // cloning the environment, syncing the topic's uploads — is the agent's
     // call to make, and a viewer's read of a recycled sandbox would otherwise
@@ -82,10 +89,8 @@ export class SandboxMiddlewareService implements SandboxService {
       toolName,
       this.applyEnvironmentVariables(toolName, params),
     );
-    // Awaited, so a serverless request that ends with this call cannot freeze
-    // the write half-done and leave the Files panel reading a stale record —
-    // but bounded, so a slow Redis never holds up a step of the agent's run.
-    await withinActivityBudget(this.recordEphemeralActivity(toolName, params, result));
+    // A viewer's call says whether the agent's sandbox is still the one there.
+    await withinActivityBudget(this.recordViewerOutcome(result));
 
     // Held until a shell result can carry it: a first call that lists or
     // reads files has no output to put it in, and dropping it would hide a
@@ -101,27 +106,36 @@ export class SandboxMiddlewareService implements SandboxService {
    * What the Files panel needs to tell a temporary sandbox that still holds
    * the agent's files from one the execution plane recycled: the execution
    * plane recreates an expired session silently, and asking it whether one is
-   * alive starts one. Only a call that reached the sandbox says anything, and
-   * a temporary sandbox is the only kind that can vanish with its files.
-   * Best-effort: never fails the call it follows.
+   * alive starts one. The agent's calls are recorded as they start; a
+   * viewer's by what they found. A temporary sandbox is the only kind that
+   * can vanish with its files. Best-effort: never fails the call.
    */
-  private async recordEphemeralActivity(
+  private async recordAgentActivity(
     toolName: string,
     params: Record<string, unknown>,
-    result: SandboxCallToolResult,
   ): Promise<void> {
     const { activity = 'agent', topicId, userId } = this.options;
-    if (!topicId || !userId || !this.isEphemeral()) return;
+    if (activity !== 'agent' || !topicId || !userId || !this.isEphemeral()) return;
 
     try {
-      if (activity === 'agent') {
-        if (!result.success) return;
-        await redisService.ephemeralSandbox.recordAgentActivity(userId, topicId, {
-          keepAliveUntil: isHeteroExecLaunch(toolName, params)
-            ? Date.now() + EPHEMERAL_SANDBOX_KEEP_ALIVE_MS
-            : undefined,
-        });
-      } else if (result.sessionExpiredAndRecreated) {
+      // Whatever the call finds — even a recreated session — the agent is
+      // working in the sandbox that is there now.
+      await redisService.ephemeralSandbox.recordAgentActivity(userId, topicId, {
+        keepAliveUntil: isHeteroExecLaunch(toolName, params)
+          ? Date.now() + EPHEMERAL_SANDBOX_KEEP_ALIVE_MS
+          : undefined,
+      });
+    } catch (error) {
+      log('Failed to record sandbox activity for topic %s: %O', topicId, error);
+    }
+  }
+
+  private async recordViewerOutcome(result: SandboxCallToolResult): Promise<void> {
+    const { activity, topicId, userId } = this.options;
+    if (activity !== 'viewer' || !topicId || !userId || !this.isEphemeral()) return;
+
+    try {
+      if (result.sessionExpiredAndRecreated) {
         // Checked before success: a read of the agent's file in the new,
         // empty sandbox usually fails, and the recycle is what it found.
         await redisService.ephemeralSandbox.recordRecycled(userId, topicId);
