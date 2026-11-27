@@ -16,7 +16,6 @@ import { retryJob } from '@/database/repositories/channel/retry';
 import { stopScope } from '@/database/repositories/channel/stop';
 import { withChannelLock } from '@/database/repositories/channel/transaction';
 import { OPEN_JOB_STATUSES } from '@/database/repositories/channel/writer';
-import type { ChannelJobItem } from '@/database/schemas';
 import { channelJobs, channelMembers } from '@/database/schemas';
 import type { Transaction } from '@/database/type';
 import { AgentService } from '@/server/services/agent';
@@ -147,7 +146,7 @@ export class AgentAccessService {
           });
         }
 
-        const writers: ChannelJobItem[] = [];
+        const writers: StoppedWriters = [];
         if (decision === 'revoke' && row.grant.status === 'approved') {
           if (row.requesterUserId)
             await revokeAgentAccess(db, {
@@ -194,6 +193,9 @@ export class AgentAccessService {
   };
 }
 
+/** Stopped replies whose writer is still held, for `ChannelCoordinator.stopWriters`. */
+type StoppedWriters = Awaited<ReturnType<typeof stopScope>>;
+
 /**
  * Stops the requester's replies from an Agent member that are queued or running in a Channel,
  * across its Threads. Returns those whose writer is still held, for the coordinator to stop.
@@ -215,7 +217,7 @@ const stopRequesterReplies = async (
         inArray(channelJobs.status, [...OPEN_JOB_STATUSES]),
       ),
     );
-  const writers: ChannelJobItem[] = [];
+  const writers: StoppedWriters = [];
   for (const { id } of open) writers.push(...(await stopScope(tx, channelId, { jobId: id })));
   return writers;
 };
@@ -235,7 +237,7 @@ const stopRequesterReplies = async (
  * both guard a person publishing a share from share settings. Here the owner already pulled the
  * Agent into the Channel and approves one person there, and the share row is only how that grant
  * is recorded; the run path checks neither. Only called for an Agent that is an active member of
- * the request's Channel (`decide`).
+ * the request's Channel (`decide`), inside its transaction.
  */
 export const grantAgentAccess = async (
   db: LobeChatDatabase,
@@ -249,6 +251,17 @@ export const grantAgentAccess = async (
   },
 ) => {
   const { agentId, ownerId, requesterUserId } = params;
+  // Take the Agent row lock first, as every share mutation does (`revokeGrant`, `updateConfig`):
+  // `withShareModelLock` skips it without a provider restriction, and writing the share grant
+  // before it would invert the order against a concurrent revoke and deadlock. Held until the
+  // caller's transaction (`decide`) commits.
+  if (
+    !(await AgentShareModel.lockScopedAgentRow(db, agentId, {
+      userId: ownerId,
+      workspaceId: params.workspaceId ?? undefined,
+    }))
+  )
+    throw new ChannelError('NOT_FOUND', 'Agent not found');
   const agentService = new AgentService(db, ownerId, params.workspaceId ?? undefined);
   const shareId = await agentService.withShareModelLock(agentId, async (_service, shares) => {
     let share = await shares.getByAgentId(agentId);
