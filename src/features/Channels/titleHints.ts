@@ -18,7 +18,9 @@ export const duplicateTitleHints = (
   const groups = new Map<string, HintedChannel[]>();
   for (const channel of channels) {
     const key = channel.title.trim();
-    groups.set(key, [...(groups.get(key) ?? []), channel]);
+    const group = groups.get(key);
+    if (group) group.push(channel);
+    else groups.set(key, [channel]);
   }
 
   const day = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' });
@@ -38,16 +40,21 @@ export const duplicateTitleHints = (
   for (const group of groups.values()) {
     if (group.length < 2) continue;
     // Rows still alike after one kind of hint try the next; the last kind is kept regardless.
+    // Counted per kind, so a long list of same-named Channels stays linear.
     let alike = group;
     kinds.forEach((kind, level) => {
+      if (!alike.length) return;
       const values = alike.map(kind);
+      const counts = new Map<string, number>();
+      for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
       const last = level === kinds.length - 1;
-      alike = alike.filter((channel, index) => {
+      const next: HintedChannel[] = [];
+      alike.forEach((channel, index) => {
         const value = values[index];
-        const own = !!value && values.indexOf(value) === values.lastIndexOf(value);
-        if (own || last) hints.set(channel.id, value);
-        return !own && !last;
+        if (last || (value && counts.get(value) === 1)) hints.set(channel.id, value);
+        else next.push(channel);
       });
+      alike = next;
     });
   }
   return hints;

@@ -6,7 +6,12 @@ import { getTestDB } from '../../../core/getTestDB';
 import { channels, projects, workspaceMembers } from '../../../schemas';
 import { trashStamp } from '../../../utils/softDelete';
 import { ProjectRepository } from '../../project';
-import { ChannelRepository, projectDefaultChannelMetadata, withDisplayTitle } from '..';
+import {
+  ChannelRepository,
+  projectChannelIds,
+  projectDefaultChannelMetadata,
+  withDisplayTitle,
+} from '..';
 import { createChannelFixture } from './testUtils';
 
 const db = await getTestDB();
@@ -127,6 +132,10 @@ describe('Channel display titles', () => {
     const { channel: elsewhere } = await owner().create({ title: 'General' });
     const updatedAt = new Date('2026-01-02T03:04:05Z');
     await db.update(channels).set({ updatedAt }).where(eq(channels.id, main.id));
+    // What the delete flow reads first, to tell these Channels' members afterwards.
+    expect((await projectChannelIds(db, project.id)).toSorted()).toEqual(
+      [main.id, other.id, renamed.id].toSorted(),
+    );
 
     await new ProjectRepository(db, fixture.ownerId, fixture.workspaceId).delete(project.id);
 

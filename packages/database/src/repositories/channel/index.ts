@@ -101,7 +101,7 @@ export type { ChannelErrorCode } from './error';
 export { ChannelError } from './error';
 export { ChannelExecutionRepository } from './execution';
 export { ChannelHistoryRepository } from './history';
-export { removeAgentFromProjectChannels } from './membership';
+export { projectChannelIds, removeAgentFromProjectChannels } from './membership';
 export type {
   ChannelCoAddressedAgent,
   ChannelOpeningCandidate,
