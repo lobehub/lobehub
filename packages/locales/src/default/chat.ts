@@ -3506,6 +3506,8 @@ export default {
   'taskList.calendar.status.succeeded': 'Succeeded',
   'taskList.calendar.timezone': 'Times are shown in {{timezone}}',
   'taskList.calendar.today': 'Today',
+  'taskList.calendar.truncated':
+    'This month has more than the calendar can show. Narrow it with a filter to see the rest.',
   'taskList.breadcrumb.task': 'Task',
   'taskList.empty': 'No tasks yet',
   'taskList.emptyHero.greeting': 'What should we tackle today?',

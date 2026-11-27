@@ -4,7 +4,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs, { type Dayjs } from 'dayjs';
 import { CalendarClockIcon, ChevronLeft, ChevronRight, Info, Plus } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
@@ -24,6 +24,9 @@ import {
   type TaskCalendarEntry,
 } from './calendarModel';
 import { useTaskCalendarTasks } from './useTaskCalendarTasks';
+
+/** How often the calendar's clock advances: today's highlight and which runs are still ahead. */
+const CLOCK_TICK_MS = 60_000;
 
 /** Entries a day cell shows before folding the rest behind "+N". */
 const VISIBLE_ENTRIES_PER_DAY = 3;
@@ -194,9 +197,13 @@ const TaskCalendar = memo<TaskCalendarProps>(
   }) => {
     const { t, i18n } = useTranslation('chat');
     const locale = normalizeDayjsLocale(i18n.language);
-    // The moment the page opened: "today", the timezone label and where planned
-    // runs begin. A calendar left open past midnight catches up on remount.
-    const [now] = useState(() => new Date());
+    // "Now" for today's highlight, the timezone label and where planned runs
+    // begin. It advances each minute, so a calendar left open stays current.
+    const [now, setNow] = useState(() => new Date());
+    useEffect(() => {
+      const timer = setInterval(() => setNow(new Date()), CLOCK_TICK_MS);
+      return () => clearInterval(timer);
+    }, []);
     const [month, setMonth] = useState(() => dayjs(now).startOf('month'));
     const weekStartsOn = resolveWeekStart(i18n.language);
     const grid = useMemo(() => buildMonthGrid(month, weekStartsOn), [month, weekStartsOn]);
@@ -216,14 +223,14 @@ const TaskCalendar = memo<TaskCalendarProps>(
     const entriesByDay = useMemo(() => {
       if (!data) return new Map<string, TaskCalendarEntry[]>();
       const entries = isScheduled
-        ? collectScheduledEntries(data, range, now)
-        : collectCompletedEntries(data, range);
+        ? collectScheduledEntries(data.tasks, range, now)
+        : collectCompletedEntries(data.tasks, range);
       return groupEntriesByDay(entries);
     }, [data, isScheduled, now, range]);
 
     const todayKey = dayKey(now);
     const weekdays = grid.weeks[0].map((day) => day.locale(locale).format('ddd'));
-    const isEmptySchedule = isScheduled && !filter && data?.length === 0;
+    const isEmptySchedule = isScheduled && !filter && data?.tasks.length === 0;
 
     return (
       <Flexbox gap={12}>
@@ -257,6 +264,14 @@ const TaskCalendar = memo<TaskCalendarProps>(
             <Info color={cssVar.colorTextTertiary} size={12} />
             <Text fontSize={12} type={'secondary'}>
               {t('taskList.calendar.completedHint')}
+            </Text>
+          </Flexbox>
+        )}
+        {data?.truncated && (
+          <Flexbox horizontal align={'center'} gap={6}>
+            <Info color={cssVar.colorWarning} size={12} />
+            <Text fontSize={12} type={'secondary'}>
+              {t('taskList.calendar.truncated')}
             </Text>
           </Flexbox>
         )}

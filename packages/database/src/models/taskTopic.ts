@@ -602,14 +602,17 @@ export class TaskTopicModel {
    * Runs of the given tasks that started in `[from, to)`, oldest first per
    * task, each with the short note its handoff left. Capped at `limit` rows
    * across all tasks (earliest first), so a dense heartbeat cannot blow up a
-   * month view's payload.
+   * month view's payload; `truncated` says the cap cut the window short, so
+   * the caller can tell the reader the later runs are missing.
    */
   async findRunsInRange(
     taskIds: string[],
     { from, limit, to }: { from: Date; limit: number; to: Date },
-  ): Promise<Map<string, TaskCalendarRun[]>> {
+  ): Promise<{ runsByTaskId: Map<string, TaskCalendarRun[]>; truncated: boolean }> {
     const runsByTaskId = new Map<string, TaskCalendarRun[]>();
-    if (taskIds.length === 0 || limit <= 0 || from >= to) return runsByTaskId;
+    if (taskIds.length === 0 || limit <= 0 || from >= to) {
+      return { runsByTaskId, truncated: false };
+    }
 
     const rows = await this.db
       .select({
@@ -634,14 +637,16 @@ export class TaskTopicModel {
         ),
       )
       .orderBy(asc(taskTopics.createdAt), asc(taskTopics.seq))
-      .limit(limit);
+      // One row past the cap tells a full window from a cut one.
+      .limit(limit + 1);
+    const truncated = rows.length > limit;
 
-    for (const { handoff, taskId, ...run } of rows) {
+    for (const { handoff, taskId, ...run } of rows.slice(0, limit)) {
       const runs = runsByTaskId.get(taskId) ?? [];
       runs.push({ ...run, note: resolveRunNote(handoff as TaskTopicHandoff | null) });
       runsByTaskId.set(taskId, runs);
     }
-    return runsByTaskId;
+    return { runsByTaskId, truncated };
   }
 
   async findRunningByTaskIds(taskIds: string[]): Promise<TaskTopicItem[]> {

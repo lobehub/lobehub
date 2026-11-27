@@ -2956,6 +2956,7 @@
   "taskList.calendar.status.succeeded": "Succeeded",
   "taskList.calendar.timezone": "Times are shown in {{timezone}}",
   "taskList.calendar.today": "Today",
+  "taskList.calendar.truncated": "This month has more than the calendar can show. Narrow it with a filter to see the rest.",
   "taskList.completedTasks.all": "All",
   "taskList.completedTasks.day": "Past day",
   "taskList.completedTasks.month": "Past month",

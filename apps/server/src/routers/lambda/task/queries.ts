@@ -191,26 +191,25 @@ export const queriesRouter = router({
         ...new Set(result.tasks.map((t) => t.assigneeUserId).filter((id): id is string => !!id)),
       ];
       const taskIds = result.tasks.map((t) => t.id);
-      const [agents, users, runsByTaskId, awaitingHumanTaskIds, rangeRunsByTaskId] =
-        await Promise.all([
-          assigneeIds.length > 0 ? ctx.agentModel.getAgentAvatarsByIds(assigneeIds) : [],
-          assigneeUserIds.length > 0
-            ? UserModel.getDisplayInfoByIds(ctx.serverDB, assigneeUserIds)
-            : [],
-          recentRuns ? ctx.taskTopicModel.findRecentRunsByTaskIds(taskIds, recentRuns) : undefined,
-          // Same rule the schedule and heartbeat ticks skip on: an urgent brief
-          // that is not an error is a question only the user can answer. The
-          // calendar needs it too: a held schedule plans no future runs.
-          recentRuns || runsBetween
-            ? ctx.briefModel.findTaskIdsWithUnresolvedUrgent(taskIds, { excludeTypes: ['error'] })
-            : undefined,
-          runsBetween
-            ? ctx.taskTopicModel.findRunsInRange(taskIds, {
-                ...runsBetween,
-                limit: TASK_CALENDAR_MAX_RUNS,
-              })
-            : undefined,
-        ]);
+      const [agents, users, runsByTaskId, awaitingHumanTaskIds, rangeRuns] = await Promise.all([
+        assigneeIds.length > 0 ? ctx.agentModel.getAgentAvatarsByIds(assigneeIds) : [],
+        assigneeUserIds.length > 0
+          ? UserModel.getDisplayInfoByIds(ctx.serverDB, assigneeUserIds)
+          : [],
+        recentRuns ? ctx.taskTopicModel.findRecentRunsByTaskIds(taskIds, recentRuns) : undefined,
+        // Same rule the schedule and heartbeat ticks skip on: an urgent brief
+        // that is not an error is a question only the user can answer. The
+        // calendar needs it too: a held schedule plans no future runs.
+        recentRuns || runsBetween
+          ? ctx.briefModel.findTaskIdsWithUnresolvedUrgent(taskIds, { excludeTypes: ['error'] })
+          : undefined,
+        runsBetween
+          ? ctx.taskTopicModel.findRunsInRange(taskIds, {
+              ...runsBetween,
+              limit: TASK_CALENDAR_MAX_RUNS,
+            })
+          : undefined,
+      ]);
       const agentMap = new Map(agents.map((a) => [a.id, a]));
       const userMap = new Map(users.map((u) => [u.id, u]));
 
@@ -242,12 +241,18 @@ export const queriesRouter = router({
         }
         const item: TaskListItem = { ...task, participants };
         if (awaitingHumanTaskIds) item.awaitingHuman = awaitingHumanTaskIds.has(task.id);
-        if (rangeRunsByTaskId) item.rangeRuns = rangeRunsByTaskId.get(task.id) ?? [];
+        if (rangeRuns) item.rangeRuns = rangeRuns.runsByTaskId.get(task.id) ?? [];
         if (runsByTaskId) item.recentRuns = runsByTaskId.get(task.id) ?? [];
         return item;
       });
 
-      return { data, success: true, total: result.total };
+      return {
+        data,
+        // Only with `runsBetween`: the run cap cut the window, so later runs are missing.
+        ...(rangeRuns && { rangeRunsTruncated: rangeRuns.truncated }),
+        success: true,
+        total: result.total,
+      };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
       console.error('[task:list]', error);

@@ -128,23 +128,18 @@ describe('expandPlannedRuns', () => {
     expect(runs.map((at) => at.toISOString())).toEqual(['2026-11-30T01:00:00.000Z']);
   });
 
-  it('steps a heartbeat by its interval from the pending tick', () => {
+  it('plans only the pending tick of a heartbeat, which re-arms after each run', () => {
     const now = new Date('2026-11-30T20:00:00Z');
-    const runs = expandPlannedRuns(
-      task({
-        automationMode: 'heartbeat',
-        heartbeatInterval: 3600,
-        lastHeartbeatAt: new Date('2026-11-30T19:30:00Z'),
-      }),
-      NOVEMBER_UTC,
-      now,
-    );
-    expect(runs.map((at) => at.toISOString())).toEqual([
+    const heartbeat = task({
+      automationMode: 'heartbeat',
+      heartbeatInterval: 3600,
+      lastHeartbeatAt: new Date('2026-11-30T19:30:00Z'),
+    });
+    expect(expandPlannedRuns(heartbeat, NOVEMBER_UTC, now).map((at) => at.toISOString())).toEqual([
       '2026-11-30T20:30:00.000Z',
-      '2026-11-30T21:30:00.000Z',
-      '2026-11-30T22:30:00.000Z',
-      '2026-11-30T23:30:00.000Z',
     ]);
+    // A running heartbeat has no pending tick until its run ends.
+    expect(expandPlannedRuns({ ...heartbeat, status: 'running' }, NOVEMBER_UTC, now)).toEqual([]);
   });
 
   it('caps a dense cadence', () => {

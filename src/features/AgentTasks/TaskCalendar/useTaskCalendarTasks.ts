@@ -8,12 +8,15 @@ import { filterToServerVisibility } from '@/store/task/slices/list/action';
 import type { TaskCollection } from '../shared/taskCollection';
 import type { CalendarRange } from './calendarModel';
 
-/**
- * The most tasks one calendar month asks for: the server's page cap. Completed
- * tasks are windowed to the grid server-side, so the cap only bites on a month
- * with more completions than that; past it the newest-updated tasks win.
- */
+/** One request's page: the server's page cap. */
 export const TASK_CALENDAR_PAGE_SIZE = 500;
+
+/**
+ * The most tasks one calendar month walks to. Completed tasks are windowed to
+ * the grid server-side, so this only bites on a month with more completions
+ * (or a scope with more live schedules); the calendar then says it is partial.
+ */
+export const TASK_CALENDAR_MAX_TASKS = 1000;
 
 export interface TaskCalendarQueryOptions {
   agentId?: string;
@@ -80,13 +83,51 @@ export const buildTaskCalendarParams = (
   };
 };
 
+type TaskListResult = Awaited<ReturnType<typeof taskService.list>>;
+
+export interface TaskCalendarData {
+  tasks: TaskListResult['data'];
+  /** Some tasks or runs of the month were left out by the page or run caps. */
+  truncated: boolean;
+}
+
+/**
+ * Walk the month's pages with the list's keyset cursor (an offset page would
+ * repeat or skip a row that moves mid-walk) up to `TASK_CALENDAR_MAX_TASKS`.
+ */
+export const fetchTaskCalendar = async (
+  params: TaskListParams,
+  fetchPage: (params: TaskListParams) => Promise<TaskListResult> = taskService.list,
+): Promise<TaskCalendarData> => {
+  const tasks: TaskListResult['data'] = [];
+  let truncated = false;
+  let page = await fetchPage(params);
+  const total = page.total ?? 0;
+  for (;;) {
+    tasks.push(...page.data);
+    if ('rangeRunsTruncated' in page && page.rangeRunsTruncated) truncated = true;
+    const last = page.data.at(-1);
+    if (!last || page.data.length < TASK_CALENDAR_PAGE_SIZE) break;
+    if (tasks.length >= TASK_CALENDAR_MAX_TASKS) {
+      truncated = truncated || total > tasks.length;
+      break;
+    }
+    page = await fetchPage({
+      ...params,
+      after: { at: last.updatedAt, seq: last.seq },
+      offset: undefined,
+    });
+  }
+  return { tasks, truncated };
+};
+
 export const useTaskCalendarTasks = (options: TaskCalendarQueryOptions) => {
   const listVisibility = useTaskStore((s) => s.listVisibility);
   const params = buildTaskCalendarParams(options, filterToServerVisibility(listVisibility));
 
-  return useClientDataSWR(
-    ['task-calendar', JSON.stringify(params)],
-    async () => (await taskService.list(params)).data,
-    { revalidateOnFocus: false },
+  // Runs start and finish in the background, so the month refreshes whenever
+  // the viewer comes back to it (the client SWR default).
+  return useClientDataSWR(['task-calendar', JSON.stringify(params)], () =>
+    fetchTaskCalendar(params),
   );
 };

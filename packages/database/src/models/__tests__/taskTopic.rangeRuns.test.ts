@@ -61,10 +61,14 @@ describe('TaskTopicModel.findRunsInRange', () => {
       summary: 'Gmail rejected the token. Retried twice.',
     });
 
-    const result = await topicModel.findRunsInRange([digest.id], { ...NOVEMBER, limit: 100 });
+    const { runsByTaskId, truncated } = await topicModel.findRunsInRange([digest.id], {
+      ...NOVEMBER,
+      limit: 100,
+    });
 
+    expect(truncated).toBe(false);
     // The window is half-open: Oct 31 and Dec 1 00:00 both fall outside it.
-    expect(result.get(digest.id)).toEqual([
+    expect(runsByTaskId.get(digest.id)).toEqual([
       expect.objectContaining({
         // The agent the run wrote to, whoever the task is assigned to now.
         agentId: 'agt_range_runs',
@@ -95,18 +99,22 @@ describe('TaskTopicModel.findRunsInRange', () => {
     await new TaskTopicModel(serverDB, otherUserId).add(theirs.id, theirTopic, { seq: 1 });
     await startedAt(theirTopic, '2026-11-02T08:00:00Z');
 
-    const result = await topicModel.findRunsInRange([mine.id, theirs.id], {
+    const { runsByTaskId, truncated } = await topicModel.findRunsInRange([mine.id, theirs.id], {
       ...NOVEMBER,
       limit: 2,
     });
 
-    expect([...result.keys()]).toEqual([mine.id]);
-    expect(result.get(mine.id)?.map((run) => run.seq)).toEqual([1, 2]);
+    expect([...runsByTaskId.keys()]).toEqual([mine.id]);
+    expect(runsByTaskId.get(mine.id)?.map((run) => run.seq)).toEqual([1, 2]);
+    // The third run was cut, and the caller is told so.
+    expect(truncated).toBe(true);
   });
 
   it('reads nothing for an empty page or an empty window', async () => {
     const topicModel = new TaskTopicModel(serverDB, userId);
-    expect((await topicModel.findRunsInRange([], { ...NOVEMBER, limit: 10 })).size).toBe(0);
+    expect(
+      (await topicModel.findRunsInRange([], { ...NOVEMBER, limit: 10 })).runsByTaskId.size,
+    ).toBe(0);
     expect(
       (
         await topicModel.findRunsInRange(['task-x'], {
@@ -114,7 +122,7 @@ describe('TaskTopicModel.findRunsInRange', () => {
           limit: 10,
           to: NOVEMBER.from,
         })
-      ).size,
+      ).runsByTaskId.size,
     ).toBe(0);
   });
 });

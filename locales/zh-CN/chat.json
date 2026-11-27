@@ -2956,6 +2956,7 @@
   "taskList.calendar.status.succeeded": "成功",
   "taskList.calendar.timezone": "时间以 {{timezone}} 为准",
   "taskList.calendar.today": "今天",
+  "taskList.calendar.truncated": "本月内容过多，日历只显示了一部分。可以用筛选缩小范围查看其余内容。",
   "taskList.completedTasks.all": "全部",
   "taskList.completedTasks.day": "过去一天",
   "taskList.completedTasks.month": "过去一个月",

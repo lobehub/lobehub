@@ -69,6 +69,7 @@ describe('Task Router list runsBetween', () => {
     expect(list.data[0].rangeRuns).toEqual([
       expect.objectContaining({ note: 'Run 2 done', seq: 2, status: 'completed' }),
     ]);
+    expect(list.rangeRunsTruncated).toBe(false);
     // `runsBetween` alone does not opt into the scheduled table's fields.
     expect(list.data[0]).not.toHaveProperty('recentRuns');
   });

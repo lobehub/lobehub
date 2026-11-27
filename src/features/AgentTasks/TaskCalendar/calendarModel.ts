@@ -103,18 +103,11 @@ export const expandPlannedRuns = (task: TaskListItem, range: CalendarRange, now:
     return result.nextRuns.filter((at) => at.getTime() > now.getTime() && at < range.to);
   }
 
-  if (task.automationMode === 'heartbeat' && task.heartbeatInterval) {
-    const intervalMs = task.heartbeatInterval * 1000;
-    // A running heartbeat has no pending tick yet; its next one follows the run.
-    let at = state.nextRunAt?.getTime() ?? now.getTime() + intervalMs;
-    // Jump straight to the grid when the next tick lies before it.
-    if (at < start) at += Math.ceil((start - at) / intervalMs) * intervalMs;
-    const runs: Date[] = [];
-    while (at < range.to.getTime() && runs.length < MAX_PLANNED_PER_TASK) {
-      runs.push(new Date(at));
-      at += intervalMs;
-    }
-    return runs;
+  // A heartbeat re-arms an interval after each run finishes, so only its
+  // pending tick is known; a running one has none until the run ends.
+  if (task.automationMode === 'heartbeat') {
+    const at = state.nextRunAt;
+    return at && at.getTime() >= start && at < range.to ? [at] : [];
   }
 
   return [];
