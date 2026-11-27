@@ -35,7 +35,10 @@ import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspa
 import AsyncError from '@/components/AsyncError';
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import NavItem from '@/features/NavPanel/components/NavItem';
-import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
+import SectionTitle, {
+  sectionItemClassName,
+  useSectionTriggerStyle,
+} from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useNavItemMetrics } from '@/features/NavPanel/density';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -320,6 +323,8 @@ const ChannelRow = ({ activeChannelId, activeThreadId, channel, menuItems }: Cha
 };
 
 interface ChannelSectionProps {
+  /** Class for the section's `AccordionItem`, for hosts that space sections by expanded state. */
+  itemClassName?: string;
   /** The accordion item value; the parent `AccordionRoot` owns the expanded state. */
   itemKey?: string;
   /**
@@ -339,6 +344,7 @@ interface ChannelSectionProps {
  * Channel's threads nested under it.
  */
 const EnabledChannelSection = ({
+  itemClassName,
   itemKey = 'channels',
   layoutMenuItems,
   projectId,
@@ -474,7 +480,7 @@ const EnabledChannelSection = ({
   );
 
   return (
-    <AccordionItem value={itemKey}>
+    <AccordionItem className={itemClassName} value={itemKey}>
       {layoutMenuItems ? (
         <ContextMenuTrigger items={layoutMenuItems}>{header}</ContextMenuTrigger>
       ) : (
@@ -521,7 +527,10 @@ export const ChannelSection = (props: ChannelSectionProps) =>
 const ChannelList = ({ layoutMenuItems }: Pick<ChannelSectionProps, 'layoutMenuItems'>) =>
   useChannelsEnabled() ? (
     <AccordionRoot defaultValue={['channels']} indicatorPlacement="inline">
-      <EnabledChannelSection layoutMenuItems={layoutMenuItems} />
+      <EnabledChannelSection
+        itemClassName={sectionItemClassName}
+        layoutMenuItems={layoutMenuItems}
+      />
     </AccordionRoot>
   ) : null;
 

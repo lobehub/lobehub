@@ -75,7 +75,7 @@ const mergeSidebarExpandedKeys = (
 
 const Body = memo(() => {
   const { t } = useTranslation('common');
-  const { panelPaddingInline, sectionGap } = useNavItemMetrics();
+  const { panelPaddingInline } = useNavItemMetrics();
   const tab = useActiveTabKey();
   const navigate = useWorkspaceAwareNavigate();
   const { topNavItems, bottomMenuItems } = useNavLayout();
@@ -197,8 +197,9 @@ const Body = memo(() => {
     [sidebarExpandedKeys, updateSystemStatus],
   );
 
-  // Consecutive sections share one spacing group, including Channels' independent
-  // accordion. Nav links keep their positions and compact spacing.
+  // Consecutive sections share one group, including Channels' independent accordion.
+  // Collapsed headers stack like nav rows; each expanded section adds its own gap below
+  // (`sectionItemClassName`), so the group itself sets no gap.
   const content = useMemo(() => {
     const elements: ReactElement[] = [];
     let accGroup: { element: ReactElement; key: string }[] = [];
@@ -212,7 +213,6 @@ const Body = memo(() => {
           <AccordionRoot
             indicatorPlacement="inline"
             key={`acc-${sectionGroup.length}`}
-            style={{ gap: sectionGap }}
             value={sidebarExpandedKeys}
             onValueChange={(keys) => handleAccordionExpandedChange(accordionKeys, keys as string[])}
           >
@@ -226,11 +226,7 @@ const Body = memo(() => {
     const flushSections = () => {
       flushAccordion();
       if (sectionGroup.length > 0) {
-        elements.push(
-          <Flexbox gap={sectionGap} key={`sections-${elements.length}`}>
-            {sectionGroup}
-          </Flexbox>,
-        );
+        elements.push(<Flexbox key={`sections-${elements.length}`}>{sectionGroup}</Flexbox>);
         sectionGroup = [];
       }
     };
@@ -255,7 +251,7 @@ const Body = memo(() => {
     flushSections();
 
     return elements;
-  }, [visibleKeys, renderNavLink, sidebarExpandedKeys, handleAccordionExpandedChange, sectionGap]);
+  }, [visibleKeys, renderNavLink, sidebarExpandedKeys, handleAccordionExpandedChange]);
 
   return (
     <Flexbox gap={1} paddingInline={panelPaddingInline}>
