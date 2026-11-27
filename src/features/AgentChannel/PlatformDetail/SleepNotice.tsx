@@ -6,7 +6,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { FieldSchema } from '@/server/services/bot/platforms/types';
-import type { BotRuntimeStatus } from '@/types/botRuntimeStatus';
+import type { BotRuntimeStatusSnapshot } from '@/types/botRuntimeStatus';
 
 import { supportsWebhookMode, useWakeSleepingBot } from './useWakeSleepingBot';
 
@@ -17,39 +17,49 @@ interface SleepNoticeProps {
   platform: string;
   schema: FieldSchema[];
   scope: 'personal' | 'workspace';
-  status?: BotRuntimeStatus;
+  snapshot?: Pick<BotRuntimeStatusSnapshot, 'errorCode' | 'status'>;
 }
 
 /**
  * A bot put to sleep for being idle wakes as soon as its owner opens it; the notice says why it
- * had stopped and how to keep it from sleeping again.
+ * had stopped and how to keep it from sleeping again. The upgrade is offered only when the plan
+ * limit is what put it to sleep; a bot already on the longest limit is told only how long it was.
  */
 const SleepNotice = memo<SleepNoticeProps>(
-  ({ applicationId, onUpgrade, onWoke, platform, schema, scope, status }) => {
+  ({ applicationId, onUpgrade, onWoke, platform, schema, scope, snapshot }) => {
     const { t } = useTranslation('agent');
-    const phase = useWakeSleepingBot({ applicationId, onWoke, platform, status });
+    const wake = useWakeSleepingBot({ applicationId, onWoke, platform, snapshot });
 
-    if (!phase) return null;
+    if (!wake) return null;
+    const { phase, upgradable } = wake;
+    const webhook = supportsWebhookMode(schema);
+    const descKey = upgradable
+      ? webhook
+        ? 'channel.sleep.descWithWebhook'
+        : 'channel.sleep.desc'
+      : webhook
+        ? 'channel.sleep.descLongestWithWebhook'
+        : 'channel.sleep.descLongest';
 
     return (
       <Alert
         showIcon
+        description={t(descKey)}
         style={{ marginBlockStart: 16, maxWidth: 1024, width: '100%' }}
         type={phase === 'failed' ? 'warning' : 'info'}
-        description={t(
-          supportsWebhookMode(schema) ? 'channel.sleep.descWithWebhook' : 'channel.sleep.desc',
-        )}
         message={
           <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
             <span>{t(`channel.sleep.title.${phase}`)}</span>
-            <Button
-              icon={<ExternalLink size={14} />}
-              size={'small'}
-              type={'primary'}
-              onClick={onUpgrade}
-            >
-              {t(`channel.paidFeature.cta.${scope}`)}
-            </Button>
+            {upgradable && (
+              <Button
+                icon={<ExternalLink size={14} />}
+                size={'small'}
+                type={'primary'}
+                onClick={onUpgrade}
+              >
+                {t(`channel.paidFeature.cta.${scope}`)}
+              </Button>
+            )}
           </Flexbox>
         }
       />

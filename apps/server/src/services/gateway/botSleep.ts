@@ -1,6 +1,7 @@
 import debug from 'debug';
 
 import { getBotSleepState } from '@/business/server/bot/sleep';
+import { BOT_SLEEP_ERROR_CODES } from '@/types/botRuntimeStatus';
 
 import { BOT_RUNTIME_STATUSES, getBotRuntimeStatus, updateBotRuntimeStatus } from './runtimeStatus';
 
@@ -41,6 +42,9 @@ export async function isBotAsleep(
     return false;
   }
   if (!state.asleep) return false;
+  const errorCode = state.upgradable
+    ? BOT_SLEEP_ERROR_CODES.idleUpgradable
+    : BOT_SLEEP_ERROR_CODES.idle;
 
   // Best-effort label for the UI, written only when it changes: every sync
   // re-derives the same verdict for the same idle bots.
@@ -48,10 +52,12 @@ export async function isBotAsleep(
     const current = await getBotRuntimeStatus(platform, provider.applicationId);
     if (
       current?.status !== BOT_RUNTIME_STATUSES.sleeping ||
+      current.errorCode !== errorCode ||
       current.errorMessage !== state.message
     ) {
       await updateBotRuntimeStatus({
         applicationId: provider.applicationId,
+        errorCode,
         errorMessage: state.message,
         platform,
         status: BOT_RUNTIME_STATUSES.sleeping,

@@ -12,6 +12,8 @@ export interface BotSleepState {
   asleep: boolean;
   /** Why the bot is asleep, shown with its runtime status. */
   message?: string;
+  /** Whether a plan upgrade would let the bot stay idle longer; the bot page then offers one. */
+  upgradable?: boolean;
 }
 
 /**

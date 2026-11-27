@@ -20,7 +20,7 @@ const render = (status?: string) =>
         applicationId: 'app-1',
         onWoke,
         platform: 'qq',
-        status: props.status as any,
+        snapshot: props.status ? { status: props.status as any } : undefined,
       }),
     { initialProps: { status } },
   );
@@ -41,13 +41,13 @@ describe('useWakeSleepingBot', () => {
   it('wakes a sleeping bot once, refreshes its status, and remembers it slept', async () => {
     const { rerender, result } = render('sleeping');
 
-    await waitFor(() => expect(result.current).toBe('woke'));
+    await waitFor(() => expect(result.current?.phase).toBe('woke'));
     expect(mockWakeBot).toHaveBeenCalledWith({ applicationId: 'app-1', platform: 'qq' });
     expect(onWoke).toHaveBeenCalledTimes(1);
 
     rerender({ status: 'starting' });
     rerender({ status: 'sleeping' });
-    expect(result.current).toBe('woke');
+    expect(result.current?.phase).toBe('woke');
     expect(mockWakeBot).toHaveBeenCalledTimes(1);
   });
 
@@ -55,7 +55,7 @@ describe('useWakeSleepingBot', () => {
     mockWakeBot.mockRejectedValue(new Error('forbidden'));
     const { result } = render('sleeping');
 
-    await waitFor(() => expect(result.current).toBe('failed'));
+    await waitFor(() => expect(result.current?.phase).toBe('failed'));
   });
 
   it("keeps each bot's wake result to that bot when the user switches bots", async () => {
@@ -70,25 +70,58 @@ describe('useWakeSleepingBot', () => {
           applicationId: props.applicationId,
           onWoke,
           platform: 'qq',
-          status: props.status as any,
+          snapshot: props.status ? { status: props.status as any } : undefined,
         }),
       { initialProps: { applicationId: 'app-a', status: 'sleeping' } },
     );
-    expect(result.current).toBe('waking');
+    expect(result.current?.phase).toBe('waking');
 
     // Bot B fails to wake while A's wake is still in flight.
     rerender({ applicationId: 'app-b', status: 'sleeping' });
-    await waitFor(() => expect(result.current).toBe('failed'));
+    await waitFor(() => expect(result.current?.phase).toBe('failed'));
 
     // A's late success must not tell B it is awake.
     finishA();
     await Promise.resolve();
     await Promise.resolve();
-    expect(result.current).toBe('failed');
+    expect(result.current?.phase).toBe('failed');
 
     // A connected bot shows no sleep notice at all.
     rerender({ applicationId: 'app-c', status: 'connected' });
     expect(result.current).toBeUndefined();
+  });
+});
+
+describe('useWakeSleepingBot upgrade signal', () => {
+  it('keeps whether an upgrade helps after the bot wakes', async () => {
+    const { rerender, result } = renderHook(
+      (props: { errorCode?: string; status: string }) =>
+        useWakeSleepingBot({
+          applicationId: 'app-1',
+          onWoke,
+          platform: 'qq',
+          snapshot: { errorCode: props.errorCode, status: props.status as any },
+        }),
+      { initialProps: { errorCode: 'idle_sleep_upgradable', status: 'sleeping' } },
+    );
+
+    await waitFor(() => expect(result.current?.phase).toBe('woke'));
+    rerender({ errorCode: undefined, status: 'connected' });
+    expect(result.current?.upgradable).toBe(true);
+  });
+
+  it('offers no upgrade to a bot that slept on the longest limit', async () => {
+    const { result } = renderHook(() =>
+      useWakeSleepingBot({
+        applicationId: 'app-1',
+        onWoke,
+        platform: 'qq',
+        snapshot: { errorCode: 'idle_sleep', status: 'sleeping' },
+      }),
+    );
+
+    await waitFor(() => expect(result.current?.phase).toBe('woke'));
+    expect(result.current?.upgradable).toBe(false);
   });
 });
 

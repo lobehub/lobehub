@@ -14,6 +14,15 @@ export const BOT_RUNTIME_STATUSES = {
   starting: 'starting',
 } as const;
 
+/**
+ * `errorCode` of a `sleeping` status: whether a plan upgrade would let the bot
+ * stay idle longer, so the bot page knows whether to offer one.
+ */
+export const BOT_SLEEP_ERROR_CODES = {
+  idle: 'idle_sleep',
+  idleUpgradable: 'idle_sleep_upgradable',
+} as const;
+
 export type BotRuntimeStatus = (typeof BOT_RUNTIME_STATUSES)[keyof typeof BOT_RUNTIME_STATUSES];
 
 export interface BotRuntimeStatusSnapshot {

@@ -27,15 +27,27 @@ export default {
   'agent_transfer_reassigned':
     'A workspace owner transferred your agent "{{agentTitle}}" to {{recipientLabel}}.',
   'bot_idle_warning':
-    'Your {{platform}} bot for "{{agent}}" hasn\'t been used for 12 days. Free plan bots go to sleep after two weeks without use and stop receiving messages.\n\nTo keep it running, use it before then or upgrade to a paid plan.',
+    'Your {{platform}} bot for "{{agent}}" hasn\'t been used for 12 days. Free plan bots go to sleep after two weeks without use and stop receiving messages.\n\nTo keep it running, use it before then, or upgrade to a paid plan, where bots sleep only after a month without use.',
   'bot_idle_warning_webhook':
-    'Your {{platform}} bot for "{{agent}}" hasn\'t been used for 12 days. Free plan bots go to sleep after two weeks without use and stop receiving messages.\n\nTo keep it running, use it before then, upgrade to a paid plan, or switch it to Webhook mode, which never sleeps.',
+    'Your {{platform}} bot for "{{agent}}" hasn\'t been used for 12 days. Free plan bots go to sleep after two weeks without use and stop receiving messages.\n\nTo keep it running, use it before then, upgrade to a paid plan (bots sleep only after a month without use), or switch it to Webhook mode, which never sleeps.',
   'bot_idle_warning_title': 'Your {{platform}} bot will go to sleep in 2 days',
   'bot_idle_warning_action': 'Upgrade plan',
   'bot_sleeping':
-    'Your {{platform}} bot for "{{agent}}" went to sleep after two weeks without use and no longer receives messages.\n\nOpen the bot to wake it up. To keep it from sleeping again, upgrade to a paid plan.',
+    'Your {{platform}} bot for "{{agent}}" went to sleep after two weeks without use and no longer receives messages.\n\nOpen the bot to wake it up. On a paid plan, bots sleep only after a month without use.',
   'bot_sleeping_webhook':
-    'Your {{platform}} bot for "{{agent}}" went to sleep after two weeks without use and no longer receives messages.\n\nOpen the bot to wake it up. To keep it from sleeping again, upgrade to a paid plan or switch it to Webhook mode, which never sleeps.',
+    'Your {{platform}} bot for "{{agent}}" went to sleep after two weeks without use and no longer receives messages.\n\nOpen the bot to wake it up. On a paid plan, bots sleep only after a month without use; in Webhook mode they never sleep.',
+  'bot_idle_warning_paid':
+    'Your {{platform}} bot for "{{agent}}" hasn\'t been used for 28 days. Bots go to sleep after a month without use and stop receiving messages.\n\nTo keep it running, use it before then.',
+  'bot_idle_warning_paid_webhook':
+    'Your {{platform}} bot for "{{agent}}" hasn\'t been used for 28 days. Bots go to sleep after a month without use and stop receiving messages.\n\nTo keep it running, use it before then or switch it to Webhook mode, which never sleeps.',
+  'bot_idle_warning_paid_title': 'Your {{platform}} bot will go to sleep in 2 days',
+  'bot_idle_warning_paid_action': 'Open bot',
+  'bot_sleeping_paid':
+    'Your {{platform}} bot for "{{agent}}" went to sleep after a month without use and no longer receives messages.\n\nOpen the bot to wake it up.',
+  'bot_sleeping_paid_webhook':
+    'Your {{platform}} bot for "{{agent}}" went to sleep after a month without use and no longer receives messages.\n\nOpen the bot to wake it up. To keep it from sleeping again, switch it to Webhook mode, which never sleeps.',
+  'bot_sleeping_paid_title': 'Your {{platform}} bot is asleep',
+  'bot_sleeping_paid_action': 'Wake up bot',
   'bot_sleeping_title': 'Your {{platform}} bot is asleep',
   'bot_sleeping_action': 'Wake up bot',
   'bot_sleeping_secondaryAction': 'Upgrade plan',

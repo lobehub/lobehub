@@ -1053,7 +1053,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
               platform={platformDef.id}
               schema={platformDef.schema}
               scope={paidFeatureScope}
-              status={currentConfig?.enabled ? runtimeSnapshot?.status : undefined}
+              snapshot={currentConfig?.enabled ? runtimeSnapshot : undefined}
               onUpgrade={handlePaidFeatureUpgrade}
               onWoke={refreshRuntimeStatus}
             />

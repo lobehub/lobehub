@@ -30,7 +30,7 @@ beforeEach(() => {
 
 describe('isBotAsleep', () => {
   it('records the sleeping status with its reason', async () => {
-    mockGetBotSleepState.mockResolvedValue({ asleep: true, message: 'Idle.' });
+    mockGetBotSleepState.mockResolvedValue({ asleep: true, message: 'Idle.', upgradable: true });
 
     await expect(isBotAsleep('discord', provider)).resolves.toBe(true);
     expect(mockGetBotSleepState).toHaveBeenCalledWith({
@@ -42,6 +42,7 @@ describe('isBotAsleep', () => {
     });
     expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledWith({
       applicationId: 'app-1',
+      errorCode: 'idle_sleep_upgradable',
       errorMessage: 'Idle.',
       platform: 'discord',
       status: 'sleeping',
@@ -50,10 +51,28 @@ describe('isBotAsleep', () => {
 
   it('does not rewrite a sleeping status that already says the same', async () => {
     mockGetBotSleepState.mockResolvedValue({ asleep: true, message: 'Idle.' });
-    mockGetBotRuntimeStatus.mockResolvedValue({ errorMessage: 'Idle.', status: 'sleeping' });
+    mockGetBotRuntimeStatus.mockResolvedValue({
+      errorCode: 'idle_sleep',
+      errorMessage: 'Idle.',
+      status: 'sleeping',
+    });
 
     await expect(isBotAsleep('discord', provider)).resolves.toBe(true);
     expect(mockUpdateBotRuntimeStatus).not.toHaveBeenCalled();
+  });
+
+  it('rewrites a sleeping status once an upgrade no longer helps', async () => {
+    mockGetBotSleepState.mockResolvedValue({ asleep: true, message: 'Idle.', upgradable: false });
+    mockGetBotRuntimeStatus.mockResolvedValue({
+      errorCode: 'idle_sleep_upgradable',
+      errorMessage: 'Idle.',
+      status: 'sleeping',
+    });
+
+    await expect(isBotAsleep('discord', provider)).resolves.toBe(true);
+    expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ errorCode: 'idle_sleep' }),
+    );
   });
 
   it('keeps an awake bot as it is', async () => {
