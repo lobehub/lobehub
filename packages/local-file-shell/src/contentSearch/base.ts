@@ -279,10 +279,11 @@ export abstract class BaseContentSearch {
 
         const content = await readFile(filePath, 'utf8');
         const lines = content.split('\n');
+        if (lines.at(-1) === '') lines.pop();
 
         switch (output_mode) {
           case 'files_with_matches': {
-            if (regex.test(content)) {
+            if (params.multiline ? regex.test(content) : lines.some((line) => regex.test(line))) {
               matches.push(filePath);
               totalMatches++;
               if (params.head_limit && matches.length >= params.head_limit) break;
@@ -311,8 +312,9 @@ export abstract class BaseContentSearch {
             break;
           }
           case 'count': {
-            const globalRegex = new RegExp(pattern, `g${flags}`);
-            const fileMatches = (content.match(globalRegex) || []).length;
+            const fileMatches = params.multiline
+              ? (content.match(new RegExp(pattern, `g${flags}`)) || []).length
+              : lines.filter((line) => regex.test(line)).length;
             if (fileMatches > 0) {
               matches.push(`${filePath}:${fileMatches}`);
               totalMatches += fileMatches;
