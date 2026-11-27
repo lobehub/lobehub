@@ -6,8 +6,11 @@ import {
   RESERVED_AGENT_SHARE_SLUGS,
 } from '@lobechat/const';
 import type {
+  AgentShareAuthorizationNotice,
+  AgentShareAuthorizationObserver,
   AgentShareGrantItem,
   AgentShareGrantSource,
+  AgentSharePersonGrantAuthorizationSnapshot,
   AgentShareVisibility,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
@@ -22,6 +25,8 @@ import type {
 import { agents, agentShareGrants, agentShares, users, workspaces } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { agentShareAdmits } from '../utils/agentShareAdmits';
+import type { AgentShareAuthorizationState } from '../utils/agentShareAuthorization';
+import { diffAgentShareAuthorization } from '../utils/agentShareAuthorization';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '../utils/inboxAgent';
 import { notTrashed } from '../utils/softDelete';
 import { isUuid } from '../utils/uuid';
@@ -89,6 +94,8 @@ interface LockedAgentSnapshot {
 interface AgentShareModelOptions {
   /** Re-check Workspace share authority after the Agent row lock is acquired. */
   authorizeMutation?: (tx: LobeChatDatabase, agentId: string) => Promise<void>;
+  /** Told about every authorization change this model's mutations make. */
+  onAuthorizationChange?: AgentShareAuthorizationObserver;
 }
 
 /**
@@ -108,6 +115,7 @@ const getShareSlugRejection = (
 export class AgentShareModel {
   private authorizeMutation?: AgentShareModelOptions['authorizeMutation'];
   private db: LobeChatDatabase;
+  private onAuthorizationChange?: AgentShareAuthorizationObserver;
   private userId: string;
   private workspaceId?: string;
 
@@ -119,6 +127,7 @@ export class AgentShareModel {
   ) {
     this.authorizeMutation = options.authorizeMutation;
     this.db = db;
+    this.onAuthorizationChange = options.onAuthorizationChange;
     this.userId = userId;
     this.workspaceId = workspaceId;
   }
@@ -244,9 +253,57 @@ export class AgentShareModel {
     return updated ?? share;
   };
 
+  /** The share fields authorization snapshots are drawn from, read under the caller's Agent row lock. */
+  private static readAuthorizationState = async (
+    tx: LobeChatDatabase,
+    agentId: string,
+  ): Promise<AgentShareAuthorizationState | null> => {
+    const [share] = await tx
+      .select({
+        id: agentShares.id,
+        shareConfig: agentShares.shareConfig,
+        visibility: agentShares.visibility,
+      })
+      .from(agentShares)
+      .where(eq(agentShares.agentId, agentId))
+      .limit(1);
+    return share ?? null;
+  };
+
+  /**
+   * Run `mutation` and tell `observer` the authorization it changed, inside the caller's
+   * transaction, so a rejecting observer rolls the mutation back. Without an observer the share is
+   * not read twice.
+   */
+  private static observeShareMutation = async <T>(
+    tx: LobeChatDatabase,
+    observer: AgentShareAuthorizationObserver | undefined,
+    params: {
+      actorUserId: string;
+      agentId: string;
+      notice?: AgentShareAuthorizationNotice;
+      workspaceId: string | null;
+    },
+    mutation: () => Promise<T>,
+  ): Promise<T> => {
+    if (!observer) return mutation();
+
+    const before = await AgentShareModel.readAuthorizationState(tx, params.agentId);
+    const result = await mutation();
+    const after = await AgentShareModel.readAuthorizationState(tx, params.agentId);
+    const changes = diffAgentShareAuthorization(before, after);
+    if (changes.length > 0) await observer({ ...params, changes });
+    return result;
+  };
+
+  /**
+   * Run a share mutation under the Agent row lock and report the authorization it changed.
+   * `notice` is what the actor confirmed for this one mutation.
+   */
   private withScopedAgentLock = async <T>(
     agentId: string,
     mutation: (tx: LobeChatDatabase, agent: LockedAgentSnapshot) => Promise<T>,
+    notice?: AgentShareAuthorizationNotice,
   ): Promise<T | null> =>
     this.db.transaction(async (transaction) => {
       const tx = transaction as LobeChatDatabase;
@@ -257,7 +314,13 @@ export class AgentShareModel {
 
       if (!agent) return null;
       await this.authorizeMutation?.(tx, agentId);
-      return mutation(tx, agent);
+
+      return AgentShareModel.observeShareMutation(
+        tx,
+        this.onAuthorizationChange,
+        { actorUserId: this.userId, agentId, notice, workspaceId: agent.workspaceId },
+        () => mutation(tx, agent),
+      );
     });
 
   /** Create a private share by default, or return the existing share for the agent. */
@@ -353,7 +416,10 @@ export class AgentShareModel {
     db: LobeChatDatabase,
     workspaceId: string,
     shareId: string,
-    options: AgentShareModelOptions = {},
+    options: AgentShareModelOptions & {
+      /** The administrator stopping the share, reported as the change's actor. */
+      actorUserId: string;
+    },
   ) =>
     db.transaction(async (transaction) => {
       const tx = transaction as LobeChatDatabase;
@@ -376,16 +442,21 @@ export class AgentShareModel {
       // Recheck inside the transaction so a revocation that won the race also wins the mutation.
       await options.authorizeMutation?.(tx, share.agentId);
 
-      const [updated] = await tx
-        .update(agentShares)
-        .set({ updatedAt: new Date(), visibility: 'private' })
-        .where(and(eq(agentShares.id, shareId), eq(agentShares.agentId, agent.id)))
-        .returning({
-          agentId: agentShares.agentId,
-          shareId: agentShares.id,
-          visibility: agentShares.visibility,
-        });
-
+      const [updated] = await AgentShareModel.observeShareMutation(
+        tx,
+        options.onAuthorizationChange,
+        { actorUserId: options.actorUserId, agentId: agent.id, workspaceId },
+        () =>
+          tx
+            .update(agentShares)
+            .set({ updatedAt: new Date(), visibility: 'private' })
+            .where(and(eq(agentShares.id, shareId), eq(agentShares.agentId, agent.id)))
+            .returning({
+              agentId: agentShares.agentId,
+              shareId: agentShares.id,
+              visibility: agentShares.visibility,
+            }),
+      );
       return updated ?? null;
     });
 
@@ -398,39 +469,47 @@ export class AgentShareModel {
    *
    * `slug` is stripped even if smuggled past the type — it has its own
    * validated write path (`updateSlug`).
+   *
+   * `options.notice` is the notice the actor confirmed for this patch (e.g. widening device
+   * access), reported with the authorization changes it makes.
    */
   updateConfig = async (
     agentId: string,
     config: AgentShareConfigPatch,
+    options: { notice?: AgentShareAuthorizationNotice } = {},
   ): Promise<NormalizedAgentShareItem | null> =>
-    this.withScopedAgentLock(agentId, async (tx) => {
-      const { slug: _slug, ...patch } = config as AgentShareConfigPatch & { slug?: unknown };
-      if (patch.featuredWorkIds !== undefined) {
-        await new AgentShareProfileModel(tx, this.userId).validateFeaturedWorks(
-          agentId,
-          patch.featuredWorkIds,
-        );
-      }
-      const setEntries = Object.entries(patch).filter(([, v]) => v !== undefined);
+    this.withScopedAgentLock(
+      agentId,
+      async (tx) => {
+        const { slug: _slug, ...patch } = config as AgentShareConfigPatch & { slug?: unknown };
+        if (patch.featuredWorkIds !== undefined) {
+          await new AgentShareProfileModel(tx, this.userId).validateFeaturedWorks(
+            agentId,
+            patch.featuredWorkIds,
+          );
+        }
+        const setEntries = Object.entries(patch).filter(([, v]) => v !== undefined);
 
-      let configExpr = sql`COALESCE(${agentShares.shareConfig}, '{}'::jsonb)`;
-      if (setEntries.length > 0) {
-        configExpr = sql`${configExpr} || ${JSON.stringify(Object.fromEntries(setEntries))}::jsonb`;
-      }
+        let configExpr = sql`COALESCE(${agentShares.shareConfig}, '{}'::jsonb)`;
+        if (setEntries.length > 0) {
+          configExpr = sql`${configExpr} || ${JSON.stringify(Object.fromEntries(setEntries))}::jsonb`;
+        }
 
-      const [updated] = await tx
-        .update(agentShares)
-        .set({
-          shareConfig: sql<AgentShareConfig>`${configExpr}`,
-          updatedAt: new Date(),
-        })
-        .where(eq(agentShares.agentId, agentId))
-        .returning();
+        const [updated] = await tx
+          .update(agentShares)
+          .set({
+            shareConfig: sql<AgentShareConfig>`${configExpr}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(agentShares.agentId, agentId))
+          .returning();
 
-      if (!updated) return null;
+        if (!updated) return null;
 
-      return { ...updated, shareConfig: normalizeAgentShareConfig(updated.shareConfig) };
-    });
+        return { ...updated, shareConfig: normalizeAgentShareConfig(updated.shareConfig) };
+      },
+      options.notice,
+    );
 
   /**
    * Update share visibility for an Agent in the model's owning scope. This is also the
@@ -708,23 +787,101 @@ export class AgentShareModel {
    * restores a revoked grant, and it takes over the source of a live one: a request grant is also
    * what lets {@link resolveShareVisitorDeviceAccess} admit the person to the device without being
    * in the owner's address book. Idempotent.
+   *
+   * Admitting someone not already admitted, or turning their card grant into a request grant, is
+   * an `agent_share.person_grant` change by `options.actorUserId`, reported to
+   * `options.onAuthorizationChange` in the same transaction.
    */
   static grantByRequest = async (
-    db: Pick<LobeChatDatabase, 'insert'>,
+    db: LobeChatDatabase,
     params: { channelId: string; grantId: string; shareId: string; userId: string },
+    options: { actorUserId: string; onAuthorizationChange?: AgentShareAuthorizationObserver },
   ): Promise<void> => {
     const source: AgentShareGrantSource = {
       channelId: params.channelId,
       grantId: params.grantId,
       type: 'request',
     };
-    await db
-      .insert(agentShareGrants)
-      .values({ shareId: params.shareId, source, userId: params.userId })
-      .onConflictDoUpdate({
-        set: { revokedAt: null, source },
-        target: [agentShareGrants.shareId, agentShareGrants.userId],
+    const person = and(
+      eq(agentShareGrants.shareId, params.shareId),
+      eq(agentShareGrants.userId, params.userId),
+    );
+    await db.transaction(async (transaction) => {
+      const tx = transaction as LobeChatDatabase;
+      // Returns a row only when this statement admitted the person (inserted or restored a
+      // revoked grant). A concurrent approval waits on the same row and then finds it live, so
+      // a double click or a retried request reports one admission, not two. A read before the
+      // write could not tell: `FOR UPDATE` locks nothing while the grant does not exist yet.
+      const [admitted] = await tx
+        .insert(agentShareGrants)
+        .values({ shareId: params.shareId, source, userId: params.userId })
+        .onConflictDoUpdate({
+          set: { revokedAt: null, source },
+          setWhere: isNotNull(agentShareGrants.revokedAt),
+          target: [agentShareGrants.shareId, agentShareGrants.userId],
+        })
+        .returning({ id: agentShareGrants.id });
+
+      const after = { shareId: params.shareId, source: source.type, userId: params.userId };
+      if (admitted) {
+        await AgentShareModel.reportPersonGrant(tx, options.onAuthorizationChange, {
+          actorUserId: options.actorUserId,
+          after,
+          before: null,
+          shareId: params.shareId,
+        });
+        return;
+      }
+
+      // Already admitted, and the upsert keeps the conflicting row locked, so no revoke slips in
+      // between: the approval takes over the live grant's source. Turning a card grant into a
+      // request grant is reported as well, since a request grant also admits the person to the
+      // device outside the address book.
+      const [live] = await tx
+        .select({ source: agentShareGrants.source })
+        .from(agentShareGrants)
+        .where(and(person, isNull(agentShareGrants.revokedAt)))
+        .limit(1);
+      await tx
+        .update(agentShareGrants)
+        .set({ source })
+        .where(and(person, isNull(agentShareGrants.revokedAt)));
+      if (!live || live.source.type === source.type) return;
+      await AgentShareModel.reportPersonGrant(tx, options.onAuthorizationChange, {
+        actorUserId: options.actorUserId,
+        after,
+        before: { ...after, source: live.source.type },
+        shareId: params.shareId,
       });
+    });
+  };
+
+  /** Report one person admitted to (`after`) or removed from (`before`) a share. */
+  private static reportPersonGrant = async (
+    tx: LobeChatDatabase,
+    observer: AgentShareAuthorizationObserver | undefined,
+    params: {
+      actorUserId: string;
+      after: AgentSharePersonGrantAuthorizationSnapshot | null;
+      before: AgentSharePersonGrantAuthorizationSnapshot | null;
+      shareId: string;
+    },
+  ) => {
+    if (!observer) return;
+    const [share] = await tx
+      .select({ agentId: agentShares.agentId, workspaceId: agents.workspaceId })
+      .from(agentShares)
+      .innerJoin(agents, eq(agents.id, agentShares.agentId))
+      .where(eq(agentShares.id, params.shareId))
+      .limit(1);
+    if (!share) return;
+
+    await observer({
+      actorUserId: params.actorUserId,
+      agentId: share.agentId,
+      changes: [{ after: params.after, before: params.before, kind: 'agent_share.person_grant' }],
+      workspaceId: share.workspaceId,
+    });
   };
 
   /**
@@ -795,8 +952,17 @@ export class AgentShareModel {
             isNull(agentShareGrants.revokedAt),
           ),
         )
-        .returning({ id: agentShareGrants.id });
-      return removed.length > 0;
+        .returning({ id: agentShareGrants.id, source: agentShareGrants.source });
+      const [grant] = removed;
+      if (!grant) return false;
+
+      await AgentShareModel.reportPersonGrant(tx, this.onAuthorizationChange, {
+        actorUserId: this.userId,
+        after: null,
+        before: { shareId: share.id, source: grant.source.type, userId },
+        shareId: share.id,
+      });
+      return true;
     }));
 
   /**

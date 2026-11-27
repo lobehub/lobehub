@@ -1,6 +1,6 @@
 import { AGENT_SHARE_DEVICE_ALLOW_USERS_LIMIT } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { AgentAccessDecision } from '@lobechat/types';
+import type { AgentAccessDecision, AgentShareAuthorizationObserver } from '@lobechat/types';
 import { isLiveAgentShareVisibility } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 
@@ -39,6 +39,8 @@ export class AgentAccessService {
     private readonly db: LobeChatDatabase,
     private readonly userId: string,
     private readonly workspaceId?: string,
+    /** Receives the share access an owner's decision grants. */
+    private readonly onAuthorizationChange?: AgentShareAuthorizationObserver,
   ) {}
 
   /** Whether the caller may use the Agent, for the client entering its conversation or profile. */
@@ -119,6 +121,7 @@ export class AgentAccessService {
       await grantAgentAccess(this.db, {
         agentId: row.agentId,
         channelId: row.grant.channelId,
+        onAuthorizationChange: this.onAuthorizationChange,
         grantId,
         ownerId: this.userId,
         requesterUserId: row.requesterUserId,
@@ -174,31 +177,41 @@ export const grantAgentAccess = async (
     agentId: string;
     channelId: string;
     grantId: string;
+    /** Receives every share access the approval grants. */
+    onAuthorizationChange?: AgentShareAuthorizationObserver;
     ownerId: string;
     requesterUserId: string;
     workspaceId: string | null;
   },
 ) => {
-  const { agentId, ownerId, requesterUserId } = params;
+  const { agentId, onAuthorizationChange, ownerId, requesterUserId } = params;
   const agentService = new AgentService(db, ownerId, params.workspaceId ?? undefined);
-  const shareId = await agentService.withShareModelLock(agentId, async (_service, shares) => {
-    let share = await shares.getByAgentId(agentId);
-    if (!share || !isLiveAgentShareVisibility(share.visibility)) {
-      const created = await shares.create(agentId, 'card');
-      share =
-        created.visibility === 'private'
-          ? await shares.updateVisibility(agentId, 'card')
-          : await shares.getByAgentId(agentId);
-    }
-    if (!share) throw new ChannelError('NOT_FOUND', 'Agent share not found');
-    return share.id;
-  });
-  await AgentShareModel.grantByRequest(db, {
-    channelId: params.channelId,
-    grantId: params.grantId,
-    shareId,
-    userId: requesterUserId,
-  });
+  const shareId = await agentService.withShareModelLock(
+    agentId,
+    async (_service, shares) => {
+      let share = await shares.getByAgentId(agentId);
+      if (!share || !isLiveAgentShareVisibility(share.visibility)) {
+        const created = await shares.create(agentId, 'card');
+        share =
+          created.visibility === 'private'
+            ? await shares.updateVisibility(agentId, 'card')
+            : await shares.getByAgentId(agentId);
+      }
+      if (!share) throw new ChannelError('NOT_FOUND', 'Agent share not found');
+      return share.id;
+    },
+    { onAuthorizationChange },
+  );
+  await AgentShareModel.grantByRequest(
+    db,
+    {
+      channelId: params.channelId,
+      grantId: params.grantId,
+      shareId,
+      userId: requesterUserId,
+    },
+    { actorUserId: ownerId, onAuthorizationChange },
+  );
 
   const share = await AgentShareModel.findByShareId(db, shareId);
   if (!share) throw new ChannelError('NOT_FOUND', 'Agent share not found');
@@ -211,7 +224,9 @@ export const grantAgentAccess = async (
     deviceAllowUserIds.length >= AGENT_SHARE_DEVICE_ALLOW_USERS_LIMIT
   )
     throw new ChannelError('CONFLICT', 'The Agent’s device already allows the most people it can');
-  await new AgentShareModel(db, ownerId, params.workspaceId ?? undefined).updateConfig(agentId, {
+  await new AgentShareModel(db, ownerId, params.workspaceId ?? undefined, {
+    onAuthorizationChange,
+  }).updateConfig(agentId, {
     // `contacts` keeps admitting the address book; the list then names the people outside it.
     deviceAccess: deviceAccess === 'contacts' ? 'contacts' : 'allowlist',
     deviceAllowUserIds: [...new Set([...deviceAllowUserIds, requesterUserId])],

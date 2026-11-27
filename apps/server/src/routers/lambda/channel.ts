@@ -3,6 +3,7 @@ import { CHANNEL_ASK_LIMITS, CHANNEL_LIMITS, SIGNAL_DECISION_OUTCOMES } from '@l
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { createAgentShareAuthorizationObserver } from '@/business/server/agent-share/authorizationObserver';
 import {
   denyExternalContact,
   wsExternalCompatProcedure,
@@ -11,6 +12,7 @@ import { SCOPE_READ_MAX_LIMIT, SignalDecisionModel } from '@/database/models/sig
 import { ChannelError } from '@/database/repositories/channel';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
+import type { AuthContext } from '@/libs/trpc/lambda/context';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentAccessService } from '@/server/services/channel/agentAccess';
 import { ChannelService } from '@/server/services/channel/ChannelService';
@@ -69,11 +71,13 @@ const externalChannelProcedure = channelBaseProcedure;
 /** Everything else is for members (and the personal space) only. */
 const channelProcedure = channelBaseProcedure.use(denyExternalContact);
 
-const agentAccessService = (ctx: {
-  serverDB: LobeChatDatabase;
-  userId: string;
-  workspaceId?: string | null;
-}) => new AgentAccessService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+const agentAccessService = (ctx: AuthContext & { serverDB: LobeChatDatabase; userId: string }) =>
+  new AgentAccessService(
+    ctx.serverDB,
+    ctx.userId,
+    ctx.workspaceId ?? undefined,
+    createAgentShareAuthorizationObserver(ctx, 'channel_access_request'),
+  );
 
 export const channelRouter = router({
   ...channelHistoryProcedures,

@@ -5,6 +5,7 @@ import { DEFAULT_MODEL, isAgentShareModelRestrictionExempt } from '@lobechat/con
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
   type AgentItem,
+  type AgentShareAuthorizationObserver,
   type CreateAgentConfig,
   isLiveAgentShareVisibility,
   type LobeAgentChatConfig,
@@ -188,9 +189,15 @@ export class AgentService {
   async withShareModelLock<T>(
     agentId: string,
     action: (service: AgentService, shares: AgentShareModel) => Promise<T>,
+    /** Handed to the share model, so the mutations `action` makes report what they authorize. */
+    options: { onAuthorizationChange?: AgentShareAuthorizationObserver } = {},
   ): Promise<T> {
+    const { onAuthorizationChange } = options;
     if (!AGENT_SHARE_ALLOWED_PROVIDERS) {
-      return action(this, new AgentShareModel(this.db, this.userId, this.workspaceId));
+      return action(
+        this,
+        new AgentShareModel(this.db, this.userId, this.workspaceId, { onAuthorizationChange }),
+      );
     }
     return this.db.transaction(async (transaction) => {
       const tx = transaction as LobeChatDatabase;
@@ -214,7 +221,7 @@ export class AgentService {
       }
       return action(
         new AgentService(tx, this.userId, this.workspaceId),
-        new AgentShareModel(tx, this.userId, this.workspaceId),
+        new AgentShareModel(tx, this.userId, this.workspaceId, { onAuthorizationChange }),
       );
     });
   }

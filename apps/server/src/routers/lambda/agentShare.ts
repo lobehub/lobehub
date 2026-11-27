@@ -7,6 +7,7 @@ import { eq, inArray } from 'drizzle-orm';
 import pMap from 'p-map';
 import { z } from 'zod';
 
+import { createAgentShareAuthorizationObserver } from '@/business/server/agent-share/authorizationObserver';
 import { getAgentShareMonthlySpend } from '@/business/server/agent-share/spendGate';
 import { getAddressBook } from '@/business/server/contact/addressBook';
 import { withRbacPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -130,9 +131,23 @@ export const agentShareConfigPatchSchema = agentShareConfigSchema.refine(
   'Config patch cannot be empty',
 );
 
+/**
+ * The notice the creator confirmed before saving a patch, passed on with the authorization
+ * changes it made. The version is the client's claim about the copy it rendered and is not
+ * enforced, so a client on an older bundle can still save.
+ */
+const shareNoticeSchema = z
+  .object({
+    id: z.string().trim().min(1).max(64),
+    locale: z.string().trim().min(1).max(35).optional(),
+    version: z.string().trim().min(1).max(64),
+  })
+  .strict();
+
 const agentShareProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const workspaceId = ctx.workspaceId ?? undefined;
+  const onAuthorizationChange = createAgentShareAuthorizationObserver(ctx, 'agent_share_settings');
 
   return opts.next({
     ctx: {
@@ -149,8 +164,10 @@ const agentShareProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
                 workspaceId,
               })
           : undefined,
+        onAuthorizationChange,
       }),
       agentShareProfileModel: new AgentShareProfileModel(ctx.serverDB, ctx.userId),
+      onAuthorizationChange,
     },
   });
 });
@@ -247,12 +264,16 @@ export const agentShareRouter = router({
     await assertCanManageAgentShare(ctx, input.agentId);
     await assertAgentShareCreationEnabled(ctx.userId);
 
-    return ctx.agentService.withShareModelLock(input.agentId, async (service, shares) => {
-      await service.prepareShareModel(input.agentId);
-      const share = await shares.create(input.agentId, 'card');
-      if (share.visibility !== 'private') return share;
-      return requireShare(await shares.updateVisibility(input.agentId, 'card'));
-    });
+    return ctx.agentService.withShareModelLock(
+      input.agentId,
+      async (service, shares) => {
+        await service.prepareShareModel(input.agentId);
+        const share = await shares.create(input.agentId, 'card');
+        if (share.visibility !== 'private') return share;
+        return requireShare(await shares.updateVisibility(input.agentId, 'card'));
+      },
+      { onAuthorizationChange: ctx.onAuthorizationChange },
+    );
   }),
 
   enableShare: agentShareProcedure
@@ -263,10 +284,14 @@ export const agentShareRouter = router({
 
       const visibility = input.visibility;
       if (visibility === 'link' || visibility === 'card') {
-        return ctx.agentService.withShareModelLock(input.agentId, async (service, shares) => {
-          await service.prepareShareModel(input.agentId);
-          return shares.create(input.agentId, visibility);
-        });
+        return ctx.agentService.withShareModelLock(
+          input.agentId,
+          async (service, shares) => {
+            await service.prepareShareModel(input.agentId);
+            return shares.create(input.agentId, visibility);
+          },
+          { onAuthorizationChange: ctx.onAuthorizationChange },
+        );
       }
 
       return ctx.agentShareModel.create(input.agentId, visibility);
@@ -394,6 +419,11 @@ export const agentShareRouter = router({
           ctx.workspaceId,
           input.shareId,
           {
+            actorUserId: ctx.userId,
+            onAuthorizationChange: createAgentShareAuthorizationObserver(
+              ctx,
+              'workspace_share_audit',
+            ),
             authorizeMutation: async (db) => {
               const allowed = await new RbacModel(db, ctx.userId).hasPermission(
                 'agent:update:all',
@@ -517,6 +547,8 @@ export const agentShareRouter = router({
         .object({
           agentId: z.string().trim().min(1),
           config: agentShareConfigPatchSchema,
+          /** The notice the creator confirmed for this patch. */
+          notice: shareNoticeSchema.optional(),
         })
         .strict(),
     )
@@ -556,7 +588,11 @@ export const agentShareRouter = router({
           });
       }
 
-      return requireShare(await ctx.agentShareModel.updateConfig(input.agentId, input.config));
+      return requireShare(
+        await ctx.agentShareModel.updateConfig(input.agentId, input.config, {
+          notice: input.notice,
+        }),
+      );
     }),
 
   /**
@@ -596,10 +632,14 @@ export const agentShareRouter = router({
       const visibility = input.visibility;
       if (visibility === 'link' || visibility === 'card') {
         await assertAgentShareCreationEnabled(ctx.userId);
-        return ctx.agentService.withShareModelLock(input.agentId, async (service, shares) => {
-          await service.prepareShareModel(input.agentId);
-          return requireShare(await shares.updateVisibility(input.agentId, visibility));
-        });
+        return ctx.agentService.withShareModelLock(
+          input.agentId,
+          async (service, shares) => {
+            await service.prepareShareModel(input.agentId);
+            return requireShare(await shares.updateVisibility(input.agentId, visibility));
+          },
+          { onAuthorizationChange: ctx.onAuthorizationChange },
+        );
       }
 
       return requireShare(
@@ -610,4 +650,5 @@ export const agentShareRouter = router({
 
 export type AgentShareConfigInput = z.infer<typeof agentShareConfigSchema>;
 export type AgentShareConfigPatchInput = z.infer<typeof agentShareConfigPatchSchema>;
+export type AgentShareNoticeInput = z.infer<typeof shareNoticeSchema>;
 export type AgentShareRouter = typeof agentShareRouter;
