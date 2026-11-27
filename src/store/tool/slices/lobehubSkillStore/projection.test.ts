@@ -117,3 +117,34 @@ describe('connection scope fields', () => {
     expect(toReferencedByWorkspaceIds({ referencedByWorkspaceIds: [] })).toBeUndefined();
   });
 });
+
+describe('mergeLobehubSkillServers with a replaced borrowed authorization', () => {
+  const borrowed: LobehubSkillServer = {
+    identifier: 'github',
+    isConnected: true,
+    name: 'GitHub',
+    reference: { sourceDisplayName: 'Owner', sourceUserId: 'user_owner' },
+    status: LobehubSkillStatus.CONNECTED,
+  };
+  const own: LobehubSkillServer = { ...borrowed, reference: undefined };
+
+  it('should not let a stale borrowed row settle the workspace own authorization', () => {
+    const intent = createLobehubSkillLocalIntent();
+    intent.added.set('github', own);
+
+    const merged = mergeLobehubSkillServers([borrowed], intent);
+
+    expect(merged).toEqual([own]);
+    expect(intent.added.has('github')).toBe(true);
+  });
+
+  it('should settle once the response reflects the replacement', () => {
+    const intent = createLobehubSkillLocalIntent();
+    intent.added.set('github', own);
+
+    const merged = mergeLobehubSkillServers([own], intent);
+
+    expect(merged).toEqual([own]);
+    expect(intent.added.size).toBe(0);
+  });
+});

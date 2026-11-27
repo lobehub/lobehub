@@ -92,24 +92,37 @@ export const createLobehubSkillLocalIntent = (): LobehubSkillLocalIntent => ({
  * resolving a connected provider even if the follow-up `connectListTools` call
  * fails.
  */
+/** Whether two rows of a provider come from the same authorization source. */
+const isSameAuthorization = (a: LobehubSkillServer, b: LobehubSkillServer): boolean =>
+  (a.reference?.sourceUserId ?? null) === (b.reference?.sourceUserId ?? null) &&
+  !!a.reference === !!b.reference;
+
 export const mergeLobehubSkillServers = (
   incoming: LobehubSkillServer[],
   intent: LobehubSkillLocalIntent,
   confirmed?: LobehubSkillServer[],
 ): LobehubSkillServer[] => {
-  const echoed = new Set(incoming.map((server) => server.identifier));
+  const incomingById = new Map(incoming.map((server) => [server.identifier, server]));
 
-  // A response confirms a pending add (echoed) or drop (gone): settle it.
-  for (const identifier of intent.added.keys()) {
-    if (echoed.has(identifier)) intent.added.delete(identifier);
+  // A response confirms a pending add (echoed with the same authorization) or
+  // drop (gone): settle it. A row that only shares the identifier is not an
+  // echo: replacing a borrowed authorization keeps the provider, and a list
+  // response predating it would restore the old reference.
+  for (const [identifier, pending] of intent.added) {
+    const row = incomingById.get(identifier);
+    if (row && isSameAuthorization(row, pending)) intent.added.delete(identifier);
   }
   for (const identifier of intent.removed) {
-    if (!echoed.has(identifier)) intent.removed.delete(identifier);
+    if (!incomingById.has(identifier)) intent.removed.delete(identifier);
   }
 
-  const kept = intent.removed.size
-    ? incoming.filter((server) => !intent.removed.has(server.identifier))
-    : incoming;
+  const kept =
+    intent.removed.size || intent.added.size
+      ? incoming.filter(
+          (server) =>
+            !intent.removed.has(server.identifier) && !intent.added.has(server.identifier),
+        )
+      : incoming;
   const carried = [...intent.added.values()];
 
   // `connectListConnections` carries no tool catalog, so the response alone
