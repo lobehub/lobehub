@@ -46,6 +46,7 @@ import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { composeEnabledTools, resolveAgentConfig } from '@/services/chat/mecha';
 import { messageService } from '@/services/message';
 import { hydrateProjectedConversation } from '@/services/message/hydrateProjectedTools';
+import { withDeltaReturn } from '@/services/message/returnMode';
 import { refreshRunConnectors } from '@/services/runConnectors';
 import { workService } from '@/services/work';
 import { getAgentStoreState } from '@/store/agent';
@@ -867,11 +868,13 @@ export class StreamingExecutorActionImpl {
             // as stopped, not as failed.
             const isCancelled = this.#get().operations[operationId]?.status === 'cancelled';
             if (assistantMessage && !isCancelled) {
-              await messageService.updateMessageError(assistantMessage.id, event.error, {
-                agentId,
-                groupId,
-                topicId,
-              });
+              // The response is not read (the local list is re-applied below),
+              // so skip the server's full conversation re-read.
+              await messageService.updateMessageError(
+                assistantMessage.id,
+                event.error,
+                withDeltaReturn({ agentId, groupId, topicId }),
+              );
             }
             const finalMessages = this.#get().messagesMap[messageKey] || [];
             this.#get().replaceMessages(finalMessages, { context });
@@ -944,7 +947,8 @@ export class StreamingExecutorActionImpl {
                 userMessageId: state.metadata?.sourceMessageId,
               },
             },
-            context,
+            // `refreshMessages` below reconciles the run boundary.
+            withDeltaReturn(context),
           );
         }
       } catch (error) {

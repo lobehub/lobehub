@@ -105,10 +105,7 @@ describe('ChatPluginAction', () => {
       expect(messageService.updateMessagePluginState).toHaveBeenCalledWith(
         messageId,
         pluginStateValue,
-        {
-          agentId: 'inbox',
-          topicId: null,
-        },
+        { agentId: 'inbox', returnMode: 'delta', topicId: null },
       );
 
       expect(replaceMessagesSpy).toHaveBeenCalledWith(mockMessages, {
@@ -1006,7 +1003,7 @@ describe('ChatPluginAction', () => {
         expect(messageService.updateMessagePluginState).toHaveBeenCalledWith(
           messageId,
           pluginState,
-          { agentId: contextSessionId, topicId: contextTopicId },
+          { agentId: contextSessionId, returnMode: 'delta', topicId: contextTopicId },
         );
         expect(replaceMessagesSpy).toHaveBeenCalledWith([], {
           context: { agentId: contextSessionId, topicId: contextTopicId, threadId: undefined },
@@ -1037,7 +1034,7 @@ describe('ChatPluginAction', () => {
         expect(messageService.updateMessagePluginState).toHaveBeenCalledWith(
           messageId,
           pluginState,
-          { agentId: 'active-session', topicId: 'active-topic' },
+          { agentId: 'active-session', returnMode: 'delta', topicId: 'active-topic' },
         );
       });
     });
@@ -1125,7 +1122,7 @@ describe('ChatPluginAction', () => {
         expect(messageService.updateMessage).toHaveBeenCalledWith(
           messageId,
           { tools: message.tools },
-          { agentId: contextSessionId, topicId: contextTopicId },
+          { agentId: contextSessionId, returnMode: 'delta', topicId: contextTopicId },
         );
       });
     });

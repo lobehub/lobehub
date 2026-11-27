@@ -49,6 +49,7 @@ const pendingTool = {
 describe('requestHumanApprove', () => {
   let createToolMessage: ReturnType<typeof vi.fn>;
   let deleteMessage: ReturnType<typeof vi.fn>;
+  let findToolMessageIdByToolCallId: ReturnType<typeof vi.fn>;
   let query: ReturnType<typeof vi.fn>;
   let updateToolIntervention: ReturnType<typeof vi.fn>;
   let host: AgentRuntimeHost;
@@ -56,6 +57,7 @@ describe('requestHumanApprove', () => {
   beforeEach(() => {
     createToolMessage = vi.fn().mockResolvedValue({ id: 'tool-msg-1' });
     deleteMessage = vi.fn().mockResolvedValue(undefined);
+    findToolMessageIdByToolCallId = vi.fn().mockResolvedValue(undefined);
     query = vi.fn().mockResolvedValue([]);
     updateToolIntervention = vi.fn().mockResolvedValue(undefined);
 
@@ -68,7 +70,13 @@ describe('requestHumanApprove', () => {
         topicId: 'topic-1',
       },
       transports: {
-        messages: { createToolMessage, deleteMessage, query, updateToolIntervention },
+        messages: {
+          createToolMessage,
+          deleteMessage,
+          findToolMessageIdByToolCallId,
+          query,
+          updateToolIntervention,
+        },
         stream: { publishChunk: vi.fn(), publishEvent: vi.fn() },
       },
     } as unknown as AgentRuntimeHost;
@@ -152,12 +160,16 @@ describe('requestHumanApprove', () => {
       type: 'request_human_approve',
     };
 
-    query.mockResolvedValue([
-      { id: 'tool-msg-existing', role: 'tool', tool_call_id: 'call_ask_1' },
-    ]);
+    findToolMessageIdByToolCallId.mockImplementation(async (toolCallId, parentId) =>
+      toolCallId === 'call_ask_1' && parentId === 'assistant-current'
+        ? 'tool-msg-existing'
+        : undefined,
+    );
 
     await requestHumanApprove(host)(instruction, createState());
 
+    // Indexed lookups scoped to the owning assistant, never a full-topic read.
+    expect(query).not.toHaveBeenCalled();
     expect(createToolMessage).not.toHaveBeenCalled();
     expect(
       (host.transports.stream.publishChunk as ReturnType<typeof vi.fn>).mock.calls[0][0],
@@ -189,10 +201,9 @@ describe('requestHumanApprove', () => {
         status: 'pending' as const,
       },
     };
-    query.mockResolvedValue([
-      { id: 'tool-msg-existing-1', role: 'tool', tool_call_id: 'call_ask_1' },
-      { id: 'tool-msg-existing-2', role: 'tool', tool_call_id: 'call_ask_2' },
-    ]);
+    findToolMessageIdByToolCallId.mockImplementation(
+      async (toolCallId: string) => `tool-msg-existing-${toolCallId.at(-1)}`,
+    );
 
     const result = await requestHumanApprove(host)(
       {
@@ -266,9 +277,7 @@ describe('requestHumanApprove', () => {
     } as unknown as AgentInstruction;
 
     beforeEach(() => {
-      query.mockResolvedValue([
-        { id: 'tool-msg-existing', role: 'tool', tool_call_id: 'call_ask_1' },
-      ]);
+      findToolMessageIdByToolCallId.mockResolvedValue('tool-msg-existing');
     });
 
     it('retires the seeded placeholder when the run parks without calling the LLM', async () => {

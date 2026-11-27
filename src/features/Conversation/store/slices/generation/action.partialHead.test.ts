@@ -9,7 +9,10 @@ import { createStore } from '../../index';
 vi.mock('@/services/topic', () => ({
   topicService: { branchTopicAtMessage: vi.fn(), cancelRateLimitContinuation: vi.fn() },
 }));
-vi.mock('@/services/message/roundCursorPage', () => ({ isPartialHeadWindow: () => true }));
+vi.mock('@/services/message/roundCursorPage', () => ({
+  isPartialHeadWindow: () => true,
+  requestClientRunHistoryWindow: vi.fn(),
+}));
 
 const context: ConversationContext = { agentId: 'session-1', threadId: null, topicId: 'topic-1' };
 const key = messageMapKey(context);

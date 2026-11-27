@@ -1,5 +1,7 @@
 import type { CreateMessageParams, UIChatMessage, UpdateMessageParams } from '@lobechat/types';
 
+import type { AgentState } from '../types';
+
 /** Minimal reference an executor needs back after creating a message. */
 export interface RuntimeMessageRef {
   agentId?: string | null;
@@ -115,6 +117,20 @@ export interface MessageTransport {
   /** Read one tool row by primary key, without projecting away its stored result. */
   getToolMessage: (id: string) => Promise<RuntimeToolMessage | undefined>;
   query: (params?: QueryMessagesInput, options?: QueryMessagesOptions) => Promise<UIChatMessage[]>;
+  /**
+   * Whether the host re-reads this run's conversation into `state.messages`
+   * when the next step starts.
+   *
+   * When it answers `true`, the tool executors fold the rows they just
+   * persisted into the in-memory working set instead of re-querying the whole
+   * conversation after every tool call: a row written by anyone else (a
+   * sub-agent, a group member, a device) arrives with that entry read anyway,
+   * and a re-query here was a second full-topic read per tool step.
+   *
+   * Absent / `false` keeps the re-query — e.g. the client transport, whose
+   * `query` is a local store read and the only place other writers show up.
+   */
+  rehydratesOnNextStep?: (state: AgentState) => boolean;
   update: (id: string, params: Partial<UpdateMessageParams>) => Promise<void>;
   updatePluginState: (id: string, state: Record<string, any>) => Promise<void>;
   /**

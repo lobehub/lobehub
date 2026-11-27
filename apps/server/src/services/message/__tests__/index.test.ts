@@ -339,6 +339,110 @@ describe('MessageService', () => {
     });
   });
 
+  describe('mutation return mode', () => {
+    const topicContext = { agentId: 'agent-1', topicId: 'topic-1' };
+
+    it('skips the conversation re-read when the caller asks for a delta', async () => {
+      vi.mocked(mockMessageModel.updateToolMessage).mockResolvedValue({ success: true } as any);
+      vi.mocked(mockMessageModel.query).mockResolvedValue([{ id: 'msg-1' }] as any);
+
+      const results = await Promise.all([
+        messageService.updateMessage('msg-1', { content: 'x' } as any, {
+          ...topicContext,
+          returnMode: 'delta',
+        }),
+        messageService.updateMetadata(
+          'msg-1',
+          { collapsed: true },
+          {
+            ...topicContext,
+            returnMode: 'delta',
+          },
+        ),
+        messageService.updatePluginState(
+          'msg-1',
+          { a: 1 },
+          {
+            ...topicContext,
+            returnMode: 'delta',
+          },
+        ),
+        messageService.updateMessagePlugin(
+          'msg-1',
+          { arguments: '{}' },
+          {
+            ...topicContext,
+            returnMode: 'delta',
+          },
+        ),
+        messageService.updateToolMessage(
+          'msg-1',
+          { content: 'r' },
+          {
+            ...topicContext,
+            returnMode: 'delta',
+          },
+        ),
+      ]);
+
+      expect(mockMessageModel.update).toHaveBeenCalledWith('msg-1', { content: 'x' });
+      expect(mockMessageModel.updatePluginState).toHaveBeenCalledWith('msg-1', { a: 1 });
+      expect(results).toEqual(Array.from({ length: 5 }, () => ({ success: true })));
+      expect(mockMessageModel.query).not.toHaveBeenCalled();
+    });
+
+    it('keeps returning the full list when the mode is omitted (legacy clients)', async () => {
+      const mockMessages = [{ id: 'msg-1' }];
+      vi.mocked(mockMessageModel.query).mockResolvedValue(mockMessages as any);
+
+      const result = await messageService.updateMessage('msg-1', { content: 'x' } as any, {
+        ...topicContext,
+        returnMode: 'full',
+      });
+
+      expect(result).toEqual({ messages: mockMessages, success: true });
+    });
+
+    it('does not re-read the scope-less bucket for a context that resolved to all nulls', async () => {
+      // `resolveContext` turns an omitted context (CLI, plugin-argument writes)
+      // into nulls. That used to query every sessionless + topicless message.
+      const nullContext = {
+        agentId: null,
+        groupId: null,
+        sessionId: null,
+        threadId: null,
+        topicId: null,
+      };
+
+      const result = await messageService.updateMessage(
+        'msg-1',
+        { content: 'x' } as any,
+        nullContext,
+      );
+      await messageService.removeMessages(['msg-1'], nullContext);
+
+      expect(result).toEqual({ success: true });
+      expect(mockMessageModel.query).not.toHaveBeenCalled();
+    });
+
+    it('still re-reads a group-only conversation', async () => {
+      vi.mocked(mockMessageModel.query).mockResolvedValue([]);
+
+      await messageService.updateMessage('msg-1', { content: 'x' } as any, {
+        agentId: null,
+        groupId: 'group-1',
+        sessionId: null,
+        threadId: null,
+        topicId: null,
+      });
+
+      expect(mockMessageModel.query).toHaveBeenCalledWith(
+        expect.objectContaining({ groupId: 'group-1' }),
+        expect.anything(),
+      );
+    });
+  });
+
   describe('updateMessage', () => {
     it('normalizes a known error from a legacy client before persistence', async () => {
       await messageService.updateMessage(

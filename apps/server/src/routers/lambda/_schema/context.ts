@@ -29,3 +29,14 @@ export const basicContextSchema = z.object({
 
 export type ConversationContextInput = z.infer<typeof conversationContextSchema>;
 export type BasicContextInput = z.infer<typeof basicContextSchema>;
+
+/**
+ * Opt-in response shape for row-local message mutations.
+ *
+ * Omitted (legacy clients: CLI, mobile, older web bundles) → `full`: the
+ * mutation re-reads and returns the whole conversation list as before.
+ * `delta` → `{ success }` only; the caller keeps its optimistically patched row.
+ */
+export const mutationReturnModeSchema = z.object({
+  returnMode: z.enum(['delta', 'full']).optional(),
+});

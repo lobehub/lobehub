@@ -425,12 +425,16 @@ describe('Client runtime approval cards', () => {
     vi.spyOn(roundCursorPage, 'isPartialHeadWindow').mockImplementation(
       (context) => context.topicId === topicId,
     );
+    // The reload must read the client-run history window, not a display page.
+    vi.spyOn(roundCursorPage, 'requestClientRunHistoryWindow').mockImplementation(() => {
+      order.push('historyWindow');
+    });
 
     await act(async () => {
       await result.current.approveToolCalling('tool-1', '');
     });
 
-    expect(order).toEqual(['refresh', 'run']);
+    expect(order).toEqual(['historyWindow', 'refresh', 'run']);
   });
 
   it('restores the pending card when persisting the rejection fails', async () => {

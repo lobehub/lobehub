@@ -578,10 +578,7 @@ describe('chatMessage actions', () => {
         {
           tools: [{ id: 'tool2' }],
         },
-        {
-          agentId: sessionId,
-          topicId,
-        },
+        { agentId: sessionId, returnMode: 'delta', topicId },
       );
     });
   });
@@ -731,7 +728,7 @@ describe('chatMessage actions', () => {
       expect(spy).toHaveBeenCalledWith(
         messageId,
         expect.objectContaining({ content: newContent }),
-        { agentId: 'session-id', topicId: 'topic-id' },
+        { agentId: 'session-id', returnMode: 'delta', topicId: 'topic-id' },
       );
     });
 
@@ -919,7 +916,7 @@ describe('chatMessage actions', () => {
       expect(updateMessageSpy).toHaveBeenCalledWith(
         messageId,
         expect.objectContaining({ content, tools: undefined }),
-        { agentId: contextSessionId, topicId: contextTopicId },
+        { agentId: contextSessionId, returnMode: 'delta', topicId: contextTopicId },
       );
     });
 
@@ -1043,6 +1040,7 @@ describe('chatMessage actions', () => {
 
       expect(updateMessagePluginSpy).toHaveBeenCalledWith(messageId, pluginValue, {
         agentId: 'session-id',
+        returnMode: 'delta',
         topicId: 'topic-id',
       });
     });
@@ -1152,6 +1150,7 @@ describe('chatMessage actions', () => {
 
       expect(updateMessagePluginSpy).toHaveBeenCalledWith(messageId, pluginValue, {
         agentId: contextSessionId,
+        returnMode: 'delta',
         topicId: contextTopicId,
       });
     });

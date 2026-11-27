@@ -28,15 +28,42 @@ const normalizeMessageError = <T extends Pick<UpdateMessageParams, 'error'>>(val
       }
     : value;
 
+/**
+ * What a row-local mutation hands back.
+ *
+ * - `full` (default, legacy): re-read and return the whole conversation list.
+ * - `delta`: return only `{ success }`. The caller already holds the mutated
+ *   row (it applied the change optimistically), so re-reading 100–1000 rows of
+ *   the topic after every edit is pure egress. Only offered on mutations whose
+ *   effect is confined to the row(s) the caller already patched locally.
+ */
+export type MessageMutationReturnMode = 'delta' | 'full';
+
 interface QueryOptions {
   agentId?: string | null;
   groupId?: string | null;
+  returnMode?: MessageMutationReturnMode;
   sessionId?: string | null;
   threadId?: string | null;
   timingRequestId?: string;
   timingStartedAt?: number;
   topicId?: string | null;
 }
+
+/**
+ * A context with no conversation identifier at all (every id null/undefined).
+ * `resolveContext` turns an omitted context into nulls, so checking for
+ * `undefined` alone let context-less writes (CLI, plugin-argument writes)
+ * re-read the user's entire sessionless / topicless bucket.
+ */
+const hasConversationScope = (options: QueryOptions) =>
+  !!(
+    options.agentId ||
+    options.sessionId ||
+    options.topicId ||
+    options.groupId ||
+    options.threadId
+  );
 
 const { createPrefixedTimingContext, logTiming, toTimingContext } = createTimingHelpers(
   'lobe-server:chat:lobehub:timing',
@@ -154,13 +181,10 @@ export class MessageService {
   private async queryWithSuccess(
     options?: QueryOptions,
   ): Promise<{ messages?: UIChatMessage[]; success: boolean }> {
-    if (
-      !options ||
-      (options.agentId === undefined &&
-        options.sessionId === undefined &&
-        options.topicId === undefined)
-    ) {
-      logMessageTiming(options, 'lambda.message.update.queryMessages:skipped');
+    if (!options || options.returnMode === 'delta' || !hasConversationScope(options)) {
+      logMessageTiming(options, 'lambda.message.update.queryMessages:skipped', {
+        returnMode: options?.returnMode ?? 'full',
+      });
       return { success: true };
     }
 

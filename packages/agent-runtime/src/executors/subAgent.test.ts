@@ -161,6 +161,35 @@ describe('sub-agent executors', () => {
     });
   });
 
+  it('patches the parent result in memory when the host re-reads the next step', async () => {
+    (host.transports.messages as any).rehydratesOnNextStep = vi.fn().mockReturnValue(true);
+    execSubAgentTransport.mockResolvedValueOnce({
+      assistantMessageId: 'assistant-child',
+      operationId: 'child-op',
+      result: 'Child result',
+      status: 'completed',
+      success: true,
+      threadId: 'child-thread',
+    });
+    const parent = { content: '', id: 'tool-msg-1', role: 'tool' };
+    const other = { content: 'hi', id: 'user-1', role: 'user' };
+
+    const result = await execSubAgent(host)(
+      {
+        payload: {
+          parentMessageId: 'tool-msg-1',
+          task: { description: 'Call child', instruction: 'Do useful work' },
+        },
+        type: 'exec_sub_agent',
+      },
+      createState({ messages: [other, parent] as AgentState['messages'] }),
+    );
+
+    expect(update).toHaveBeenCalledWith('tool-msg-1', { content: 'Child result' });
+    expect(query).not.toHaveBeenCalled();
+    expect(result.newState.messages).toEqual([other, { ...parent, content: 'Child result' }]);
+  });
+
   it('blocks nested sub-agent dispatch before transport dispatch', async () => {
     const instruction: Extract<AgentInstruction, { type: 'exec_sub_agent' }> = {
       payload: {

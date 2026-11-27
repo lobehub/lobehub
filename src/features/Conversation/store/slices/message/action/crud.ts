@@ -17,6 +17,7 @@ import isEqual from 'fast-deep-equal';
 import { type StateCreator } from 'zustand';
 
 import { messageService } from '@/services/message';
+import { withDeltaReturn } from '@/services/message/returnMode';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
@@ -404,10 +405,11 @@ export const messageCRUDSlice: StateCreator<
     // Get the updated tools for persistence
     const message = dataSelectors.getDbMessageById(messageId)(get());
     if (message) {
+      // Persists the tools[] just dispatched locally: nothing to read back.
       const result = await messageService.updateMessage(
         messageId,
         { tools: message.tools || [] },
-        context,
+        withDeltaReturn(context),
       );
 
       if (result?.success && result.messages) {
@@ -420,18 +422,33 @@ export const messageCRUDSlice: StateCreator<
   updateMessageContent: async (id, content, extra) => {
     const { internal_dispatchMessage, replaceMessages, context } = get();
 
+    // New images become `messages_files` rows whose access URLs only the server
+    // resolves, so that write still takes the conversation back.
+    const needsServerRows = !!extra?.imageList?.length;
+
     // Optimistic update
-    if (extra?.tools) {
+    if (needsServerRows) {
       internal_dispatchMessage({
         id,
         type: 'updateMessage',
-        value: { tools: extra.tools },
+        value: extra?.tools ? { tools: extra.tools } : { content, editorData: extra?.editorData },
       });
     } else {
+      // Mirror every column the write sets: with a delta response this local
+      // row is the only copy the store holds until the next read.
       internal_dispatchMessage({
         id,
         type: 'updateMessage',
-        value: { content, editorData: extra?.editorData },
+        value: {
+          content,
+          editorData: extra?.editorData,
+          metadata: extra?.metadata,
+          model: extra?.model,
+          provider: extra?.provider,
+          reasoning: extra?.reasoning,
+          search: extra?.search,
+          tools: extra?.tools,
+        },
       });
     }
 
@@ -449,7 +466,7 @@ export const messageCRUDSlice: StateCreator<
         search: extra?.search,
         tools: extra?.tools,
       },
-      context,
+      needsServerRows ? context : withDeltaReturn(context),
     );
 
     if (result?.success && result.messages) {
@@ -482,7 +499,13 @@ export const messageCRUDSlice: StateCreator<
     internal_dispatchMessage({ id, type: 'updateMessageMetadata', value: metadata });
 
     // Persist to database
-    const result = await messageService.updateMessageMetadata(id, metadata, context);
+    // Merged locally above. A branch switch keeps the full list: the selected
+    // branch's rows may sit outside the loaded window.
+    const result = await messageService.updateMessageMetadata(
+      id,
+      metadata,
+      'activeBranchIndex' in metadata ? context : withDeltaReturn(context),
+    );
 
     if (result?.success && result.messages) {
       replaceMessages(result.messages, { expectedContext: context });
@@ -500,7 +523,7 @@ export const messageCRUDSlice: StateCreator<
     });
 
     // Persist to database
-    const result = await messageService.updateMessagePlugin(id, value, context);
+    const result = await messageService.updateMessagePlugin(id, value, withDeltaReturn(context));
 
     if (result?.success && result.messages) {
       replaceMessages(result.messages, { expectedContext: context });
@@ -546,7 +569,7 @@ export const messageCRUDSlice: StateCreator<
       const result = await messageService.updateMessage(
         messageId,
         { tools: message.tools },
-        context,
+        withDeltaReturn(context),
       );
 
       if (result?.success && result.messages) {
@@ -619,7 +642,13 @@ export const messageCRUDSlice: StateCreator<
 
     // Create the update promise - backend handles all cases using toolCallId
     const updatePromise = (async () => {
-      const result = await messageService.updateToolArguments(toolCallId, nextValue, context);
+      // Both rows the server touches (tool plugin + parent tools[]) are
+      // patched above, so the conversation need not come back.
+      const result = await messageService.updateToolArguments(
+        toolCallId,
+        nextValue,
+        withDeltaReturn(context),
+      );
       if (options?.refresh !== false && result?.success && result.messages) {
         replaceMessages(result.messages, { expectedContext: context });
       }

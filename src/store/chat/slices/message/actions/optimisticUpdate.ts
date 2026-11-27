@@ -14,6 +14,7 @@ import { ChatErrorType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 
 import { messageService } from '@/services/message';
+import { withDeltaReturn } from '@/services/message/returnMode';
 import { type ChatStore } from '@/store/chat/store';
 import type { MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
 import { type StoreSetter } from '@/store/types';
@@ -146,24 +147,39 @@ export class MessageOptimisticUpdateActionImpl {
   ): Promise<void> => {
     const { internal_dispatchMessage, refreshMessages, replaceMessages } = this.#get();
 
+    // New images become `messages_files` rows whose access URLs only the server
+    // can resolve, so that write still needs the conversation back. Every
+    // other field is mirrored locally below and needs no re-read.
+    const needsServerRows = !!extra?.imageList?.length;
+
     // Due to the async update method and refresh need about 100ms
     // we need to update the message content at the frontend to avoid the update flick
     // refs: https://medium.com/@kyledeguzmanx/what-are-optimistic-updates-483662c3e171
-    if (extra?.tools) {
+    if (needsServerRows) {
       internal_dispatchMessage(
         {
           id,
           type: 'updateMessage',
-          value: { tools: extra?.tools },
+          value: extra?.tools ? { tools: extra.tools } : { content, metadata: extra?.metadata },
         },
         context,
       );
     } else {
+      // Mirror every column the server write sets: with a delta response this
+      // local row is the only copy the store will hold until the next read.
       internal_dispatchMessage(
         {
           id,
           type: 'updateMessage',
-          value: { content, metadata: extra?.metadata },
+          value: {
+            content,
+            metadata: extra?.metadata,
+            model: extra?.model,
+            provider: extra?.provider,
+            reasoning: extra?.reasoning,
+            search: extra?.search,
+            tools: extra?.tools,
+          },
         },
         context,
       );
@@ -183,12 +199,12 @@ export class MessageOptimisticUpdateActionImpl {
         search: extra?.search,
         tools: extra?.tools,
       },
-      ctx,
+      needsServerRows ? ctx : withDeltaReturn(ctx),
     );
 
-    if (result && result.success && result.messages) {
+    if (result?.success && result.messages) {
       replaceMessages(result.messages, { action: 'optimisticUpdateMessageContent', context: ctx });
-    } else {
+    } else if (!result?.success) {
       await refreshMessages();
     }
   };
@@ -218,11 +234,18 @@ export class MessageOptimisticUpdateActionImpl {
     internal_dispatchMessage({ id, type: 'updateMessageMetadata', value: metadata }, context);
 
     const ctx = this.#get().internal_getConversationContext(context);
-    const result = await messageService.updateMessageMetadata(id, metadata, ctx);
+    // The metadata patch is already merged into the local row above. A branch
+    // switch is the exception: the newly selected branch's rows may sit outside
+    // the loaded window, so it still takes the server's full list.
+    const result = await messageService.updateMessageMetadata(
+      id,
+      metadata,
+      'activeBranchIndex' in metadata ? ctx : withDeltaReturn(ctx),
+    );
 
     if (result?.success && result.messages) {
       replaceMessages(result.messages, { context: ctx });
-    } else {
+    } else if (!result?.success) {
       await refreshMessages();
     }
   };
@@ -250,7 +273,8 @@ export class MessageOptimisticUpdateActionImpl {
     }
 
     const ctx = this.#get().internal_getConversationContext(context);
-    const result = await messageService.updateMessagePlugin(id, value, ctx);
+    // Plugin row and the parent's tools[] mirror are both patched above.
+    const result = await messageService.updateMessagePlugin(id, value, withDeltaReturn(ctx));
 
     if (result?.success && result.messages) {
       replaceMessages(result.messages, { context: ctx });

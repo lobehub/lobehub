@@ -3911,10 +3911,10 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
     it('should skip message creation when skipCreateToolMessage is true', async () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState();
-      mockMessageModel.query.mockResolvedValueOnce([
-        { id: 'existing-tool-1', role: 'tool', tool_call_id: 'tool-call-1' },
-        { id: 'existing-tool-2', role: 'tool', tool_call_id: 'tool-call-2' },
-      ]);
+      mockMessageModel.findToolMessageIdByToolCallId.mockImplementation(
+        async (toolCallId: string, parentId: string) =>
+          parentId === 'assistant-msg-1' ? `existing-${toolCallId.replace('-call', '')}` : null,
+      );
 
       await executors.request_human_approve!(
         {
@@ -3927,6 +3927,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       );
 
       expect(mockMessageModel.create).not.toHaveBeenCalled();
+      expect(mockMessageModel.query).not.toHaveBeenCalled(); // indexed lookups only
       expect(mockMessageModel.updateMessagePlugin).toHaveBeenCalledTimes(2);
       expect(mockMessageModel.updateMessagePlugin).toHaveBeenNthCalledWith(1, 'existing-tool-1', {
         intervention: {
@@ -4252,23 +4253,20 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       expect(result.newState.messages).toHaveLength(4);
     });
 
-    it('should include id in refreshed messages', async () => {
+    it('patches the persisted tool row into state instead of re-reading the topic', async () => {
       const executors = createRuntimeExecutors(ctx);
-      const state = createMockState();
+      const userRow = { content: 'hi', id: 'msg-1', role: 'user' } as any;
+      const state = createMockState({ messages: [userRow] });
 
       const instruction = createBatchToolInstruction([createSearchToolCall()]);
 
       const result = await executors.call_tools_batch!(instruction, state);
 
-      // Each message should have an id
-      result.newState.messages.forEach((msg: any) => {
-        expect(msg.id).toBeDefined();
-        expect(typeof msg.id).toBe('string');
-      });
-
-      // Verify specific message ids
-      expect(result.newState.messages[0].id).toBe('msg-1');
-      expect(result.newState.messages[2].id).toBe('tool-msg-1');
+      // The next step entry re-reads a topic-scoped run; no second read here.
+      expect(mockMessageModel.query).not.toHaveBeenCalled();
+      expect(result.newState.messages[0]).toEqual(userRow);
+      // The durable id is kept: the next step rebuilds media refs by id.
+      expect(result.newState.messages[1]).toMatchObject({ id: 'tool-msg-1', role: 'tool' });
     });
 
     it('anchors the next turn on the calling assistant, not the last tool message', async () => {
@@ -4457,6 +4455,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
     it('should query messages with correct metadata fields when state.metadata is defined', async () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState({
+        // An id-less (ephemeral) row skips the step-entry re-read: still re-query.
+        messages: [{ content: 'respond to the group', role: 'user' }] as any,
         origin: {
           agentId: 'agent-abc',
           threadId: 'thread-xyz',

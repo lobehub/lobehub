@@ -1861,7 +1861,7 @@ export class ConversationControlActionImpl {
       await messageService.updateMessagePluginState(
         toolMessageId,
         { askUserAnswers: answers },
-        ctx,
+        { ...ctx, returnMode: 'delta' }, // dispatched above; the list is not read back
       );
     } catch (err) {
       console.warn('[setInterventionAnswers] persist failed:', err);

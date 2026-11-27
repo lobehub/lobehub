@@ -44,7 +44,7 @@ import {
   assertCreatorTopicTargets,
 } from './_helpers/shareVisitorTargetGuard';
 import { readTopicPreviews, topicPreviewsInputSchema } from './_helpers/topicPreviews';
-import { basicContextSchema } from './_schema/context';
+import { basicContextSchema, mutationReturnModeSchema } from './_schema/context';
 
 const { logTiming, runTimedStage } = createTimingHelpers('lobe-server:chat:lobehub:timing');
 
@@ -140,10 +140,11 @@ export const messageRouter = router({
           fileIds: z.array(z.string()),
           id: z.string(),
         })
-        .extend(basicContextSchema.shape),
+        .extend(basicContextSchema.shape)
+        .extend(mutationReturnModeSchema.shape),
     )
     .mutation(async ({ input, ctx }) => {
-      const { id, fileIds, agentId, ...options } = input;
+      const { id, fileIds, agentId, returnMode, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       // Agent-share visitor messages live under the creator's `userId`;
       // attaching files to one on the creator's behalf would leak into the
@@ -157,7 +158,7 @@ export const messageRouter = router({
         ctx.workspaceId ?? undefined,
       );
 
-      return ctx.messageService.addFilesToMessage(id, fileIds, resolved);
+      return ctx.messageService.addFilesToMessage(id, fileIds, { ...resolved, returnMode });
     }),
 
   batchMutate: messageProcedure
@@ -805,10 +806,11 @@ export const messageRouter = router({
           id: z.string(),
           value: UpdateMessageParamsSchema,
         })
-        .extend(basicContextSchema.shape),
+        .extend(basicContextSchema.shape)
+        .extend(mutationReturnModeSchema.shape),
     )
     .mutation(async ({ input, ctx }) => {
-      const { id, value, agentId, ...options } = input;
+      const { id, value, agentId, returnMode, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       // Agent-share visitor messages live under the creator's `userId`, so the
       // ownership predicate alone would let a creator edit a visitor's turn —
@@ -841,6 +843,7 @@ export const messageRouter = router({
         () =>
           ctx.messageService.updateMessage(id, value as any, {
             ...resolved,
+            returnMode,
             timingRequestId: timingContext.requestId,
             timingStartedAt: timingContext.startedAt,
           }),
@@ -888,10 +891,11 @@ export const messageRouter = router({
           id: z.string(),
           value: UpdateMessagePluginSchema.partial(),
         })
-        .extend(basicContextSchema.shape),
+        .extend(basicContextSchema.shape)
+        .extend(mutationReturnModeSchema.shape),
     )
     .mutation(async ({ input, ctx }) => {
-      const { id, value, agentId, ...options } = input;
+      const { id, value, agentId, returnMode, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
@@ -901,14 +905,18 @@ export const messageRouter = router({
         ctx.workspaceId ?? undefined,
       );
 
-      return ctx.messageService.updateMessagePlugin(id, value, resolved);
+      return ctx.messageService.updateMessagePlugin(id, value, { ...resolved, returnMode });
     }),
 
   updateMessageRAG: messageProcedure
     .use(withScopedPermission('message:update'))
-    .input(UpdateMessageRAGParamsSchema.extend(basicContextSchema.shape))
+    .input(
+      UpdateMessageRAGParamsSchema.extend(basicContextSchema.shape).extend(
+        mutationReturnModeSchema.shape,
+      ),
+    )
     .mutation(async ({ input, ctx }) => {
-      const { id, value, agentId, ...options } = input;
+      const { id, value, agentId, returnMode, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
@@ -918,7 +926,7 @@ export const messageRouter = router({
         ctx.workspaceId ?? undefined,
       );
 
-      return ctx.messageService.updateMessageRAG(id, value, resolved);
+      return ctx.messageService.updateMessageRAG(id, value, { ...resolved, returnMode });
     }),
 
   updateMetadata: messageProcedure
@@ -929,10 +937,11 @@ export const messageRouter = router({
           id: z.string(),
           value: z.object({}).passthrough(),
         })
-        .extend(basicContextSchema.shape),
+        .extend(basicContextSchema.shape)
+        .extend(mutationReturnModeSchema.shape),
     )
     .mutation(async ({ input, ctx }) => {
-      const { id, value, agentId, ...options } = input;
+      const { id, value, agentId, returnMode, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
@@ -942,7 +951,10 @@ export const messageRouter = router({
         ctx.workspaceId ?? undefined,
       );
 
-      return ctx.messageService.updateMetadata(id, omitServerOwnedMessageMetadata(value), resolved);
+      return ctx.messageService.updateMetadata(id, omitServerOwnedMessageMetadata(value), {
+        ...resolved,
+        returnMode,
+      });
     }),
 
   updatePluginError: messageProcedure
@@ -953,10 +965,11 @@ export const messageRouter = router({
           id: z.string(),
           value: z.object({}).passthrough().nullable(),
         })
-        .extend(basicContextSchema.shape),
+        .extend(basicContextSchema.shape)
+        .extend(mutationReturnModeSchema.shape),
     )
     .mutation(async ({ input, ctx }) => {
-      const { id, value, agentId, ...options } = input;
+      const { id, value, agentId, returnMode, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
@@ -966,7 +979,7 @@ export const messageRouter = router({
         ctx.workspaceId ?? undefined,
       );
 
-      return ctx.messageService.updatePluginError(id, value, resolved);
+      return ctx.messageService.updatePluginError(id, value, { ...resolved, returnMode });
     }),
 
   updatePluginState: messageProcedure
@@ -977,10 +990,11 @@ export const messageRouter = router({
           id: z.string(),
           value: z.object({}).passthrough(),
         })
-        .extend(basicContextSchema.shape),
+        .extend(basicContextSchema.shape)
+        .extend(mutationReturnModeSchema.shape),
     )
     .mutation(async ({ input, ctx }) => {
-      const { id, value, agentId, ...options } = input;
+      const { id, value, agentId, returnMode, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
@@ -990,7 +1004,7 @@ export const messageRouter = router({
         ctx.workspaceId ?? undefined,
       );
 
-      return ctx.messageService.updatePluginState(id, value, resolved);
+      return ctx.messageService.updatePluginState(id, value, { ...resolved, returnMode });
     }),
 
   updateTTS: messageProcedure
@@ -1025,10 +1039,11 @@ export const messageRouter = router({
           toolCallId: z.string(),
           value: z.union([z.string(), z.record(z.string(), z.unknown())]),
         })
-        .extend(basicContextSchema.shape),
+        .extend(basicContextSchema.shape)
+        .extend(mutationReturnModeSchema.shape),
     )
     .mutation(async ({ input, ctx }) => {
-      const { toolCallId, value, agentId, ...options } = input;
+      const { toolCallId, value, agentId, returnMode, ...options } = input;
       // No message id in the input — guard by the topic row when present,
       // falling back to the declared conversation target.
       if (options.topicId) await assertCanUseTopicTargets(guardCtx(ctx), [options.topicId]);
@@ -1046,7 +1061,7 @@ export const messageRouter = router({
         ctx.workspaceId ?? undefined,
       );
 
-      return ctx.messageService.updateToolArguments(toolCallId, value, resolved);
+      return ctx.messageService.updateToolArguments(toolCallId, value, { ...resolved, returnMode });
     }),
 
   /**
@@ -1067,10 +1082,11 @@ export const messageRouter = router({
             pluginState: z.object({}).passthrough().optional(),
           }),
         })
-        .extend(basicContextSchema.shape),
+        .extend(basicContextSchema.shape)
+        .extend(mutationReturnModeSchema.shape),
     )
     .mutation(async ({ input, ctx }) => {
-      const { id, value, agentId, ...options } = input;
+      const { id, value, agentId, returnMode, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
@@ -1080,7 +1096,7 @@ export const messageRouter = router({
         ctx.workspaceId ?? undefined,
       );
 
-      return ctx.messageService.updateToolMessage(id, value, resolved);
+      return ctx.messageService.updateToolMessage(id, value, { ...resolved, returnMode });
     }),
   updateTranslate: messageProcedure
     .use(withScopedPermission('message:update'))
