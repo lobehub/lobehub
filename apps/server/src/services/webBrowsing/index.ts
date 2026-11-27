@@ -28,6 +28,12 @@ export interface UpsertCrawledDocumentParams {
 }
 
 export interface UpsertCrawledDocumentResult {
+  /**
+   * The Markdown the document now stores: the editor snapshot of the crawled text, which can have
+   * fewer lines than the crawl (blank-line runs and loose lists collapse). Line offsets handed to
+   * `readDocument` must count this text.
+   */
+  content: string;
   id: string;
   /**
    * - `created`: this URL is new for the user; a `documents` row was inserted.
@@ -114,6 +120,7 @@ export class WebBrowsingDocumentService {
 
     let documentId: string;
     let status: UpsertCrawledDocumentResult['status'];
+    let storedContent: string;
 
     if (existing) {
       if (hashContent(existing.content ?? '') === hashContent(persistedContent)) {
@@ -122,6 +129,7 @@ export class WebBrowsingDocumentService {
         // not worth the cost (and pollutes the history list with no-op rows).
         documentId = existing.id;
         status = 'unchanged';
+        storedContent = existing.content ?? '';
       } else {
         const snapshot = await createAgentMarkdownSnapshot(persistedContent);
         // `DocumentService.updateDocument` runs inside a transaction and
@@ -142,6 +150,7 @@ export class WebBrowsingDocumentService {
         );
         documentId = existing.id;
         status = 'updated';
+        storedContent = snapshot.content;
       }
     } else {
       const snapshot = await createAgentMarkdownSnapshot(persistedContent);
@@ -163,6 +172,7 @@ export class WebBrowsingDocumentService {
       });
       documentId = created.id;
       status = 'created';
+      storedContent = snapshot.content;
     }
 
     // Topic binding fires across all three statuses: the user may open the
@@ -173,6 +183,6 @@ export class WebBrowsingDocumentService {
       await this.topicDocumentModel.associate({ documentId, topicId });
     }
 
-    return { id: documentId, status };
+    return { content: storedContent, id: documentId, status };
   };
 }

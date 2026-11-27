@@ -51,7 +51,15 @@ export interface WebBrowsingDocumentService {
     description?: string;
     title: string;
     url: string;
-  }) => Promise<{ id: string }>;
+  }) => Promise<{
+    /**
+     * The Markdown the document stores, which is what `readDocument(format="markdown")` pages.
+     * It can differ from the crawled text (the snapshot collapses blank-line runs and loose
+     * lists), so a window that continues through `readDocument` is cut from this text.
+     */
+    content?: string;
+    id: string;
+  }>;
 }
 
 const NON_ESCALATABLE_ERROR_TYPES = new Set([
@@ -174,7 +182,7 @@ export class WebBrowsingExecutionRuntime {
 
     // Save crawled pages as documents and associate with agent. The agent document id lets a
     // truncated page point the model at the full saved copy.
-    const savedDocumentIds = new Map<string, string>();
+    const savedDocuments = new Map<string, { content?: string; id: string }>();
     if (this.documentService) {
       await Promise.all(
         results.map(async (item) => {
@@ -200,7 +208,8 @@ export class WebBrowsingExecutionRuntime {
             });
 
             const binding = await this.documentService!.associateDocument(doc.id);
-            if (binding?.id) savedDocumentIds.set(pageData.url, binding.id);
+            if (binding?.id)
+              savedDocuments.set(pageData.url, { content: doc.content, id: binding.id });
           } catch (error) {
             console.error(
               `[WebBrowsing] Failed to save crawl result to agent document (${pageData.url}): ${describeSaveError(error)}`,
@@ -220,15 +229,20 @@ export class WebBrowsingExecutionRuntime {
         return pageData;
       }
 
-      const savedId = this.canReadSavedDocuments ? savedDocumentIds.get(pageData.url) : undefined;
-      const window = sliceTextWindow(pageData.content, { maxChars: CRAWL_CONTENT_LIMITED_COUNT });
+      const saved = this.canReadSavedDocuments ? savedDocuments.get(pageData.url) : undefined;
+      // The continuation offset and the totals must count lines of the text `readDocument` pages,
+      // so cut the window from the stored copy when there is one. Counting the raw crawl sent the
+      // model past the end of a shorter stored document.
+      const window = sliceTextWindow(saved?.content ?? pageData.content, {
+        maxChars: CRAWL_CONTENT_LIMITED_COUNT,
+      });
 
       return {
         ...pageData,
         content: appendTextWindowNotice(window, {
-          continueFrom: savedId
+          continueFrom: saved
             ? (line) =>
-                `call lobe-agent-documents readDocument with id="${savedId}", format="markdown" and offset=${line}`
+                `call lobe-agent-documents readDocument with id="${saved.id}", format="markdown" and offset=${line}`
             : undefined,
         }),
       };
