@@ -810,8 +810,11 @@ export default {
   'builtins.lobe-activator.inspector.activateTools.notFoundCount': '{{count}} not found',
   'builtins.lobe-skill-store.apiName.importFromMarket': 'Import from Market',
   'builtins.lobe-skill-store.apiName.importSkill': 'Import Skill',
+  'builtins.lobe-skill-store.apiName.inspectSkill': 'Check Skill Requirements',
   'builtins.lobe-skill-store.apiName.searchSkill': 'Search Skills',
   'builtins.lobe-skill-store.inspector.noResults': 'No results',
+  'builtins.lobe-skill-store.inspector.requirements':
+    'Credentials: {{credentials}} · Hosts: {{hosts}}',
   'builtins.lobe-skill-store.render.installs': 'Installs',
   'builtins.lobe-skill-store.render.repository': 'Repository',
   'builtins.lobe-skill-store.render.version': 'Version',

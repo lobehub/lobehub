@@ -1,6 +1,7 @@
 import {
   type MarketSkillItem,
   type SearchSkillParams,
+  type SkillPackageFile,
   SkillStoreIdentifier,
 } from '@lobechat/builtin-tool-skill-store';
 import {
@@ -22,6 +23,7 @@ import {
 import { redisPolicyStateStore } from '@/server/services/agentSignal/store/adapters/redis/policyStateStore';
 import { MarketService } from '@/server/services/market';
 import { SkillImporter } from '@/server/services/skill/importer';
+import { SkillParser } from '@/server/services/skill/parser';
 
 import { type ServerRuntimeRegistration } from './types';
 
@@ -214,6 +216,26 @@ class SkillStoreServerRuntimeService implements SkillStoreRuntimeService {
       });
       throw error;
     }
+  };
+
+  getMarketSkillFiles = async (
+    identifier: string,
+  ): Promise<{ files: SkillPackageFile[]; name?: string }> => {
+    // The same package importFromMarket would install, parsed the same way, but
+    // nothing is stored: inspectSkill reads it before the user decides.
+    const { buffer } = await this.marketService.downloadSkill(identifier);
+    const { content, manifest, resources } = await new SkillParser().parseZipPackage(
+      Buffer.from(buffer),
+      { fallbackName: identifier },
+    );
+
+    return {
+      files: [
+        { content, path: 'SKILL.md' },
+        ...[...resources].map(([path, data]) => ({ content: data.toString('utf8'), path })),
+      ],
+      name: manifest.name,
+    };
   };
 
   searchSkill = async (

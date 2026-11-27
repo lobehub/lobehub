@@ -8,6 +8,7 @@ import { SkillStoreExecutionRuntime } from '@lobechat/builtin-tool-skill-store/e
 import { SkillStoreExecutor } from '@lobechat/builtin-tool-skill-store/executor';
 import { LIBRARY_SKILL_IMPLICIT_MODE, parsePluginEntry } from '@lobechat/types';
 
+import { discoverService } from '@/services/discover';
 import { marketApiService } from '@/services/marketApi';
 import { agentSkillService } from '@/services/skill';
 
@@ -31,6 +32,17 @@ const turnOnForActiveAgent = async (skill: { identifier: string }) => {
 // Create runtime with client-side service
 const runtime = new SkillStoreExecutionRuntime({
   service: {
+    // The package listing leaves SKILL.md out (the detail endpoint serves its body).
+    getMarketSkillFiles: async (identifier) => {
+      const [detail, files] = await Promise.all([
+        discoverService.getSkillDetail({ identifier }),
+        marketApiService.getSkillPackageFiles(identifier),
+      ]);
+      return {
+        files: [{ content: detail.content ?? '', path: 'SKILL.md' }, ...files],
+        name: detail.name,
+      };
+    },
     importFromGitHub: async (gitUrl) => {
       const result = await agentSkillService.importFromGitHub({ gitUrl });
       if (!result) throw new Error('Import failed');
