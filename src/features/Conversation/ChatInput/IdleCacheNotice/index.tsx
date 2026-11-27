@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { InfoIcon } from 'lucide-react';
+import { ArrowRightIcon, InfoIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -98,7 +98,13 @@ const IdleCacheNotice = memo(() => {
         showIcon
         type={'info'}
         action={
-          <Button loading={opening} size={'small'} onClick={handleNewTopic}>
+          <Button
+            icon={ArrowRightIcon}
+            iconPosition={'end'}
+            loading={opening}
+            size={'small'}
+            onClick={handleNewTopic}
+          >
             {t('input.idleCache.newTopic')}
           </Button>
         }
