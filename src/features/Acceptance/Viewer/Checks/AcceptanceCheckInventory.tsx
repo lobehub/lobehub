@@ -13,6 +13,7 @@ import { useSearchParams } from 'react-router';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { verifyService } from '@/services/verify';
 import { useVerifyStore } from '@/store/verify';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { hasVisualEvidence } from '../Evidence/evidence';
@@ -61,7 +62,7 @@ const styles = stylex.create({
     flex: 'none',
     gap: '6px',
     alignItems: 'center',
-    height: '28px',
+    height: densityTokens['--lobe-density-small-control-height'],
     margin: 0,
     paddingBlock: 0,
     paddingInline: '8px',

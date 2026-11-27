@@ -12,6 +12,7 @@ import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { useAgentStore } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import { useDensityTokens } from '@/styles/density';
 
 import AgentItem from './AgentItem';
 
@@ -39,6 +40,7 @@ interface AgentSelectorActionProps {
 }
 
 const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) => {
+  const { smallControlHeight } = useDensityTokens();
   const { t } = useTranslation(['chat', 'common']);
   const [open, setOpen] = useState(false);
   const agentId = useConversationStore(conversationSelectors.agentId);
@@ -130,7 +132,12 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
       }}
       onOpenChange={setOpen}
     >
-      <Center horizontal className={cx(styles.container)} height={28} paddingInline={6}>
+      <Center
+        horizontal
+        className={cx(styles.container)}
+        height={smallControlHeight}
+        paddingInline={6}
+      >
         <Flexbox horizontal align={'center'} gap={4}>
           <AgentAvatar
             agentId={activeAgent?.id}

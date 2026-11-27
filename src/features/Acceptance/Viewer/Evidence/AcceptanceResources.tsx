@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsHydrated } from '@/hooks/useIsHydrated';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import QuietState from '../QuietState';
@@ -35,7 +36,7 @@ const styles = stylex.create({
     flexWrap: 'wrap',
     gap: '8px',
     alignItems: 'center',
-    minHeight: '28px',
+    minHeight: densityTokens['--lobe-density-small-control-height'],
   },
   filters: { display: 'flex', flex: '1', gap: '4px', alignItems: 'center', minWidth: 0 },
   filter: {
@@ -43,7 +44,7 @@ const styles = stylex.create({
     display: 'inline-flex',
     gap: '8px',
     alignItems: 'center',
-    height: '28px',
+    height: densityTokens['--lobe-density-small-control-height'],
     margin: '0',
     paddingBlock: 0,
     paddingInline: '12px',

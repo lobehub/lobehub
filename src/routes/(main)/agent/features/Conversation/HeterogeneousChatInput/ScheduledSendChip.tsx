@@ -7,14 +7,15 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useConversationStore } from '@/features/Conversation';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   chip: css`
     flex: none;
 
-    height: 28px;
+    height: ${densityVars.smallControlHeight};
     padding-inline: 8px 4px;
-    border-radius: 14px;
+    border-radius: calc(${densityVars.smallControlHeight} / 2);
 
     background: ${cssVar.colorInfoBg};
   `,

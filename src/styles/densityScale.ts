@@ -43,6 +43,7 @@ export interface DensityScale {
   radius: number;
   rowHeight: number;
   sectionGap: number;
+  smallControlHeight: number;
   toolbarHeight: number;
 }
 
@@ -74,6 +75,7 @@ export const DENSITY_SCALE: Record<InterfaceDensity, DensityScale> = {
     radius: 6,
     rowHeight: 32,
     sectionGap: 12,
+    smallControlHeight: 24,
     toolbarHeight: 36,
   },
   loose: {
@@ -103,6 +105,7 @@ export const DENSITY_SCALE: Record<InterfaceDensity, DensityScale> = {
     radius: 8,
     rowHeight: 36,
     sectionGap: 16,
+    smallControlHeight: 28,
     toolbarHeight: 40,
   },
 };

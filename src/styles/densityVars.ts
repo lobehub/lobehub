@@ -30,5 +30,6 @@ export const densityVars = {
   radius: densityTokens['--lobe-density-radius'],
   rowHeight: densityTokens['--lobe-density-row-height'],
   sectionGap: densityTokens['--lobe-density-section-gap'],
+  smallControlHeight: densityTokens['--lobe-density-small-control-height'],
   toolbarHeight: densityTokens['--lobe-density-toolbar-height'],
 };

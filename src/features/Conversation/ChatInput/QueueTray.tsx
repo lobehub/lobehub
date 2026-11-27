@@ -22,6 +22,7 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useFileStore } from '@/store/file';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { useDensityTokens } from '@/styles/density';
 import { densityTokens } from '@/styles/density.stylex';
 
 import { useConversationResourceAccess } from '../hooks/useConversationResourceAccess';
@@ -32,8 +33,6 @@ import {
   putQueuedMessageInEditor,
   sendQueuedMessageNow,
 } from './utils';
-
-const PREVIEW_SIZE = 28;
 
 const NARROW = '@container (max-width: 480px)';
 
@@ -57,7 +56,7 @@ const styles = stylex.create({
     overflow: 'hidden',
     flexShrink: 0,
     maxWidth: '160px',
-    height: '28px',
+    height: densityTokens['--lobe-density-small-control-height'],
     paddingBlock: 0,
     paddingInline: '6px',
     borderWidth: '1px',
@@ -97,8 +96,8 @@ const styles = stylex.create({
   icon: { flexShrink: 0, color: cssVar.colorTextDescription },
   imageThumb: {
     flexShrink: 0,
-    width: '28px',
-    height: '28px',
+    width: densityTokens['--lobe-density-small-control-height'],
+    height: densityTokens['--lobe-density-small-control-height'],
     marginBlock: 0,
     borderWidth: '1px',
     borderStyle: 'solid',
@@ -106,7 +105,11 @@ const styles = stylex.create({
     borderRadius: '6px',
     boxShadow: 'none',
   },
-  imageThumbImage: { width: '28px', height: '28px', objectFit: 'cover' },
+  imageThumbImage: {
+    width: densityTokens['--lobe-density-small-control-height'],
+    height: densityTokens['--lobe-density-small-control-height'],
+    objectFit: 'cover',
+  },
   item: {
     paddingBlock: '6px',
     paddingInlineStart: densityTokens['--lobe-density-content-gap'],
@@ -134,15 +137,17 @@ interface QueuedFilePreviewProps {
 }
 
 const QueuedFilePreview = memo<QueuedFilePreviewProps>(({ file }) => {
+  const { smallControlHeight: previewSize } = useDensityTokens();
+
   if (isImageFile(file)) {
     // Use @lobehub/ui Image so click-to-zoom preview works. Lock both wrapper
-    // and inner <img> to PREVIEW_SIZE — `size` alone doesn't constrain the
+    // and inner <img> to previewSize — `size` alone doesn't constrain the
     // intrinsic image dimensions inside a flex row.
     return (
       <Image
         alt={file.name}
         objectFit={'cover'}
-        size={PREVIEW_SIZE}
+        size={previewSize}
         src={file.url}
         title={file.name}
         variant={'borderless'}
@@ -151,8 +156,8 @@ const QueuedFilePreview = memo<QueuedFilePreviewProps>(({ file }) => {
           wrapper: stylex.props(styles.imageThumb).className,
         }}
         styles={{
-          image: { height: PREVIEW_SIZE, width: PREVIEW_SIZE },
-          wrapper: { height: PREVIEW_SIZE, width: PREVIEW_SIZE },
+          image: { height: previewSize, width: previewSize },
+          wrapper: { height: previewSize, width: previewSize },
         }}
       />
     );

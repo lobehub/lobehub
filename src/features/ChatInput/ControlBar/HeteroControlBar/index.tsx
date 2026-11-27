@@ -24,13 +24,14 @@ import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import PermissionModeSelector from './PermissionMode';
 import PlanModeSwitch from './PlanMode';
 import { ClaudeCodeQuotaMenu, CodexQuotaMenu, KimiCodeQuotaMenu } from './QuotaMenu';
 
 const styles = stylex.create({
-  // Pinned to the same 28px row as the plain ControlBar so the composer footer
+  // Pinned to the same row height as the plain ControlBar so the composer footer
   // keeps its rhythm regardless of which chips render. `flex: none` matters:
   // the bar sits in a column flex parent and would otherwise shrink to the
   // (compact) chips' min-content height.
@@ -38,7 +39,7 @@ const styles = stylex.create({
     containerName: 'runtimebar',
     containerType: 'inline-size',
     flex: 'none',
-    height: '28px',
+    height: densityTokens['--lobe-density-small-control-height'],
     paddingBlock: '0',
     paddingInline: '4px',
   },
@@ -128,7 +129,7 @@ const visibleSdkRuntimeStates = new Set<HeterogeneousAgentRuntimeState>([
 ]);
 
 /**
- * Same 28px row as the loaded bar: the workspace / device chip on the left and,
+ * Same row height as the loaded bar: the workspace / device chip on the left and,
  * on desktop once config is known, the full-access badge on the right. Keeps the
  * composer from jumping while access or agent config resolve.
  */

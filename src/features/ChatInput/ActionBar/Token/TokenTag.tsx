@@ -2,12 +2,15 @@ import { TokenTag } from '@lobehub/ui/chat';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useDensityTokens } from '@/styles/density';
+
 import ActionPopover from '../components/ActionPopover';
 import TokenDetails from './TokenDetails';
 import { useTokenBreakdown } from './useTokenBreakdown';
 
 const Token = memo(() => {
   const { t } = useTranslation('chat');
+  const { iconBox, iconSize } = useDensityTokens();
 
   const breakdown = useTokenBreakdown();
   const { maxTokens, totalToken } = breakdown;
@@ -23,8 +26,8 @@ const Token = memo(() => {
         mode={'used'}
         value={totalToken}
         size={{
-          blockSize: 28,
-          size: 18,
+          blockSize: iconBox,
+          size: iconSize,
         }}
         text={{
           overload: t('tokenTag.overload'),

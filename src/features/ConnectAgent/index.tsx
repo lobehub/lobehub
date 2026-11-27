@@ -140,7 +140,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     width: 100%;
-    min-height: 28px;
+    min-height: ${densityVars.smallControlHeight};
     margin-block-start: auto;
 
     > a,
@@ -922,7 +922,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
               horizontal
               align={'center'}
               justify={'space-between'}
-              style={{ minHeight: 28 }}
+              style={{ minHeight: densityVars.smallControlHeight }}
             >
               <SectionLabel>
                 {t('connectAgent.create.stepAgents', { device: targetLabel })}

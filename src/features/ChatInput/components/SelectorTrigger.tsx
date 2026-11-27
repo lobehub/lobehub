@@ -5,6 +5,7 @@ import { ChevronDownIcon, ZapIcon } from 'lucide-react';
 import type { ComponentPropsWithRef } from 'react';
 import { memo } from 'react';
 
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 const styles = stylex.create({
@@ -34,7 +35,7 @@ const styles = stylex.create({
     alignItems: 'center',
     minWidth: '0',
     maxWidth: '100%',
-    height: '28px',
+    height: densityTokens['--lobe-density-small-control-height'],
     paddingInline: '8px',
     borderRadius: '6px',
     fontSize: '12px',

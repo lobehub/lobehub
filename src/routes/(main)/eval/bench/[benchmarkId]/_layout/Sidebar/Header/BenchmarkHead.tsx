@@ -32,6 +32,7 @@ import { benchmarkHomePath } from '@/features/LobeBench/experimentNavigation';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useEvalStore } from '@/store/eval';
 import { isLobeBenchKind } from '@/store/eval/kinds';
+import { useHeaderActionSize } from '@/styles/density';
 
 const SYSTEM_ICONS = [
   LoaderPinwheel,
@@ -60,6 +61,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const BenchmarkHead = memo<{ id: string }>(({ id }) => {
   const navigate = useWorkspaceAwareNavigate();
+  const switcherActionSize = useHeaderActionSize(true);
   const useFetchBenchmarks = useEvalStore((s) => s.useFetchBenchmarks);
   useFetchBenchmarks();
   const benchmark = useEvalStore((s) => s.benchmarkDetailMap[id]);
@@ -133,14 +135,7 @@ const BenchmarkHead = memo<{ id: string }>(({ id }) => {
             <Text ellipsis style={{ flex: 1 }} weight={500}>
               {name}
             </Text>
-            <ActionIcon
-              icon={ChevronsUpDownIcon}
-              style={{ width: 24 }}
-              size={{
-                blockSize: 28,
-                size: 16,
-              }}
-            />
+            <ActionIcon icon={ChevronsUpDownIcon} size={switcherActionSize} style={{ width: 24 }} />
           </Center>
         </DropdownMenu>
       )}

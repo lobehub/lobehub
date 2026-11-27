@@ -215,7 +215,7 @@ const styles = stylex.create({
     backgroundImage: 'none',
   },
   tooltipContent: { display: 'flex', flexDirection: 'column', gap: '6px', maxWidth: '240px' },
-  slider: { width: '100%' },
+  slider: { width: '100%', height: densityTokens['--lobe-density-small-control-height'] },
 });
 
 const PARAM_NAME_MAP: Record<ParamKey, string> = {
@@ -399,7 +399,6 @@ const SliderField = ({
     min={min}
     size={'small'}
     step={step}
-    style={{ height: 28 }}
     unlimitedInput={unlimitedInput}
     value={value}
     styles={{

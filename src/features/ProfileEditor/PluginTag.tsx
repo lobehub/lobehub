@@ -36,6 +36,7 @@ import {
 } from '@/store/tool/selectors';
 import { type LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import { type ItemConnection, type ItemDetail } from './ItemDetailPanel';
 import ItemRow from './ItemRow';
@@ -90,7 +91,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorWarningBg};
   `,
   tag: css`
-    height: 28px !important;
+    height: ${densityVars.smallControlHeight} !important;
     border-radius: ${cssVar.borderRadiusSM} !important;
   `,
   warningIcon: css`

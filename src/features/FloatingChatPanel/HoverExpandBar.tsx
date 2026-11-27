@@ -5,6 +5,8 @@ import { ChevronUp } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   bar: css`
     pointer-events: auto;
@@ -18,7 +20,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    height: 28px;
+    height: ${densityVars.smallControlHeight};
     padding-block-end: 4px;
 
     opacity: 0;

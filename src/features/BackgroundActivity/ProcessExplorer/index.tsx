@@ -25,6 +25,7 @@ import { type KeyboardEvent, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAppProcessMetrics } from '@/features/DevDock/widgets/appProcessMetrics';
+import { useDensityTokens } from '@/styles/density';
 
 import { topicName, TopicTitle } from '../ActivityTable';
 import { formatCpu, formatMemory, stopActivity, useActivities } from '../state';
@@ -94,6 +95,7 @@ const openByDefault = (key: string) =>
 
 export default function ProcessExplorer() {
   const { t } = useTranslation('chat');
+  const { smallControlHeight } = useDensityTokens();
   const metrics = useAppProcessMetrics();
   const { activities, sampledAt, selected: selectedActivity, totalMemoryMB } = useActivities();
   const [sort, setSort] = useState<SortKey>('cpu');
@@ -204,7 +206,7 @@ export default function ProcessExplorer() {
             classNames={{ node: styles.node, title: styles.title }}
             expandedKeys={expandedKeys}
             selectedKeys={selected ? [selected] : []}
-            styles={{ node: { height: 28 } }}
+            styles={{ node: { height: smallControlHeight } }}
             titleRender={(node) => <Cells row={rows.get(node.key)!} />}
             treeData={treeData}
             onSelect={(keys) => setSelected(keys[0])}

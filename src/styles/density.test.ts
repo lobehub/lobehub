@@ -18,6 +18,11 @@ describe('DENSITY_TOKENS', () => {
     expect(DENSITY_TOKENS.loose.headerActionSmallSize).toEqual({ blockSize: 28, size: 16 });
   });
 
+  it('shrinks small controls from 28px to 24px in compact', () => {
+    expect(DENSITY_TOKENS.loose.smallControlHeight).toBe(28);
+    expect(DENSITY_TOKENS.compact.smallControlHeight).toBe(24);
+  });
+
   it('sizes tree rows from the control height', () => {
     expect(DENSITY_TOKENS.compact.treeItemHeight).toBe(28);
     expect(DENSITY_TOKENS.loose.treeItemHeight).toBe(32);

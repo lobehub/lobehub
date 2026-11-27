@@ -16,6 +16,7 @@ import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import { useDensityTokens } from '@/styles/density';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chevron: css`
@@ -49,6 +50,7 @@ interface AgentSelectorActionProps {
 }
 
 const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) => {
+  const { smallControlHeight } = useDensityTokens();
   const { t } = useTranslation(['chat', 'topic']);
   const [open, setOpen] = useState(false);
   const agentId = useConversationStore(conversationSelectors.agentId);
@@ -184,7 +186,12 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
       }}
       onOpenChange={setOpen}
     >
-      <Center horizontal className={cx(styles.container)} height={28} paddingInline={6}>
+      <Center
+        horizontal
+        className={cx(styles.container)}
+        height={smallControlHeight}
+        paddingInline={6}
+      >
         <Flexbox horizontal align={'center'} gap={4}>
           <AgentAvatar
             agentId={activeAgent?.id}

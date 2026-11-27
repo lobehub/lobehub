@@ -5,6 +5,8 @@ import { ChevronDownIcon, FolderIcon, FolderOpenIcon } from 'lucide-react';
 import * as m from 'motion/react-m';
 import { memo, useCallback } from 'react';
 
+import { densityVars } from '@/styles/densityVars';
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   folderHeader: css`
     cursor: pointer;
@@ -105,7 +107,7 @@ export const FolderTreeItemComponent = memo<FolderTreeItemProps>(
             align={'center'}
             flex={1}
             gap={8}
-            style={{ minHeight: 28, minWidth: 0 }}
+            style={{ minHeight: densityVars.smallControlHeight, minWidth: 0 }}
           >
             <Icon icon={isExpanded ? FolderOpenIcon : FolderIcon} size={16} />
             <span

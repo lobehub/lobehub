@@ -41,6 +41,7 @@ export interface DensityTokens {
   rowHeight: number;
   sectionGap: number;
   sectionHeaderHeight: number;
+  smallControlHeight: number;
   toolbarHeight: number;
   treeItemHeight: number;
 }

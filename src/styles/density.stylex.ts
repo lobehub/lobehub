@@ -29,6 +29,7 @@ export const densityTokens = stylex.defineVars({
   '--lobe-density-radius': '8px',
   '--lobe-density-row-height': '36px',
   '--lobe-density-section-gap': '16px',
+  '--lobe-density-small-control-height': '28px',
   '--lobe-density-toolbar-height': '40px',
 });
 

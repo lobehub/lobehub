@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { localeOptions } from '@/locales/resources';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
+import { useDensityTokens } from '@/styles/density';
 import { electronStylish } from '@/styles/electron';
 import { preloadLang } from '@/utils/client/preloadLang';
 
@@ -21,6 +22,7 @@ const LangButton = memo<{ compact?: boolean; placement?: DropdownMenuProps['plac
     ]);
 
     const { t } = useTranslation(['setting', 'common']);
+    const { smallControlHeight } = useDensityTokens();
     const currentLabel = getLanguageDisplayLabel(
       language,
       currentLanguage,
@@ -98,7 +100,7 @@ const LangButton = memo<{ compact?: boolean; placement?: DropdownMenuProps['plac
             borderRadius: 8,
             boxSizing: 'content-box',
             cursor: 'pointer',
-            height: 28,
+            height: smallControlHeight,
             marginInline: 4,
             paddingBlock: 6,
             paddingInline: 12,

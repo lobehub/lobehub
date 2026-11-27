@@ -6,9 +6,9 @@ import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import { actionMap } from '@/features/ChatInput/ActionBar/config';
 import { ActionBarContext } from '@/features/ChatInput/ActionBar/context';
 import {
-  COMPACT_ACTION_BAR_CONTEXT,
   COMPACT_ACTION_BAR_STYLE,
   COMPACT_SEND_BUTTON_PROPS,
+  useCompactActionBarContext,
 } from '@/features/ChatInput/compactPreset';
 import {
   ChatInput,
@@ -59,16 +59,18 @@ const Conversation = memo(() => {
     [currentAgentId, setActiveAgentId],
   );
 
+  const actionBarContext = useCompactActionBarContext();
+
   const leftContent = useMemo(
     () => (
-      <ActionBarContext value={COMPACT_ACTION_BAR_CONTEXT}>
+      <ActionBarContext value={actionBarContext}>
         <Flexbox horizontal align={'center'} gap={2}>
           <AgentSelectorAction onAgentChange={handleAgentChange} />
           <Search />
         </Flexbox>
       </ActionBarContext>
     ),
-    [handleAgentChange],
+    [actionBarContext, handleAgentChange],
   );
 
   const modelSelector = useMemo(() => <CopilotModelSelect />, []);

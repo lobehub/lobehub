@@ -31,5 +31,6 @@ export const compactDensityTheme = stylex.createTheme(densityTokens, {
   '--lobe-density-radius': '6px',
   '--lobe-density-row-height': '32px',
   '--lobe-density-section-gap': '12px',
+  '--lobe-density-small-control-height': '24px',
   '--lobe-density-toolbar-height': '36px',
 });

@@ -56,7 +56,7 @@ const styles = stylex.create({
     color: cssVar.colorTextSecondary,
   },
   resetButton: {
-    height: '28px',
+    height: densityTokens['--lobe-density-small-control-height'],
     paddingBlock: 0,
     paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: '999px',
@@ -71,7 +71,7 @@ const styles = stylex.create({
     backgroundImage: 'none',
   },
   saveButton: {
-    height: '28px',
+    height: densityTokens['--lobe-density-small-control-height'],
     paddingBlock: 0,
     paddingInline: '14px',
     borderRadius: '999px',

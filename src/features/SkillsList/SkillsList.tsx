@@ -7,6 +7,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 
 import { useDensityTokens } from '@/styles/density';
 import { sidebarRow } from '@/styles/density.stylex';
+import { densityVars } from '@/styles/densityVars';
 
 export interface SkillListItem {
   description?: string;
@@ -76,7 +77,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   item: css`
     cursor: pointer;
 
-    height: 28px;
+    height: ${densityVars.smallControlHeight};
     padding-inline: 4px 8px;
     border-radius: 6px;
 

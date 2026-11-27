@@ -102,7 +102,7 @@ export const taskDetailLayoutStyles = createStaticStyles(({ css }) => ({
   `,
   propertyItem: css`
     max-width: 100%;
-    height: 28px;
+    height: ${densityVars.smallControlHeight};
     padding-inline: 8px;
     border-radius: ${cssVar.borderRadius};
 

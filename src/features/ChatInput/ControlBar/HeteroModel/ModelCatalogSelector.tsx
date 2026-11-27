@@ -89,7 +89,7 @@ const styles = stylex.create({
     flex: 'none',
     gap: '6px',
     alignItems: 'center',
-    height: '28px',
+    height: densityTokens['--lobe-density-small-control-height'],
     paddingInline: '8px',
     borderRadius: '6px',
     fontSize: '12px',
