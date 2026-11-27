@@ -11,6 +11,7 @@ import { clampToolIdentifier } from '@/utils/clampToolIdentifier';
 import { agents, messagePlugins, messages, threads, topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { idGenerator } from '../../utils/idGenerator';
+import { bumpTopicLastMessageAt } from '../../utils/topicLastMessageAt';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 /** topic clientId convention of an imported session: `<source>-session-<sessionId>` */
@@ -334,7 +335,11 @@ export class HeteroSessionImporterRepo {
       }));
 
     for (let i = 0; i < messageRows.length; i += BATCH_SIZE) {
-      await tx.insert(messages).values(messageRows.slice(i, i + BATCH_SIZE));
+      const inserted = await tx
+        .insert(messages)
+        .values(messageRows.slice(i, i + BATCH_SIZE))
+        .returning({ topicId: messages.topicId, updatedAt: messages.updatedAt });
+      await bumpTopicLastMessageAt(tx, inserted);
     }
     for (let i = 0; i < pluginRows.length; i += BATCH_SIZE) {
       await tx.insert(messagePlugins).values(pluginRows.slice(i, i + BATCH_SIZE));

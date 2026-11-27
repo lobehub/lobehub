@@ -5,6 +5,7 @@ import { clampToolIdentifier } from '@/utils/clampToolIdentifier';
 import { messagePlugins, messages, topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { idGenerator } from '../../utils/idGenerator';
+import { bumpTopicLastMessageAt } from '../../utils/topicLastMessageAt';
 
 export interface ImportTopicParams {
   agentId: string;
@@ -105,7 +106,11 @@ export class TopicImporterRepo {
 
       // Batch insert messages
       if (preparedMessages.length > 0) {
-        await tx.insert(messages).values(preparedMessages as any);
+        const inserted = await tx
+          .insert(messages)
+          .values(preparedMessages as any)
+          .returning({ topicId: messages.topicId, updatedAt: messages.updatedAt });
+        await bumpTopicLastMessageAt(tx, inserted);
       }
 
       // Batch insert message plugins (for tool messages)

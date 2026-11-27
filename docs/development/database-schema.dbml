@@ -5180,6 +5180,7 @@ table topics {
   mode text
   status text
   completed_at "timestamp with time zone"
+  last_message_at "timestamp with time zone"
   total_cost "numeric(20, 6)"
   total_input_tokens bigint
   total_output_tokens bigint
@@ -5213,6 +5214,8 @@ table topics {
     (user_id, completed_at) [name: 'topics_user_id_completed_at_idx']
     sender_id [name: 'topics_sender_id_idx']
     workspace_id [name: 'topics_workspace_id_idx']
+    (user_id, agent_id, favorite, last_message_at, updated_at) [name: 'topics_user_id_agent_id_activity_idx']
+    (workspace_id, agent_id, favorite, last_message_at, updated_at) [name: 'topics_workspace_id_agent_id_activity_idx']
     () [name: 'topics_extract_status_gin_idx']
   }
 }

@@ -22,6 +22,7 @@ import {
 } from 'drizzle-orm';
 
 import { agents, chatGroups, messages, topics } from '../../schemas';
+import { topicActivityAtColumn } from '../../utils/topicLastMessageAt';
 import { topicRunStartedAtColumn } from '../../utils/topicRunStartedAt';
 import { notChannelTopic } from '../../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../../utils/workspace';
@@ -153,16 +154,9 @@ export const query = async (
     .select({ value: sql<number>`count(*)::int` })
     .from(messages)
     .where(and(eq(messages.topicId, topics.id), ctx.messageOwnership()));
-  const latestMessageAtSubquery = ctx.db
-    .select({ value: messages.updatedAt })
-    .from(messages)
-    .where(and(eq(messages.topicId, topics.id), ctx.messageOwnership()))
-    .orderBy(desc(messages.updatedAt))
-    .limit(1);
-  const topicActivityAt =
-    sql<Date>`COALESCE((${latestMessageAtSubquery}), ${topics.updatedAt})`.mapWith(
-      topics.updatedAt,
-    );
+  // Latest message activity, denormalized onto the topic row (see
+  // `topics.lastMessageAt`) so ordering a page never scans `messages`.
+  const topicActivityAt = topicActivityAtColumn();
 
   const runStartedAtColumn = topicRunStartedAtColumn(ctx.db);
 

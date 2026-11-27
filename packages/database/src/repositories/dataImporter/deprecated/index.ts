@@ -15,6 +15,7 @@ import {
   topics,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
+import { bumpTopicLastMessageAt } from '../../../utils/topicLastMessageAt';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 
 interface ImportResult {
@@ -251,7 +252,11 @@ export class DeprecatedDataImporterRepos {
 
           for (let i = 0; i < inertValues.length; i += BATCH_SIZE) {
             const batch = inertValues.slice(i, i + BATCH_SIZE);
-            await trx.insert(messages).values(batch);
+            const inserted = await trx
+              .insert(messages)
+              .values(batch)
+              .returning({ topicId: messages.topicId, updatedAt: messages.updatedAt });
+            await bumpTopicLastMessageAt(trx, inserted);
           }
 
           const messageIdArray = await trx

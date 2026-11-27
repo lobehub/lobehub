@@ -7,6 +7,7 @@ import { messagePlugins, messages, topics } from '../../schemas';
 import { COPIED_TOPIC_USAGE_RESET } from '../../utils/copiedTranscript';
 import { markCopiedMessageMetadata } from '../../utils/copyMessagesInDatabase';
 import { idGenerator } from '../../utils/idGenerator';
+import { bumpTopicLastMessageAt } from '../../utils/topicLastMessageAt';
 import { buildWorkspacePayload } from '../../utils/workspace';
 import { messageOwnership, topicOwnership, type TopicRepositoryScope } from './scope';
 
@@ -86,6 +87,8 @@ export const duplicateTopic = async (
             clientId: null,
             createdAt: copiedAt,
             id: idGenerator('topics'),
+            // Re-derived from the copied messages below, never the source's.
+            lastMessageAt: null,
             title: newTitle || originalTopic?.title,
             updatedAt: copiedAt,
           },
@@ -206,6 +209,8 @@ export const duplicateTopic = async (
         });
       }
     }
+
+    await bumpTopicLastMessageAt(tx, duplicatedMessages);
 
     return {
       messages: duplicatedMessages,

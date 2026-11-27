@@ -20,6 +20,7 @@ import {
   messagesFiles,
 } from '../../schemas';
 import type { Transaction } from '../../type';
+import { bumpTopicLastMessageAt } from '../../utils/topicLastMessageAt';
 import { buildWorkspacePayload } from '../../utils/workspace';
 import { recomputeTopicUsage } from '../topicUsage';
 import { MessageScope } from './scope';
@@ -102,7 +103,8 @@ export class MessageWriteMutations extends MessageScope {
       .update(messages)
       .set({ content })
       .where(and(eq(messages.id, id), this.ownership()))
-      .returning({ id: messages.id });
+      .returning({ id: messages.id, topicId: messages.topicId, updatedAt: messages.updatedAt });
+    if (updated) await bumpTopicLastMessageAt(this.db, [updated]);
     return Boolean(updated);
   };
 
@@ -270,6 +272,10 @@ export class MessageWriteMutations extends MessageScope {
       timingPrefix,
     );
 
+    await runTimedStage(timing, `${timingPrefix}.topic.bumpLastMessageAt`, () =>
+      bumpTopicLastMessageAt(trx, [item]),
+    );
+
     return item;
   };
 
@@ -362,6 +368,12 @@ export class MessageWriteMutations extends MessageScope {
             'db.message.createUserAndAssistant.assistant',
           );
 
+          await runTimedStage(
+            timing,
+            'db.message.createUserAndAssistant.topic.bumpLastMessageAt',
+            () => bumpTopicLastMessageAt(trx, insertedMessages),
+          );
+
           const userMessageItem = messageMap.get(userMessageId);
           const assistantMessageItem = messageMap.get(assistantMessageId);
 
@@ -389,9 +401,15 @@ export class MessageWriteMutations extends MessageScope {
     );
 
     return this.db.transaction(async (trx) => {
-      const result = await trx.insert(messages).values(messagesToInsert);
+      const result = await trx.insert(messages).values(messagesToInsert).returning({
+        topicId: messages.topicId,
+        updatedAt: messages.updatedAt,
+      });
 
-      return result;
+      await bumpTopicLastMessageAt(trx, result);
+
+      // Keep the pre-`returning` result shape: callers read `rowCount`.
+      return { rowCount: result.length };
     });
   };
 
@@ -472,11 +490,17 @@ export class MessageWriteMutations extends MessageScope {
                     ...(usageToWrite && { usage: usageToWrite }),
                   })
                   .where(and(eq(messages.id, id), this.ownership()))
-                  .returning({ topicId: messages.topicId }),
+                  .returning({ topicId: messages.topicId, updatedAt: messages.updatedAt }),
               { hasMetadata: !!metadataPatch, valueKeys: Object.keys(message) },
             );
 
             matchedRow = !!updated;
+
+            if (updated) {
+              await runTimedStage(timing, 'db.message.update.topic.bumpLastMessageAt', () =>
+                bumpTopicLastMessageAt(trx, [updated]),
+              );
+            }
 
             if (
               updated?.topicId && // When this write carries token usage (assistant finalize / hetero
@@ -523,12 +547,18 @@ export class MessageWriteMutations extends MessageScope {
     const mergedMetadata = merge(item.metadata || {}, metadataPatch);
     if (usageToWrite) delete mergedMetadata.usage;
 
-    return this.db
+    const updated = await this.db
       .update(messages)
       .set({
         metadata: mergedMetadata,
         ...(usageToWrite && { usage: usageToWrite }),
       })
-      .where(and(eq(messages.id, id), this.ownership()));
+      .where(and(eq(messages.id, id), this.ownership()))
+      .returning({ topicId: messages.topicId, updatedAt: messages.updatedAt });
+
+    await bumpTopicLastMessageAt(this.db, updated);
+
+    // Keep the pre-`returning` result shape: callers read `rowCount`.
+    return { rowCount: updated.length };
   };
 }
