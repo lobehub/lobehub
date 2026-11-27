@@ -53,9 +53,12 @@ export const PanelContent: FC<PanelContentProps> = ({
     () =>
       filterHiddenModels(
         enabledList,
-        resolvePanelHiddenPredicate(isModelHidden, getModelDisabledReason),
+        resolvePanelHiddenPredicate(
+          isModelHidden,
+          ModelItemComponent ? undefined : getModelDisabledReason,
+        ),
       ).length,
-    [enabledList, getModelDisabledReason, isModelHidden],
+    [ModelItemComponent, enabledList, getModelDisabledReason, isModelHidden],
   );
   const [searchKeyword, setSearchKeyword] = useState('');
   const { groupMode, handleGroupModeChange } = usePanelState();

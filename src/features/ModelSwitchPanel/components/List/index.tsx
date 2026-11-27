@@ -69,9 +69,15 @@ export const List: FC<ListProps> = ({
   );
 
   const chatEnabledList = useEnabledChatModels();
+  // Only the chat rows render a disabled state; generation rows (custom `ModelItemComponent`)
+  // would make such a model selectable, so they keep hiding it.
   const isHiddenInPanel = useMemo(
-    () => resolvePanelHiddenPredicate(isModelHidden, getModelDisabledReason),
-    [getModelDisabledReason, isModelHidden],
+    () =>
+      resolvePanelHiddenPredicate(
+        isModelHidden,
+        ModelItemComponent ? undefined : getModelDisabledReason,
+      ),
+    [ModelItemComponent, getModelDisabledReason, isModelHidden],
   );
   const enabledList = useMemo(
     () => filterHiddenModels(enabledListProp ?? chatEnabledList, isHiddenInPanel),
