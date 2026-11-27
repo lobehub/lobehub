@@ -4,7 +4,12 @@ import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { printConnectStatus } from './connectStatus';
-import { buildInstallCommand, isNewerVersion, reportInstalledConnectStatus } from './update';
+import {
+  buildInstallCommand,
+  fetchLatestVersion,
+  isNewerVersion,
+  reportInstalledConnectStatus,
+} from './update';
 
 const { execFile, spawn } = vi.hoisted(() => ({ execFile: vi.fn(), spawn: vi.fn() }));
 vi.mock('node:child_process', async (original) => ({
@@ -138,5 +143,38 @@ describe('reportInstalledConnectStatus', () => {
         stdio: 'inherit',
       },
     );
+  });
+});
+
+describe('fetchLatestVersion', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    execFile.mockReset();
+  });
+
+  it('reads the dist-tag from the registry', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ version: '1.2.3' }));
+    await expect(fetchLatestVersion('@lobehub/cli', 'latest')).resolves.toBe('1.2.3');
+    expect(execFile).not.toHaveBeenCalled();
+  });
+
+  it('falls back to npm view when the direct request cannot reach the registry', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('fetch failed'));
+    execFile.mockImplementation((_command, _args, _options, callback) => callback(null, '1.2.4\n'));
+    await expect(fetchLatestVersion('@lobehub/cli', 'latest')).resolves.toBe('1.2.4');
+    expect(execFile).toHaveBeenCalledWith(
+      'npm',
+      ['view', '@lobehub/cli@latest', 'version'],
+      expect.any(Object),
+      expect.any(Function),
+    );
+  });
+
+  it('reports the registry error when npm view fails too', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('fetch failed'));
+    execFile.mockImplementation((_command, _args, _options, callback) =>
+      callback(new Error('npm missing'), ''),
+    );
+    await expect(fetchLatestVersion('@lobehub/cli', 'latest')).rejects.toThrow('fetch failed');
   });
 });

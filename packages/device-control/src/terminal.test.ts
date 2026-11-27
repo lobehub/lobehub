@@ -163,6 +163,17 @@ describe('TerminalSessionManager', () => {
     expect(manager.read({ cursor: first.nextCursor, id: info.id }).chunk).not.toBe('');
   });
 
+  it('counts only shells that are still running as active', async () => {
+    expect(manager.activeCount).toBe(0);
+    const first = await openSession();
+    await openSession();
+    expect(manager.activeCount).toBe(2);
+    ptys[1].emitExit(0);
+    expect(manager.activeCount).toBe(1);
+    manager.close({ id: first.info.id });
+    expect(manager.activeCount).toBe(0);
+  });
+
   it('kills the shell on close and reports an unknown session honestly', async () => {
     const { info, pty } = await openSession();
 

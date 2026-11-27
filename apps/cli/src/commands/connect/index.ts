@@ -25,6 +25,7 @@ import {
   CLI_DISPLAY_NAME,
   CLI_PRIMARY_BIN,
 } from '../../constants/identity';
+import { DaemonAutoUpdater } from '../../daemon/autoUpdate';
 import { getCliInstallationPath } from '../../daemon/installation';
 import { CliMaintenance } from '../../daemon/maintenance';
 import {
@@ -637,6 +638,21 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
       })
     : undefined;
 
+  // Managed cloud devices run the version their platform installs.
+  const autoUpdater =
+    !managed && DaemonAutoUpdater.applies()
+      ? new DaemonAutoUpdater({
+          // Restarting closes every remote terminal and every tunnel, including those of the
+          // workspace share connections.
+          isBusy: () =>
+            terminals.activeCount > 0 ||
+            client.activeTunnelCount > 0 ||
+            [...workspaceConnections.values()].some((entry) => entry.client.activeTunnelCount > 0),
+          log: info,
+          maintenance,
+        })
+      : undefined;
+
   const handlerContext: GatewayHandlerContext = {
     activity,
     browser,
@@ -1059,6 +1075,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   const cleanup = () => {
     info('Shutting down...');
     cancelRefreshTimer?.();
+    autoUpdater?.stop();
     managed?.session.stop();
     activity?.stop();
     cleanupAllProcesses();
@@ -1131,6 +1148,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
 
   await metricsSampler?.start();
   activity?.start();
+  autoUpdater?.start();
 
   // Connect
   await client.connect();

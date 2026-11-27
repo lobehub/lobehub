@@ -2,10 +2,12 @@ import { describeScopedNotFound } from './api/workspace';
 import { hydrateJwtFromFile } from './auth/envJwt';
 import { reportDaemonStartupError } from './daemon/manager';
 import { createProgram } from './program';
+import { maybeStartBackgroundUpdate } from './utils/autoUpdate';
 import { formatError } from './utils/error';
 import { log } from './utils/logger';
 
 hydrateJwtFromFile();
+maybeStartBackgroundUpdate();
 
 void createProgram()
   .parseAsync(process.argv, { from: 'node' })

@@ -10,6 +10,14 @@ import { CLI_DISPLAY_NAME } from '../constants/identity';
 // bundled entry's depth) rather than a local `require('../../package.json')`,
 // which would point outside the package once bundled into dist/index.js.
 import { cliPackageName, cliVersion } from '../pkg';
+import { loadSettings, saveSettings } from '../settings';
+import {
+  acquireInstallLock,
+  AUTO_UPDATE_WORKER_COMMAND,
+  isAutoUpdateEnabled,
+  isDaemonInstallRunning,
+  releaseInstallLock,
+} from '../utils/autoUpdate';
 import { log } from '../utils/logger';
 import { printConnectStatus } from './connectStatus';
 
@@ -18,6 +26,7 @@ export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
 const PACKAGE_MANAGERS: PackageManager[] = ['npm', 'pnpm', 'yarn', 'bun'];
 
 interface UpdateOptions {
+  auto?: string;
   check?: boolean;
   packageManager?: PackageManager;
   tag?: string;
@@ -86,8 +95,7 @@ export function isNewerVersion(latest: string, current: string): boolean {
   return semver.gt(latestParsed, currentParsed);
 }
 
-/** Published version behind an npm dist-tag. Also used by `lh doctor`. */
-export async function fetchLatestVersion(name: string, tag: string): Promise<string> {
+async function fetchRegistryVersion(name: string, tag: string): Promise<string> {
   const url = `https://registry.npmjs.org/${name}/${encodeURIComponent(tag)}`;
   const res = await fetch(url, { headers: { accept: 'application/json' } });
 
@@ -103,11 +111,46 @@ export async function fetchLatestVersion(name: string, tag: string): Promise<str
   return data.version;
 }
 
-function runInstall(command: string, args: string[]): Promise<void> {
+/** `npm view` goes through the user's npm config: registry mirror, proxy and auth. */
+function npmViewVersion(name: string, tag: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      'npm',
+      ['view', `${name}@${tag}`, 'version'],
+      { encoding: 'utf8', shell: process.platform === 'win32', timeout: 30_000 },
+      (error, stdout) => {
+        const version = stdout?.trim();
+        if (error || !version) reject(error ?? new Error('npm view printed no version'));
+        else resolve(version);
+      },
+    );
+  });
+}
+
+/**
+ * Published version behind an npm dist-tag. Also used by `lh doctor` and the daemon updater.
+ *
+ * Node's `fetch` neither reads `HTTPS_PROXY` nor the npm config, so on networks that only reach
+ * the registry through a proxy or a mirror the direct request fails while `npm install` works.
+ * Fall back to `npm view`, which resolves the version the same way the install will.
+ */
+export async function fetchLatestVersion(name: string, tag: string): Promise<string> {
+  try {
+    return await fetchRegistryVersion(name, tag);
+  } catch (error) {
+    try {
+      return await npmViewVersion(name, tag);
+    } catch {
+      throw error;
+    }
+  }
+}
+
+function runInstall(command: string, args: string[], quiet = false): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       shell: process.platform === 'win32',
-      stdio: 'inherit',
+      stdio: quiet ? 'ignore' : 'inherit',
     });
 
     child.on('error', reject);
@@ -154,11 +197,64 @@ export async function reportInstalledConnectStatus(installedVersion: string, ver
   await printConnectStatus({ installedVersion, verbose });
 }
 
+/**
+ * Background half of automatic updates, started detached by `maybeStartBackgroundUpdate`.
+ * Installs silently; failures are dropped because nobody is watching this process and the
+ * next check retries a day later.
+ */
+export async function runAutoUpdateWorker(): Promise<void> {
+  if (!isAutoUpdateEnabled() || !acquireInstallLock()) return;
+  try {
+    if (isDaemonInstallRunning()) return;
+    const latest = await fetchLatestVersion(cliPackageName, 'latest');
+    if (!semver.valid(latest) || !isNewerVersion(latest, cliVersion)) return;
+    const { args, command } = buildInstallCommand(
+      detectPackageManager(),
+      `${cliPackageName}@${latest}`,
+    );
+    await runInstall(command, args, true);
+  } catch (error) {
+    log.debug(`Automatic update failed: ${(error as Error).message}`);
+  } finally {
+    releaseInstallLock();
+  }
+}
+
+function setAutoUpdates(value: string): boolean {
+  const normalized = value.toLowerCase();
+  if (normalized !== 'on' && normalized !== 'off') {
+    log.error(`Unsupported --auto value "${value}". Use on or off.`);
+    return false;
+  }
+  const settings = loadSettings() ?? {};
+  saveSettings({ ...settings, autoUpdates: normalized === 'off' ? false : undefined });
+  log.info(
+    normalized === 'off'
+      ? 'Automatic updates are off. Run lh update to upgrade manually.'
+      : 'Automatic updates are on.',
+  );
+  if (normalized === 'on' && !isAutoUpdateEnabled()) {
+    log.warn(
+      'LOBEHUB_CLI_DISABLE_AUTOUPDATE, CI, an agent run or a managed cloud device still keeps them off in this environment.',
+    );
+  }
+  return true;
+}
+
 export function registerUpdateCommand(program: Command) {
+  program
+    .command(AUTO_UPDATE_WORKER_COMMAND, { hidden: true })
+    .description('Internal command for background automatic updates')
+    .action(runAutoUpdateWorker);
+
   program
     .command('update')
     .description(`Update the ${CLI_DISPLAY_NAME} to the latest published version`)
     .option('--check', 'Only check for a newer version without installing')
+    .option(
+      '--auto <on|off>',
+      'Turn automatic updates on or off (on by default; LOBEHUB_CLI_DISABLE_AUTOUPDATE=1 also turns them off)',
+    )
     .option('-v, --verbose', 'Include connector details and installation paths')
     .option('--tag <tag>', 'npm dist-tag to update to', 'latest')
     .option(
@@ -166,6 +262,10 @@ export function registerUpdateCommand(program: Command) {
       `Force a package manager (${PACKAGE_MANAGERS.join(', ')}) instead of auto-detecting`,
     )
     .action(async (options: UpdateOptions) => {
+      if (options.auto !== undefined) {
+        if (!setAutoUpdates(options.auto)) process.exit(1);
+        return;
+      }
       if (options.packageManager && !PACKAGE_MANAGERS.includes(options.packageManager)) {
         log.error(
           `Unsupported package manager "${options.packageManager}". Use one of: ${PACKAGE_MANAGERS.join(', ')}.`,
@@ -210,13 +310,23 @@ export function registerUpdateCommand(program: Command) {
 
       log.info(`Upgrading via ${pc.bold(pm)}: ${pc.dim([command, ...args].join(' '))}`);
 
+      // Two installs into one global package directory can leave a broken CLI behind.
+      if (isDaemonInstallRunning() || !acquireInstallLock()) {
+        log.error('A background CLI update is installing. Retry in a few minutes.');
+        process.exit(1);
+        return;
+      }
       try {
         await runInstall(command, args);
       } catch (error) {
+        // `process.exit` skips the `finally` below.
+        releaseInstallLock();
         log.error(`Update failed: ${(error as Error).message}`);
         log.error(`You can upgrade manually: ${[command, ...args].join(' ')}`);
         process.exit(1);
         return;
+      } finally {
+        releaseInstallLock();
       }
       log.info(pc.green(`CLI installation updated: ${current} → ${latest}.`));
       log.info(
