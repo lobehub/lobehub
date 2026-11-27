@@ -39,6 +39,7 @@ import InfiniAIProvider from './infiniai';
 import InternLMProvider from './internlm';
 import JinaProvider from './jina';
 import KimiCodingPlanProvider from './kimiCodingPlan';
+import LLMTRProvider from './llmtr';
 import LMStudioProvider from './lmstudio';
 import LobeHubProvider from './lobehub';
 import LongCatProvider from './longcat';
@@ -174,6 +175,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   XiaomiMiMoProvider,
   AiHubMixProvider,
   OpenRouterProvider,
+  LLMTRProvider,
   FalProvider,
   ElevenLabsProvider,
   FishAudioProvider,
@@ -349,6 +351,7 @@ export { default as InfiniAIProviderCard } from './infiniai';
 export { default as InternLMProviderCard } from './internlm';
 export { default as JinaProviderCard } from './jina';
 export { default as KimiCodingPlanProviderCard } from './kimiCodingPlan';
+export { default as LLMTRProviderCard } from './llmtr';
 export { default as LMStudioProviderCard } from './lmstudio';
 export { default as LobeHubProviderCard } from './lobehub';
 export { default as LongCatProviderCard } from './longcat';

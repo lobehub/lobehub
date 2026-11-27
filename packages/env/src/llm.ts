@@ -79,6 +79,10 @@ export const getLLMConfig = () => {
       ENABLED_OPENROUTER: z.boolean(),
       OPENROUTER_API_KEY: z.string().optional(),
 
+      ENABLED_LLMTR: z.boolean(),
+      LLMTR_API_KEY: z.string().optional(),
+      LLMTR_PROXY_URL: z.string().optional(),
+
       ENABLED_TYPESAFE: z.boolean(),
       TYPESAFE_API_KEY: z.string().optional(),
 
@@ -332,6 +336,10 @@ export const getLLMConfig = () => {
 
       ENABLED_OPENROUTER: !!process.env.OPENROUTER_API_KEY,
       OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+
+      ENABLED_LLMTR: !!process.env.LLMTR_API_KEY,
+      LLMTR_API_KEY: process.env.LLMTR_API_KEY,
+      LLMTR_PROXY_URL: process.env.LLMTR_PROXY_URL,
 
       ENABLED_TYPESAFE: !!process.env.TYPESAFE_API_KEY,
       TYPESAFE_API_KEY: process.env.TYPESAFE_API_KEY,

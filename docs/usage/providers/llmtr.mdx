@@ -1,0 +1,42 @@
+---
+title: Using LLMTR in LobeHub
+description: >-
+  Add an LLMTR API key in LobeHub and chat through LLMTR's OpenAI-compatible
+  gateway.
+tags:
+  - LLMTR
+  - API Key
+  - Web UI
+---
+
+# Using LLMTR in LobeHub
+
+[LLMTR](https://llmtr.com) is an OpenAI-compatible gateway. You bring an LLMTR API key, pick a model, and LobeHub sends chat requests to `https://llmtr.com/v1`.
+
+This guide covers how to configure LLMTR in LobeHub:
+
+<Steps>
+  ### Step 1: Create an LLMTR API key
+
+  - Open [llmtr.com](https://llmtr.com) and create an account if you do not have one.
+  - Create an API key. LLMTR keys use the `llmtr-` prefix.
+  - Store the key securely. LLMTR uses prepaid credit; platform margin is applied at top-up. See [LLMTR docs](https://llmtr.com/docs) for current account and billing details.
+
+  ### Step 2: Configure LLMTR in LobeHub
+
+  - Open **App Settings → AI Providers**.
+  - Select **LLMTR** in the provider list.
+  - Enable the provider and paste your API key. The default endpoint is `https://llmtr.com/v1`. You can override it only if you use a documented custom base URL.
+
+  ### Step 3: Choose a model
+
+  - LLMTR model ids usually look like `provider/model` (for example `qwen/qwen-flash`).
+  - LobeHub can refresh the list from `GET https://llmtr.com/v1/models` when you are signed in with a valid key.
+  - Pick a model for your assistant and start chatting.
+
+  <Callout type={'warning'}>
+    API use is billed by LLMTR according to your account balance and the selected model's rates. Check the provider's pricing before you send traffic.
+  </Callout>
+</Steps>
+
+You're now ready to use LLMTR models in LobeHub.
