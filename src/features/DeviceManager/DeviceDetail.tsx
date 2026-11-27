@@ -27,6 +27,7 @@ import {
   InfoIcon,
   LockIcon,
   PencilIcon,
+  SquareTerminalIcon,
   XIcon,
 } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -42,7 +43,9 @@ import { nextWorkingDirs } from '@/store/device';
 
 import AgentRuntimes from './AgentRuntimes';
 import { refreshDeviceList } from './const';
+import { type DetailTab, resolveDetailTab } from './detailTabs';
 import DeviceOverview from './DeviceOverview';
+import DeviceTerminal from './DeviceTerminal';
 import FieldLabel from './FieldLabel';
 import { getDeviceIcon } from './getDeviceIcon';
 import ManagedDeviceBadge from './ManagedDeviceBadge';
@@ -100,12 +103,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const DETAIL_TABS = ['overview', 'files', 'agents'] as const;
-type DetailTab = (typeof DETAIL_TABS)[number];
-
-const isDetailTab = (value: string | null): value is DetailTab =>
-  !!value && (DETAIL_TABS as readonly string[]).includes(value);
-
 interface DeviceDetailProps {
   device: DeviceListItem;
   /**
@@ -135,7 +132,7 @@ const DeviceDetail = memo<DeviceDetailProps>(({ device, isConfirmed, isCurrent, 
   // Back; other params are kept.
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const tab: DetailTab = isDetailTab(tabParam) ? tabParam : 'overview';
+  const tab = resolveDetailTab(tabParam, canOperate);
   const setTab = (next: DetailTab) =>
     setSearchParams(
       (prev) => {
@@ -376,6 +373,15 @@ const DeviceDetail = memo<DeviceDetailProps>(({ device, isConfirmed, isCurrent, 
             key: 'agents',
             label: t('devices.detail.tabs.agents'),
           },
+          ...(canOperate
+            ? [
+                {
+                  icon: <Icon icon={SquareTerminalIcon} />,
+                  key: 'terminal',
+                  label: t('devices.detail.tabs.terminal'),
+                },
+              ]
+            : []),
         ]}
         onChange={(key) => setTab(key as DetailTab)}
       />
@@ -397,6 +403,8 @@ const DeviceDetail = memo<DeviceDetailProps>(({ device, isConfirmed, isCurrent, 
         {tab === 'overview' && <DeviceOverview canOperate={canOperate} device={device} />}
 
         {tab === 'agents' && <AgentRuntimes device={device} />}
+
+        {tab === 'terminal' && <DeviceTerminal device={device} />}
 
         {tab === 'files' && (
           <>

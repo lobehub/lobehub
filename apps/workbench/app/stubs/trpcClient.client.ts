@@ -16,6 +16,7 @@ export const lambdaClient = createTRPCClient<LambdaRouter>({
 });
 
 export const createWorkspaceLambdaClient = reject('createWorkspaceLambdaClient');
+export const createKeepaliveLambdaClient = reject('createKeepaliveLambdaClient');
 // Workbench has one scope: an unpinned call uses it, a pinned one has no workspace to reach.
 export const scopedLambdaClient = (workspaceId?: string | null) =>
   workspaceId === undefined ? lambdaClient : createWorkspaceLambdaClient(workspaceId);

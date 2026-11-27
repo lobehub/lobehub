@@ -6,8 +6,12 @@ import { deviceRouter } from '../device';
 const mocks = vi.hoisted(() => ({
   browseDirectory: vi.fn(),
   createDirectory: vi.fn(),
+  closeTerminal: vi.fn(),
   createTerminalSession: vi.fn(),
   findWorkspaceDeviceById: vi.fn(),
+  readTerminal: vi.fn(),
+  resizeTerminal: vi.fn(),
+  writeTerminal: vi.fn(),
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn() }));
@@ -21,7 +25,11 @@ vi.mock('@/server/services/deviceGateway', async (importOriginal) => ({
   deviceGateway: {
     browseDirectory: mocks.browseDirectory,
     createDirectory: mocks.createDirectory,
+    closeTerminal: mocks.closeTerminal,
     createTerminalSession: mocks.createTerminalSession,
+    readTerminal: mocks.readTerminal,
+    resizeTerminal: mocks.resizeTerminal,
+    writeTerminal: mocks.writeTerminal,
   },
 }));
 
@@ -48,6 +56,21 @@ const operate = {
     }),
   createTerminalSession: (userId: string, role: Role) =>
     workspaceCaller(userId, role).createTerminalSession({ cols: 80, deviceId: 'device', rows: 24 }),
+  // A session must not outlive the permission that opened it: every call on an
+  // open shell is gated like opening one.
+  readTerminal: (userId: string, role: Role) =>
+    workspaceCaller(userId, role).readTerminal({ cursor: 0, deviceId: 'device', id: 'term' }),
+  writeTerminal: (userId: string, role: Role) =>
+    workspaceCaller(userId, role).writeTerminal({ data: 'bHMK', deviceId: 'device', id: 'term' }),
+  resizeTerminal: (userId: string, role: Role) =>
+    workspaceCaller(userId, role).resizeTerminal({
+      cols: 100,
+      deviceId: 'device',
+      id: 'term',
+      rows: 30,
+    }),
+  closeTerminal: (userId: string, role: Role) =>
+    workspaceCaller(userId, role).closeTerminal({ deviceId: 'device', id: 'term' }),
 };
 
 describe('operating a workspace device', () => {
@@ -56,13 +79,17 @@ describe('operating a workspace device', () => {
     mocks.browseDirectory.mockResolvedValue({ entries: [] });
     mocks.createDirectory.mockResolvedValue({ path: '/home/new-project', success: true });
     mocks.createTerminalSession.mockResolvedValue({ sessionId: 'session' });
+    mocks.readTerminal.mockResolvedValue({ chunk: '', exited: false, nextCursor: 0 });
+    mocks.writeTerminal.mockResolvedValue(undefined);
+    mocks.resizeTerminal.mockResolvedValue(undefined);
+    mocks.closeTerminal.mockResolvedValue({ closed: true });
   });
 
   it.each(Object.keys(operate) as (keyof typeof operate)[])(
     'lets any member %s on a public device',
     async (procedure) => {
       withDevice('public');
-      await expect(operate[procedure]('member', 'member')).resolves.toBeTruthy();
+      await operate[procedure]('member', 'member');
       expect(mocks[procedure]).toHaveBeenCalledWith(
         expect.objectContaining({ deviceId: 'device', userId: 'member', workspaceId: 'workspace' }),
       );
@@ -98,6 +125,18 @@ describe('operating a workspace device', () => {
   ] as const)('lets the %s browse a private device', async (userId, role) => {
     withDevice('private');
     await expect(operate.browseDirectory(userId, role)).resolves.toEqual({ entries: [] });
+  });
+
+  it('words the terminal refusal as one sentence', async () => {
+    withDevice('public');
+    await expect(operate.createTerminalSession('viewer', 'viewer')).rejects.toMatchObject({
+      message: 'Workspace viewers cannot open a terminal on this device.',
+    });
+    withDevice('private');
+    await expect(operate.readTerminal('member', 'member')).rejects.toMatchObject({
+      message:
+        'Only the enrolling member or a workspace owner can use a terminal on this private device.',
+    });
   });
 
   it('keeps hiding devices the caller cannot see', async () => {

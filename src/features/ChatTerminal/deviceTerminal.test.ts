@@ -7,6 +7,7 @@ import {
 } from './deviceTerminal';
 
 const mocks = vi.hoisted(() => ({
+  closeOnUnload: vi.fn(async () => ({ closed: true })),
   closeTerminal: vi.fn(async () => ({ closed: true })),
   createTerminalSession: vi.fn(async () => ({
     cwd: '/root',
@@ -26,6 +27,7 @@ vi.mock('@/services/device', () => ({
   deviceService: {
     closeTerminal: mocks.closeTerminal,
     createTerminalSession: mocks.createTerminalSession,
+    prepareCloseTerminalOnUnload: async () => mocks.closeOnUnload,
     readTerminal: mocks.readTerminal,
     resizeTerminal: mocks.resizeTerminal,
     writeTerminal: mocks.writeTerminal,
@@ -116,8 +118,55 @@ describe('DeviceTerminalSession polling', () => {
     await session.dispose();
     await vi.advanceTimersByTimeAsync(TERMINAL_RETRY_MAX_MS * 10);
 
-    expect(mocks.closeTerminal).toHaveBeenCalledWith({ deviceId: 'dev-1', id: 'term_1' });
+    expect(mocks.closeTerminal).toHaveBeenCalledWith(
+      { deviceId: 'dev-1', id: 'term_1' },
+      { scope: undefined },
+    );
     expect(mocks.readTerminal.mock.calls.length).toBe(before);
+  });
+
+  it('ends the shell with a keepalive close when the page goes away', async () => {
+    mocks.readTerminal.mockResolvedValue({ chunk: '', exited: false, nextCursor: 0 });
+
+    const session = await open();
+    await vi.advanceTimersByTimeAsync(0);
+    const before = mocks.readTerminal.mock.calls.length;
+
+    session.disposeOnUnload();
+    // Started synchronously: a request begun after `pagehide` returns is lost.
+    expect(mocks.closeOnUnload).toHaveBeenCalledWith({ deviceId: 'dev-1', id: 'term_1' });
+    // A later unmount cleanup must not send a second close.
+    await session.dispose();
+    await vi.advanceTimersByTimeAsync(TERMINAL_RETRY_MAX_MS * 10);
+
+    expect(mocks.closeOnUnload).toHaveBeenCalledTimes(1);
+    expect(mocks.closeTerminal).not.toHaveBeenCalled();
+    expect(mocks.readTerminal.mock.calls.length).toBe(before);
+  });
+
+  it("routes every call through the device's own scope", async () => {
+    // A personal device must stay reachable while a workspace is active.
+    mocks.readTerminal.mockResolvedValue({ chunk: '', exited: false, nextCursor: 0 });
+
+    const session = await DeviceTerminalSession.open(
+      'dev-1',
+      { cols: 80, rows: 24 },
+      { scope: 'personal' },
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    session.sink.write('term_1', 'ls');
+    session.sink.resize('term_1', 100, 30);
+    await vi.advanceTimersByTimeAsync(0);
+    await session.dispose();
+
+    expect(mocks.createTerminalSession).toHaveBeenCalledWith(
+      { cols: 80, deviceId: 'dev-1', rows: 24 },
+      'personal',
+    );
+    expect(mocks.readTerminal).toHaveBeenCalledWith(expect.anything(), 'personal');
+    expect(mocks.writeTerminal).toHaveBeenCalledWith(expect.anything(), 'personal');
+    expect(mocks.resizeTerminal).toHaveBeenCalledWith(expect.anything(), 'personal');
+    expect(mocks.closeTerminal).toHaveBeenCalledWith(expect.anything(), { scope: 'personal' });
   });
 
   it('keeps every call on the client that created the session', async () => {
@@ -140,9 +189,9 @@ describe('DeviceTerminalSession polling', () => {
     await session.dispose();
 
     const pinned = { client: 'desktop', deviceId: 'dev-1', id: 'term_1' };
-    expect(mocks.readTerminal).toHaveBeenCalledWith(expect.objectContaining(pinned));
-    expect(mocks.writeTerminal).toHaveBeenCalledWith(expect.objectContaining(pinned));
-    expect(mocks.resizeTerminal).toHaveBeenCalledWith(expect.objectContaining(pinned));
-    expect(mocks.closeTerminal).toHaveBeenCalledWith(pinned);
+    expect(mocks.readTerminal).toHaveBeenCalledWith(expect.objectContaining(pinned), undefined);
+    expect(mocks.writeTerminal).toHaveBeenCalledWith(expect.objectContaining(pinned), undefined);
+    expect(mocks.resizeTerminal).toHaveBeenCalledWith(expect.objectContaining(pinned), undefined);
+    expect(mocks.closeTerminal).toHaveBeenCalledWith(pinned, { scope: undefined });
   });
 });
