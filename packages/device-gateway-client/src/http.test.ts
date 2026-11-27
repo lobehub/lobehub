@@ -581,6 +581,31 @@ describe('GatewayHttpClient', () => {
       expect(result).toEqual({ error: 'DEVICE_OFFLINE', success: false });
     });
 
+    it('sends the run credential in the body and never echoes it in a failure', async () => {
+      const token = 'sk-ant-oat01-run-credential';
+      const runCredential = {
+        provider: 'claude-code' as const,
+        secret: {
+          expiresAt: '2026-12-01T00:00:00.000Z',
+          token,
+          type: 'claude-oauth-token' as const,
+        },
+      };
+      mockFetch({
+        ok: false,
+        status: 400,
+        text: vi.fn().mockResolvedValue(`bad request: {"token":"${token}"}`),
+      });
+
+      const result = await client.dispatchAgentRun({ ...createAgentRunInput(), runCredential });
+
+      const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);
+      expect(body.runCredential).toEqual(runCredential);
+      expect(result.success).toBe(false);
+      expect(JSON.stringify(result)).not.toContain(token);
+      expect(result.error).toContain('[redacted]');
+    });
+
     /** @example A pre-acceptance 404 keeps enough context for an outer agent to retry. */
     it('returns structured retry context for a missing agent-run target', async () => {
       mockFetch({

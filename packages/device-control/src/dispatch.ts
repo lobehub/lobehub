@@ -43,7 +43,12 @@ import type {
 } from '@lobechat/local-file-shell/types';
 import { AGENT_CREDENTIAL_UNSUPPORTED_MESSAGE, type DeviceCliRestartParams } from '@lobechat/types';
 
+import {
+  assertOutsideAgentCredentialRoot,
+  fileRpcGuardedPaths,
+} from './agentCredentials/pathGuard';
 import { toRedactedAgentCredentialError } from './agentCredentials/redact';
+import { defaultAgentCredentialRootDir } from './agentCredentials/store';
 import { listClaudeCodeMemory } from './claudeCodeMemory';
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
 import { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
@@ -253,6 +258,16 @@ export const executeDeviceRpc = async (
   params: unknown,
   deps: DeviceControlDeps,
 ): Promise<unknown> => {
+  // No file RPC may read, list or write inside the agent-credential store,
+  // whatever `..` or symlink the path takes to get there.
+  const guardedPaths = fileRpcGuardedPaths(method, params);
+  if (guardedPaths.length > 0) {
+    await assertOutsideAgentCredentialRoot(
+      guardedPaths,
+      deps.agentCredentialRootDir ?? defaultAgentCredentialRootDir(),
+    );
+  }
+
   switch (method) {
     // Remote workspace share: the host owns the gateway connections, so both
     // handlers are host-injected. A host that can't manage a second connection

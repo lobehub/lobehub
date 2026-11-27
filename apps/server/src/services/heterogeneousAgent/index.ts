@@ -14,6 +14,10 @@ import { type ChatMessageError, ThreadStatus, ThreadType } from '@lobechat/types
 import debug from 'debug';
 
 import {
+  type AgentOutputSecretDetection,
+  onAgentOutputSecretsDetected,
+} from '@/business/server/agentOutputSecrets';
+import {
   AgentOperationModel,
   type HeteroIngestRejectionMarker,
   type HeteroIngestRejectionReason,
@@ -32,12 +36,14 @@ import { releaseHeteroSteers } from '@/server/services/aiAgent/steerQueue/hetero
 import { mirrorInterventionsToChannel } from '@/server/services/channel/interventionAsk';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 import { instantiateVerifyPlanOnStart } from '@/server/services/verify';
+import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import {
   HeterogeneousPersistenceHandler,
   StaleHeteroOperationError,
 } from './HeterogeneousPersistenceHandler';
 import { HeteroTraceRecorder } from './HeteroTraceRecorder';
+import { redactOutputSecrets } from './outputSecrets';
 import { settlePermissionModeReport } from './permissionModeReport';
 
 const log = debug('lobe-server:hetero-agent-service');
@@ -273,8 +279,30 @@ export class HeterogeneousAgentService {
       });
   }
 
+  /** Hand credentials found in a batch to the deployment, after the response. */
+  private reportOutputSecrets(
+    detection: Omit<AgentOutputSecretDetection, 'userId' | 'workspaceId'>,
+  ) {
+    log(
+      'heteroIngest: redacted %d credential(s) op=%s',
+      detection.secrets.length,
+      detection.operationId,
+    );
+    const { userId, workspaceId } = this;
+    afterUnscoped(() =>
+      onAgentOutputSecretsDetected({
+        ...detection,
+        userId,
+        ...(workspaceId ? { workspaceId } : {}),
+      }),
+    );
+  }
+
   async heteroIngest(params: HeterogeneousIngestParams): Promise<HeterogeneousIngestResult> {
-    const { agentType, assistantMessageId, events, operationId, topicId } = params;
+    const { agentType, assistantMessageId, operationId, topicId } = params;
+    // Credentials the agent printed never reach the DB, the trace or the stream.
+    const { events, secrets } = redactOutputSecrets(params.events);
+    if (secrets.length > 0) this.reportOutputSecrets({ agentType, operationId, secrets, topicId });
 
     log(
       'heteroIngest: user=%s topic=%s op=%s type=%s count=%d',

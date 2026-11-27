@@ -7,6 +7,7 @@ import path from 'node:path';
 import { installAgentCredential } from '@lobechat/device-control/agent-credentials';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { saveTask } from '../daemon/taskRegistry';
 import { spawnHeteroAgentRun } from './agentRun';
 
 const { spawnMock, credentialRoot, identityMock, hasLoginMock } = vi.hoisted(() => ({
@@ -158,6 +159,86 @@ describe('spawnHeteroAgentRun with an installed agent credential', () => {
     expect(env.CODEX_HOME).toBe(path.join(credentialRoot.dir, 'codex', 'home'));
     expect(env).not.toHaveProperty('CODEX_API_KEY');
     expect(env).not.toHaveProperty('OPENAI_API_KEY');
+  });
+
+  it('does not turn on subprocess env scrubbing, which needs bubblewrap and sandboxes Bash', async () => {
+    await installClaude('2026-07-01T00:00:00.000Z');
+
+    const env = await spawnedEnv({ ...baseParams, agentType: 'claude-code' });
+
+    expect(env).not.toHaveProperty('CLAUDE_CODE_SUBPROCESS_ENV_SCRUB');
+  });
+
+  describe('with a run credential', () => {
+    const RUN_TOKEN = 'sk-ant-oat01-run-token-value';
+    const runCredential = (expiresAt = '2026-07-01T00:00:00.000Z') => ({
+      provider: 'claude-code' as const,
+      secret: { expiresAt, token: RUN_TOKEN, type: 'claude-oauth-token' as const },
+    });
+
+    it('runs on the run token ahead of an installed one and account routing', async () => {
+      await installClaude('2026-07-01T00:00:00.000Z');
+      vi.stubEnv('ANTHROPIC_API_KEY', 'sk-local-api-key');
+      const info = vi.fn();
+      const child = makeFakeChild();
+      spawnMock.mockReturnValue(child);
+
+      const ack = spawnHeteroAgentRun(
+        {
+          ...baseParams,
+          agentType: 'claude-code',
+          claudeAccountRouting: {
+            candidates: [{ externalAccountId: 'acc-elsewhere' }],
+            mode: 'pinned',
+          },
+          runCredential: runCredential(),
+        },
+        { error: vi.fn(), info },
+      );
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled());
+      child.emit('spawn');
+      expect(await ack).toEqual({ status: 'accepted' });
+
+      const env = spawnMock.mock.calls[0][2].env as Record<string, string | undefined>;
+      expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe(RUN_TOKEN);
+      expect(env.CLAUDE_CONFIG_DIR).toBe(path.join(credentialRoot.dir, 'claude-code', 'config'));
+      expect(env).not.toHaveProperty('ANTHROPIC_API_KEY');
+      expect(identityMock).not.toHaveBeenCalled();
+      // Neither the argv, the task registry nor the log carries the token.
+      expect(JSON.stringify(spawnMock.mock.calls[0][1])).not.toContain(RUN_TOKEN);
+      expect(JSON.stringify(vi.mocked(saveTask).mock.calls)).not.toContain(RUN_TOKEN);
+      expect(JSON.stringify(info.mock.calls)).not.toContain(RUN_TOKEN);
+    });
+
+    it('rejects an expired run credential without falling back', async () => {
+      await installClaude('2026-07-01T00:00:00.000Z');
+      const error = vi.fn();
+
+      const ack = await spawnHeteroAgentRun(
+        {
+          ...baseParams,
+          agentType: 'claude-code',
+          runCredential: runCredential('2026-05-01T00:00:00.000Z'),
+        },
+        { error, info: vi.fn() },
+      );
+
+      expect(ack.status).toBe('rejected');
+      expect(ack.reason).toContain('expired');
+      expect(spawnMock).not.toHaveBeenCalled();
+      expect(JSON.stringify([ack, error.mock.calls])).not.toContain(RUN_TOKEN);
+    });
+
+    it('is ignored for another agent type', async () => {
+      vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', undefined);
+      const env = await spawnedEnv({
+        ...baseParams,
+        agentType: 'codex',
+        runCredential: runCredential(),
+      });
+
+      expect(env).not.toHaveProperty('CLAUDE_CODE_OAUTH_TOKEN');
+    });
   });
 
   it('keeps the device login and account routing when nothing is installed', async () => {

@@ -1,12 +1,15 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
+import type { AgentRunCredential } from '@lobechat/types';
+
 import { seedClaudeProfile, seedCodexProfile } from './profile';
 import { AGENT_CREDENTIAL_RUN_DIR_ENV } from './runLease';
 import {
   agentCredentialRunDirFor,
   type AgentCredentialStoreOptions,
   isAgentCredentialExpired,
+  prepareClaudeCredentialConfigDir,
   readInstalledAgentCredential,
 } from './store';
 
@@ -24,6 +27,24 @@ const CLAUDE_CODE_CREDENTIAL_OVERRIDDEN_ENV = [
   'CLAUDE_CODE_USE_MANTLE',
   'CLAUDE_CODE_USE_VERTEX',
 ] as const;
+
+/**
+ * Spawn env for Claude Code on a server credential, installed or per run.
+ *
+ * Deliberately without `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB`: on Linux it makes
+ * Claude Code refuse to start without bubblewrap, and with it every Bash call
+ * runs in a sandbox that protects files such as `package.json` and `.npmrc`,
+ * which ordinary coding on the device needs to change.
+ */
+const claudeCredentialSpawnEnv = (token: string, claudeConfigDir: string) =>
+  ({
+    env: {
+      CLAUDE_CODE_OAUTH_TOKEN: token,
+      CLAUDE_CONFIG_DIR: claudeConfigDir,
+    },
+    kind: 'spawn',
+    unsetEnv: [...CLAUDE_CODE_CREDENTIAL_OVERRIDDEN_ENV],
+  }) satisfies AgentCredentialSpawnEnv;
 
 /**
  * API keys that would authenticate (and bill) instead of the `auth.json`
@@ -89,14 +110,7 @@ export const resolveAgentCredentialSpawnEnv = async (
       };
     }
     await seedClaudeProfile(credential.claudeConfigDir, seed);
-    return {
-      env: {
-        CLAUDE_CODE_OAUTH_TOKEN: credential.token,
-        CLAUDE_CONFIG_DIR: credential.claudeConfigDir,
-      },
-      kind: 'spawn',
-      unsetEnv: [...CLAUDE_CODE_CREDENTIAL_OVERRIDDEN_ENV],
-    };
+    return claudeCredentialSpawnEnv(credential.token, credential.claudeConfigDir);
   }
 
   try {
@@ -117,4 +131,62 @@ export const resolveAgentCredentialSpawnEnv = async (
     kind: 'spawn',
     unsetEnv: [...CODEX_CREDENTIAL_OVERRIDDEN_ENV],
   };
+};
+
+/**
+ * Turn the credential the server sent with one run into spawn env for it.
+ * The token stays in memory and the child's env only; nothing is written
+ * except the seeded profile dir the installed credential also runs in, so
+ * sessions resume across both.
+ *
+ * `none` when the run carries no credential or its agent is not Claude Code
+ * (then the caller resolves the installed credential as before). Otherwise it
+ * outranks an installed credential and account routing; an expired or
+ * malformed one rejects the run instead of falling back to another login.
+ * Reasons never contain the token.
+ */
+export const resolveRunCredentialSpawnEnv = async (
+  agentType: string,
+  runCredential: AgentRunCredential | undefined,
+  options: ResolveAgentCredentialSpawnEnvOptions,
+): Promise<AgentCredentialSpawnEnv> => {
+  if (!runCredential || agentType !== 'claude-code') return NONE;
+
+  const secret = (runCredential as { secret?: Partial<AgentRunCredential['secret']> }).secret;
+  if (
+    runCredential.provider !== 'claude-code' ||
+    secret?.type !== 'claude-oauth-token' ||
+    typeof secret.token !== 'string' ||
+    !secret.token.trim() ||
+    typeof secret.expiresAt !== 'string' ||
+    Number.isNaN(Date.parse(secret.expiresAt))
+  ) {
+    return {
+      kind: 'reject',
+      reason: 'The Claude Code credential LobeHub sent for this run is malformed.',
+    };
+  }
+
+  const now = options.now?.() ?? Date.now();
+  if (isAgentCredentialExpired(secret.expiresAt, now)) {
+    return {
+      kind: 'reject',
+      reason: `The Claude Code credential LobeHub sent for this run expired at ${new Date(secret.expiresAt).toISOString()}. Contact the LobeHub team to renew it.`,
+    };
+  }
+
+  let claudeConfigDir: string;
+  try {
+    claudeConfigDir = await prepareClaudeCredentialConfigDir(options.rootDir);
+    await seedClaudeProfile(claudeConfigDir, {
+      env: options.inheritedEnv ?? process.env,
+      homeDir: options.homeDir,
+    });
+  } catch {
+    return {
+      kind: 'reject',
+      reason: 'Could not prepare the Claude Code profile for this run on this device.',
+    };
+  }
+  return claudeCredentialSpawnEnv(secret.token.trim(), claudeConfigDir);
 };

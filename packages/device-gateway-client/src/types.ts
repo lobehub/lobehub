@@ -1,5 +1,6 @@
 import type { McpElicitationCall } from '@lobechat/mcp-elicitation/types';
 import type {
+  AgentRunCredential,
   CodexCollaborationMode,
   DeviceMetricSample,
   HeteroPermissionMode,
@@ -387,6 +388,14 @@ export interface AgentRunRequestMessage {
   prompt: string;
   resumeFallbackSystemContext?: string;
   resumeSessionId?: string;
+  /**
+   * Credential the server hands this run instead of installing it on the
+   * device (Claude Code only). The device spawns the run with it, never writes
+   * it to disk, and it outranks an installed credential and account routing.
+   * A secret: never log, persist or echo this field or a message holding it.
+   * Optional — omitted for runs on the device's own login and older servers.
+   */
+  runCredential?: AgentRunCredential;
   /**
    * Static context injected before the user prompt (workspace conventions,
    * selected context). The desktop sends it to `lh hetero exec` as the first
