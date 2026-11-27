@@ -309,16 +309,8 @@ describe('Home rail layout', () => {
   }, 20000);
 
   it('takes an empty rail out of the way of the widened main column', async () => {
-    let reportEmpty: ((empty: boolean) => void) | undefined;
-    await renderHome({
-      homeInbox: () => ({
-        default: ({ onRailEmptyChange }: { onRailEmptyChange?: (empty: boolean) => void }) => {
-          reportEmpty = onRailEmptyChange;
-          return <div data-testid={'home-inbox'} />;
-        },
-      }),
-      showHomeRail: true,
-    });
+    let report: ((state: RailContentState) => void) | undefined;
+    await renderHome({ homeInbox: capturingInbox((fn) => (report = fn)), showHomeRail: true });
 
     const rail = screen.getByTestId('home-rail');
     expect(rail).toHaveAttribute('data-collapsed', 'false');
@@ -327,12 +319,12 @@ describe('Home rail layout', () => {
     // The widened column now runs under the rail track; an interactive rail
     // there swallows clicks on the column's right-hand buttons (e.g. inbox
     // card "Dismiss" / "Approve").
-    act(() => reportEmpty?.(true));
+    act(() => report?.('empty'));
     expect(rail).toHaveAttribute('data-collapsed', 'true');
     expect(rail).toHaveAttribute('inert');
     expect(rail).toContainElement(screen.getByTestId('home-inbox'));
 
-    act(() => reportEmpty?.(false));
+    act(() => report?.('filled'));
     expect(rail).toHaveAttribute('data-collapsed', 'false');
     expect(rail).not.toHaveAttribute('inert');
   }, 20000);
