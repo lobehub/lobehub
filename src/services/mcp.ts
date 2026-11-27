@@ -242,6 +242,8 @@ class MCPService {
       fromEntrypoint,
       linkId,
       onThisDevice,
+      relayDeviceId,
+      relayWorkspaceId,
       server,
       signal,
       clientRuntime,
@@ -269,6 +271,13 @@ class MCPService {
        * `localhost` from this machine's.
        */
       onThisDevice?: boolean;
+      /**
+       * With `fromMcpApp`: the device the view's result was relayed from
+       * (`mcpApp.relayDeviceId`). Its calls go through the server, back to
+       * that device, from any client.
+       */
+      relayDeviceId?: string;
+      relayWorkspaceId?: string;
       /** With `fromMcpApp`: the server the view came from; its calls reach no other. */
       server?: string;
       signal?: AbortSignal;
@@ -385,8 +394,11 @@ class MCPService {
         connector?.mcpConnectionType !== 'stdio' &&
         !!connector?.mcpServerUrl &&
         isDeviceOnlyMcpEndpoint(connectorMcpEndpoint(connector));
-      // A connector bound to another device runs there, through the server
+      // A connector bound to another device runs there, through the server,
+      // as does a view relayed from a device
+      const relayed = !!fromMcpApp && !!relayDeviceId;
       const runsHere =
+        !relayed &&
         connector &&
         isDesktop &&
         !runsOnAnotherDevice(connectorDeviceBinding(connector)?.deviceId) &&
@@ -520,6 +532,7 @@ class MCPService {
             elicitation,
             // The server checks the view's server against the connector it resolves
             ...(fromMcpApp && { fromApp: true, server }),
+            ...(relayed && { relayDeviceId, ...(relayWorkspaceId && { relayWorkspaceId }) }),
             ...(fromEntrypoint && { fromEntrypoint: true, agentId }),
             identifier,
             toolName: apiName,
@@ -721,6 +734,8 @@ class MCPService {
       linkId,
       toolArguments,
       onThisDevice = false,
+      relayDeviceId,
+      relayWorkspaceId,
       server,
       topicId,
     }: {
@@ -734,6 +749,12 @@ class MCPService {
        * server-side `localhost` from this machine's.
        */
       onThisDevice?: boolean;
+      /**
+       * The device the result was relayed from (`mcpApp.relayDeviceId`): the
+       * server reads the view there, for any client.
+       */
+      relayDeviceId?: string;
+      relayWorkspaceId?: string;
       server?: string;
       /**
        * The conversation the result belongs to. The server resolves the
@@ -795,6 +816,21 @@ class MCPService {
       pluginSelectors.getCustomPluginById(identifier)(s);
     const connectorServes = serves(resolved, !!plugin);
     const connector = connectorServes ? resolved : undefined;
+
+    // A result relayed from a device has its view read there, by the server
+    if (connector && relayDeviceId) {
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      return (await lambdaClient.connector.readUiResource.query({
+        agentId,
+        identifier,
+        linkId,
+        relayDeviceId,
+        ...(relayWorkspaceId && { relayWorkspaceId }),
+        server,
+        topicId,
+        uri,
+      })) as ReadResourceResult;
+    }
 
     // Stdio connectors run on a desktop app, never on the server, so only the
     // desktop can read their view: it spawns the same command over IPC.

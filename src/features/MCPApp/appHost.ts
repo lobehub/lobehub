@@ -42,6 +42,12 @@ export interface AppViewContext {
   linkId?: string;
   /** This desktop's own MCP process produced the result; the view's calls run there. */
   onThisDevice: boolean;
+  /**
+   * The device the server relayed the result from (`mcpApp.relayDeviceId`):
+   * the view's calls go through the server, back to it.
+   */
+  relayDeviceId?: string;
+  relayWorkspaceId?: string;
   /** Tool call result envelope (`{ content, state, success }`). */
   result: { content: string; state?: any };
   sendMessage: (params: SendMessageParams) => Promise<void>;
@@ -166,6 +172,8 @@ export const connectAppView = ({
         agentId,
         identifier,
         onThisDevice,
+        relayDeviceId,
+        relayWorkspaceId,
         server,
         t,
         topicId,
@@ -220,8 +228,19 @@ export const connectAppView = ({
               identifier,
               type: 'mcp',
             },
-            // The view's HTML came from this machine for a local server, so its calls do too
-            { agentId, fromMcpApp: true, onThisDevice, server, signal, linkId, topicId },
+            // The view's HTML came from this machine for a local server, so its
+            // calls do too; a relayed view's calls go back to its device
+            {
+              agentId,
+              fromMcpApp: true,
+              onThisDevice,
+              server,
+              signal,
+              linkId,
+              topicId,
+              ...(relayDeviceId && { relayDeviceId }),
+              ...(relayWorkspaceId && { relayWorkspaceId }),
+            },
           ),
         );
       } finally {
