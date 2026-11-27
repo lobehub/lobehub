@@ -723,7 +723,7 @@ export default {
   'plans.limits.topUpRate': 'Top-up discount',
   'plans.limits.topUpRate.tooltip': 'Cheaper top-ups than on Free',
   'plans.limits.ultraWeeklySpend': 'Pro model weekly limit',
-  'plans.limits.ultraWeeklySpend.multiple': 'Pro model limit: {{multiple}}× {{plan}}',
+  'plans.limits.ultraWeeklySpend.multiple': '{{multiple}}× Pro model limit',
   'plans.limits.ultraWeeklySpend.tooltip':
     'Pro models are the most capable and most expensive ones. Their usage counts toward your weekly limit and also has a limit of its own; both reset together.',
   'plans.limits.ultraWeeklySpend.unavailable': 'Pro models',
