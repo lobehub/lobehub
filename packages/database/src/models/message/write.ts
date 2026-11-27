@@ -557,6 +557,7 @@ export class MessageWriteMutations extends MessageScope {
 
     await bumpTopicLastMessageAt(this.db, updated);
 
-    return updated;
+    // Keep the pre-`returning` result shape: callers read `rowCount`.
+    return { rowCount: updated.length };
   };
 }

@@ -315,9 +315,15 @@ describe('LobeBench migration integration', () => {
         preservedTables.map(async (table) => (await client.query(`SELECT * FROM ${table}`)).rows),
       );
       await migrate(drizzle({ client }), { migrationsFolder });
+      // Later migrations may add columns to these tables; only the values that
+      // existed before the upgrade must survive it unchanged.
       expect(
         await Promise.all(
-          preservedTables.map(async (table) => (await client.query(`SELECT * FROM ${table}`)).rows),
+          preservedTables.map(async (table, index) => {
+            const columns = Object.keys(before[index][0] ?? {});
+            const { rows } = await client.query(`SELECT * FROM ${table}`);
+            return rows.map((row) => Object.fromEntries(columns.map((c) => [c, row[c]])));
+          }),
         ),
       ).toEqual(before);
       expect(
