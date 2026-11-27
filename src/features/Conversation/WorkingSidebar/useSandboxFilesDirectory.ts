@@ -1,7 +1,10 @@
+import useSWR from 'swr';
+
 import {
   isPersistentSelection,
   useSandboxPlacement,
 } from '@/features/ChatInput/ControlBar/useSandboxPlacement';
+import { sandboxStorageService } from '@/services/sandboxStorage';
 import { sandboxActions, sandboxSelectors, useSandboxStore } from '@/store/sandbox';
 
 /**
@@ -28,7 +31,27 @@ export const useSandboxFilesDirectory = (
 ) => {
   const { selection } = useSandboxPlacement(agentId);
   const instanceId = selection.instanceId;
-  const persistent = isSandboxTarget && isPersistentSelection(selection);
+  const picked = isSandboxTarget && isPersistentSelection(selection);
+  // A pick the run cannot honour — the folder was deleted, the plan lapsed —
+  // sends the run to a temporary sandbox, so ask the resolver the run uses.
+  // Shares the composer's key: one request answers both. `null` means no
+  // drive at all, which is a temporary sandbox too; until it answers, the
+  // pick stands.
+  const { data: placement } = useSWR(
+    picked && topicId
+      ? [
+          'sandbox-drive-placement',
+          topicId,
+          selection.drive ?? '',
+          selection.instanceId ?? '',
+          selection.workingDirectory ?? '',
+        ]
+      : null,
+    () => sandboxStorageService.resolveSessionPlacement({ topicId: topicId ?? undefined }),
+    { revalidateOnFocus: true },
+  );
+  const fellBack = placement === null || placement?.mode === 'ephemeral';
+  const persistent = picked && !fellBack;
   const ephemeral = isSandboxTarget && !persistent && !!topicId;
   const active = persistent || ephemeral;
 

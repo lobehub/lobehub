@@ -183,4 +183,28 @@ describe('SandboxMiddlewareService — temporary sandbox activity', () => {
     const [, firstParams] = callTool.mock.calls[0] as unknown as [string, { command: string }];
     expect(firstParams.command).toContain('git clone');
   });
+
+  it('finishes the record before the call returns, so a request ending here keeps it', async () => {
+    let written = false;
+    redis.recordAgentActivity.mockImplementationOnce(
+      () => new Promise<void>((resolve) => setTimeout(() => ((written = true), resolve()), 20)),
+    );
+    const { service } = serviceWith(ok);
+
+    await service.callTool('runCommand', { command: 'ls' });
+
+    expect(written).toBe(true);
+  });
+
+  it('never holds a tool call more than a second on a slow record', async () => {
+    vi.useFakeTimers();
+    redis.recordAgentActivity.mockImplementationOnce(() => new Promise<void>(() => {}));
+    const { service } = serviceWith(ok);
+
+    const call = service.callTool('runCommand', { command: 'ls' });
+    await vi.advanceTimersByTimeAsync(1000);
+
+    await expect(call).resolves.toMatchObject({ success: true });
+    vi.useRealTimers();
+  });
 });

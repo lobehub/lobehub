@@ -82,9 +82,10 @@ export class SandboxMiddlewareService implements SandboxService {
       toolName,
       this.applyEnvironmentVariables(toolName, params),
     );
-    // Not awaited: it is bookkeeping for the Files panel, and must not add a
-    // round-trip to every step of the agent's run.
-    void this.recordEphemeralActivity(toolName, params, result);
+    // Awaited, so a serverless request that ends with this call cannot freeze
+    // the write half-done and leave the Files panel reading a stale record —
+    // but bounded, so a slow Redis never holds up a step of the agent's run.
+    await withinActivityBudget(this.recordEphemeralActivity(toolName, params, result));
 
     // Held until a shell result can carry it: a first call that lists or
     // reads files has no output to put it in, and dropping it would hide a
@@ -471,6 +472,23 @@ export const normalizeSandboxCommandResult = (
 };
 
 const SHELL_TOOLS = new Set(['execScript', 'runCommand']);
+
+/** The most a tool call waits on the Files panel's activity record. */
+const ACTIVITY_RECORD_BUDGET_MS = 1000;
+
+const withinActivityBudget = async (work: Promise<void>) => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      work,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, ACTIVITY_RECORD_BUDGET_MS);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+};
 
 /**
  * What the conversation is told when the initializer could not be run at all

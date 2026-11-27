@@ -3725,6 +3725,7 @@
   "workingPanel.files.filters.changedOnly": "仅显示 Git 变更",
   "workingPanel.files.filters.hideIgnored": "隐藏 Git 忽略文件",
   "workingPanel.files.filters.title": "筛选文件",
+  "workingPanel.files.indexTruncatedNotice": "文件太多，无法全部列出，只显示了前面的部分条目",
   "workingPanel.files.noSearchResults": "没有匹配的文件",
   "workingPanel.files.open": "打开文件",
   "workingPanel.files.openNeedsTopic": "先发一条消息 —— 该环境的文件要在对话建立会话后才能打开。",

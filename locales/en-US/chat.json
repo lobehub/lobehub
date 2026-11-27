@@ -3725,6 +3725,7 @@
   "workingPanel.files.filters.changedOnly": "Show Git Changes Only",
   "workingPanel.files.filters.hideIgnored": "Exclude Ignored Files",
   "workingPanel.files.filters.title": "Filter Files",
+  "workingPanel.files.indexTruncatedNotice": "Too many files to list them all — only the first entries are shown",
   "workingPanel.files.noSearchResults": "No matching files",
   "workingPanel.files.open": "Open File",
   "workingPanel.files.openNeedsTopic": "Send a message first — this environment’s files open once the conversation has a session.",

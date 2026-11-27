@@ -4473,6 +4473,8 @@ export default {
   'workingPanel.files.validation.whitespace': "Names can't start or end with a space",
   'workingPanel.files.collapseAll': 'Collapse Folders in Explorer',
   'workingPanel.files.empty': 'No files in this workspace',
+  'workingPanel.files.indexTruncatedNotice':
+    'Too many files to list them all — only the first entries are shown',
   'workingPanel.files.download.action': 'Download',
   'workingPanel.files.download.failed': "Couldn't download {{name}} from the sandbox",
   'workingPanel.files.download.preparing': 'Preparing {{name}}\u2026',

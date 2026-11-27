@@ -1,4 +1,6 @@
-import { renderHook } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
+import { createElement, type ReactNode } from 'react';
+import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SandboxSelection } from '@/features/ChatInput/ControlBar/useSandboxPlacement';
@@ -6,7 +8,14 @@ import type { SandboxSelection } from '@/features/ChatInput/ControlBar/useSandbo
 const state = vi.hoisted(() => ({
   fetchedInstance: [] as (string | undefined)[],
   instanceDirectory: undefined as string | null | undefined,
+  placement: undefined as { mode: string } | null | undefined,
   selection: {} as SandboxSelection,
+}));
+
+vi.mock('@/services/sandboxStorage', () => ({
+  sandboxStorageService: {
+    resolveSessionPlacement: async () => state.placement,
+  },
 }));
 
 vi.mock('@/features/ChatInput/ControlBar/useSandboxPlacement', async (importOriginal) => ({
@@ -23,13 +32,21 @@ vi.mock('@/store/sandbox', () => ({
 
 const { useSandboxFilesDirectory } = await import('../useSandboxFilesDirectory');
 
+// A fresh SWR cache per render, so one case's placement never answers another's.
+const wrapper = ({ children }: { children: ReactNode }) =>
+  createElement(SWRConfig, { value: { dedupingInterval: 0, provider: () => new Map() } }, children);
+
+const renderLive = (options: { isSandboxTarget: boolean; topicId?: string | null }) =>
+  renderHook(() => useSandboxFilesDirectory('agent-1', options), { wrapper }).result;
+
 const render = (options: { isSandboxTarget: boolean; topicId?: string | null }) =>
-  renderHook(() => useSandboxFilesDirectory('agent-1', options)).result.current;
+  renderLive(options).current;
 
 describe('useSandboxFilesDirectory', () => {
   beforeEach(() => {
     state.fetchedInstance = [];
     state.instanceDirectory = undefined;
+    state.placement = { mode: 'drive' };
     state.selection = {};
   });
 
@@ -85,5 +102,26 @@ describe('useSandboxFilesDirectory', () => {
       ephemeral: false,
       topicId: undefined,
     });
+  });
+
+  it('shows the temporary sandbox the run actually fell back to', async () => {
+    // The picked folder was deleted: the run resolves to a temporary sandbox.
+    state.selection = { workingDirectory: 'gone' };
+    state.placement = { mode: 'ephemeral' };
+
+    const result = renderLive({ isSandboxTarget: true, topicId: 'tpc_1' });
+    // Until the resolver answers, the pick stands.
+    expect(result.current).toMatchObject({ directory: 'gone', ephemeral: false });
+
+    await waitFor(() => expect(result.current).toMatchObject({ directory: '', ephemeral: true }));
+  });
+
+  it('reads a pick without a drive (no entitlement) as a temporary sandbox', async () => {
+    state.selection = { workingDirectory: 'reports' };
+    state.placement = null;
+
+    const result = renderLive({ isSandboxTarget: true, topicId: 'tpc_1' });
+
+    await waitFor(() => expect(result.current).toMatchObject({ ephemeral: true }));
   });
 });

@@ -712,4 +712,16 @@ describe('Files — temporary sandbox with nothing to show', () => {
     expect(screen.getByTestId('explorer-tree')).toBeInTheDocument();
     expect(screen.queryByText('workingPanel.files.sandbox.expiredDesc')).not.toBeInTheDocument();
   });
+
+  it('says a capped listing is not the whole tree', () => {
+    const capped = projectFilesMock.data as typeof projectFilesMock.data & {
+      truncated?: boolean;
+    };
+    capped.truncated = true;
+
+    render(<Files sandboxEphemeral sandboxTopicId="tpc_1" workingDirectory="" />);
+
+    expect(screen.getByText('workingPanel.files.indexTruncatedNotice')).toBeInTheDocument();
+    capped.truncated = undefined;
+  });
 });

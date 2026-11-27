@@ -28,6 +28,7 @@ import { redisService } from '@/server/services/redis';
 import { createSandboxService, resolveSandboxSessionConfig } from '@/server/services/sandbox';
 import {
   type EphemeralSandboxFilesResult,
+  EphemeralSandboxListError,
   listEphemeralSandboxFiles,
 } from '@/server/services/sandbox/ephemeralFiles';
 import { isSandboxAuthError } from '@/server/services/sandbox/errors';
@@ -851,6 +852,11 @@ export const marketRouter = router({
         topicId,
       }).catch((error: Error) => {
         log('listEphemeralSandboxFiles failed for topic %s: %O', topicId, error);
+        // Same re-auth contract as execInSandbox and exportAndUploadFile: an
+        // expired Market sign-in must reach the client as UNAUTHORIZED.
+        if (error instanceof EphemeralSandboxListError && isSandboxAuthError(error.providerError)) {
+          throwSandboxAuthError();
+        }
         throw new TRPCError({ cause: error, code: 'BAD_GATEWAY', message: error.message });
       });
 

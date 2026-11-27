@@ -663,6 +663,12 @@ const Files = memo<FilesProps>(
           <div {...stylex.props(styles.truncated)}>
             {t('workingPanel.files.partialIndexNotice')}
           </div>
+        ) : data?.truncated ? (
+          // The host stopped at its entry cap: what is past it cannot be
+          // found in this tree, so the tree must not read as complete.
+          <div {...stylex.props(styles.truncated)}>
+            {t('workingPanel.files.indexTruncatedNotice')}
+          </div>
         ) : (
           truncatedCount > 0 && (
             <div {...stylex.props(styles.truncated)}>{t('workingPanel.files.truncatedNotice')}</div>

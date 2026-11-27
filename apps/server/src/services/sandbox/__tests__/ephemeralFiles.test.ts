@@ -9,6 +9,7 @@ import {
   buildEphemeralListingCommand,
   EPHEMERAL_SANDBOX_IDLE_MS,
   EPHEMERAL_SANDBOX_MAX_ENTRIES,
+  EphemeralSandboxListError,
   isHeteroExecLaunch,
   listEphemeralSandboxFiles,
   parseEphemeralListing,
@@ -184,6 +185,24 @@ describe('listEphemeralSandboxFiles', () => {
     await expect(
       listEphemeralSandboxFiles({ activity: undefined, callTool, topicId: 't' }),
     ).resolves.toEqual({ status: 'expired' });
+  });
+
+  it("keeps the provider's error, so an expired sign-in can be told apart", async () => {
+    const callTool = vi
+      .fn()
+      .mockResolvedValue({ error: { message: 'x', name: 'token_expired' }, success: false });
+
+    const error = await listEphemeralSandboxFiles({
+      activity: { activeAt: Date.now() },
+      callTool,
+      topicId: 't',
+    }).catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(EphemeralSandboxListError);
+    expect((error as EphemeralSandboxListError).providerError).toEqual({
+      message: 'x',
+      name: 'token_expired',
+    });
   });
 
   it('fails rather than show an empty tree when the sandbox could not be read', async () => {

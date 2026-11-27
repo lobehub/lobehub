@@ -118,6 +118,21 @@ export const parseEphemeralListing = (stdout: string): EphemeralSandboxListing |
   };
 };
 
+/**
+ * The sandbox answered the listing with a failure. Keeps the provider's own
+ * error, so a caller can tell an expired Market sign-in — which the user can
+ * fix by signing in again — from a sandbox that could not be read.
+ */
+export class EphemeralSandboxListError extends Error {
+  readonly providerError?: { message?: string; name?: string };
+
+  constructor(providerError?: { message?: string; name?: string }) {
+    super(providerError?.message || 'Failed to list the sandbox files');
+    this.name = 'EphemeralSandboxListError';
+    this.providerError = providerError;
+  }
+}
+
 export type EphemeralSandboxFilesResult =
   | ({ status: 'ready' } & EphemeralSandboxListing)
   /** The sandbox the agent wrote into was recycled; its files are gone. */
@@ -177,9 +192,7 @@ export const listEphemeralSandboxFiles = async ({
   });
 
   if (result.sessionExpiredAndRecreated) return { status: 'expired' };
-  if (!result.success) {
-    throw new Error(result.error?.message || 'Failed to list the sandbox files');
-  }
+  if (!result.success) throw new EphemeralSandboxListError(result.error);
 
   const raw = (result.result ?? {}) as { output?: unknown; stdout?: unknown };
   const listing = parseEphemeralListing(String(raw.stdout ?? raw.output ?? ''));
