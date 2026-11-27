@@ -4,9 +4,11 @@ import type { UIChatMessage } from '@lobechat/types';
 import { memo } from 'react';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { MESSAGE_ACTION_BAR_HEIGHT } from '@/const/messageActionPortal';
 import { useUserAvatar } from '@/hooks/useUserAvatar';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { useDensity } from '@/styles/density';
 
 import { ChatItem } from '../../../ChatItem';
 import UserMessageContent from '../../../Messages/User/components/MessageContent';
@@ -16,10 +18,11 @@ const PreviewQuestion = memo<{ message: UIChatMessage }>(({ message }) => {
   const avatar = useUserAvatar();
   const title = useUserStore(userProfileSelectors.displayUserName);
   const showSender = Boolean(activeWorkspaceId);
+  const { compact } = useDensity();
 
   return (
     <ChatItem
-      actions={<div style={{ height: '28px' }} />}
+      actions={compact ? undefined : <div style={{ height: MESSAGE_ACTION_BAR_HEIGHT }} />}
       avatar={{ avatar, title }}
       message={message.content}
       placement={'right'}

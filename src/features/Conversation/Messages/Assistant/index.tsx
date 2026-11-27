@@ -7,20 +7,18 @@ import type { MouseEventHandler, ReactNode } from 'react';
 import { memo, useCallback, useMemo } from 'react';
 
 import AssistantMessageNotice from '@/business/client/components/AssistantMessageNotice';
-import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import { ChatItem } from '@/features/Conversation/ChatItem';
-import { selectionStyles } from '@/features/Conversation/MessageForward/selectionStyles';
 import { useMessageCommentCount } from '@/features/TopicComment/hooks';
 import MessageCommentBadge from '@/features/TopicComment/MessageCommentBadge';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
-import { sx } from '@/styles/sx';
 
 import { ReactionDisplay } from '../../components/Reaction';
 import ErrorMessageExtra, { useErrorContent } from '../../Error';
 import { useAgentMeta, useDoubleClickEdit } from '../../hooks';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
 import { normalizeThinkTags, processWithArtifact } from '../../utils/markdown';
+import ActionBarHolder from '../components/ActionBarHolder';
 import ActionRowSpacer from '../components/ActionRowSpacer';
 import MessageBranch from '../components/MessageBranch';
 import Reasoning from '../components/Reasoning';
@@ -36,13 +34,6 @@ import MessageContent from './components/MessageContent';
 import ThreadExecutionSummary from './components/ThreadExecutionSummary';
 import { AssistantMessageExtra } from './Extra';
 import { shouldShowReasoningAboveError } from './reasoningAboveError';
-
-const actionBarHolder = (
-  <div
-    {...{ [MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES.assistant]: '' }}
-    {...sx(selectionStyles.hidden, { height: '28px' })}
-  />
-);
 
 interface AssistantMessageProps {
   disableEditing?: boolean;
@@ -196,7 +187,7 @@ const AssistantMessage = memo<AssistantMessageProps>(
                 messageId={id}
               />
             )}
-            {disableEditing ? <ActionRowSpacer /> : actionBarHolder}
+            {disableEditing ? <ActionRowSpacer /> : <ActionBarHolder type={'assistant'} />}
           </>
         }
         afterActions={

@@ -16,6 +16,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { useDevDockMounted } from '@/hooks/useDevDockMounted';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { useDensity } from '@/styles/density';
 
 import WideScreenContainer from '../../../WideScreenContainer';
 import { MessageForwardSelectToHere } from '../../MessageForward';
@@ -38,6 +39,7 @@ import { useReadingAnchor } from '../hooks/useReadingAnchor';
 import { useSelectionMessageIds } from '../hooks/useSelectionMessageIds';
 import { type InitialScrollPosition, useTopicScrollPersist } from '../hooks/useTopicScrollPersist';
 import { resolveAutoScrollDetached } from '../utils/autoScrollFollow';
+import { resolveListPaddingBottom } from '../utils/listPaddingBottom';
 import type { ResolvedMessageDeepLink } from '../utils/messageDeepLink';
 import AutoScroll from './AutoScroll';
 import { AT_BOTTOM_THRESHOLD } from './AutoScroll/const';
@@ -459,7 +461,8 @@ const VirtualizedList = memo<VirtualizedListProps>(
     // ChatInput's `marginTop: -12` (skipScrollMarginWithList) so the last
     // message lands exactly on the overlay's top edge.
     const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
-    const paddingBottom = Math.max(24, overlayHeight + 12);
+    const { compact } = useDensity();
+    const paddingBottom = resolveListPaddingBottom(overlayHeight, compact);
 
     // A forward list always ends in the footer row: it hosts the later-page
     // skeleton and retry row, kept before the footer slot.
