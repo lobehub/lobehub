@@ -120,11 +120,6 @@ export interface ConnectorExecContext extends ConnectorToolSyncContext {
   serverDB?: LobeChatDatabase;
   /** `userId` decides the caller's `mcp_apps` flag. */
   userId?: string | null;
-  /**
-   * The workspace the call is made in. A view's device named by the caller
-   * must be in the caller's own pool or this one, as a run's device is.
-   */
-  workspaceId?: string | null;
 }
 
 /**
@@ -275,13 +270,14 @@ const resolveConnectorDevice = async (
       'This view came from another device than the connector runs on now',
     );
   }
-  // The device a caller names gets the connector's credentials, so it is held
-  // to what a run of theirs may route to (`resolveMcpTunnelTarget`): their own
-  // device, or one in the workspace the call is made in. Never another pool.
-  if (!binding && viewDevice?.workspaceId && viewDevice.workspaceId !== ctx.workspaceId) {
+  // A device the caller names gets the connector's credentials (stdio env,
+  // HTTP tokens), so it may only get the caller's own: their personal
+  // connector, on one of their personal devices. A shared connector shows a
+  // relayed view only through its binding, which its managers set.
+  if (!binding && viewDevice && (connector.workspaceId || viewDevice.workspaceId)) {
     throw new ConnectorToolCallError(
       'FORBIDDEN',
-      "This view came from a device outside your own devices and this workspace's",
+      `Connector '${connector.name}' shows interactive views from a device only when it is bound to one. Bind it to a device to use its views here.`,
     );
   }
   const { serverDB, userId } = ctx;

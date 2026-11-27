@@ -8,6 +8,7 @@ import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { ToolExecutionService } from '../index';
 
+const row = vi.hoisted(() => ({ workspaceId: null as string | null }));
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn(function () {
     return {
@@ -18,11 +19,13 @@ vi.mock('@/database/models/connector', () => ({
           isEnabled: true,
           mcpConnectionType: 'stdio',
           toolIdentifier: 'apps',
+          workspaceId: row.workspaceId,
         },
       ],
     };
   }),
 }));
+const runWorkspace = vi.hoisted(() => ({ id: undefined as string | undefined }));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: async () => ({}) },
 }));
@@ -38,7 +41,15 @@ vi.mock('@/server/services/deviceGateway/dispatchAuthorization', () => ({
   resolveDeviceDispatchAuthorizationFailure: async () => undefined,
 }));
 vi.mock('../serverRuntimes/resolveWorkspaceScope', () => ({
-  resolveRunWorkspaceId: async () => undefined,
+  resolveRunWorkspaceId: async () => runWorkspace.id,
+}));
+vi.mock('@/server/services/mcp/deviceTunnel', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  resolveBoundMcpDevice: async ({ binding }: any) => ({
+    clientKinds: ['cli'],
+    deviceId: binding.deviceId,
+    workspaceId: binding.workspaceId,
+  }),
 }));
 
 /** A stdio MCP Apps server, run on the user's device through `lh connect`. */
@@ -56,7 +67,7 @@ const payload = {
   identifier: 'apps',
   type: 'mcp',
 } as any;
-const run = (manifest: Record<string, unknown>) =>
+const run = (manifest: Record<string, unknown>, workspaceId?: string) =>
   new ToolExecutionService({
     builtinToolsExecutor: {} as never,
     mcpService: { callTool: vi.fn() } as never,
@@ -65,6 +76,7 @@ const run = (manifest: Record<string, unknown>) =>
     serverDB: {},
     toolManifestMap: { apps: manifest },
     userId: 'me',
+    ...(workspaceId && { workspaceId }),
   } as any);
 const connectorManifest = { connector: { id: 'c', identifier: 'apps' }, mcpParams: stdio };
 const sentParams = () => vi.mocked(deviceGateway.executeMcpCall).mock.calls[0][0].params;
@@ -72,6 +84,8 @@ const sentParams = () => vi.mocked(deviceGateway.executeMcpCall).mock.calls[0][0
 describe('ToolExecutionService — MCP Apps views of a tunneled call', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    row.workspaceId = null;
+    runWorkspace.id = undefined;
     vi.mocked(isMcpAppsEnabled).mockResolvedValue(true);
     vi.mocked(resolveMcpDeviceFeatures).mockResolvedValue(['apps']);
     vi.mocked(deviceGateway.executeMcpCall).mockResolvedValue({
@@ -125,5 +139,36 @@ describe('ToolExecutionService — MCP Apps views of a tunneled call', () => {
 
     expect(sentParams()).not.toHaveProperty('mcpCall');
     expect(result.state).not.toHaveProperty('mcpApp');
+  });
+
+  // Only views the connector routes can relay back are kept (resolveConnectorDevice)
+  it("drops the view of a shared connector that isn't bound to a device", async () => {
+    row.workspaceId = 'ws1';
+    runWorkspace.id = 'ws1';
+
+    const result = await run(connectorManifest, 'ws1');
+
+    expect(sentParams()).not.toHaveProperty('mcpCall');
+    expect(result.state).not.toHaveProperty('mcpApp');
+  });
+
+  it("drops the view of the caller's own unbound connector run on a workspace device", async () => {
+    runWorkspace.id = 'ws1';
+
+    const result = await run(connectorManifest, 'ws1');
+
+    expect(result.state).not.toHaveProperty('mcpApp');
+  });
+
+  it("keeps the view of a shared connector bound to a device, in that device's pool", async () => {
+    row.workspaceId = 'ws1';
+    const bound = { ...stdio, boundDevice: { deviceId: 'ws-nas', workspaceId: 'ws1' } };
+
+    const result = await run({ ...connectorManifest, mcpParams: bound }, 'ws1');
+
+    expect((result.state as any).mcpApp).toMatchObject({
+      relayDeviceId: 'ws-nas',
+      relayWorkspaceId: 'ws1',
+    });
   });
 });

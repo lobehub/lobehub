@@ -39,7 +39,10 @@ vi.mock('./refresh', () => ({
 }));
 
 /** A stdio MCP Apps server on the user's own machine, run through `lh connect`. */
-const connector = (metadata: Record<string, unknown> | null = { boundDeviceId: 'nas' }) =>
+const connector = (
+  metadata: Record<string, unknown> | null = { boundDeviceId: 'nas' },
+  workspaceId: string | null = null,
+) =>
   ({
     credentials: null,
     id: 'c1',
@@ -51,7 +54,7 @@ const connector = (metadata: Record<string, unknown> | null = { boundDeviceId: '
     metadata,
     name: 'Poki',
     oidcConfig: null,
-    workspaceId: null,
+    workspaceId,
   }) as any;
 const stdioParams = {
   args: ['stdio.mjs'],
@@ -145,25 +148,42 @@ describe("callConnectorToolById — an MCP App view's call relayed to a device",
     expect(scheduleStaleConnectorToolsRefresh).not.toHaveBeenCalled();
   });
 
-  it("runs an unbound connector's view call on the device its view names", async () => {
-    await call({ relayDeviceId: 'laptop', relayWorkspaceId: 'ws1' }, connector(null), 'ws1');
+  it("runs the caller's own unbound connector's view call on their device the view names", async () => {
+    await call({ relayDeviceId: 'laptop' }, connector(null), 'ws1');
 
     expect(resolveBoundMcpDevice).toHaveBeenCalledWith(
-      expect.objectContaining({ binding: { deviceId: 'laptop', workspaceId: 'ws1' } }),
+      expect.objectContaining({ binding: { deviceId: 'laptop' } }),
     );
-    expect(sent()).toMatchObject({ deviceId: 'laptop', workspaceId: 'ws1' });
+    expect(sent()).toMatchObject({ deviceId: 'laptop', workspaceId: undefined });
   });
 
-  it("refuses a view's device in another workspace's pool than the call's", async () => {
-    // The device a run could use is the caller's own or one in the run's workspace
-    await expect(
-      call({ relayDeviceId: 'their-nas', relayWorkspaceId: 'ws-other' }, connector(null), 'ws1'),
-    ).rejects.toHaveProperty('code', 'FORBIDDEN');
-    await expect(
-      call({ relayDeviceId: 'their-nas', relayWorkspaceId: 'ws-other' }, connector(null)),
-    ).rejects.toHaveProperty('code', 'FORBIDDEN');
+  // A device the caller names may only get the caller's own credentials
+  it.each([
+    ['a shared connector to their own device', connector(null, 'ws1'), {}],
+    [
+      'a shared connector to a workspace device',
+      connector(null, 'ws1'),
+      { relayWorkspaceId: 'ws1' },
+    ],
+    ['their own connector to a workspace device', connector(null), { relayWorkspaceId: 'ws1' }],
+    ['their own connector to another workspace', connector(null), { relayWorkspaceId: 'ws-other' }],
+  ])('refuses relaying %s that the caller names', async (_case, row, relay) => {
+    await expect(call({ relayDeviceId: 'their-nas', ...relay }, row, 'ws1')).rejects.toHaveProperty(
+      'code',
+      'FORBIDDEN',
+    );
     expect(resolveBoundMcpDevice).not.toHaveBeenCalled();
     expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+  });
+
+  it("relays a shared connector's view on the device it is bound to", async () => {
+    await call(
+      { relayDeviceId: 'nas', relayWorkspaceId: 'ws1' },
+      connector({ boundDeviceId: 'nas' }, 'ws1'),
+      'ws1',
+    );
+
+    expect(sent()).toMatchObject({ deviceId: 'nas', workspaceId: 'ws1' });
   });
 
   it('opens an entrypoint only on a bound device, never on one the caller names', async () => {

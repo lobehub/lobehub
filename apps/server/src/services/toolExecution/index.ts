@@ -333,8 +333,9 @@ export class ToolExecutionService {
     let linkName: string | undefined;
     let mcpConnectorAccount: { connectorId: string; linkId?: string } | undefined;
     // A connector's result may keep the MCP App view a device names: the
-    // connector routes read the view and run its calls back on that device
-    let relaysView = false;
+    // connector routes read the view and run its calls back on that device.
+    // Set to the connector's pool once it resolves (`null`: the caller's own).
+    let relayConnector: { workspaceId: string | null } | undefined;
     if (!mcpParams) {
       log('MCP configuration not found in manifest for: %s ', identifier);
       return {
@@ -409,7 +410,6 @@ export class ToolExecutionService {
       // every call resolves it again, in the run's conversation, and runs only
       // while the tool prefix still names that same row.
       const rowRef = (manifest as { connector?: { id: string } }).connector;
-      relaysView = !!(rowRef || marker);
       if (rowRef || marker) {
         if (!context.serverDB || !context.userId)
           throw new Error(
@@ -441,6 +441,7 @@ export class ToolExecutionService {
           throw new Error(
             'Connector is no longer available. Ask the user to connect an account in Settings > Connectors.',
           );
+        relayConnector = { workspaceId: connector.workspaceId ?? null };
         if (marker) {
           const tool = // A run model reads the tools of the owner's personal row too
             (
@@ -531,7 +532,7 @@ export class ToolExecutionService {
             { ...context, toolMessageId },
             mcpParams,
             bound,
-            relaysView,
+            relayConnector,
           );
           return { ...result, toolMessageId: result.toolMessageId ?? toolMessageId };
         }
@@ -554,7 +555,7 @@ export class ToolExecutionService {
           { ...context, toolMessageId },
           mcpParams,
           tunnelTarget,
-          relaysView,
+          relayConnector,
         );
         result.toolMessageId ??= toolMessageId;
         if (!result.success && linkName) {
@@ -771,16 +772,19 @@ export class ToolExecutionService {
    * token). Callers must ensure `userId` is set and pass a resolved tunnel
    * target (device + workspace scope).
    *
-   * `relaysView`: a connector's call, whose result may keep the MCP App view
-   * the device names (see `relayDeviceViewState`) while the user's `mcp_apps`
-   * flag is on and the device's client serves views.
+   * `relayConnector`: the connector (its pool) a call ran, whose result may
+   * keep the MCP App view the device names (see `relayDeviceViewState`) while
+   * the user's `mcp_apps` flag is on and the device's client serves views —
+   * and only where the connector routes can relay it back: through the
+   * connector's binding, or for the caller's own unbound connector on their
+   * personal device (`resolveConnectorDevice`).
    */
   private async executeMcpViaDevice(
     payload: ChatToolPayload,
     context: ToolExecutionContext,
     mcpParams: StdioMCPParams | HttpMCPClientParams,
     target: McpTunnelTarget,
-    relaysView = false,
+    relayConnector?: { workspaceId: string | null },
   ): Promise<ToolExecutionResult> {
     const { identifier, apiName, arguments: args } = payload;
 
@@ -810,6 +814,9 @@ export class ToolExecutionService {
 
     // MCP Apps on the device session too, so a view's later calls and reads
     // reach the same pooled server; an older client would ignore it
+    const relaysView =
+      !!relayConnector &&
+      (!!mcpParams.boundDevice || (!relayConnector.workspaceId && !target.workspaceId));
     const mcpApps =
       relaysView &&
       (await isMcpAppsEnabled(context.userId)) &&
