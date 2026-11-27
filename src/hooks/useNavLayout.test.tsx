@@ -57,17 +57,16 @@ describe('useNavLayout', () => {
     return result.current.topNavItems.find((item) => item.key === 'dashboard');
   };
 
-  it('hides Dashboards while the dashboard feature flag is off', async () => {
-    expect((await dashboardItem())?.hidden).toBe(true);
-  });
-
-  it('shows Dashboards in personal mode once the flag is on', async () => {
-    mocks.enableDashboard = true;
-    expect((await dashboardItem())?.hidden).toBe(false);
-
-    mocks.activeWorkspaceSlug = 'lobe-team';
-    expect((await dashboardItem())?.hidden).toBe(true);
-  });
+  // Boards stay reachable from the command menu and project sidebars; the home
+  // sidebar no longer carries an entry for them.
+  it.each([null, 'lobe-team'])(
+    'keeps Dashboards out of the home sidebar even with the flag on (workspace: %s)',
+    async (slug) => {
+      mocks.enableDashboard = true;
+      mocks.activeWorkspaceSlug = slug as typeof mocks.activeWorkspaceSlug;
+      expect(await dashboardItem()).toBeUndefined();
+    },
+  );
 
   const goalsItem = async () => {
     const { useNavLayout } = await import('./useNavLayout');

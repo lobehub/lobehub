@@ -261,7 +261,6 @@ export const DEFAULT_SIDEBAR_ITEMS: string[] = [
   'tasks',
   'goals',
   'project',
-  'dashboard',
   'resource',
   'image',
   'community',
