@@ -7,6 +7,7 @@ import { useBlankProjectAuto } from './useBlankProjectAuto';
 
 const env = vi.hoisted(() => ({
   online: new Set<string>(['dev-a', 'dev-b']),
+  ownDevice: undefined as { deviceId: string; sandboxFallback: boolean } | undefined,
 }));
 
 const directory = (id: string, deviceId: string) => ({
@@ -15,6 +16,7 @@ const directory = (id: string, deviceId: string) => ({
   id,
   instanceId: `inst-${id}`,
   permission: 'readWrite',
+  runnable: true,
 });
 
 vi.mock('@/features/Projects/WorkingDirectories/useProjectExecutionEnvironments', () => ({
@@ -30,12 +32,16 @@ vi.mock('@/features/Projects/WorkingDirectories/useProjectExecutionEnvironments'
 vi.mock('@/features/Projects/WorkingDirectories/useAgentFixedDeviceId', () => ({
   useAgentFixedDeviceId: () => undefined,
 }));
+vi.mock('@/features/Projects/WorkingDirectories/useAgentOwnDevice', () => ({
+  useAgentOwnDevice: () => env.ownDevice,
+}));
 vi.mock('@/store/device', () => ({ useDeviceList: () => ({ data: [] }) }));
 
 const pending = () => useChatStore.getState().pendingNewTopicDirectory;
 
 beforeEach(() => {
   env.online = new Set(['dev-a', 'dev-b']);
+  env.ownDevice = undefined;
   act(() =>
     useChatStore
       .getState()
@@ -86,6 +92,20 @@ describe('useBlankProjectAuto', () => {
 
     expect(result.current?.active).toBe(false);
     expect(pending()).toEqual({ agentId: 'agt', auto: true, projectId: 'other' });
+  });
+
+  it("stages a heterogeneous agent on its own device's directory, outside the order", () => {
+    env.ownDevice = { deviceId: 'dev-b', sandboxFallback: false };
+    const { rerender, result } = renderHook(() => useBlankProjectAuto('agt', 'prj'));
+    act(() => result.current?.onSelect());
+    expect(pending()).toMatchObject({ auto: true, projectWorkingDirectoryId: 'dir-b' });
+
+    // Offline: a device-only agent does not move to dev-a; the draft waits on
+    // the project and says why.
+    env.online = new Set(['dev-a']);
+    rerender();
+    expect(pending()).toEqual({ agentId: 'agt', auto: true, projectId: 'prj' });
+    expect(result.current?.notice).toEqual({ blocked: true, reason: 'offline' });
   });
 
   it('offers nothing without a project (a started conversation)', () => {

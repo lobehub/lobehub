@@ -21,6 +21,7 @@ import ProjectDeviceSwitcher from '@/features/ChatInput/ControlBar/ProjectDevice
 import InputDragUpload from '@/features/Home/InputArea/InputDragUpload';
 import ModeSelect from '@/features/Home/InputArea/ModeSelect';
 import { SANDBOX_EXECUTION_ENVIRONMENT } from '@/features/Projects/WorkingDirectories/executionEnvironmentOrder';
+import { ownDeviceNoticeKey } from '@/helpers/agentOwnDevice';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -193,8 +194,14 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
   });
 
   const submit: SendButtonHandler = async (params) => {
+    // Auto could not start on the agent's own device: a device-only agent is
+    // not sent anywhere else; one that may use the sandbox goes there, said so.
+    const notice = mode === 'chat' && environment.auto ? environment.notice : undefined;
+    if (notice?.blocked) return void toast.error(t(ownDeviceNoticeKey(notice)));
     try {
       await send(params);
+      // Said once the conversation has left the composer, not before a refusal.
+      if (notice) toast.info(t(ownDeviceNoticeKey(notice)));
     } catch (error) {
       if (error instanceof AttachmentsNotReadyError) {
         toast.error(tHome('dashboard.task.attachmentsNotReady'));
@@ -252,11 +259,15 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
             {mode === 'chat' ? (
               <ProjectDeviceSwitcher
                 agentId={agentId}
-                auto={{ active: environment.auto, onSelect: environment.pickAuto }}
                 directories={environment.directories}
                 directoryId={environment.directoryId}
                 placement={'bottomRight'}
                 projectId={project.id}
+                auto={{
+                  active: environment.auto,
+                  notice: environment.notice,
+                  onSelect: environment.pickAuto,
+                }}
                 sandbox={{
                   active: environment.onSandbox,
                   // Same as a blank project conversation: the sandbox run also

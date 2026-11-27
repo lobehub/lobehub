@@ -9,7 +9,10 @@ import type {
   WorkingDirConfig,
 } from '@lobechat/types';
 import { getWorkingDirEffectivePath, getWorkingDirSessionPath } from '@lobechat/types';
+import { toast } from '@lobehub/ui';
+import { t } from 'i18next';
 
+import { ownDeviceNoticeKey, OwnDeviceUnavailableError } from '@/helpers/agentOwnDevice';
 import {
   resolveAgentWorkingDirectory,
   resolveAgentWorkingDirectoryConfig,
@@ -72,9 +75,10 @@ const isKnownMissingDirectory = async (path: string, machine: RunMachine): Promi
  * the source's bare cwd (see {@link resolveRunCwd}) or — when the directory is
  * gone from its device — its own default.
  */
-export const resolveSendProjectRun = async <T extends { boundDeviceId?: string }>(params: {
+const resolveProjectRun = async <T extends { boundDeviceId?: string }>(params: {
   agencyConfig: T | undefined;
-  boundDirectoryId: string | null | undefined;
+  /** The open conversation, whose project binding the send follows. */
+  boundTopic: Pick<ChatTopic, 'metadata' | 'projectId' | 'projectWorkingDirectoryId'> | undefined;
   context: ConversationContext;
   directMentionRoute: boolean;
   isGatewayMode: boolean;
@@ -82,12 +86,18 @@ export const resolveSendProjectRun = async <T extends { boundDeviceId?: string }
   pendingDirectory: PendingNewTopicDirectory | undefined;
   sourceTopic: SourceTopicDirectory | undefined;
 }) => {
-  const { context, directMentionRoute, ownerAgentId, pendingDirectory, sourceTopic } = params;
+  const { boundTopic, context, directMentionRoute, ownerAgentId, pendingDirectory, sourceTopic } =
+    params;
   const createsTopic = !context.topicId && !context.groupId && !directMentionRoute;
   const inheritedTopic = createsTopic ? sourceTopic : undefined;
   const runParams = {
     agencyConfig: params.agencyConfig,
-    boundDirectoryId: params.boundDirectoryId,
+    boundDirectoryId: boundTopic?.projectWorkingDirectoryId,
+    boundTopic: boundTopic && {
+      boundDeviceId: boundTopic.metadata?.boundDeviceId,
+      projectId: boundTopic.projectId,
+      projectWorkingDirectoryId: boundTopic.projectWorkingDirectoryId,
+    },
     isGatewayMode: params.isGatewayMode,
     staged:
       createsTopic && !context.isolatedTopic && pendingDirectory?.agentId === ownerAgentId
@@ -115,6 +125,29 @@ export const resolveSendProjectRun = async <T extends { boundDeviceId?: string }
   } catch (error) {
     console.warn('[sendMessage] Source project directory unavailable:', error);
     return { ...(await resolveProjectDirectoryRun(runParams)), inheritedTopic };
+  }
+};
+
+/**
+ * {@link resolveProjectRun}, with the agent's own device said out loud: a
+ * fallback from it to the sandbox is noted, and a device-only agent its device
+ * cannot take resolves to `undefined` once the person is told why — the caller
+ * hands the draft back instead of running it anywhere else.
+ */
+export const resolveSendProjectRun = async <T extends { boundDeviceId?: string }>(
+  params: Parameters<typeof resolveProjectRun<T>>[0],
+) => {
+  try {
+    const run = await resolveProjectRun(params);
+    if (run.ownDeviceFallback)
+      toast.info(
+        t(ownDeviceNoticeKey({ blocked: false, reason: run.ownDeviceFallback }), { ns: 'project' }),
+      );
+    return run;
+  } catch (error) {
+    if (!(error instanceof OwnDeviceUnavailableError)) throw error;
+    toast.error(t(ownDeviceNoticeKey({ blocked: true, reason: error.reason }), { ns: 'project' }));
+    return undefined;
   }
 };
 

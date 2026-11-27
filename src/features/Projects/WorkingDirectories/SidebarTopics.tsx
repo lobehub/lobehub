@@ -41,9 +41,10 @@ import {
 } from '@/store/projectWorkingDirectory';
 import { filterTopics, type TopicListFilter } from '@/utils/client/topic';
 
-import { pickExecutionEnvironment } from './executionEnvironmentOrder';
+import { resolveAgentProjectRunner } from './agentProjectRunner';
 import { canStageDraftOn } from './startProjectTopicDraft';
 import { useAgentFixedDeviceId } from './useAgentFixedDeviceId';
+import { useAgentOwnDevice } from './useAgentOwnDevice';
 import {
   isExecutionDirectoryAvailable,
   useProjectExecutionEnvironments,
@@ -105,6 +106,7 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
   );
   const startTopic = useStartProjectTopic(projectId);
   const fixedDeviceId = useAgentFixedDeviceId(coordinatorAgentId);
+  const ownDevice = useAgentOwnDevice(coordinatorAgentId);
   const { ordered } = useProjectExecutionEnvironments(projectId);
   const { data: devices } = useDeviceList();
   return (
@@ -138,12 +140,14 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
               // conversation, in the project's first execution environment that
               // can take it now — a ready folder on an online device the agent
               // may use — or the cloud sandbox.
-              const picked = pickExecutionEnvironment(
-                ordered,
-                (directory) =>
+              // A heterogeneous main agent tries its own device first.
+              const { environment: picked } = resolveAgentProjectRunner(ordered, undefined, {
+                isAvailable: (directory) =>
                   canStageDraftOn(directory, fixedDeviceId) &&
                   isExecutionDirectoryAvailable(directory, devices),
-              );
+                isRunnable: (directory) => canStageDraftOn(directory, fixedDeviceId),
+                ownDevice,
+              });
               startTopic({
                 agentId: coordinatorAgentId,
                 auto: true,

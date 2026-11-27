@@ -3,7 +3,13 @@
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ChevronDownIcon, PlusIcon, SettingsIcon, SparklesIcon } from 'lucide-react';
+import {
+  ChevronDownIcon,
+  PlusIcon,
+  SettingsIcon,
+  SparklesIcon,
+  TriangleAlertIcon,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,6 +23,7 @@ import { useCanManageProject } from '@/features/Projects/useCanManageProject';
 import { openAddDirectoryModal } from '@/features/Projects/WorkingDirectories/AddDirectoryModal';
 import { useProjectExecutionEnvironments } from '@/features/Projects/WorkingDirectories/useProjectExecutionEnvironments';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { ownDeviceNoticeKey, type OwnDeviceUnavailableReason } from '@/helpers/agentOwnDevice';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useDeviceList } from '@/store/device';
@@ -77,7 +84,15 @@ interface ProjectDeviceSwitcherProps {
    * whichever runner the project's order picks — the sandbox or `directoryId`
    * as passed — and the row names it, so the person still sees where.
    */
-  auto?: { active: boolean; onSelect: () => void };
+  auto?: {
+    active: boolean;
+    /**
+     * Auto could not start on the agent's own device: why, and whether the
+     * send will be refused (a device-only agent) or runs in the sandbox.
+     */
+    notice?: { blocked: boolean; reason: OwnDeviceUnavailableReason };
+    onSelect: () => void;
+  };
   directories: ProjectDirectory[];
   directoryId?: string;
   /** Picked another device's project directory; absent when folders can't be picked here. */
@@ -162,6 +177,9 @@ const ProjectDeviceSwitcher = ({
   // On the automatic choice, every runner row is a pick of its own, the one
   // it resolves to included: picking it pins the conversation there.
   const autoActive = !!auto?.active;
+  // Said only while Auto decides: a hand pick runs where it was picked.
+  const notice = autoActive ? auto?.notice : undefined;
+  const noticeText = notice ? t(ownDeviceNoticeKey(notice), { ns: 'project' }) : undefined;
   const handleSelect = (target: ProjectDeviceTarget) => {
     setOpen(false);
     if (!target.active || autoActive) onSelect?.(target);
@@ -257,7 +275,8 @@ const ProjectDeviceSwitcher = ({
           key="auto"
           label={t('runnerPicker.auto', { ns: 'project' })}
           desc={
-            auto.active
+            noticeText ??
+            (auto.active
               ? t('runnerPicker.autoResolved', {
                   ns: 'project',
                   runner:
@@ -265,7 +284,7 @@ const ProjectDeviceSwitcher = ({
                       ? sandboxName
                       : projectDirectoryDeviceName(directory, devices),
                 })
-              : t('runnerPicker.autoDesc', { ns: 'project' })
+              : t('runnerPicker.autoDesc', { ns: 'project' }))
           }
           onClick={() => {
             setOpen(false);
@@ -305,7 +324,9 @@ const ProjectDeviceSwitcher = ({
     <div {...stylex.props(workingDirectoryChipStyles.chip)}>
       {/* On the sandbox the chip names it as the menu does: its repositories
           and the first one's logo, once it has any. */}
-      {autoActive ? (
+      {notice?.blocked ? (
+        <Icon color={cssVar.colorWarning} icon={TriangleAlertIcon} size={14} />
+      ) : autoActive ? (
         <Icon icon={SparklesIcon} size={14} />
       ) : (
         <ExecutionTargetIcon
@@ -328,13 +349,15 @@ const ProjectDeviceSwitcher = ({
   );
 
   // The tooltip's body lays its children out in a row; stack the two lines.
+  // Auto's own-device notice comes first: it says why the chip is not on that device.
   const tooltip =
-    directory && !onSandbox ? (
+    noticeText ||
+    (directory && !onSandbox ? (
       <Flexbox gap={4}>
         <span>{t('directories.boundTip', { ns: 'project', path: directory.path })}</span>
         {load && <span>{load.summary}</span>}
       </Flexbox>
-    ) : undefined;
+    ) : undefined);
 
   return (
     <Popover

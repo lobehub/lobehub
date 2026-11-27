@@ -3,6 +3,7 @@ import type { LobeAgentAgencyConfig } from '@lobechat/types';
 import { resolveAgentAgencyConfig } from '@lobechat/types';
 
 import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgentManagementAccess';
+import { projectTopicFallsBackToSandbox } from '@/helpers/agentOwnDevice';
 import {
   applyTopicDeviceBinding,
   getTopicBoundDeviceId,
@@ -151,8 +152,15 @@ export const useEffectiveAgencyConfig = (
       agentAgencyConfig,
     ),
   );
+  // A project conversation its agent fell back to the sandbox for runs there.
+  const projectSandboxTopic = useChatStore((s) =>
+    projectTopicFallsBackToSandbox(
+      agentAgencyConfig,
+      bindingTopicId ? topicSelectors.getTopicById(bindingTopicId)(s) : undefined,
+    ),
+  );
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
-  const { agencyConfig, workspaceScoped } = applyTopicDeviceBinding(
+  const { agencyConfig: boundAgencyConfig, workspaceScoped } = applyTopicDeviceBinding(
     {
       agencyConfig: agentAgencyConfig,
       workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, override),
@@ -161,6 +169,9 @@ export const useEffectiveAgencyConfig = (
     currentDeviceId,
     { isHetero: isModelOnlyHetero },
   );
+  const agencyConfig = projectSandboxTopic
+    ? { ...boundAgencyConfig, executionTarget: 'sandbox' as const }
+    : boundAgencyConfig;
   // Managers and private-agent owners also keep their `local` pick in the
   // per-user override, so any workspace agent must wait for the preference
   // fetch — not just the member-selection case.

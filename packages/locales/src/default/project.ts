@@ -727,4 +727,18 @@ export default {
   'runnerPicker.auto': 'Auto',
   'runnerPicker.autoDesc': 'Run on the first available runner in the project order',
   'runnerPicker.autoResolved': 'Will run on {{runner}}',
+  'runnerPicker.ownDevice.blocked_noDirectory':
+    "Add a project folder on the agent's device in Runners before starting here",
+  'runnerPicker.ownDevice.blocked_offline':
+    "The agent's device is offline. This agent runs only on its own device",
+  'runnerPicker.ownDevice.fallback_noDirectory':
+    "The agent's device has no project folder yet, so this runs in the cloud sandbox",
+  'runnerPicker.ownDevice.fallback_offline':
+    "The agent's device is offline, so this runs in the cloud sandbox",
+  'settings.agentDeviceAddDirectory': 'Add folder',
+  'settings.agentDeviceNoDirectory': 'No project folder on this device yet',
+  'settings.agentDeviceOnly': 'Device only',
+  'settings.agentDevices': "Members' own devices",
+  'settings.agentDevicesHint':
+    "These agents run on their own device and don't follow the order above. When the device can't take a conversation, Claude Code and Codex use the cloud sandbox; device-only agents stop and tell you why.",
 };

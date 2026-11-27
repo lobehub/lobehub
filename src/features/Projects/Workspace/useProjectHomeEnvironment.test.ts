@@ -1,11 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
+import { resolveAgentProjectRunner } from '@/features/Projects/WorkingDirectories/agentProjectRunner';
 import { orderExecutionEnvironments } from '@/features/Projects/WorkingDirectories/executionEnvironmentOrder';
 import type { ProjectDirectory } from '@/store/projectWorkingDirectory';
 
-import { resolveProjectHomeEnvironment } from './useProjectHomeEnvironment';
-
 const folder = (id: string, sortOrder = 0) => ({ id, sortOrder }) as unknown as ProjectDirectory;
+
+// The project home's rule for a regular agent (no device of its own).
+const resolveProjectHomeEnvironment = (
+  ordered: Parameters<typeof resolveAgentProjectRunner>[0],
+  pickedId: string | undefined,
+  isAvailable: (directory: ProjectDirectory) => boolean,
+) =>
+  resolveAgentProjectRunner(ordered, pickedId, {
+    isAvailable,
+    isRunnable: () => true,
+    ownDevice: undefined,
+  }).environment;
 
 describe('resolveProjectHomeEnvironment', () => {
   const ordered = orderExecutionEnvironments([folder('dir-a'), folder('dir-b')], 0);

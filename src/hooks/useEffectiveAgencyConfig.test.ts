@@ -21,6 +21,7 @@ const topicState = vi.hoisted(() => ({
     | {
         agentId?: string;
         metadata?: { boundDeviceId?: string; workingDirectory?: string };
+        projectId?: string;
         projectWorkingDirectoryId?: string;
       }
     | undefined,
@@ -347,6 +348,33 @@ describe('useEffectiveAgencyConfig', () => {
     const defaults = renderHook(() => useEffectiveAgencyConfig('agent-1', { topicId: null }));
     expect(defaults.result.current.agencyConfig).toEqual(sharedConfig);
     expect(sharedConfig.boundDeviceId).toBe('creator-device');
+  });
+
+  // Regression (T-14984): a project conversation that fell back to the sandbox
+  // from the agent's offline device still showed that device as its target.
+  it("runs a fallen-back project conversation in the sandbox, not on the agent's device", () => {
+    const claudeCode = { ...sharedConfig, heterogeneousProvider: { type: 'claude-code' } };
+    setupStores({ agencyConfig: claudeCode });
+    topicState.topic = { agentId: 'agent-1', projectId: 'project-1' };
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+    expect(result.current.agencyConfig?.executionTarget).toBe('sandbox');
+
+    // One that already ran on a machine, and a regular agent, keep their target.
+    topicState.topic = {
+      agentId: 'agent-1',
+      metadata: { boundDeviceId: 'creator-device' },
+      projectId: 'project-1',
+    };
+    expect(
+      renderHook(() => useEffectiveAgencyConfig('agent-1')).result.current.agencyConfig
+        ?.executionTarget,
+    ).toBe('device');
+    setupStores();
+    topicState.topic = { agentId: 'agent-1', projectId: 'project-1' };
+    expect(
+      renderHook(() => useEffectiveAgencyConfig('agent-1')).result.current.agencyConfig
+        ?.executionTarget,
+    ).toBe('device');
   });
 
   // Regression: a cwd with no recorded machine fell back to the agent default

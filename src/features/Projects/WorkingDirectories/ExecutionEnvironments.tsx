@@ -24,6 +24,8 @@ import type { ProjectDirectory } from '@/store/projectWorkingDirectory';
 import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
 import { openAddDirectoryModal } from './AddDirectoryModal';
+import { AgentDeviceGroups } from './AgentDeviceGroups';
+import { DevicePresence } from './DevicePresence';
 import {
   type DirectoryEnableAttempt,
   directoryUnavailableReason,
@@ -32,34 +34,6 @@ import {
 import { openEditDirectoryModal } from './EditDirectoryModal';
 import type { ProjectExecutionEnvironment } from './executionEnvironmentOrder';
 import { useProjectExecutionEnvironments } from './useProjectExecutionEnvironments';
-
-/**
- * Presence as a dot — green online, gray offline — with the word on hover. A
- * device restored from the persisted list (`onlineUnknown`) has not been
- * confirmed yet, so it shows no dot until `listDevices` answers.
- */
-const DevicePresence = ({ device }: { device?: DeviceListItem }) => {
-  const { t } = useTranslation('project');
-  if (device?.onlineUnknown) return null;
-  const online = !!device?.online;
-  const label = t(online ? 'settings.deviceOnline' : 'settings.deviceOffline');
-  // A plain element with its own title: a tooltip trigger inside a sortable
-  // row renders as a bordered button.
-  return (
-    <div
-      aria-label={label}
-      role="img"
-      title={label}
-      style={{
-        background: online ? cssVar.colorSuccess : cssVar.colorTextQuaternary,
-        borderRadius: '50%',
-        flex: 'none',
-        height: 8,
-        width: 8,
-      }}
-    />
-  );
-};
 
 interface ExecutionEnvironmentsProps {
   canManage: boolean;
@@ -74,7 +48,8 @@ interface ExecutionEnvironmentsProps {
  * changes the order a new conversation follows — the first folder that is
  * ready on an online device, or the cloud sandbox, which always is. A project
  * starts with only the sandbox; a folder is added on purpose, device by
- * device.
+ * device. Below it, the members that run on a device of their own, which the
+ * order does not apply to (`AgentDeviceGroups`).
  */
 export function ExecutionEnvironments({
   canManage,
@@ -313,49 +288,59 @@ export function ExecutionEnvironments({
   });
 
   return (
-    <Flexbox gap={12}>
-      <Flexbox horizontal align="center" gap={16} justify="space-between">
-        <Text fontSize={13} type="secondary">
-          {t('settings.executionOrderHint')}
-        </Text>
-        {canManage && (
-          <Button
-            icon={<Icon icon={PlusIcon} />}
-            style={{ flex: 'none' }}
-            type="primary"
-            onClick={() => openAddDirectoryModal(projectId, environmentId)}
-          >
-            {t('settings.addExecutionEnvironment')}
-          </Button>
-        )}
-      </Flexbox>
-      {canManage ? (
-        <SortableList
-          items={items}
-          renderItem={(item: ProjectExecutionEnvironment) => (
-            <SortableList.Item
-              id={item.id}
-              style={{ borderRadius: 16, padding: 16 }}
-              variant="filled"
+    <Flexbox gap={32}>
+      <Flexbox gap={12}>
+        <Flexbox horizontal align="center" gap={16} justify="space-between">
+          <Text fontSize={13} type="secondary">
+            {t('settings.executionOrderHint')}
+          </Text>
+          {canManage && (
+            <Button
+              icon={<Icon icon={PlusIcon} />}
+              style={{ flex: 'none' }}
+              type="primary"
+              onClick={() => openAddDirectoryModal(projectId, environmentId)}
+            >
+              {t('settings.addExecutionEnvironment')}
+            </Button>
+          )}
+        </Flexbox>
+        {canManage ? (
+          <SortableList
+            items={items}
+            renderItem={(item: ProjectExecutionEnvironment) => (
+              <SortableList.Item
+                id={item.id}
+                style={{ borderRadius: 16, padding: 16 }}
+                variant="filled"
+              >
+                {render(item)}
+              </SortableList.Item>
+            )}
+            onChange={(next: ProjectExecutionEnvironment[]) =>
+              void save(next.map((item) => item.id))
+            }
+          />
+        ) : (
+          items.map((item) => (
+            <Flexbox
+              horizontal
+              align="center"
+              key={item.id}
+              padding={16}
+              style={{ background: cssVar.colorFillQuaternary, borderRadius: 16 }}
             >
               {render(item)}
-            </SortableList.Item>
-          )}
-          onChange={(next: ProjectExecutionEnvironment[]) => void save(next.map((item) => item.id))}
-        />
-      ) : (
-        items.map((item) => (
-          <Flexbox
-            horizontal
-            align="center"
-            key={item.id}
-            padding={16}
-            style={{ background: cssVar.colorFillQuaternary, borderRadius: 16 }}
-          >
-            {render(item)}
-          </Flexbox>
-        ))
-      )}
+            </Flexbox>
+          ))
+        )}
+      </Flexbox>
+      <AgentDeviceGroups
+        canManage={canManage}
+        directories={directories}
+        environmentId={environmentId}
+        projectId={projectId}
+      />
     </Flexbox>
   );
 }

@@ -2,33 +2,15 @@
 
 import { useState } from 'react';
 
-import {
-  pickExecutionEnvironment,
-  type ProjectExecutionEnvironment,
-} from '@/features/Projects/WorkingDirectories/executionEnvironmentOrder';
+import { resolveAgentProjectRunner } from '@/features/Projects/WorkingDirectories/agentProjectRunner';
 import { canStageDraftOn } from '@/features/Projects/WorkingDirectories/startProjectTopicDraft';
 import { useAgentFixedDeviceId } from '@/features/Projects/WorkingDirectories/useAgentFixedDeviceId';
+import { useAgentOwnDevice } from '@/features/Projects/WorkingDirectories/useAgentOwnDevice';
 import {
   isExecutionDirectoryAvailable,
   useProjectExecutionEnvironments,
 } from '@/features/Projects/WorkingDirectories/useProjectExecutionEnvironments';
 import { useDeviceList } from '@/store/device';
-import type { ProjectDirectory } from '@/store/projectWorkingDirectory';
-
-/**
- * The execution environment a new conversation from the project home starts
- * in: the person's pick while the project still has it, otherwise the first
- * one in the project's priority order that can take it now — the same rule
- * the project sidebar's "+" follows, so the two never start a conversation in
- * different places.
- */
-export const resolveProjectHomeEnvironment = (
-  ordered: readonly ProjectExecutionEnvironment[],
-  pickedId: string | undefined,
-  isAvailable: (directory: ProjectDirectory) => boolean,
-): ProjectExecutionEnvironment =>
-  (pickedId && ordered.find((environment) => environment.id === pickedId)) ||
-  pickExecutionEnvironment(ordered, isAvailable);
 
 /**
  * The project home composer's execution environment, picked among the
@@ -40,15 +22,19 @@ export const useProjectHomeEnvironment = (projectId: string, agentId: string) =>
   const { directories, ordered } = useProjectExecutionEnvironments(projectId);
   const { data: devices } = useDeviceList();
   const fixedDeviceId = useAgentFixedDeviceId(agentId);
+  const ownDevice = useAgentOwnDevice(agentId);
   const [pickedId, setPickedId] = useState<string>();
 
-  const environment = resolveProjectHomeEnvironment(
-    ordered,
-    pickedId,
-    (directory) =>
+  // A heterogeneous agent with a device of its own starts there first, as a
+  // blank project conversation does (`useBlankProjectAuto`).
+  const choice = resolveAgentProjectRunner(ordered, pickedId, {
+    isAvailable: (directory) =>
       canStageDraftOn(directory, fixedDeviceId) &&
       isExecutionDirectoryAvailable(directory, devices),
-  );
+    isRunnable: (directory) => canStageDraftOn(directory, fixedDeviceId),
+    ownDevice,
+  });
+  const { environment } = choice;
 
   return {
     directories,
@@ -57,6 +43,10 @@ export const useProjectHomeEnvironment = (projectId: string, agentId: string) =>
     onSandbox: environment.kind === 'sandbox',
     /** Nothing picked by hand: the project's order decides where it starts. */
     auto: pickedId === undefined,
+    /** Auto could not start on the agent's own device: why, and whether nothing else may. */
+    notice: choice.ownDeviceUnavailable
+      ? { blocked: !!choice.blocked, reason: choice.ownDeviceUnavailable }
+      : undefined,
     pick: setPickedId,
     pickAuto: () => setPickedId(undefined),
   };

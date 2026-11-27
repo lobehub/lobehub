@@ -213,6 +213,14 @@ vi.mock('@/database/models/user', async (importOriginal) => {
   return { ...actual, UserModel };
 });
 
+// The project lookup reads the database; the turn only needs its id.
+vi.mock('@/server/services/aiAgent/pipeline/topicProject', () => ({
+  resolveTurnProjectId: vi.fn(
+    async (_deps, input: { requestedProjectId?: string }) => input?.requestedProjectId ?? undefined,
+  ),
+  withProjectSandbox: vi.fn(async (_deps, input: { metadata?: unknown }) => input.metadata),
+}));
+
 vi.mock('@/server/services/heterogeneousAgent/sandboxRunner', () => ({
   spawnHeteroSandbox: mockSpawnHeteroSandbox,
 }));
@@ -319,6 +327,25 @@ describe('AiAgentService.execAgent - Codex device runtime', () => {
   afterEach(() => {
     recordStartSpy.mockRestore();
     vi.clearAllMocks();
+  });
+
+  // ROOT CAUSE (T-14984):
+  // A project conversation the composer left without a directory because the
+  // agent's own device could not take it was routed to that device anyway.
+  /** @example A Codex agent's project conversation without a directory runs in the sandbox. */
+  it('runs a project conversation without a directory in the sandbox, not on its device', async () => {
+    Object.assign(heteroAgentConfig.agencyConfig, {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { type: 'codex' },
+    });
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { projectId: 'project-1' },
+      prompt: 'device is offline',
+    });
+    expect(mockSpawnHeteroSandbox).toHaveBeenCalled();
+    expect(mockDispatchAgentRun).not.toHaveBeenCalled();
   });
 
   // ROOT CAUSE:
