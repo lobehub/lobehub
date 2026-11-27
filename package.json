@@ -348,7 +348,7 @@
     "@lobehub/analytics": "^1.6.4",
     "@lobehub/charts": "^6.2.0",
     "@lobehub/desktop-ipc-typings": "workspace:*",
-    "@lobehub/editor": "7.2.1",
+    "@lobehub/editor": "7.3.2",
     "@lobehub/icons": "^6.15.2",
     "@lobehub/market-sdk": "0.46.0",
     "@lobehub/tts": "^6.1.0",
