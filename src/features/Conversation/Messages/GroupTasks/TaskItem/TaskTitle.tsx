@@ -1,12 +1,14 @@
 'use client';
 
 import { ThreadStatus } from '@lobechat/types';
-import { Block, cssVar, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
+import { cssVar, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
 import { BrainCircuit, ListChecksIcon, Wrench, XIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
+import StepStatusBox from '@/features/Conversation/components/StepStatusBox';
+import { useDensity } from '@/styles/density';
 
 import { formatDuration, formatElapsedTime, isProcessingStatus } from '../../Tasks/shared';
 
@@ -54,23 +56,7 @@ export const TaskStatusIndicator = memo<{ status?: ThreadStatus }>(({ status }) 
     return null;
   }
 
-  return (
-    <Block
-      horizontal
-      align={'center'}
-      flex={'none'}
-      gap={4}
-      height={24}
-      justify={'center'}
-      variant={'outlined'}
-      width={24}
-      style={{
-        fontSize: 12,
-      }}
-    >
-      {icon}
-    </Block>
-  );
+  return <StepStatusBox>{icon}</StepStatusBox>;
 });
 
 TaskStatusIndicator.displayName = 'TaskStatusIndicator';
@@ -152,6 +138,7 @@ export const MetricsDisplay = memo<MetricsDisplayProps>(({ metrics, status }) =>
 MetricsDisplay.displayName = 'MetricsDisplay';
 
 const TaskTitle = memo<TaskTitleProps>(({ title, status, metrics, agent }) => {
+  const { tokens } = useDensity();
   return (
     <Flexbox horizontal align="center" gap={6}>
       <TaskStatusIndicator status={status} />
@@ -164,7 +151,7 @@ const TaskTitle = memo<TaskTitleProps>(({ title, status, metrics, agent }) => {
           size={20}
         />
       )}
-      <Text ellipsis fontSize={14}>
+      <Text ellipsis fontSize={tokens.fontSize}>
         {title}
       </Text>
       {metrics && <MetricsDisplay metrics={metrics} status={status} />}

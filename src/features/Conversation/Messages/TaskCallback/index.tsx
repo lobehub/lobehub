@@ -1,5 +1,6 @@
 'use client';
 
+import type { InterfaceDensity } from '@lobechat/types';
 import { Button, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -9,21 +10,49 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
-import { densityTokens } from '@/styles/density.stylex';
+import { useDensity } from '@/styles/density';
 
 import { dataSelectors, useConversationStore } from '../../store';
+
+const CARD_PADDING_BLOCK = {
+  compact: '6px',
+  loose: '12px',
+} as const satisfies Record<InterfaceDensity, string>;
+
+const CARD_PADDING_INLINE = {
+  compact: '10px',
+  loose: '16px',
+} as const satisfies Record<InterfaceDensity, string>;
+
+const CARD_RADIUS = {
+  compact: '12px',
+  loose: '16px',
+} as const satisfies Record<InterfaceDensity, string>;
+
+const CARD_LAYOUT = {
+  compact: { gap: 4, paddingBlock: 4, titleFontSize: 13 },
+  loose: { gap: 8, paddingBlock: 8, titleFontSize: undefined },
+} as const satisfies Record<
+  InterfaceDensity,
+  { gap: number; paddingBlock: number; titleFontSize: number | undefined }
+>;
 
 const styles = stylex.create({
   card: {
     overflow: 'hidden',
-    paddingBlock: densityTokens['--lobe-density-content-gap'],
-    paddingInline: densityTokens['--lobe-density-card-padding'],
+    paddingBlock: CARD_PADDING_BLOCK.loose,
+    paddingInline: CARD_PADDING_INLINE.loose,
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
-    borderRadius: '16px',
+    borderRadius: CARD_RADIUS.loose,
     backgroundColor: cssVar.colorBgElevated,
     backgroundImage: 'none',
+  },
+  cardCompact: {
+    paddingBlock: CARD_PADDING_BLOCK.compact,
+    paddingInline: CARD_PADDING_INLINE.compact,
+    borderRadius: CARD_RADIUS.compact,
   },
   identifier: { fontFamily: cssVar.fontFamilyCode, color: cssVar.colorTextSecondary },
 });
@@ -57,6 +86,8 @@ const reasonMeta: Record<
  */
 const TaskCallbackMessage = memo<TaskCallbackMessageProps>(({ id }) => {
   const { t } = useTranslation('chat');
+  const { compact, density } = useDensity();
+  const layout = CARD_LAYOUT[density];
   // Open the task in the right-side detail portal (in-context), instead of
   // navigating away from the conversation to the full task page.
   const openTaskDetail = useChatStore((s) => s.openTaskDetail);
@@ -77,12 +108,17 @@ const TaskCallbackMessage = memo<TaskCallbackMessageProps>(({ id }) => {
   );
 
   return (
-    <Flexbox paddingBlock={8}>
-      <Flexbox className={stylex.props(styles.card).className} gap={8}>
+    <Flexbox paddingBlock={layout.paddingBlock}>
+      <Flexbox
+        className={stylex.props(styles.card, compact && styles.cardCompact).className}
+        gap={layout.gap}
+      >
         <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
           <Flexbox horizontal align={'center'} gap={8}>
             <Icon color={cssVar[color]} icon={icon} size={18} />
-            <Text strong>{t(i18nKey)}</Text>
+            <Text strong fontSize={layout.titleFontSize}>
+              {t(i18nKey)}
+            </Text>
             <span {...stylex.props(styles.identifier)}>{callback.identifier}</span>
           </Flexbox>
           {viewTaskButton}

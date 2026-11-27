@@ -1,6 +1,6 @@
 'use client';
 
-import type { CompressionGroupMetadata, UIChatMessage } from '@lobechat/types';
+import type { CompressionGroupMetadata, InterfaceDensity, UIChatMessage } from '@lobechat/types';
 import {
   ActionIcon,
   confirmModal,
@@ -22,6 +22,8 @@ import { useTranslation } from 'react-i18next';
 import StreamingMarkdown from '@/components/StreamingMarkdown';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
+import { useDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 import { shinyTextStyles } from '@/styles/loading';
 
 import { dataSelectors, useConversationStore, useConversationStoreApi } from '../../store';
@@ -37,6 +39,11 @@ import { openCompressionSummary } from './SummaryModal';
 import { useFollowCompressingRow } from './useFollowCompressingRow';
 import { useGroupPreferences } from './useGroupPreferences';
 import { useIsSlow } from './useIsSlow';
+
+const CONTAINER_MARGIN_BLOCK_END = {
+  compact: '4px',
+  loose: '8px',
+} as const satisfies Record<InterfaceDensity, string>;
 
 const styles = stylex.create({
   collapsedButton: {
@@ -61,16 +68,17 @@ const styles = stylex.create({
     gap: '6px',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    paddingBlock: '4px',
+    paddingBlock: densityTokens['--lobe-density-inline-row-padding-block'],
     paddingInline: '0',
     borderStyle: 'none',
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     color: { 'default': cssVar.colorTextDescription, ':hover': cssVar.colorTextSecondary },
     backgroundColor: 'transparent',
     backgroundImage: 'none',
   },
   statusRowButton: { cursor: 'pointer' },
-  container: { marginBlockEnd: '8px' },
+  container: { marginBlockEnd: CONTAINER_MARGIN_BLOCK_END.loose },
+  containerCompact: { marginBlockEnd: CONTAINER_MARGIN_BLOCK_END.compact },
   divider: { margin: '0' },
   messagesContainer: { paddingBlock: '8px' },
 });
@@ -82,6 +90,7 @@ export interface CompressedGroupMessageProps {
 
 const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
   const { t } = useTranslation('chat');
+  const { compact } = useDensity();
   const { activeTab, expanded, setActiveTab, toggleExpanded } = useGroupPreferences(id);
   // The chat list renders the original conversation as rows above this group,
   // so the group is just the divider at the compression point plus its summary.
@@ -171,7 +180,9 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
   // and the summary only appears when the reader opens it afterwards.
   if (isGeneratingSummary && historyInline) {
     return (
-      <Flexbox className={stylex.props(styles.container).className}>
+      <Flexbox
+        className={stylex.props(styles.container, compact && styles.containerCompact).className}
+      >
         <div {...stylex.props(styles.statusRow)}>
           <Icon icon={CompactIcon} size={16} />
           <span className={cx(shinyTextStyles.shinyText)}>
@@ -212,7 +223,9 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
   // compression point is just a status line; its summary opens in a modal.
   if (historyInline) {
     return (
-      <Flexbox className={stylex.props(styles.container).className}>
+      <Flexbox
+        className={stylex.props(styles.container, compact && styles.containerCompact).className}
+      >
         {/* The reader scrolls through the history right above; a turn count adds nothing. */}
         <button
           {...stylex.props(styles.statusRow, styles.statusRowButton)}
