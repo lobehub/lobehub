@@ -356,6 +356,8 @@ export const taskComments = pgTable(
     taskId: text('task_id')
       .references(() => tasks.id, { onDelete: 'cascade' })
       .notNull(),
+    /** Root comment ID; replies to replies are normalized before insertion. */
+    parentCommentId: text('parent_comment_id'),
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
@@ -385,6 +387,12 @@ export const taskComments = pgTable(
     ...timestamps,
   },
   (t) => [
+    foreignKey({
+      columns: [t.parentCommentId],
+      foreignColumns: [t.id],
+      name: 'task_comments_parent_comment_id_task_comments_id_fk',
+    }).onDelete('cascade'),
+    index('task_comments_parent_comment_id_idx').on(t.parentCommentId),
     index('task_comments_task_id_idx').on(t.taskId),
     index('task_comments_user_id_idx').on(t.userId),
     index('task_comments_author_user_id_idx').on(t.authorUserId),

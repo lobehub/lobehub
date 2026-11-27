@@ -4867,6 +4867,7 @@ table task_activities {
 table task_comments {
   id text [pk, not null]
   task_id text [not null]
+  parent_comment_id text
   user_id text [not null]
   workspace_id text
   author_user_id text
@@ -4881,6 +4882,8 @@ table task_comments {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
+    
+    parent_comment_id [name: 'task_comments_parent_comment_id_idx']
     task_id [name: 'task_comments_task_id_idx']
     user_id [name: 'task_comments_user_id_idx']
     author_user_id [name: 'task_comments_author_user_id_idx']
