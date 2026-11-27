@@ -6,14 +6,25 @@ type CacheTTL = Anthropic.Messages.CacheControlEphemeral['ttl'];
 
 /** Anthropic caches for 5 minutes unless a request asks for `1h`. */
 export const DEFAULT_CACHE_TTL = '5m' as const;
+export interface ResolveCacheTTLOptions {
+  /**
+   * The upstream is Anthropic's own cache (the Anthropic API, Claude on Bedrock), which keeps a
+   * `cache_control` block without a TTL for {@link DEFAULT_CACHE_TTL}. Leave it off for other
+   * Messages-compatible providers (DeepSeek, Moonshot, MiniMax, ...): they accept the same blocks
+   * but cache on their own terms (DeepSeek's disk cache lasts hours), so a TTL reported for them
+   * would make a still-warm cache look expired.
+   */
+  anthropicCache?: boolean;
+}
+
 /**
- * Resolves the cache TTL of the request actually sent to Anthropic.
+ * Resolves the cache TTL of the request actually sent upstream.
  *
- * Returns the first explicit TTL found in system or message content blocks. A
- * block that asks for caching without a TTL caches for {@link DEFAULT_CACHE_TTL}:
- * the payload builder enables caching unless the request opts out, so a request
- * that never set `enabledContextCaching` still carries `cache_control` blocks.
- * Returns `undefined` only when the request asked for no caching at all.
+ * Returns the first explicit TTL found in system or message content blocks, or
+ * {@link DEFAULT_CACHE_TTL} when the request explicitly enabled context caching. With
+ * `anthropicCache`, a block that asks for caching without a TTL also resolves to the default:
+ * the payload builder enables caching unless the request opts out, so a request that never set
+ * `enabledContextCaching` still carries `cache_control` blocks.
  */
 export const resolveCacheTTL = (
   requestPayload: ChatStreamPayload,
@@ -21,6 +32,7 @@ export const resolveCacheTTL = (
     messages: Anthropic.MessageCreateParams['messages'];
     system: Anthropic.MessageCreateParams['system'];
   },
+  { anthropicCache = false }: ResolveCacheTTLOptions = {},
 ): CacheTTL | undefined => {
   let requestsCaching = false;
 
@@ -49,7 +61,9 @@ export const resolveCacheTTL = (
     }
   }
 
-  if (requestsCaching || requestPayload.enabledContextCaching) return DEFAULT_CACHE_TTL;
+  if ((anthropicCache && requestsCaching) || requestPayload.enabledContextCaching) {
+    return DEFAULT_CACHE_TTL;
+  }
 
   return undefined;
 };

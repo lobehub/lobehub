@@ -4,6 +4,7 @@ import {
   buildDefaultAnthropicPayload,
   createAnthropicCompatibleParams,
   createAnthropicCompatibleRuntime,
+  resolveAnthropicPricingOptions,
 } from '../../core/anthropicCompatible';
 import type { ChatStreamPayload } from '../../types';
 import { normalizeClaudeThinkingHistoryMessages } from './claudeThinkingHistory';
@@ -22,6 +23,7 @@ const buildAnthropicPayload = (payload: ChatStreamPayload) => {
 
 export const params = createAnthropicCompatibleParams({
   chatCompletion: {
+    getPricingOptions: resolveAnthropicPricingOptions,
     handlePayload: buildAnthropicPayload,
   },
   debug: {

@@ -6,19 +6,30 @@ import { cacheTTLToSeconds, resolveCacheTTL } from './resolveCacheTTL';
 const request = (overrides: Partial<ChatStreamPayload> = {}) =>
   ({ messages: [], model: 'claude', temperature: 1, ...overrides }) as ChatStreamPayload;
 
-describe('resolveCacheTTL', () => {
-  it('reports the default lifetime for a cached request that never set enabledContextCaching', () => {
-    const ttl = resolveCacheTTL(request(), {
-      messages: [
-        {
-          content: [{ cache_control: { type: 'ephemeral' }, text: 'hi', type: 'text' }],
-          role: 'user',
-        },
+const cachedWithoutTTL = {
+  messages: [
+    {
+      content: [
+        { cache_control: { type: 'ephemeral' as const }, text: 'hi', type: 'text' as const },
       ],
-      system: [{ cache_control: { type: 'ephemeral' }, text: 'system', type: 'text' }],
-    });
+      role: 'user' as const,
+    },
+  ],
+  system: [
+    { cache_control: { type: 'ephemeral' as const }, text: 'system', type: 'text' as const },
+  ],
+};
+
+describe('resolveCacheTTL', () => {
+  it("reports Anthropic's default lifetime for a cached request that never set enabledContextCaching", () => {
+    const ttl = resolveCacheTTL(request(), cachedWithoutTTL, { anthropicCache: true });
 
     expect(ttl).toBe('5m');
+  });
+
+  it('does not assume Anthropic lifetimes for other Messages-compatible caches', () => {
+    // DeepSeek, Moonshot and MiniMax accept these blocks but keep their caches far longer.
+    expect(resolveCacheTTL(request(), cachedWithoutTTL)).toBeUndefined();
   });
 
   it('prefers an explicit lifetime on any block', () => {
