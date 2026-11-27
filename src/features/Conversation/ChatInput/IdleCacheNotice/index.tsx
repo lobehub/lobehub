@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Button, Flexbox, Icon, toast, Tooltip } from '@lobehub/ui';
 import { ArrowRightIcon, InfoIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -83,11 +83,12 @@ const IdleCacheNotice = memo(() => {
     track(NOTICE_EVENTS.newTopic);
     setOpening(true);
     try {
-      await continueInNewTopic({ context, editor });
+      const moved = await continueInNewTopic({ context, editor });
+      if (!moved) toast.error(t('input.idleCache.draftNotMoved'));
     } finally {
       setOpening(false);
     }
-  }, [context, editor, track]);
+  }, [context, editor, t, track]);
 
   if (!notice) return null;
 

@@ -21,6 +21,9 @@ type ComposerEditor = Pick<ChatInputEditor, 'clearContent' | 'getJSONState' | 'g
  * emptied, so the composer's own key transition restores it there and removes it from the old
  * conversation instead of saving it under both. A blank conversation that already holds a draft
  * keeps it, with the carried one appended.
+ *
+ * Returns `false` without touching anything when the draft cannot be saved (for example, storage
+ * is full): clearing the editor or switching would lose the unsent text.
  */
 export const continueInNewTopic = async ({
   context,
@@ -28,7 +31,7 @@ export const continueInNewTopic = async ({
 }: {
   context: ConversationContext;
   editor?: ComposerEditor | null;
-}) => {
+}): Promise<boolean> => {
   const fromKey = messageMapKey(context);
   const toKey = messageMapKey({ agentId: context.agentId, topicId: null });
 
@@ -36,7 +39,8 @@ export const continueInNewTopic = async ({
     const draft = editor?.getMarkdownContent().trim() ? editor.getJSONState() : undefined;
     if (draft) {
       const existing = getDraft(toKey);
-      saveDraft(toKey, existing ? appendEditorDocument(existing, draft) : draft);
+      const saved = saveDraft(toKey, existing ? appendEditorDocument(existing, draft) : draft);
+      if (saved === undefined) return false;
       editor?.clearContent();
     }
 
@@ -44,4 +48,5 @@ export const continueInNewTopic = async ({
   }
 
   await useChatStore.getState().openNewTopicOrSaveTopic();
+  return true;
 };

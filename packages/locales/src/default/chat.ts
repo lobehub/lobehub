@@ -1078,6 +1078,8 @@ export default {
     'Estimated from current context, tools, and model pricing. Actual cost may vary.',
   'input.disclaimer': 'Agents can make mistakes. Use your judgment for critical info.',
   'input.errorMsg': 'Send failed: {{errorMsg}}. Retry, or send again later.',
+  'input.idleCache.draftNotMoved':
+    "Couldn't carry your message to a new conversation. It's still here; try again.",
   'input.idleCache.info':
     'Right after a reply, the model can reuse what it just read, so continuing costs about {{usual}}. After a few minutes it has to read the whole conversation again. For a new question, a new conversation costs less, and what you typed comes along. Amounts are estimates.',
   'input.idleCache.newTopic': 'New conversation to save',

@@ -38,13 +38,30 @@ describe('continueInNewTopic', () => {
   it('carries the draft and attachments to the blank topic, then opens it', async () => {
     const editor = createEditor('next question');
 
-    await continueInNewTopic({ context, editor });
+    await expect(continueInNewTopic({ context, editor })).resolves.toBe(true);
 
     const toKey = messageMapKey({ agentId: 'agent-1', topicId: null });
     expect(getDraft(toKey)).toEqual(draftDocument);
     expect(editor.clearContent).toHaveBeenCalledOnce();
     expect(moveChatComposerAttachments).toHaveBeenCalledWith(messageMapKey(context), toKey);
     expect(openNewTopicOrSaveTopic).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the draft, attachments and topic when the draft cannot be saved', async () => {
+    const editor = createEditor('next question');
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('quota', 'QuotaExceededError');
+    });
+
+    try {
+      await expect(continueInNewTopic({ context, editor })).resolves.toBe(false);
+    } finally {
+      setItem.mockRestore();
+    }
+
+    expect(editor.clearContent).not.toHaveBeenCalled();
+    expect(moveChatComposerAttachments).not.toHaveBeenCalled();
+    expect(openNewTopicOrSaveTopic).not.toHaveBeenCalled();
   });
 
   it('opens the blank topic without saving an empty draft', async () => {
