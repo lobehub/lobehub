@@ -85,6 +85,9 @@ vi.mock('@lobechat/model-runtime', async () => {
   // implementation instead of a drifting stub.
   const { resolveEffectiveReasoningChatConfig } =
     await import('../../../../../../packages/model-runtime/src/utils/modelExtendParams');
+  // Pure too: the executor records the prompt cache lifetime with it on every call.
+  const { cacheTTLToSeconds } =
+    await import('../../../../../../packages/model-runtime/src/core/protocols/anthropicMessages/resolveCacheTTL');
   const errorCodeSpecs = {
     RemoteMediaDownloadTimeout: {
       code: 'RemoteMediaDownloadTimeout',
@@ -99,6 +102,7 @@ vi.mock('@lobechat/model-runtime', async () => {
       return {};
     }),
     resolveEffectiveReasoningChatConfig,
+    cacheTTLToSeconds,
     consumeStreamUntilDone: vi.fn().mockResolvedValue(undefined),
     // `llmErrorClassification.ts` reads these at module-load time. Keep the
     // terminal media-timeout transport contract available to the executor test below.
