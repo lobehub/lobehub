@@ -53,7 +53,11 @@ const readWhileLocked = async <T>(channelId: string, read: () => Promise<T>) => 
   }
 };
 
-describe('Channel detail under a write', () => {
+// The read only runs concurrently when a second connection can take the lock. The client-db PGlite
+// engine serializes every statement on one session, so there the read waits for the writer by
+// construction and the timeout below fails no matter what the repository does; the assertion is
+// meaningful against the node-postgres test pool (`TEST_SERVER_DB=1`) only.
+describe.skipIf(process.env.TEST_SERVER_DB !== '1')('Channel detail under a write', () => {
   it('reads the main timeline and a Thread without waiting for the Channel lock', async () => {
     const { asOwner, channel, thread } = await threadChannel();
 
