@@ -5,14 +5,14 @@ import type { Pricing } from 'model-bank';
 /**
  * The extra cost of the next reply, over what it costs with a warm cache, that is worth
  * interrupting the user about. Below it the re-read costs cents, and a notice after every idle
- * pause would teach the user to ignore it. Matches Caxri's cache notice.
+ * pause would teach the user to ignore it.
  */
 export const IDLE_CACHE_NOTICE_MIN_EXTRA_USD = 0.25;
 
 /**
  * The share of the model's context window the conversation needs before the notice shows. A
  * conversation filling a small part of the window re-reads about as much as any ordinary turn,
- * so a fresh conversation would not be meaningfully cheaper. Matches Caxri's cache notice.
+ * so a fresh conversation would not be meaningfully cheaper.
  */
 export const IDLE_CACHE_NOTICE_MIN_CONTEXT_SHARE = 0.2;
 
