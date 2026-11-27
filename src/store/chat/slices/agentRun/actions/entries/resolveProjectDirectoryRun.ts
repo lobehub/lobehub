@@ -43,11 +43,12 @@ const ownDeviceReason = (
 };
 
 /**
- * An Auto draft still staged on another device's directory (the agent's own
- * device changed since it was staged) does not follow it there: it moves to
- * the own device's directory while that device is online, or to the project
- * alone, as Auto would stage it now. Read from the replicas; a cold one leaves
- * the draft to the server check.
+ * An Auto draft whose folder the agent's own device can no longer run it in —
+ * the device changed since it was staged, or went offline — goes where Auto
+ * would stage it now: the own device's folder while that device is online,
+ * else the project alone, where the sandbox fallback or the device-only
+ * refusal applies. Read from the replicas; a cold one, or a device whose
+ * presence is not known yet, leaves the draft to the server check.
  */
 const retargetAutoDraft = (
   staged: PendingNewTopicDirectory | undefined,
@@ -55,19 +56,19 @@ const retargetAutoDraft = (
 ): PendingNewTopicDirectory | undefined => {
   if (!staged?.auto || !ownDevice || !staged.projectWorkingDirectoryId) return staged;
   const directory = findProjectDirectory(staged.projectWorkingDirectoryId);
-  if (!directory || directory.deviceId === ownDevice.deviceId) return staged;
-  // Same availability Auto stages by: a ready folder on an online device. An
-  // offline one leaves the draft on the project, where the fallback or the
-  // device-only refusal applies.
+  if (!directory) return staged;
   const device = deviceSelectors
     .deviceList(getDeviceStoreState())
     .find((item) => item.deviceId === ownDevice.deviceId);
-  const online = !!device?.online && !device.onlineUnknown;
-  const own = online
-    ? (useProjectDirectoryStore.getState().directoriesMap[directory.projectId] ?? []).find(
-        (row) => row.deviceId === ownDevice.deviceId && row.runnable,
-      )
-    : undefined;
+  const presence =
+    !device || device.onlineUnknown ? 'unknown' : device.online ? 'online' : 'offline';
+  if (directory.deviceId === ownDevice.deviceId && presence !== 'offline') return staged;
+  const own =
+    presence === 'online'
+      ? (useProjectDirectoryStore.getState().directoriesMap[directory.projectId] ?? []).find(
+          (row) => row.deviceId === ownDevice.deviceId && row.runnable,
+        )
+      : undefined;
   return own
     ? { agentId: staged.agentId, auto: true, projectWorkingDirectoryId: own.id }
     : { agentId: staged.agentId, auto: true, projectId: directory.projectId };

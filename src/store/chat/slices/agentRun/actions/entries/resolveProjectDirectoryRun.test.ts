@@ -109,6 +109,35 @@ describe('resolveProjectDirectoryRun — an agent on its own device', () => {
     expect(result.ownDeviceFallback).toBe('offline');
   });
 
+  // Review: a draft staged on the own device's folder kept it after that
+  // device went offline, so the server refused the send instead.
+  it('falls back when the own device staged by Auto went offline before the send', async () => {
+    seed([directory('dir-own', 'dev-1')]);
+    useDeviceStore.setState({
+      deviceListMap: { all: [{ deviceId: 'dev-1', online: false }] },
+    } as never);
+    const result = await run(
+      { agentId: 'agt', auto: true, projectWorkingDirectoryId: 'dir-own' },
+      claudeCode,
+    );
+
+    expect(result.agencyConfig?.executionTarget).toBe('sandbox');
+    expect(result.ownDeviceFallback).toBe('offline');
+  });
+
+  it("keeps a staged own-device folder while the device's presence is unknown", async () => {
+    seed([directory('dir-own', 'dev-1')]);
+    const result = await run(
+      { agentId: 'agt', auto: true, projectWorkingDirectoryId: 'dir-own' },
+      claudeCode,
+    );
+
+    expect(result.agencyConfig).toMatchObject({
+      boundDeviceId: 'dev-1',
+      executionTarget: 'device',
+    });
+  });
+
   it('keeps a fallen-back conversation in the sandbox on later sends', async () => {
     const result = await resolveProjectDirectoryRun({
       agencyConfig: { boundDeviceId: 'dev-1', executionTarget: 'device', ...claudeCode },
