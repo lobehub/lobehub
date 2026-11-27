@@ -179,6 +179,32 @@ describe('rule-based reply error cards', () => {
     );
   });
 
+  // A provider's content filter refused the request: the card used to read as a vague "could not
+  // reply" with a Retry that met the same filter again.
+  it('names a content-policy refusal and offers no doomed retry or resume', () => {
+    for (const type of [
+      'ProviderContentModeration',
+      'ProviderContentPolicyViolation',
+      'ContentModeration',
+      'ModelContentModerationCooldownUntil',
+    ]) {
+      expect(classifyReplyFailure(facts({ error: { message: 'blocked', type } }))).toBe(
+        'content_moderation',
+      );
+    }
+    const blocked = facts({ error: { message: 'blocked', type: 'ProviderContentModeration' } });
+    expect(ruleBasedReplyError(blocked, 'zh-CN', NOW)).toMatchObject({
+      actions: [],
+      errorType: 'ProviderContentModeration',
+      kind: 'content_moderation',
+      summary:
+        'Coder 的回复被模型的内容安全策略拦截了。调整请求内容后重新发送，或换一个 Agent 接力。',
+    });
+    expect(ruleBasedReplyError(blocked, 'en-US', NOW).summary).toBe(
+      "Coder's reply was blocked by the model's content policy. Rephrase the request and send it again, or hand it to another Agent.",
+    );
+  });
+
   it("keeps a shared Agent's owner details and device out of the visitor's card", () => {
     const card = ruleBasedReplyError(
       facts(

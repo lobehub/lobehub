@@ -26,6 +26,11 @@ export type ChannelReplyFailureKind =
   | 'access_required'
   /** The run could not be submitted at all. */
   | 'dispatch'
+  /**
+   * The model provider's content-safety filter refused the request or the answer. Sending the
+   * same request again meets the same filter, so only a changed request or another Agent helps.
+   */
+  | 'content_moderation'
   /** The device the Agent runs on was offline or could not be reached. */
   | 'device'
   /** The run ended normally but wrote no reply. */
@@ -52,6 +57,13 @@ const DEVICE_ERROR_TYPES = new Set<string>([
   ChatErrorType.ShareHeteroDeviceUnavailable,
 ]);
 
+/**
+ * Error types the runtimes report for a content-safety refusal: `ContentModeration` from the model
+ * runtime, `ProviderContentPolicyViolation` from adapters such as Gemini's `SAFETY` finish,
+ * `ProviderContentModeration[Warning]` and the model cooldowns from LobeHub's own moderation.
+ */
+const CONTENT_MODERATION_TYPE = /ContentModeration|ContentPolicy/;
+
 export const classifyReplyFailure = (facts: ChannelReplyErrorFacts): ChannelReplyFailureKind => {
   const type = facts.operation?.error?.type;
   const message = facts.operation?.error?.message;
@@ -63,6 +75,7 @@ export const classifyReplyFailure = (facts: ChannelReplyErrorFacts): ChannelRepl
   if (type === ChatErrorType.ShareSpendLimitExceeded) return 'share_spend_limit';
   if (type === ChatErrorType.ShareMessageLimitExceeded) return 'share_message_limit';
   if (type && DEVICE_ERROR_TYPES.has(type)) return 'device';
+  if (type && CONTENT_MODERATION_TYPE.test(type)) return 'content_moderation';
   if (type === HETERO_AGENT_SILENCE_TIMEOUT) return 'silence';
   const quota = classifyCliQuotaMessage(message);
   if (quota) return quota.kind === 'credit_limit' ? 'quota_credit' : 'quota_usage';
@@ -106,6 +119,8 @@ export const replyFailureActions = (
         return ['request_access'];
       }
       // Resuming or retrying runs into the same limit; only its creator can lift it.
+      // The same request meets the same content filter: change it, or hand it to another Agent.
+      case 'content_moderation':
       case 'share_message_limit':
       case 'share_spend_limit': {
         return [];
@@ -124,6 +139,8 @@ type Copy = Record<ChannelReplyFailureKind, (name: string, started: boolean) => 
 const ZH: Copy = {
   access_denied: (name) => `${name} 的主人拒绝了你的使用申请，这次没有回复。可以再次申请。`,
   access_required: (name) => `${name} 需要主人授权后才能使用。申请后，主人同意即可继续。`,
+  content_moderation: (name) =>
+    `${name} 的回复被模型的内容安全策略拦截了。调整请求内容后重新发送，或换一个 Agent 接力。`,
   device: (name, started) =>
     started
       ? `${name} 所在的设备断开了，回复没能完成。`
@@ -146,6 +163,8 @@ const EN: Copy = {
     `${name}'s owner declined your request to use it, so it did not reply. You can ask again.`,
   access_required: (name) =>
     `${name} needs its owner's permission before you can use it. Ask for access; it continues once they allow it.`,
+  content_moderation: (name) =>
+    `${name}'s reply was blocked by the model's content policy. Rephrase the request and send it again, or hand it to another Agent.`,
   device: (name, started) =>
     started
       ? `${name}'s device disconnected, so the reply could not finish.`
