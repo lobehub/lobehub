@@ -23,7 +23,7 @@ const minimaxCodingPlanChatModels: AIChatModelCard[] = [
     releasedAt: '2026-10-19',
     settings: {
       disabledParams: ['temperature'],
-      extendParams: ['gpt6ReasoningEffort'],
+      reasoningEffort: { default: 'max', levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
     },
     type: 'chat',
   },

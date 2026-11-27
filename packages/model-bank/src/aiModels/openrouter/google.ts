@@ -35,7 +35,7 @@ export const openrouterGoogleModels: AIChatModelCard[] = [
     // tool OpenRouter does not proxy, so it is left out.
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel3'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -73,7 +73,7 @@ export const openrouterGoogleModels: AIChatModelCard[] = [
     // is a Gemini API tool OpenRouter does not proxy, so it is left out.
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel5'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -103,7 +103,8 @@ export const openrouterGoogleModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-26',
     settings: {
-      extendParams: ['imageAspectRatio2', 'imageResolution2', 'thinkingLevel4'],
+      extendParams: ['imageAspectRatio2', 'imageResolution2'],
+      reasoningEffort: { default: 'minimal', levels: ['minimal', 'high'] },
     },
     type: 'chat',
   },

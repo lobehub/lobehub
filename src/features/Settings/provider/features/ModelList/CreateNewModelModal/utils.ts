@@ -1,4 +1,9 @@
 import type { AiModelType, TTSVoice } from 'model-bank';
+import {
+  type AiModelReasoningEffortSettings,
+  createReasoningEffortSettings,
+  type ReasoningEffortLevel,
+} from 'model-bank/aiModel';
 
 /**
  * Model types selectable when creating or editing a custom model.
@@ -30,3 +35,39 @@ export const buildTTSVoiceOptions = (voices: TTSVoice[] | undefined) =>
     label: voice.description ? `${voice.displayName} · ${voice.description}` : voice.displayName,
     value: voice.id,
   })) ?? [];
+
+/**
+ * Rebuilds a custom model's effort control after its level checkboxes change.
+ * Clearing every level removes the control; the chosen default is kept while
+ * it is still offered, otherwise it is cleared and resolves at runtime.
+ */
+export const updateReasoningEffortLevels = (
+  value: AiModelReasoningEffortSettings | undefined,
+  levels: ReasoningEffortLevel[],
+): AiModelReasoningEffortSettings | undefined => {
+  if (levels.length === 0) return;
+
+  const next = createReasoningEffortSettings(levels, {
+    controlsThinking: value?.controlsThinking,
+  });
+  if (value?.default && next.levels.includes(value.default)) next.default = value.default;
+  return next;
+};
+
+/** Sets or clears (`undefined`) the declared default level. */
+export const setReasoningEffortDefault = (
+  value: AiModelReasoningEffortSettings,
+  level: ReasoningEffortLevel | undefined,
+): AiModelReasoningEffortSettings => {
+  const { default: _, ...rest } = value;
+  return level ? { ...rest, default: level } : rest;
+};
+
+/** Sets whether the effort also switches thinking (`controlsThinking`). */
+export const setReasoningEffortControlsThinking = (
+  value: AiModelReasoningEffortSettings,
+  controlsThinking: boolean,
+): AiModelReasoningEffortSettings => {
+  const { controlsThinking: _, ...rest } = value;
+  return controlsThinking ? { ...rest, controlsThinking: true } : rest;
+};

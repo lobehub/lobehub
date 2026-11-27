@@ -65,7 +65,8 @@ const googleChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -109,7 +110,8 @@ const googleChatModels: AIChatModelCard[] = [
     },
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -150,7 +152,8 @@ const googleChatModels: AIChatModelCard[] = [
     },
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'minimal', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -197,7 +200,8 @@ const googleChatModels: AIChatModelCard[] = [
     // https://ai.google.dev/gemini-api/docs/latest-model
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -244,7 +248,8 @@ const googleChatModels: AIChatModelCard[] = [
     // sampling parameters are ignored. https://ai.google.dev/gemini-api/docs/whats-new-gemini-4-neon
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel5', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -293,7 +298,8 @@ const googleChatModels: AIChatModelCard[] = [
     // https://ai.google.dev/gemini-api/docs/latest-model
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -342,7 +348,8 @@ const googleChatModels: AIChatModelCard[] = [
     releasedAt: '2026-09-02',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -390,7 +397,8 @@ const googleChatModels: AIChatModelCard[] = [
     releasedAt: '2026-08-13',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -438,7 +446,8 @@ const googleChatModels: AIChatModelCard[] = [
     releasedAt: '2026-07-21',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -482,7 +491,8 @@ const googleChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-05-19',
     settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -528,7 +538,8 @@ const googleChatModels: AIChatModelCard[] = [
     releasedAt: '2026-07-21',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'minimal', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -600,7 +611,8 @@ const googleChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-05-28',
     settings: {
-      extendParams: ['imageAspectRatio2', 'imageResolution2', 'thinkingLevel4'],
+      extendParams: ['imageAspectRatio2', 'imageResolution2'],
+      reasoningEffort: { default: 'minimal', levels: ['minimal', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -633,7 +645,8 @@ const googleChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-26',
     settings: {
-      extendParams: ['imageAspectRatio2', 'imageResolution2', 'thinkingLevel4'],
+      extendParams: ['imageAspectRatio2', 'imageResolution2'],
+      reasoningEffort: { levels: ['minimal', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -761,7 +774,8 @@ const googleChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-19',
     settings: {
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -800,7 +814,8 @@ const googleChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-05-07',
     settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'minimal', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -837,7 +852,8 @@ const googleChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-04',
     settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -880,7 +896,8 @@ const googleChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-12-17',
     settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -942,7 +959,7 @@ const googleChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['thinkingLevel4'],
+      reasoningEffort: { default: 'minimal', levels: ['minimal', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -970,7 +987,7 @@ const googleChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['thinkingLevel4'],
+      reasoningEffort: { default: 'minimal', levels: ['minimal', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },

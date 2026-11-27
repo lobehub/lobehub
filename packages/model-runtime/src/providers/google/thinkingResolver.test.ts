@@ -6,9 +6,20 @@ import {
   isThinkingEnabledModel,
   resolveGoogleThinkingBudget,
   resolveGoogleThinkingConfig,
+  resolveGoogleThinkingLevel,
 } from './thinkingResolver';
 
 describe('thinkingResolver', () => {
+  describe('resolveGoogleThinkingLevel', () => {
+    it('forwards an xhigh reasoning effort as the Gemini thinking level', () => {
+      expect(resolveGoogleThinkingLevel(undefined, 'xhigh')).toBe('xhigh');
+    });
+
+    it('drops an effort Gemini does not accept', () => {
+      expect(resolveGoogleThinkingLevel(undefined, 'max')).toBeUndefined();
+    });
+  });
+
   describe('getGoogleThinkingModelCategory', () => {
     it('should return "other" for undefined model', () => {
       expect(getGoogleThinkingModelCategory(undefined)).toBe('other');

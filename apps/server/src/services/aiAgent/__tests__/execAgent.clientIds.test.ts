@@ -237,7 +237,7 @@ describe('AiAgentService.execAgent - client-minted ids', () => {
     'snapshots the model and reasoning for a precreated %s topic',
     async (kind) => {
       const hintsSpy = vi.spyOn(modelHints, 'resolveModelExtendParamsForUser').mockResolvedValue({
-        modelHasReasoningExtendParams: true,
+        modelHasReasoningControls: true,
         modelExtendParams: ['reasoningEffort'],
       });
 
@@ -265,7 +265,7 @@ describe('AiAgentService.execAgent - client-minted ids', () => {
 
   it('snapshots an explicit model override when scheduling', async () => {
     const hintsSpy = vi.spyOn(modelHints, 'resolveModelExtendParamsForUser').mockResolvedValue({
-      modelHasReasoningExtendParams: true,
+      modelHasReasoningControls: true,
       modelExtendParams: ['reasoningEffort'],
     });
     await service.scheduleAgentRun({
