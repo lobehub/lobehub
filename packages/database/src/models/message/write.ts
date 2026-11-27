@@ -408,7 +408,8 @@ export class MessageWriteMutations extends MessageScope {
 
       await bumpTopicLastMessageAt(trx, result);
 
-      return result;
+      // Keep the pre-`returning` result shape: callers read `rowCount`.
+      return { rowCount: result.length };
     });
   };
 
