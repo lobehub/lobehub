@@ -115,6 +115,9 @@ describe('buildEphemeralListingCommand', () => {
     writeFileSync(path.join(dir, 'node_modules', 'pkg', 'index.js'), '');
     mkdirSync(path.join(dir, '.creds'));
     writeFileSync(path.join(dir, '.creds', 'env'), 'TOKEN=secret');
+    const deep = path.join(dir, 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i');
+    mkdirSync(deep, { recursive: true });
+    writeFileSync(path.join(deep, 'deep.txt'), 'deep');
 
     const stdout = execFileSync('/bin/sh', ['-c', buildEphemeralListingCommand()], {
       cwd: dir,
@@ -123,12 +126,16 @@ describe('buildEphemeralListingCommand', () => {
     const listing = parseEphemeralListing(stdout);
 
     expect(listing?.root).toBe(dir);
-    expect(listing?.entries.map((entry) => entry.path).sort()).toEqual([
+    const paths = listing?.entries.map((entry) => entry.path) ?? [];
+    expect(paths.filter((p) => !p.startsWith('a')).sort()).toEqual([
       '.creds',
       'node_modules',
       'out',
       'out/report.md',
     ]);
+    // Ten levels down is still listed: nothing is cut off silently by depth.
+    expect(paths).toContain('a/b/c/d/e/f/g/h/i/deep.txt');
+    expect(listing?.truncated).toBe(false);
   });
 });
 

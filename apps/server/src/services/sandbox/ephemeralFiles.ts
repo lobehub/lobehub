@@ -34,7 +34,6 @@ export const isHeteroExecLaunch = (toolName: string, params: Record<string, unkn
 /** Entries one listing returns; a sandbox holding a cloned repository can hold many more. */
 export const EPHEMERAL_SANDBOX_MAX_ENTRIES = 5000;
 
-const LISTING_MAX_DEPTH = 8;
 const LISTING_TIMEOUT_MS = 30_000;
 
 /**
@@ -61,14 +60,16 @@ const ROOT_MARKER = '__LOBE_SANDBOX_ROOT__';
  * Prints the directory a temporary sandbox starts in — where the agent's
  * relative paths land — and everything under it, one `<type>\t<path>` line per
  * entry, relative to that directory. One line past the cap says the listing
- * stopped short.
+ * stopped short. No depth limit: a cut-off below some depth would show its
+ * last folder as empty without saying anything was left out, and the entry
+ * cap already bounds the walk.
  */
 export const buildEphemeralListingCommand = () => {
   const pruned = PRUNED_DIRECTORIES.map((name) => `-name '${name}'`).join(' -o ');
 
   return [
     `printf '${ROOT_MARKER}\\t%s\\n' "$PWD"`,
-    `find . -mindepth 1 -maxdepth ${LISTING_MAX_DEPTH} \\( ${pruned} \\) -prune -printf 'd\\t%P\\n' -o -printf '%y\\t%P\\n' 2>/dev/null | head -n ${EPHEMERAL_SANDBOX_MAX_ENTRIES + 1}`,
+    `find . -mindepth 1 \\( ${pruned} \\) -prune -printf 'd\\t%P\\n' -o -printf '%y\\t%P\\n' 2>/dev/null | head -n ${EPHEMERAL_SANDBOX_MAX_ENTRIES + 1}`,
   ].join('; ');
 };
 
