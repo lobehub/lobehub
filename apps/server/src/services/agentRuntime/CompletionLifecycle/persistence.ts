@@ -164,6 +164,7 @@ export async function persistCompletion(
     : reason === 'max_steps' ||
         reason === 'cost_limit' ||
         reason === 'tool_call_repeat_limit' ||
+        reason === 'tool_call_budget_exceeded' ||
         reason === 'waiting_for_human' ||
         reason === 'waiting_for_async_tool' ||
         reason === 'waiting_for_client'

@@ -152,6 +152,16 @@ describe('AgentRuntimeService', () => {
       ).toBe('tool_call_repeat_limit');
     });
 
+    it('should name a run the tool-call budget cut short', () => {
+      expect(
+        reasonFor({
+          status: 'done',
+          stepCount: 101,
+          toolCallBudget: { counts: {}, stoppedByBudget: true },
+        }),
+      ).toBe('tool_call_budget_exceeded');
+    });
+
     it('should let a real failure outrank the repeat-guard marker', () => {
       expect(
         reasonFor({

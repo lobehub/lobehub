@@ -456,7 +456,8 @@ export interface AgentState {
   /** @deprecated Use `world.expertise`. */
   expertise?: ExpertiseContextSnapshot;
   /**
-   * When true, the agent is in force-finish mode (maxSteps exceeded).
+   * When true, the agent is in force-finish mode (maxSteps exceeded or the
+   * lookup tool budget spent).
    * Tools are allowed to complete, but the next LLM call will have tools stripped
    * and a summary prompt injected to produce a final text response.
    */
@@ -647,6 +648,18 @@ export interface AgentState {
   stepCount: number;
 
   systemRole?: string;
+  /**
+   * Per-operation call counts for read-only lookup tools, keyed
+   * `identifier/apiName`. Unlike the repeat guard these never reset, so a model
+   * that rewords its query every turn still runs out. See `toolCallBudget.ts`.
+   */
+  toolCallBudget?: {
+    counts: Record<string, number>;
+    /** The `identifier/apiName` that spent its budget. */
+    exhaustedTool?: string;
+    /** Set once spent: nothing more is dispatched and the run ends with an answer. */
+    stoppedByBudget?: boolean;
+  };
   /**
    * Consecutive LLM turns that emitted the same normalized tool calls.
    * Only signatures present in the latest tool-calling turn are retained.

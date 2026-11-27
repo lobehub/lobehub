@@ -53,6 +53,11 @@ export type AgentOperationCompletionReason =
   | 'lease_expired'
   | 'max_steps'
   /**
+   * A read-only lookup tool spent its per-operation call budget. The run still
+   * delivers: the model answers from the results it already has.
+   */
+  | 'tool_call_budget_exceeded'
+  /**
    * The same tool call was requested over and over, or one turn requested more
    * tool calls than the burst limit; a guard cut the run short.
    */

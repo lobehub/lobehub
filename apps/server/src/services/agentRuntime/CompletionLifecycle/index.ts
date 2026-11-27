@@ -76,7 +76,8 @@ export const isSuccessLikeCompletionReason = (reason: string): boolean =>
   reason === 'done' ||
   reason === 'max_steps' ||
   reason === 'cost_limit' ||
-  reason === 'tool_call_repeat_limit';
+  reason === 'tool_call_repeat_limit' ||
+  reason === 'tool_call_budget_exceeded';
 
 /**
  * Count a shared Agent run's terminal result, once: only the write that moved the row out of an

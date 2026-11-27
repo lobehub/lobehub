@@ -19,6 +19,7 @@ import type {
 } from '../types';
 import { serializePartsForStorage } from '../utils/multimodalContent';
 import { sanitizeToolCallArguments } from '../utils/sanitizeToolCallArguments';
+import { applyToolCallBudget, toolCallBudgetStopNote } from '../utils/toolCallBudget';
 import {
   hasIgnoredToolCallBudget,
   hasRepeatedToolCall,
@@ -274,11 +275,13 @@ const buildFinalState = ({
   shouldReplayAssistantReasoning,
   state,
   stepLabel,
+  toolCallBudget,
   toolCallRepeatGuard,
   visibleOutputEndPublishedStepIndex,
   finalReasoning,
 }: Omit<FinalizeCallLlmTurnInput, 'events' | 'host' | 'recordResult'> & {
   finalReasoning?: ModelReasoning;
+  toolCallBudget?: AgentState['toolCallBudget'];
   toolCallRepeatGuard: NonNullable<AgentState['toolCallRepeatGuard']>;
   visibleOutputEndPublishedStepIndex?: number;
 }): AgentState => {
@@ -287,6 +290,10 @@ const buildFinalState = ({
   // are rehydrated into display groups before the next runtime step.
   newState.metadata = { ...newState.metadata, workAssistantMessageId: assistantMessageId };
   newState.toolCallRepeatGuard = toolCallRepeatGuard;
+  if (toolCallBudget) newState.toolCallBudget = toolCallBudget;
+  // Reuse the max-steps exit: this turn's tools still finish, then the next LLM
+  // call runs without tools and answers from the results gathered so far.
+  if (toolCallBudget?.stoppedByBudget) newState.forceFinish = true;
   newState.messages.push({
     content: output.content,
     id: assistantMessageId,
@@ -370,6 +377,30 @@ export const finalizeCallLlmTurn = async ({
       stoppedByRepeatLimit: true,
     }),
   };
+  // A cancelled or repeat-stopped turn dispatches nothing, so it spends no budget.
+  const budgetDecision =
+    output.finishReason === 'abort' || stoppedByRepeatLimit
+      ? undefined
+      : applyToolCallBudget(state.toolCallBudget, output.toolsCalling);
+  const alreadyStoppedByBudget = !!state.toolCallBudget?.stoppedByBudget;
+  const blockedToolIds = new Set(budgetDecision?.blocked.map((tool) => tool.id));
+  const budgetedOutput: LLMAttemptOutput =
+    budgetDecision && (alreadyStoppedByBudget || budgetDecision.blocked.length > 0)
+      ? {
+          ...output,
+          content:
+            alreadyStoppedByBudget && !output.content?.trim()
+              ? toolCallBudgetStopNote(budgetDecision.budget.exhaustedTool)
+              : output.content,
+          // Tools are gone on this turn, so even an unresolved call must not
+          // survive: it would leave a tool_call with no result in the history.
+          toolCalls: alreadyStoppedByBudget
+            ? []
+            : output.toolCalls.filter((toolCall) => !blockedToolIds.has(toolCall.id)),
+          toolsCalling: budgetDecision.allowed,
+          ...(budgetDecision.blocked.length > 0 && { finishReason: 'tool_call_budget_exceeded' }),
+        }
+      : output;
   const finalizedOutput = stoppedByRepeatLimit
     ? {
         ...output,
@@ -382,7 +413,7 @@ export const finalizeCallLlmTurn = async ({
         toolCalls: [],
         toolsCalling: [],
       }
-    : output;
+    : budgetedOutput;
 
   events.push({
     result: {
@@ -447,6 +478,7 @@ export const finalizeCallLlmTurn = async ({
     shouldReplayAssistantReasoning,
     state,
     stepLabel,
+    toolCallBudget: budgetDecision?.budget,
     toolCallRepeatGuard,
     visibleOutputEndPublishedStepIndex,
   });

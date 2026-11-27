@@ -7,6 +7,7 @@ export interface ExecutionSnapshot {
     | 'interrupted'
     | 'max_steps'
     | 'cost_limit'
+    | 'tool_call_budget_exceeded'
     | 'tool_call_repeat_limit'
     | 'waiting_for_human';
   error?: { type: string; message: string };

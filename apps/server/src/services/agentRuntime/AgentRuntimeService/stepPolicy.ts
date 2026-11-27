@@ -87,6 +87,7 @@ export function determineCompletionReason(state: AgentState): StepCompletionReas
   // in exactly that status, having emitted a turn with no tool calls. Reading
   // it as a plain 'done' is what made these runs uncountable.
   if (state.toolCallRepeatGuard?.stoppedByRepeatLimit) return 'tool_call_repeat_limit';
+  if (state.toolCallBudget?.stoppedByBudget) return 'tool_call_budget_exceeded';
   if (state.status === 'done') return 'done';
   if (state.maxSteps && state.stepCount >= state.maxSteps) return 'max_steps';
   if (state.costLimit && state.cost?.total >= state.costLimit.maxTotalCost) return 'cost_limit';
