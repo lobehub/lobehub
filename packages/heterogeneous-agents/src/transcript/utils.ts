@@ -1,3 +1,5 @@
+import { truncateSurrogateSafe } from '@lobechat/utils/truncateSurrogateSafe';
+
 /**
  * Shared helpers for transcript parsers.
  */
@@ -50,10 +52,16 @@ export const transcriptEndAt = (
   isConversational: (record: any) => boolean,
 ): string | undefined => records.findLast((r) => isConversational(r))?.timestamp;
 
+/**
+ * Titles are persisted (session `title`, Codex `threadName`), so a bare
+ * `String#slice` here would leave a lone high surrogate whenever the cut
+ * lands inside an astral-plane character — the same jsonb/UTF-8 hazard
+ * `truncateSurrogateSafe` exists for.
+ */
 export const truncateTitle = (text: string | undefined, max = 50): string | undefined => {
   const cleaned = text?.replaceAll(/\s+/g, ' ').trim();
   if (!cleaned) return undefined;
-  return cleaned.length > max ? cleaned.slice(0, max) : cleaned;
+  return cleaned.length > max ? truncateSurrogateSafe(cleaned, max) : cleaned;
 };
 
 /**
