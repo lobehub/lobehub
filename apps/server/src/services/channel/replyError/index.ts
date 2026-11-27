@@ -130,10 +130,13 @@ export const reportChannelReplyFailure = async (
     await notify(db, channelId);
 
     // An access card's sentence and its one action are the point; a model adds nothing to them.
+    // A content-policy refusal is stated as such: a model softens it into a vague "could not
+    // reply" (its prompt forbids naming the cause as the person's) and offers a doomed retry.
     if (
       facts.share ||
       kind === 'access_denied' ||
       kind === 'access_required' ||
+      kind === 'content_moderation' ||
       deps.createSummarizer === false ||
       !facts.operation
     )
