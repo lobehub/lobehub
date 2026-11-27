@@ -15,6 +15,7 @@ import { mcpService } from '@/server/services/mcp';
 import type { ClientMcpStep } from '@/server/services/mcp/elicitation/clientStep';
 import { expireMcpElicitation } from '@/server/services/mcp/elicitation/expire';
 import { McpElicitationService } from '@/server/services/mcp/elicitation/McpElicitationService';
+import { ensureMcpRecoveryWorker } from '@/server/services/mcp/elicitation/recoveryBoot';
 import type { McpElicitationRuntime } from '@/server/services/mcp/elicitation/resume';
 import { MessageService } from '@/server/services/message';
 import { QueueService } from '@/server/services/queue';
@@ -210,6 +211,8 @@ export class AgentRuntimeService {
         }) ?? Promise.resolve(),
     });
     this.humanIntervention = new HumanInterventionHandler(db, this.messageModel);
+    // Self-hosted servers re-arm persisted MCP work the first time the runtime is used.
+    ensureMcpRecoveryWorker();
 
     // Initialize ToolExecutionService with dependencies
     const builtinToolsExecutor = new BuiltinToolsExecutor(db, userId);
