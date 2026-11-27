@@ -12,6 +12,7 @@ import {
   formatViewerTimezone,
   groupEntriesByDay,
   MAX_PLANNED_PER_TASK,
+  MAX_PLANNED_TOTAL,
   resolveWeekStart,
   toCalendarRunOutcome,
 } from './calendarModel';
@@ -172,6 +173,28 @@ describe('expandPlannedRuns', () => {
     expect(expandPlannedRuns(daily, NOVEMBER_UTC, new Date('2026-10-01T00:00:00Z')).truncated).toBe(
       false,
     );
+  });
+
+  it('does not call a batch that exactly fills the grid truncated', () => {
+    // Hourly from Dec 31 00:00 to Feb 11 00:00 UTC (42 days): exactly the per-task cap.
+    const grid = { from: new Date('2026-12-31T00:00:00Z'), to: new Date('2027-02-11T00:00:00Z') };
+    const hourly = task({ automationMode: 'schedule', schedulePattern: '0 * * * *' });
+    const planned = expandPlannedRuns(hourly, grid, new Date('2026-12-01T00:00:00Z'));
+    expect(planned.runs).toHaveLength(MAX_PLANNED_PER_TASK);
+    expect(planned.truncated).toBe(false);
+  });
+
+  it('bounds planned entries across the whole calendar and says so', () => {
+    const minutely = Array.from({ length: 5 }, (_, index) =>
+      task({ automationMode: 'schedule', id: `task-${index}`, schedulePattern: '* * * * *' }),
+    );
+    const { entries, truncated } = collectScheduledEntries(
+      minutely,
+      NOVEMBER_UTC,
+      new Date('2026-10-01T00:00:00Z'),
+    );
+    expect(entries).toHaveLength(MAX_PLANNED_TOTAL);
+    expect(truncated).toBe(true);
   });
 
   it('plans nothing for an invalid pattern', () => {

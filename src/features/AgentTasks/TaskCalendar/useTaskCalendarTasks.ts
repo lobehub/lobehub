@@ -52,7 +52,9 @@ export const buildTaskCalendarParams = (
     filter: normalizeTaskListFilter(filter),
     limit: TASK_CALENDAR_PAGE_SIZE,
     offset: 0,
-    orderBy: 'updatedAt' as const,
+    // Creation time never changes, so a row cannot move past the cursor while
+    // the pages are walked (a run finishing bumps `updatedAt`).
+    orderBy: 'createdAt' as const,
   };
 
   if (collection === 'scheduled') {
@@ -114,7 +116,7 @@ export const fetchTaskCalendar = async (
     }
     page = await fetchPage({
       ...params,
-      after: { at: last.updatedAt, seq: last.seq },
+      after: { at: last.createdAt, seq: last.seq },
       offset: undefined,
     });
   }

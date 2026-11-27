@@ -94,6 +94,12 @@ export const dayKey = (date: Date | Dayjs): string => dayjs(date).format('YYYY-M
  */
 export const MAX_PLANNED_PER_TASK = 24 * 42;
 
+/**
+ * Upper bound of planned occurrences across the whole calendar, so a scope
+ * full of dense schedules stays a bounded amount of work per clock tick.
+ */
+export const MAX_PLANNED_TOTAL = 3000;
+
 const toDate = (value: Date | string | null | undefined): Date | null => {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
@@ -121,26 +127,29 @@ export const expandPlannedRuns = (
   task: TaskListItem,
   range: CalendarRange,
   now: Date,
+  /** Occurrences this task may still add; defaults to the per-task cap. */
+  budget: number = MAX_PLANNED_PER_TASK,
 ): PlannedRuns => {
+  const cap = Math.min(budget, MAX_PLANNED_PER_TASK);
   const state = resolveScheduleState(task, now);
   if (HELD_HEALTH.has(state.health)) return NO_PLANNED_RUNS;
   const start = Math.max(now.getTime(), range.from.getTime());
   if (start >= range.to.getTime()) return NO_PLANNED_RUNS;
+  // The calendar-wide budget is spent: whatever this task would plan is cut.
+  if (cap <= 0) return { runs: [], truncated: !!state.nextRunAt && state.nextRunAt < range.to };
 
   if (task.automationMode === 'schedule' && task.schedulePattern) {
     const result = validateCronPattern(task.schedulePattern, task.scheduleTimezone ?? null, {
-      count: MAX_PLANNED_PER_TASK,
+      // One past the cap: an extra occurrence still inside the grid is what
+      // proves the cap cut it, not merely a full batch.
+      count: cap + 1,
       // cron-parser steps strictly after `from`; back off a millisecond so a
       // slot exactly at the grid start is kept.
       from: new Date(start - 1),
     });
     if (!result.valid) return NO_PLANNED_RUNS;
-    const last = result.nextRuns.at(-1);
-    return {
-      runs: result.nextRuns.filter((at) => at.getTime() > now.getTime() && at < range.to),
-      // A full batch that still ends inside the grid left its tail unexpanded.
-      truncated: result.nextRuns.length >= MAX_PLANNED_PER_TASK && !!last && last < range.to,
-    };
+    const inGrid = result.nextRuns.filter((at) => at.getTime() > now.getTime() && at < range.to);
+    return { runs: inGrid.slice(0, cap), truncated: inGrid.length > cap };
   }
 
   // A heartbeat re-arms an interval after each run finishes, so only its
@@ -166,14 +175,16 @@ export const collectScheduledEntries = (
 ): { entries: TaskCalendarEntry[]; truncated: boolean } => {
   const entries: TaskCalendarEntry[] = [];
   let truncated = false;
+  let plannedCount = 0;
   for (const task of tasks) {
     for (const run of task.rangeRuns ?? []) {
       const at = toDate(run.createdAt);
       if (!at || at < range.from || at >= range.to) continue;
       entries.push({ at, kind: 'run', outcome: toCalendarRunOutcome(run.status), run, task });
     }
-    const planned = expandPlannedRuns(task, range, now);
+    const planned = expandPlannedRuns(task, range, now, MAX_PLANNED_TOTAL - plannedCount);
     if (planned.truncated) truncated = true;
+    plannedCount += planned.runs.length;
     for (const at of planned.runs) entries.push({ at, kind: 'planned', task });
   }
   return { entries, truncated };

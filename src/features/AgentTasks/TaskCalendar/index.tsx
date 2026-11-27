@@ -28,6 +28,9 @@ import { useTaskCalendarTasks } from './useTaskCalendarTasks';
 /** How often the calendar's clock advances: today's highlight and which runs are still ahead. */
 const CLOCK_TICK_MS = 60_000;
 
+/** Entries the "+N" popover lists before naming how many more there are. */
+const POPOVER_MAX_ENTRIES = 100;
+
 /** Entries a day cell shows before folding the rest behind "+N". */
 const VISIBLE_ENTRIES_PER_DAY = 3;
 
@@ -114,6 +117,8 @@ interface DayCellProps {
 const DayCell = memo<DayCellProps>(({ day, entries, inMonth, isToday, routeScope }) => {
   const { t, i18n } = useTranslation('chat');
   const locale = normalizeDayjsLocale(i18n.language);
+  // The folded cards are only built while the popover is open.
+  const [moreOpen, setMoreOpen] = useState(false);
   const visible = entries.slice(0, VISIBLE_ENTRIES_PER_DAY);
   const hidden = entries.length - visible.length;
   const renderCard = (entry: TaskCalendarEntry) => (
@@ -135,16 +140,27 @@ const DayCell = memo<DayCellProps>(({ day, entries, inMonth, isToday, routeScope
       {hidden > 0 && (
         <Popover
           arrow={false}
+          open={moreOpen}
           placement={'bottom'}
           trigger={['click']}
           content={
-            <Flexbox gap={4} style={{ maxHeight: 360, overflowY: 'auto' }} width={240}>
-              <Text fontSize={12} type={'secondary'} weight={500}>
-                {day.locale(locale).format(t('taskList.calendar.dayFormat'))}
-              </Text>
-              {entries.map(renderCard)}
-            </Flexbox>
+            moreOpen ? (
+              <Flexbox gap={4} style={{ maxHeight: 360, overflowY: 'auto' }} width={240}>
+                <Text fontSize={12} type={'secondary'} weight={500}>
+                  {day.locale(locale).format(t('taskList.calendar.dayFormat'))}
+                </Text>
+                {entries.slice(0, POPOVER_MAX_ENTRIES).map(renderCard)}
+                {entries.length > POPOVER_MAX_ENTRIES && (
+                  <Text fontSize={12} type={'secondary'}>
+                    {t('taskList.calendar.more', {
+                      count: entries.length - POPOVER_MAX_ENTRIES,
+                    })}
+                  </Text>
+                )}
+              </Flexbox>
+            ) : null
           }
+          onOpenChange={setMoreOpen}
         >
           <button type={'button'} {...stylex.props(styles.more)}>
             {t('taskList.calendar.more', { count: hidden })}

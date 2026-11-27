@@ -11,6 +11,7 @@ import {
   clampCollectionPage,
   collectionGroupsByProject,
   getMyTaskViewOptions,
+  getOfferedTaskViewModes,
   getScheduledTaskViewOptions,
   getTaskCreateActionBehavior,
   getTaskPageHeaderVisibility,
@@ -207,10 +208,27 @@ describe('AgentTasksPage', () => {
       expect(resolveTaskCollectionView('scheduled', 'list')).toBe('list');
     });
 
+    it('falls back to the list where the calendar is not offered (a narrow screen)', () => {
+      expect(resolveTaskCollectionView('tasks', 'calendar', false)).toBe('list');
+      expect(resolveTaskCollectionView('scheduled', 'calendar', false)).toBe('list');
+    });
+
     it('renders the calendar in every collection, the scheduled one included', () => {
       expect(resolveTaskCollectionView('tasks', 'calendar')).toBe('calendar');
       expect(resolveTaskCollectionView('mine', 'calendar')).toBe('calendar');
       expect(resolveTaskCollectionView('scheduled', 'calendar')).toBe('calendar');
+    });
+  });
+
+  describe('getOfferedTaskViewModes', () => {
+    it('offers the calendar beside the list (and the board outside the scheduled tab)', () => {
+      expect(getOfferedTaskViewModes('tasks', false)).toEqual(['list', 'kanban', 'calendar']);
+      expect(getOfferedTaskViewModes('scheduled', false)).toEqual(['list', 'calendar']);
+    });
+
+    it('offers no calendar on a narrow screen', () => {
+      expect(getOfferedTaskViewModes('tasks', true)).toEqual(['list', 'kanban']);
+      expect(getOfferedTaskViewModes('scheduled', true)).toEqual(['list']);
     });
   });
 

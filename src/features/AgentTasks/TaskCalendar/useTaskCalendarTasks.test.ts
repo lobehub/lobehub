@@ -23,7 +23,7 @@ describe('buildTaskCalendarParams', () => {
       filter,
       limit: TASK_CALENDAR_PAGE_SIZE,
       offset: 0,
-      orderBy: 'updatedAt',
+      orderBy: 'createdAt',
       projectId: undefined,
       runsBetween: range,
     });
@@ -56,7 +56,7 @@ describe('fetchTaskCalendar', () => {
     Array.from({ length: count }, (_, index) => ({
       id: `task-${start + index}`,
       seq: start + index,
-      updatedAt: new Date(Date.UTC(2026, 10, 1) - (start + index) * 1000),
+      createdAt: new Date(Date.UTC(2026, 10, 1) - (start + index) * 1000),
     }));
   const params = buildTaskCalendarParams({ collection: 'scheduled', range }, undefined);
 
@@ -72,7 +72,7 @@ describe('fetchTaskCalendar', () => {
     expect(result.truncated).toBe(false);
     const last = rows(0, TASK_CALENDAR_PAGE_SIZE).at(-1)!;
     expect(fetchPage.mock.calls[1][0]).toMatchObject({
-      after: { at: last.updatedAt, seq: last.seq },
+      after: { at: last.createdAt, seq: last.seq },
       offset: undefined,
     });
   });

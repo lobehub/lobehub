@@ -71,7 +71,7 @@ import {
 import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
 import TaskList from './TaskList';
 import TaskListVisibilityFilter from './TaskListVisibilityFilter';
-import TasksGroupConfig from './TasksGroupConfig';
+import TasksGroupConfig, { ALL_TASK_VIEW_MODES } from './TasksGroupConfig';
 import { taskListCollapseScopeKey } from './useTaskListGroupCollapse';
 
 interface TaskCreateActionBehaviorParams {
@@ -226,6 +226,18 @@ export const PAGINATED_COLLECTION_PINNED_OPTIONS = ['ordering', 'showSubTasks'] 
 export const SCHEDULED_TASK_VIEW_MODES = ['list', 'calendar'] as const satisfies TaskViewMode[];
 
 /**
+ * The views a collection offers on this screen. A month grid's seven columns
+ * do not fit a phone, so a narrow screen is offered no calendar.
+ */
+export const getOfferedTaskViewModes = (
+  collection: TaskCollection,
+  isMobile: boolean,
+): readonly TaskViewMode[] => {
+  const modes = collection === 'scheduled' ? SCHEDULED_TASK_VIEW_MODES : ALL_TASK_VIEW_MODES;
+  return isMobile ? modes.filter((mode) => mode !== 'calendar') : modes;
+};
+
+/**
  * Which surface a collection renders in the active view mode. Single-sourced
  * because every collection that is offered the view switch has to answer it:
  * "My tasks" rendered its list unconditionally while still showing the switch,
@@ -236,8 +248,10 @@ export const SCHEDULED_TASK_VIEW_MODES = ['list', 'calendar'] as const satisfies
 export const resolveTaskCollectionView = (
   collection: TaskCollection,
   viewMode: TaskViewMode,
+  /** Off on a narrow screen, where a stored calendar falls back to the list. */
+  calendarAvailable = true,
 ): 'board' | 'calendar' | 'list' => {
-  if (viewMode === 'calendar') return 'calendar';
+  if (viewMode === 'calendar') return calendarAvailable ? 'calendar' : 'list';
   return collection !== 'scheduled' && viewMode === 'kanban' ? 'board' : 'list';
 };
 
@@ -268,7 +282,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   // "My tasks" honours the list/board switch like the ordinary tab does; the
   // board fetches its own server groups, so the paginated list fetch below is
   // gated off while it is up.
-  const collectionView = resolveTaskCollectionView(collection, viewMode);
+  const collectionView = resolveTaskCollectionView(collection, viewMode, !isMobile);
   const isBoardView = collectionView === 'board';
   const isCalendarView = collectionView === 'calendar';
   const isMineBoard = isMineCollection && isBoardView;
@@ -651,7 +665,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
                   options={viewOptions}
                   pinnedOptions={isMineCollection ? PAGINATED_COLLECTION_PINNED_OPTIONS : undefined}
                   setOptions={setViewOptions}
-                  viewModes={isScheduledCollection ? SCHEDULED_TASK_VIEW_MODES : undefined}
+                  viewModes={getOfferedTaskViewModes(collection, isMobile)}
                 />
               )}
               {headerVisibility.showTaskAgentPanelToggle && (
