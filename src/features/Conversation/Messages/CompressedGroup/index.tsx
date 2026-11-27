@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import StreamingMarkdown from '@/components/StreamingMarkdown';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
+import { useDensity } from '@/styles/density';
 import { shinyTextStyles } from '@/styles/loading';
 
 import { dataSelectors, useConversationStore, useConversationStoreApi } from '../../store';
@@ -69,8 +70,10 @@ const styles = stylex.create({
     backgroundColor: 'transparent',
     backgroundImage: 'none',
   },
+  statusRowCompact: { paddingBlock: '2px', fontSize: '13px' },
   statusRowButton: { cursor: 'pointer' },
   container: { marginBlockEnd: '8px' },
+  containerCompact: { marginBlockEnd: '4px' },
   divider: { margin: '0' },
   messagesContainer: { paddingBlock: '8px' },
 });
@@ -82,6 +85,7 @@ export interface CompressedGroupMessageProps {
 
 const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
   const { t } = useTranslation('chat');
+  const { compact } = useDensity();
   const { activeTab, expanded, setActiveTab, toggleExpanded } = useGroupPreferences(id);
   // The chat list renders the original conversation as rows above this group,
   // so the group is just the divider at the compression point plus its summary.
@@ -171,8 +175,10 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
   // and the summary only appears when the reader opens it afterwards.
   if (isGeneratingSummary && historyInline) {
     return (
-      <Flexbox className={stylex.props(styles.container).className}>
-        <div {...stylex.props(styles.statusRow)}>
+      <Flexbox
+        className={stylex.props(styles.container, compact && styles.containerCompact).className}
+      >
+        <div {...stylex.props(styles.statusRow, compact && styles.statusRowCompact)}>
           <Icon icon={CompactIcon} size={16} />
           <span className={cx(shinyTextStyles.shinyText)}>
             {t('compression.compacting')}
@@ -212,10 +218,16 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
   // compression point is just a status line; its summary opens in a modal.
   if (historyInline) {
     return (
-      <Flexbox className={stylex.props(styles.container).className}>
+      <Flexbox
+        className={stylex.props(styles.container, compact && styles.containerCompact).className}
+      >
         {/* The reader scrolls through the history right above; a turn count adds nothing. */}
         <button
-          {...stylex.props(styles.statusRow, styles.statusRowButton)}
+          {...stylex.props(
+            styles.statusRow,
+            compact && styles.statusRowCompact,
+            styles.statusRowButton,
+          )}
           aria-haspopup={'dialog'}
           type={'button'}
           onClick={() =>

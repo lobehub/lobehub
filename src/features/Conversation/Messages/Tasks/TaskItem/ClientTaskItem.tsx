@@ -6,6 +6,7 @@ import { memo, useMemo, useState } from 'react';
 import { useChatStore } from '@/store/chat';
 import { displayMessageSelectors, operationSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { useDensity } from '@/styles/density';
 import { type UIChatMessage } from '@/types/index';
 import { ThreadStatus } from '@/types/index';
 
@@ -20,6 +21,7 @@ interface ClientTaskItemProps {
 const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
   const { id, agentId: itemAgentId, groupId: itemGroupId, metadata, taskDetail } = item;
   const [expanded, setExpanded] = useState(false);
+  const { compact } = useDensity();
 
   const title = taskDetail?.title || metadata?.taskTitle;
   const instruction = metadata?.instruction;
@@ -133,7 +135,7 @@ const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
     <Accordion
       keepMounted
       indicatorPlacement="inline"
-      styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+      styles={{ trigger: { paddingBlock: compact ? 2 : 4, paddingInline: 4 } }}
       value={expanded ? [id] : []}
       items={[
         {

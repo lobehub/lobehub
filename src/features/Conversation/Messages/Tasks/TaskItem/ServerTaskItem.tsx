@@ -3,6 +3,7 @@
 import { Accordion, Block } from '@lobehub/ui';
 import { memo, useMemo, useState } from 'react';
 
+import { useDensity } from '@/styles/density';
 import { type UIChatMessage } from '@/types/index';
 import { ThreadStatus } from '@/types/index';
 
@@ -17,6 +18,7 @@ interface ServerTaskItemProps {
 const ServerTaskItem = memo<ServerTaskItemProps>(({ item }) => {
   const { id, metadata, taskDetail, tasks } = item;
   const [expanded, setExpanded] = useState(false);
+  const { compact } = useDensity();
 
   const title = taskDetail?.title || metadata?.taskTitle;
   const status = taskDetail?.status;
@@ -48,7 +50,7 @@ const ServerTaskItem = memo<ServerTaskItemProps>(({ item }) => {
     <Accordion
       keepMounted
       indicatorPlacement="inline"
-      styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+      styles={{ trigger: { paddingBlock: compact ? 2 : 4, paddingInline: 4 } }}
       value={expanded ? [id] : []}
       items={[
         {

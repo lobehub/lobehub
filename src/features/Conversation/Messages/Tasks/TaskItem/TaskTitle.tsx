@@ -1,10 +1,12 @@
 'use client';
 
-import { Block, cssVar, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
+import { cssVar, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
 import { BrainCircuit, ListChecksIcon, Wrench, XIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import StepStatusBox from '@/features/Conversation/components/StepStatusBox';
+import { useDensity } from '@/styles/density';
 import { ThreadStatus } from '@/types/index';
 
 import { formatDuration, formatElapsedTime, isProcessingStatus } from '../shared';
@@ -47,23 +49,7 @@ const TaskStatusIndicator = memo<{ status?: ThreadStatus }>(({ status }) => {
     return null;
   }
 
-  return (
-    <Block
-      horizontal
-      align={'center'}
-      flex={'none'}
-      gap={4}
-      height={24}
-      justify={'center'}
-      variant={'outlined'}
-      width={24}
-      style={{
-        fontSize: 12,
-      }}
-    >
-      {icon}
-    </Block>
-  );
+  return <StepStatusBox>{icon}</StepStatusBox>;
 });
 
 TaskStatusIndicator.displayName = 'TaskStatusIndicator';
@@ -145,10 +131,11 @@ const MetricsDisplay = memo<MetricsDisplayProps>(({ metrics, status }) => {
 MetricsDisplay.displayName = 'MetricsDisplay';
 
 const TaskTitle = memo<TaskTitleProps>(({ title, status, metrics }) => {
+  const { compact } = useDensity();
   return (
     <Flexbox horizontal align="center" gap={6}>
       <TaskStatusIndicator status={status} />
-      <Text ellipsis fontSize={14}>
+      <Text ellipsis fontSize={compact ? 13 : 14}>
         {title}
       </Text>
       {metrics && <MetricsDisplay metrics={metrics} status={status} />}

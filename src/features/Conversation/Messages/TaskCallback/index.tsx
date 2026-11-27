@@ -9,6 +9,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
+import { useDensity } from '@/styles/density';
 import { densityTokens } from '@/styles/density.stylex';
 
 import { dataSelectors, useConversationStore } from '../../store';
@@ -24,6 +25,11 @@ const styles = stylex.create({
     borderRadius: '16px',
     backgroundColor: cssVar.colorBgElevated,
     backgroundImage: 'none',
+  },
+  cardCompact: {
+    paddingBlock: '6px',
+    paddingInline: '10px',
+    borderRadius: '12px',
   },
   identifier: { fontFamily: cssVar.fontFamilyCode, color: cssVar.colorTextSecondary },
 });
@@ -57,6 +63,7 @@ const reasonMeta: Record<
  */
 const TaskCallbackMessage = memo<TaskCallbackMessageProps>(({ id }) => {
   const { t } = useTranslation('chat');
+  const { compact } = useDensity();
   // Open the task in the right-side detail portal (in-context), instead of
   // navigating away from the conversation to the full task page.
   const openTaskDetail = useChatStore((s) => s.openTaskDetail);
@@ -77,12 +84,17 @@ const TaskCallbackMessage = memo<TaskCallbackMessageProps>(({ id }) => {
   );
 
   return (
-    <Flexbox paddingBlock={8}>
-      <Flexbox className={stylex.props(styles.card).className} gap={8}>
+    <Flexbox paddingBlock={compact ? 4 : 8}>
+      <Flexbox
+        className={stylex.props(styles.card, compact && styles.cardCompact).className}
+        gap={compact ? 4 : 8}
+      >
         <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
           <Flexbox horizontal align={'center'} gap={8}>
             <Icon color={cssVar[color]} icon={icon} size={18} />
-            <Text strong>{t(i18nKey)}</Text>
+            <Text strong fontSize={compact ? 13 : undefined}>
+              {t(i18nKey)}
+            </Text>
             <span {...stylex.props(styles.identifier)}>{callback.identifier}</span>
           </Flexbox>
           {viewTaskButton}

@@ -24,6 +24,7 @@ import { type KeyboardEvent, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
+import { useDensity } from '@/styles/density';
 import { densityTokens } from '@/styles/density.stylex';
 
 import { summarizeEditedFilesTotals } from './deriveEditedFiles';
@@ -31,6 +32,7 @@ import { useOpenEditedFile } from './useOpenEditedFile';
 
 export const SINGLE_EDITED_FILE_ICON_SIZE = 40;
 export const AGGREGATE_EDITED_FILE_ICON_SIZE = 40;
+export const COMPACT_EDITED_FILE_ICON_SIZE = 32;
 
 /** Files listed before the "show N more" row, matching Codex's file toolbar. */
 export const INITIAL_VISIBLE_EDITED_FILES = 3;
@@ -54,9 +56,15 @@ const styles = stylex.create({
     backgroundColor: cssVar.colorBgElevated,
     backgroundImage: 'none',
   },
+  cardCompact: {
+    borderRadius: '8px',
+  },
   header: {
     paddingBlock: '8px',
     paddingInline: densityTokens['--lobe-density-content-gap'],
+  },
+  headerCompact: {
+    paddingBlock: '6px',
   },
   headerIcon: {
     flexShrink: 0,
@@ -66,6 +74,10 @@ const styles = stylex.create({
     color: cssVar.colorTextSecondary,
     backgroundColor: cssVar.colorFillTertiary,
     backgroundImage: 'none',
+  },
+  headerIconCompact: {
+    width: `${COMPACT_EDITED_FILE_ICON_SIZE}px`,
+    height: `${COMPACT_EDITED_FILE_ICON_SIZE}px`,
   },
   singleHeader: {
     position: 'relative',
@@ -158,6 +170,9 @@ const styles = stylex.create({
     paddingBlock: '6px',
     paddingInline: densityTokens['--lobe-density-content-gap'],
   },
+  rowCompact: {
+    paddingBlock: '2px',
+  },
   rowMain: {
     minHeight: '24px',
   },
@@ -185,6 +200,7 @@ const marker = stylex.defaultMarker();
 
 const EditedFileRow = memo<{ entry: EditedFileEntry; onOpen?: () => void }>(({ entry, onOpen }) => {
   const { t } = useTranslation('chat');
+  const { compact } = useDensity();
   const [expanded, setExpanded] = useState(false);
   const hasDiff = entry.diffTexts.length > 0;
   const fileName = getFileName(entry.path);
@@ -197,7 +213,14 @@ const EditedFileRow = memo<{ entry: EditedFileEntry; onOpen?: () => void }>(({ e
 
   return (
     <Flexbox
-      className={stylex.props(styles.row, clickable && styles.rowClickable, marker).className}
+      className={
+        stylex.props(
+          styles.row,
+          compact && styles.rowCompact,
+          clickable && styles.rowClickable,
+          marker,
+        ).className
+      }
     >
       <Flexbox
         horizontal
@@ -285,6 +308,7 @@ export const getEditedFileIconName = (filePath: string) => getFileName(filePath)
 const SingleEditedFileCard = memo<{ entry: EditedFileEntry; onOpen?: () => void }>(
   ({ entry, onOpen }) => {
     const { t } = useTranslation('chat');
+    const { compact } = useDensity();
     const [showDiff, setShowDiff] = useState(false);
     const hasDiff = entry.diffTexts.length > 0;
     const fileName = getFileName(entry.path);
@@ -296,7 +320,7 @@ const SingleEditedFileCard = memo<{ entry: EditedFileEntry; onOpen?: () => void 
     const handleClick = onOpen ?? (hasDiff ? () => setShowDiff((prev) => !prev) : undefined);
 
     return (
-      <Flexbox className={stylex.props(styles.card).className}>
+      <Flexbox className={stylex.props(styles.card, compact && styles.cardCompact).className}>
         <Flexbox
           horizontal
           align={'center'}
@@ -305,15 +329,19 @@ const SingleEditedFileCard = memo<{ entry: EditedFileEntry; onOpen?: () => void 
           role={handleClick ? 'button' : undefined}
           tabIndex={handleClick ? 0 : undefined}
           className={
-            stylex.props(styles.singleHeader, handleClick && styles.singleHeaderClickable, marker)
-              .className
+            stylex.props(
+              styles.singleHeader,
+              compact && styles.headerCompact,
+              handleClick && styles.singleHeaderClickable,
+              marker,
+            ).className
           }
           onClick={handleClick}
           onKeyDown={handleClick ? toggleOnKey(handleClick) : undefined}
         >
           <FileIcon
             fileName={getEditedFileIconName(entry.path)}
-            size={SINGLE_EDITED_FILE_ICON_SIZE}
+            size={compact ? COMPACT_EDITED_FILE_ICON_SIZE : SINGLE_EDITED_FILE_ICON_SIZE}
           />
           <Flexbox flex={1} gap={2}>
             <Text ellipsis className={stylex.props(styles.singleTitle).className}>
@@ -385,6 +413,7 @@ SingleEditedFileCard.displayName = 'SingleEditedFileCard';
  */
 const EditedFilesCard = memo<EditedFilesCardProps>(({ entries }) => {
   const { t } = useTranslation('chat');
+  const { compact } = useDensity();
   const [showAll, setShowAll] = useState(false);
   const getOpenAction = useOpenEditedFile();
 
@@ -400,15 +429,17 @@ const EditedFilesCard = memo<EditedFilesCardProps>(({ entries }) => {
   const toggleShowAll = () => setShowAll((prev) => !prev);
 
   return (
-    <Flexbox className={stylex.props(styles.card).className}>
+    <Flexbox className={stylex.props(styles.card, compact && styles.cardCompact).className}>
       <Flexbox
         horizontal
         align={'center'}
-        className={stylex.props(styles.header).className}
+        className={stylex.props(styles.header, compact && styles.headerCompact).className}
         gap={10}
       >
-        <Center className={stylex.props(styles.headerIcon).className}>
-          <FilePenLineIcon size={20} />
+        <Center
+          className={stylex.props(styles.headerIcon, compact && styles.headerIconCompact).className}
+        >
+          <FilePenLineIcon size={compact ? 16 : 20} />
         </Center>
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
           <Text ellipsis className={stylex.props(styles.title).className}>
