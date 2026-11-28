@@ -5,6 +5,7 @@ import {
   type TaskCompletedWindow,
 } from '@lobechat/builtin-tool-task';
 import {
+  TASK_CALENDAR_MAX_RANGE_DAYS,
   TASK_LIST_FILTER_CONTENT_MAX_LENGTH,
   TASK_LIST_FILTER_DATE_OPERATORS,
   TASK_LIST_FILTER_DATE_WINDOWS,
@@ -26,6 +27,22 @@ const filterDate = z.object({
 });
 
 const filterId = z.string().min(1).max(255);
+
+const HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * Longest elapsed span of a calendar window. The grid is bounded in local days,
+ * and a grid that crosses a daylight-saving rollback lasts one hour longer than
+ * that many 24-hour days, so the bound allows that hour.
+ */
+const CALENDAR_WINDOW_MAX_MS = (TASK_CALENDAR_MAX_RANGE_DAYS * 24 + 1) * HOUR_MS;
+
+/** A forward `[from, to)` window no longer than the Tasks calendar's month grid. */
+const calendarWindow = z
+  .object({ from: z.coerce.date(), to: z.coerce.date() })
+  .refine(({ from, to }) => to > from && to.getTime() - from.getTime() <= CALENDAR_WINDOW_MAX_MS, {
+    message: `the window must run forward and span at most ${TASK_CALENDAR_MAX_RANGE_DAYS} days`,
+  });
 
 /**
  * The Tasks page filter (`TaskListFilter` in `@lobechat/types`). Ids may hold
@@ -57,6 +74,8 @@ export const listSchema = z.object({
   // misconfigured one cannot), false → its exact complement. Omitted leaves the
   // set unnarrowed.
   automated: z.boolean().optional(),
+  // Only tasks completed in `[from, to)`: the Tasks calendar's month grid.
+  completedBetween: calendarWindow.optional(),
   // Keep completed and canceled tasks only when closed within this look-back
   // window. Relative, so a client's query stays the same as time passes.
   completedWithin: z.enum(TASK_COMPLETED_WINDOWS).optional(),
@@ -78,6 +97,9 @@ export const listSchema = z.object({
   // urgent brief holds its automation back (`awaitingHuman`). Opt-in: only the
   // scheduled tasks table reads them, and they cost two extra queries.
   recentRuns: z.number().int().min(1).max(10).optional(),
+  // Attach each row's runs started in `[from, to)` (`rangeRuns`), for the Tasks
+  // calendar. Bounded to one month grid so a page cannot ask for its history.
+  runsBetween: calendarWindow.optional(),
   // "My tasks" narrowing: 'assigned' → tasks whose member assignee is the
   // caller, 'created' → tasks the caller created. Always resolved against
   // `ctx.userId` so the endpoint never filters by an arbitrary member.

@@ -45,6 +45,7 @@ import {
 } from '../shared/taskCollection';
 import { taskDetailPath } from '../shared/taskDetailPath';
 import { TaskListOriginContext } from '../shared/taskListOrigin';
+import TaskCalendar from '../TaskCalendar';
 import CreateTaskInlineEntry from './CreateTaskInlineEntry';
 import EmptyState from './EmptyState';
 import {
@@ -70,7 +71,7 @@ import {
 import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
 import TaskList from './TaskList';
 import TaskListVisibilityFilter from './TaskListVisibilityFilter';
-import TasksGroupConfig from './TasksGroupConfig';
+import TasksGroupConfig, { ALL_TASK_VIEW_MODES } from './TasksGroupConfig';
 import { taskListCollapseScopeKey } from './useTaskListGroupCollapse';
 
 interface TaskCreateActionBehaviorParams {
@@ -221,18 +222,38 @@ export const getMyTaskViewOptions = (viewOptions: TaskListViewOptions): TaskList
  */
 export const PAGINATED_COLLECTION_PINNED_OPTIONS = ['ordering', 'showSubTasks'] as const;
 
+/** The views the scheduled tab offers: its schedule table and the calendar, no board. */
+export const SCHEDULED_TASK_VIEW_MODES = ['list', 'calendar'] as const satisfies TaskViewMode[];
+
+/**
+ * The views a collection offers on this screen. A month grid's seven columns
+ * do not fit a phone, so a narrow screen is offered no calendar.
+ */
+export const getOfferedTaskViewModes = (
+  collection: TaskCollection,
+  isMobile: boolean,
+): readonly TaskViewMode[] => {
+  const modes = collection === 'scheduled' ? SCHEDULED_TASK_VIEW_MODES : ALL_TASK_VIEW_MODES;
+  return isMobile ? modes.filter((mode) => mode !== 'calendar') : modes;
+};
+
 /**
  * Which surface a collection renders in the active view mode. Single-sourced
- * because every collection that is offered the list/board switch has to answer
- * it: "My tasks" rendered its list unconditionally while still showing the
- * switch, so picking Board did nothing at all. The scheduled tab is the one
- * collection with no switch (its config entry is hidden), so it never shows a
- * board; its 'list' is the schedule table.
+ * because every collection that is offered the view switch has to answer it:
+ * "My tasks" rendered its list unconditionally while still showing the switch,
+ * so picking Board did nothing at all. Every collection offers the calendar;
+ * the scheduled tab offers no board, so there a stored board mode falls back
+ * to its 'list', the schedule table.
  */
 export const resolveTaskCollectionView = (
   collection: TaskCollection,
   viewMode: TaskViewMode,
-): 'board' | 'list' => (collection !== 'scheduled' && viewMode === 'kanban' ? 'board' : 'list');
+  /** Off on a narrow screen, where a stored calendar falls back to the list. */
+  calendarAvailable = true,
+): 'board' | 'calendar' | 'list' => {
+  if (viewMode === 'calendar') return calendarAvailable ? 'calendar' : 'list';
+  return collection !== 'scheduled' && viewMode === 'kanban' ? 'board' : 'list';
+};
 
 const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, projectId }) => {
   const { t } = useTranslation('chat');
@@ -261,7 +282,9 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   // "My tasks" honours the list/board switch like the ordinary tab does; the
   // board fetches its own server groups, so the paginated list fetch below is
   // gated off while it is up.
-  const isBoardView = resolveTaskCollectionView(collection, viewMode) === 'board';
+  const collectionView = resolveTaskCollectionView(collection, viewMode, !isMobile);
+  const isBoardView = collectionView === 'board';
+  const isCalendarView = collectionView === 'calendar';
   const isMineBoard = isMineCollection && isBoardView;
   // The Linear-style filter is kept per list scope (workspace + page) and
   // applied server-side by every collection, so paginated pages and board
@@ -326,7 +349,8 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   // "My tasks" tabs render their own paginated collections, so the fetch is
   // gated to the ordinary tab; and the kanban view fetches its own server
   // groups, so there only the single page behind the empty-hero decision runs.
-  const isListView = !isBoardView;
+  // The calendar fetches its own month, so there too only that first page runs.
+  const isListView = collectionView === 'list';
   const listScope = projectId
     ? { projectId, visibility: 'all' as const }
     : agentId
@@ -381,7 +405,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   const useFetchMyTaskList = useTaskStore((s) => s.useFetchMyTaskList);
   const mineSWR = useFetchMyTaskList({
     completedWithin: getCompletedWithin(viewOptions),
-    enabled: isMineCollection && !isMineBoard,
+    enabled: isMineCollection && isListView,
     filter,
     limit: COLLECTION_PAGE_SIZE,
     offset: (collectionPage - 1) * COLLECTION_PAGE_SIZE,
@@ -606,7 +630,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
               )}
               {isOrdinaryCollection && !agentId && !projectId && <TaskListVisibilityFilter />}
               {isOrdinaryCollection && headerActions}
-              {isOrdinaryCollection && (inlineCollapsed || viewMode === 'kanban') && (
+              {isOrdinaryCollection && (inlineCollapsed || !isListView) && (
                 <ActionIcon
                   disabled={createActionBehavior.disabled}
                   icon={Plus}
@@ -634,12 +658,14 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
                   onClick={handleCreateScheduledTask}
                 />
               )}
-              {!isScheduledCollection && headerVisibility.showViewOptions && (
+              {headerVisibility.showViewOptions && (
                 <TasksGroupConfig
                   canGroupByProject={canGroupByProject}
+                  displayOptions={!isScheduledCollection}
                   options={viewOptions}
                   pinnedOptions={isMineCollection ? PAGINATED_COLLECTION_PINNED_OPTIONS : undefined}
                   setOptions={setViewOptions}
+                  viewModes={getOfferedTaskViewModes(collection, isMobile)}
                 />
               )}
               {headerVisibility.showTaskAgentPanelToggle && (
@@ -658,7 +684,27 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
           hideContent={showFind}
           setFilter={setFilter}
         />
-        {isMineBoard ? (
+        {isCalendarView && !(isOrdinaryCollection && isEmptyHero) ? (
+          <WideScreenContainer
+            fullWidth
+            gap={16}
+            paddingBlock={16}
+            paddingInline={16}
+            wrapperStyle={{ flex: 1, overflowY: 'auto' }}
+          >
+            <TaskCalendar
+              agentId={agentId}
+              canCreate={canCreateTask}
+              collection={collection}
+              filter={filter}
+              includeArchived={viewOptions.showArchived}
+              myTaskScope={myTaskScope}
+              projectId={projectId}
+              routeScope={routeScope}
+              onCreateScheduled={handleCreateScheduledTask}
+            />
+          </WideScreenContainer>
+        ) : isMineBoard ? (
           <Flexbox flex={1} style={{ overflowX: 'auto', overflowY: 'hidden' }}>
             <KanbanBoard
               filter={filter}

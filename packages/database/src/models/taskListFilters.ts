@@ -77,6 +77,8 @@ export interface TaskListFilterOptions {
    * unfinished tasks are never narrowed.
    */
   closedAfter?: Date;
+  /** Only tasks completed in `[from, to)` (the Tasks calendar's month grid). */
+  completedBetween?: { from: Date; to: Date };
   /** Only tasks created by this user. */
   createdByUserId?: string;
   /** The Tasks page filter (status, priority, agent, member, project, dates, content). */
@@ -111,6 +113,7 @@ export const buildTaskListFilters = ({
   assigneeUserId,
   automated,
   closedAfter,
+  completedBetween,
   createdByUserId,
   filter,
   includeArchived,
@@ -135,6 +138,12 @@ export const buildTaskListFilters = ({
         notInArray(tasks.status, CLOSED_TASK_STATUSES),
         sql`coalesce(${tasks.completedAt}, ${tasks.updatedAt}) >= ${closedAfter.toISOString()}`,
       )!,
+    );
+  }
+  if (completedBetween) {
+    conditions.push(
+      sql`${tasks.completedAt} >= ${completedBetween.from.toISOString()}`,
+      sql`${tasks.completedAt} < ${completedBetween.to.toISOString()}`,
     );
   }
   if (projectId) conditions.push(eq(tasks.projectId, projectId));

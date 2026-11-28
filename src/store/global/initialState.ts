@@ -159,7 +159,7 @@ export const MODEL_DETAIL_PANEL_EXPANDABLE_KEYS = [
   'config',
 ] as const satisfies readonly ModelDetailPanelExpandedKey[];
 
-export type TaskViewMode = 'kanban' | 'list';
+export type TaskViewMode = 'calendar' | 'kanban' | 'list';
 
 /** How topics inside one byProject sidebar group are sectioned. */
 export type ProjectTopicSubGroupMode = 'none' | 'byDevice' | 'byTime' | 'byStatus';

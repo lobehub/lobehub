@@ -12,11 +12,12 @@ import { Form, type FormFieldProps, useForm } from '@lobehub/ui/form';
 import {
   ArrowDownWideNarrow,
   ArrowUpNarrowWide,
+  CalendarDays,
   LayoutGrid,
   LayoutList,
   Settings2Icon,
 } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useFetchTaskLabels } from '@/hooks/useFetchTaskLabels';
@@ -41,6 +42,8 @@ export type TaskListPinnedOption = 'ordering' | 'showSubTasks';
 interface TasksHeaderProps {
   /** Off on a project's own page, where every task shares the one project. */
   canGroupByProject?: boolean;
+  /** Off where the collection's list has no display options (the scheduled table). */
+  displayOptions?: boolean;
   options: TaskListViewOptions;
   /**
    * Controls the active collection overrides (see
@@ -49,7 +52,21 @@ interface TasksHeaderProps {
    */
   pinnedOptions?: readonly TaskListPinnedOption[];
   setOptions: (updater: (prev: TaskListViewOptions) => TaskListViewOptions) => void;
+  /**
+   * The views this collection offers, in tab order. The scheduled collection
+   * has no board and its table no display options, so it offers list and
+   * calendar alone.
+   */
+  viewModes?: readonly TaskViewMode[];
 }
+
+export const ALL_TASK_VIEW_MODES = ['list', 'kanban', 'calendar'] as const satisfies TaskViewMode[];
+
+/** The tab a collection shows as active: a mode it does not offer reads as its list. */
+export const resolveOfferedViewMode = (
+  viewMode: TaskViewMode,
+  viewModes: readonly TaskViewMode[],
+): TaskViewMode => (viewModes.includes(viewMode) ? viewMode : 'list');
 
 const styles = createStaticStyles(({ css, cssVar }) => {
   return {
@@ -64,12 +81,22 @@ const styles = createStaticStyles(({ css, cssVar }) => {
 });
 
 const TasksGroupConfig = memo<TasksHeaderProps>(
-  ({ canGroupByProject, options, pinnedOptions, setOptions }) => {
+  ({
+    canGroupByProject,
+    displayOptions = true,
+    options,
+    pinnedOptions,
+    setOptions,
+    viewModes = ALL_TASK_VIEW_MODES,
+  }) => {
     const [isViewConfigOpen, setIsViewConfigOpen] = useState(false);
     const isPinned = (option: TaskListPinnedOption) => !!pinnedOptions?.includes(option);
     const { t } = useTranslation('chat');
     const headerActionSmallSize = useHeaderActionSize(true);
-    const viewMode = useGlobalStore(systemStatusSelectors.taskListViewMode);
+    const viewMode = resolveOfferedViewMode(
+      useGlobalStore(systemStatusSelectors.taskListViewMode),
+      viewModes,
+    );
     const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
     const form = useForm();
     useFetchTaskLabels();
@@ -278,18 +305,21 @@ const TasksGroupConfig = memo<TasksHeaderProps>(
     ];
     const boardFormItems = [groupingFormItem, completedTasksFormItem, showArchivedFormItem];
 
+    const viewModeTabs = {
+      calendar: {
+        icon: <Icon icon={CalendarDays} />,
+        key: 'calendar',
+        label: t('taskList.view.calendar'),
+      },
+      kanban: { icon: <Icon icon={LayoutGrid} />, key: 'kanban', label: t('taskList.view.board') },
+      list: { icon: <Icon icon={LayoutList} />, key: 'list', label: t('taskList.view.list') },
+    } satisfies Record<TaskViewMode, { icon: ReactNode; key: TaskViewMode; label: string }>;
+
     const panelContent = (
       <Flexbox gap={12} width={280}>
         <Tabs
           activeKey={viewMode}
-          items={[
-            { icon: <Icon icon={LayoutList} />, key: 'list', label: t('taskList.view.list') },
-            {
-              icon: <Icon icon={LayoutGrid} />,
-              key: 'kanban',
-              label: t('taskList.view.board'),
-            },
-          ]}
+          items={viewModes.map((mode) => viewModeTabs[mode])}
           styles={{
             list: { display: 'flex', width: '100%' },
             tab: { flex: 1 },
@@ -298,16 +328,19 @@ const TasksGroupConfig = memo<TasksHeaderProps>(
             updateSystemStatus({ taskListViewMode: key as TaskViewMode }, 'updateTaskListViewMode')
           }
         />
-        <Form
-          className={styles.form}
-          form={form}
-          items={viewMode === 'kanban' ? boardFormItems : formItems}
-          itemsType={'flat'}
-          variant={'borderless'}
-          styles={{
-            item: { paddingBlock: 4, paddingInline: 0 },
-          }}
-        />
+        {/* The calendar places tasks by date alone; it has no display options. */}
+        {displayOptions && viewMode !== 'calendar' && (
+          <Form
+            className={styles.form}
+            form={form}
+            items={viewMode === 'kanban' ? boardFormItems : formItems}
+            itemsType={'flat'}
+            variant={'borderless'}
+            styles={{
+              item: { paddingBlock: 4, paddingInline: 0 },
+            }}
+          />
+        )}
       </Flexbox>
     );
 
