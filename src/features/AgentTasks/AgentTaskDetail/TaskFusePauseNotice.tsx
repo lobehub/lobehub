@@ -34,7 +34,7 @@ CauseNotice.displayName = 'TaskFusePauseCauseNotice';
  * Says why a scheduled task stopped when the failure fuse paused it, and what brings it back.
  * Nothing renders for any other pause.
  */
-const TaskFusePauseNotice = memo(() => {
+export const TaskFusePauseNotice = memo(() => {
   const { t } = useTranslation('chat');
   const fusePause = useTaskStore(taskDetailSelectors.activeTaskFusePause);
   const workspaceId = useTaskStore(taskDetailSelectors.activeTaskWorkspaceId);
@@ -53,5 +53,3 @@ const TaskFusePauseNotice = memo(() => {
 });
 
 TaskFusePauseNotice.displayName = 'TaskFusePauseNotice';
-
-export default TaskFusePauseNotice;
