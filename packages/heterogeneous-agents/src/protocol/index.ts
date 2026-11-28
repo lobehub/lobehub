@@ -25,6 +25,7 @@ export {
   lobeHubCliSkillBody,
   lobeHubCliSkillDescription,
 } from './lobeHubCliGuide';
+export { lobeHubSystemPrompt } from './lobeHubSystemPrompt';
 export { INHERITED_RUN_IDENTITY_ENV_KEYS, stripInheritedRunIdentity } from './runIdentityEnv';
 export const HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV = 'LOBEHUB_HETERO_EXEC_INHERIT_PROCESS_GROUP';
 export {

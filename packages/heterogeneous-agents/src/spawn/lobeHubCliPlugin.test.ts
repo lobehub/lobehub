@@ -11,8 +11,11 @@ import {
   lobeHubCliGuideBlock,
   lobeHubCliSkillBody,
   lobeHubCliSkillDescription,
+  lobeHubSystemPrompt,
 } from '../protocol';
 import {
+  buildClaudeCodeLobeHubSystemPromptArgs,
+  claudeCodeAppendsSystemPrompt,
   claudeCodeLoadsPluginSkills,
   prepareClaudeCodeLobeHubCli,
   resolveLobeHubCliPluginDir,
@@ -209,6 +212,69 @@ describe('LobeHub CLI plugin', () => {
         else process.env[key] = value;
       }
     }
+  });
+
+  describe('buildClaudeCodeLobeHubSystemPromptArgs', () => {
+    // Regression: by default Claude Code 2.1.265+ resumes with the system prompt
+    // recorded on the conversation's first request, so a conversation started
+    // before the rules, or by a desktop-local run, never saw them.
+    it('appends the standing rules and renders them fresh on every request', () => {
+      expect(buildClaudeCodeLobeHubSystemPromptArgs([], { version: '2.1.332' })).toEqual([
+        '--append-system-prompt',
+        lobeHubSystemPrompt,
+        '--system-prompt-snapshot',
+        'off',
+      ]);
+    });
+
+    // Before 2.1.265 a system prompt flag already turns the record off.
+    it('appends only the rules for a Claude Code that predates the record', () => {
+      expect(buildClaudeCodeLobeHubSystemPromptArgs([], { version: '2.1.264' })).toEqual([
+        '--append-system-prompt',
+        lobeHubSystemPrompt,
+      ]);
+    });
+
+    it.each([[['--system-prompt-snapshot', 'on']], [['--system-prompt-snapshot=on']]])(
+      "keeps the run's own snapshot choice: %j",
+      (args) => {
+        expect(buildClaudeCodeLobeHubSystemPromptArgs(args, { version: '2.1.332' })).toEqual([
+          '--append-system-prompt',
+          lobeHubSystemPrompt,
+        ]);
+      },
+    );
+
+    // Regression: a Claude Code that predates the flag rejects it and never
+    // starts the turn; the binary checks accept any version.
+    it.each(['1.0.50', '0.2.125', 'unknown', undefined])(
+      'appends nothing for Claude Code %s',
+      (version) => {
+        expect(buildClaudeCodeLobeHubSystemPromptArgs([], { version })).toEqual([]);
+      },
+    );
+
+    it.each([
+      [['--append-system-prompt', 'mine']],
+      [['--append-system-prompt=mine']],
+      [['--append-system-prompt-file', '/tmp/mine.md']],
+    ])("leaves the run's own appended system prompt alone: %j", (args) => {
+      expect(buildClaudeCodeLobeHubSystemPromptArgs(args, { version: '2.1.332' })).toEqual([]);
+    });
+
+    it('keeps the rules to one argument line', () => {
+      expect(lobeHubSystemPrompt).not.toMatch(/[\n\r]/);
+      expect(lobeHubSystemPrompt).toContain('`lh work create --file <path>`');
+    });
+  });
+
+  it.each([
+    ['1.0.51', true],
+    ['2.1.332 (Claude Code)', true],
+    ['1.0.50', false],
+    ['0.2.125', false],
+  ])('treats Claude Code %s as accepting --append-system-prompt: %s', (version, expected) => {
+    expect(claudeCodeAppendsSystemPrompt(version)).toBe(expected);
   });
 
   it.each([

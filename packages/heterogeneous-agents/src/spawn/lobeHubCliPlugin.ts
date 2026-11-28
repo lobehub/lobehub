@@ -11,6 +11,7 @@ import {
   lobeHubCliSkillBody,
   lobeHubCliSkillDescription,
 } from '../protocol/lobeHubCliGuide';
+import { lobeHubSystemPrompt } from '../protocol/lobeHubSystemPrompt';
 
 /**
  * Delivers the `lh` guide to Claude Code as a native skill instead of text in
@@ -49,18 +50,88 @@ const parseVersion = (version: string) =>
     ?.slice(1, 4)
     .map(Number);
 
-/** Whether a reported Claude Code version loads plugin skills; unknown means no. */
-export const claudeCodeLoadsPluginSkills = (version: string | undefined): boolean => {
+/** Whether a reported version is at least `minimum`; unknown means no. */
+const isVersionAtLeast = (version: string | undefined, minimum: string): boolean => {
   const actual = version ? parseVersion(version) : undefined;
   if (!actual) return false;
 
-  const minimum = parseVersion(CLAUDE_CODE_PLUGIN_SKILLS_MIN_VERSION)!;
-  const differing = actual.findIndex((part, index) => part !== minimum[index]);
-  return differing === -1 || actual[differing] > minimum[differing];
+  const floor = parseVersion(minimum)!;
+  const differing = actual.findIndex((part, index) => part !== floor[index]);
+  return differing === -1 || actual[differing] > floor[differing];
 };
+
+/** Whether a reported Claude Code version loads plugin skills; unknown means no. */
+export const claudeCodeLoadsPluginSkills = (version: string | undefined): boolean =>
+  isVersionAtLeast(version, CLAUDE_CODE_PLUGIN_SKILLS_MIN_VERSION);
+
+/**
+ * Print mode, which every LobeHub launch uses, took `--append-system-prompt`
+ * before 1.0.51, the release that opened it to interactive mode too. The
+ * changelog names no earlier release, so this is the oldest one known to accept
+ * it; an older Claude Code would reject the flag and never start the turn.
+ */
+export const CLAUDE_CODE_APPEND_SYSTEM_PROMPT_MIN_VERSION = '1.0.51';
+
+/** Whether a reported Claude Code version accepts `--append-system-prompt`; unknown means no. */
+export const claudeCodeAppendsSystemPrompt = (version: string | undefined): boolean =>
+  isVersionAtLeast(version, CLAUDE_CODE_APPEND_SYSTEM_PROMPT_MIN_VERSION);
+
+const CLAUDE_CODE_APPEND_SYSTEM_PROMPT_FLAGS = [
+  '--append-system-prompt',
+  '--append-system-prompt-file',
+] as const;
+
+/**
+ * From 2.1.265 Claude Code records the system prompt even when a launch passes a
+ * system prompt flag; before it, passing one turned the record off. See
+ * https://code.claude.com/docs/en/cli-reference#system-prompt-flags-in-resumed-conversations
+ */
+const CLAUDE_CODE_SYSTEM_PROMPT_SNAPSHOT_MIN_VERSION = '2.1.265';
+
+const CLAUDE_CODE_SYSTEM_PROMPT_SNAPSHOT_FLAG = '--system-prompt-snapshot';
 
 const hasFlag = (args: readonly string[], flag: string) =>
   args.some((arg) => arg === flag || arg.startsWith(`${flag}=`));
+
+/**
+ * Spawn arguments appending `lobeHubSystemPrompt` to a Claude Code run that
+ * answers a LobeHub conversation through a server operation.
+ *
+ * Passed on every launch, resumed ones included, and the rules must follow each
+ * launch: a conversation may predate them, and desktop-local runs, which cannot
+ * register Works, resume the same session (`topic.metadata.heteroSessionId`).
+ * By default Claude Code records the system prompt on a conversation's first
+ * request and resends that record on every resume until compaction, ignoring
+ * the text a later launch passes. So from 2.1.265 the run also passes
+ * `--system-prompt-snapshot off`, which renders the prompt fresh on every
+ * request; older releases already stop recording once a system prompt flag is
+ * passed. Measured on 2.1.332, a resume and each step of a turn still read the
+ * whole prompt from cache while the rules text stays the same; the cache is
+ * rewritten once when it changes.
+ *
+ * Empty for a version that may not accept the flag, and when the run's own
+ * arguments already append a system prompt: those are the user's, and older
+ * releases keep only one of two. A snapshot choice in the run's own arguments
+ * stays the only one.
+ *
+ * @param args the spawn's own arguments.
+ * @param options.version the Claude Code version the caller detected.
+ */
+export const buildClaudeCodeLobeHubSystemPromptArgs = (
+  args: readonly string[] = [],
+  options: { version?: string } = {},
+): string[] => {
+  if (!claudeCodeAppendsSystemPrompt(options.version)) return [];
+  if (CLAUDE_CODE_APPEND_SYSTEM_PROMPT_FLAGS.some((flag) => hasFlag(args, flag))) return [];
+
+  const appendArgs = ['--append-system-prompt', lobeHubSystemPrompt];
+  if (
+    !isVersionAtLeast(options.version, CLAUDE_CODE_SYSTEM_PROMPT_SNAPSHOT_MIN_VERSION) ||
+    hasFlag(args, CLAUDE_CODE_SYSTEM_PROMPT_SNAPSHOT_FLAG)
+  )
+    return appendArgs;
+  return [...appendArgs, CLAUDE_CODE_SYSTEM_PROMPT_SNAPSHOT_FLAG, 'off'];
+};
 
 const toBlocks = (prompt: AgentPromptInput): AgentContentBlock[] =>
   typeof prompt === 'string' ? (prompt ? [{ text: prompt, type: 'text' }] : []) : prompt;

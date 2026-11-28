@@ -7,7 +7,7 @@ import { PassThrough } from 'node:stream';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { buildHeterogeneousPrompt, lobeHubCliGuide } from '../protocol';
+import { buildHeterogeneousPrompt, lobeHubCliGuide, lobeHubSystemPrompt } from '../protocol';
 import { spawnAgent } from './spawnAgent';
 
 const spawnCalls: Array<{ args: string[]; command: string }> = [];
@@ -80,6 +80,13 @@ const pluginDirArg = (args: string[]) => {
   const index = args.indexOf('--plugin-dir');
   return index === -1 ? undefined : args[index + 1];
 };
+
+const flagValue = (args: string[], flag: string) => {
+  const index = args.indexOf(flag);
+  return index === -1 ? undefined : args[index + 1];
+};
+
+const systemPromptArg = (args: string[]) => flagValue(args, '--append-system-prompt');
 
 // The dispatcher's own first-turn prompt: the guide, then the user's request.
 const userRequest =
@@ -162,5 +169,74 @@ describe('spawnAgent — LobeHub CLI guide for Claude Code', () => {
       lobeHubCliGuide,
       userRequest,
     ]);
+  });
+});
+
+describe('spawnAgent — LobeHub system prompt for Claude Code', () => {
+  let tempRoot: string;
+  const originalTmpdir = process.env.TMPDIR;
+  const serverRunEnv = { LOBEHUB_OPERATION_ID: 'op-1', LOBEHUB_TOPIC_ID: 'tpc_1' };
+
+  beforeEach(async () => {
+    spawnCalls.length = 0;
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), 'lobehub-cli-spawn-'));
+    process.env.TMPDIR = tempRoot;
+  });
+
+  afterEach(async () => {
+    nextFakeProc = null;
+    if (originalTmpdir === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = originalTmpdir;
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  /**
+   * Regression (T-14616): registering a finished report as a Work lived only in
+   * the `lh` skill, which Claude Code opens for LobeHub-shaped requests, so a
+   * "write me a report" run never registered one.
+   */
+  it("appends the standing rules to the system prompt, not the user's turn", async () => {
+    const { args, userContent } = await run({ env: serverRunEnv, prompt: firstTurnPrompt });
+
+    expect(systemPromptArg(args)).toBe(lobeHubSystemPrompt);
+    expect(JSON.stringify(userContent)).not.toContain('lh work create');
+  });
+
+  // The session may predate the rules or have been started by a desktop-local run.
+  it('appends them to a resumed turn instead of the recorded system prompt', async () => {
+    const { args } = await run({
+      env: serverRunEnv,
+      prompt: buildHeterogeneousPrompt({ isNewSession: false, prompt: 'carry on' }),
+      resumeSessionId: 'cc-session',
+    });
+
+    expect(systemPromptArg(args)).toBe(lobeHubSystemPrompt);
+    expect(flagValue(args, '--system-prompt-snapshot')).toBe('off');
+  });
+
+  it('starts a Claude Code that predates the flag exactly as before', async () => {
+    const { args } = await run({ commandVersion: '1.0.50', env: serverRunEnv });
+
+    expect(args).not.toContain('--append-system-prompt');
+  });
+
+  // `lh work` resolves the run from its server operation.
+  it.each([
+    ['outside any LobeHub conversation', { LOBEHUB_OPERATION_ID: 'op-1' }],
+    ['without a server operation', { LOBEHUB_TOPIC_ID: 'tpc_1' }],
+  ])('appends nothing to a run %s', async (_name, env) => {
+    const { args } = await run({ env });
+
+    expect(args).not.toContain('--append-system-prompt');
+  });
+
+  it("keeps the run's own appended system prompt as its only one", async () => {
+    const { args } = await run({
+      env: serverRunEnv,
+      extraArgs: ['--append-system-prompt', 'mine'],
+    });
+
+    expect(args.filter((arg) => arg === '--append-system-prompt')).toHaveLength(1);
+    expect(systemPromptArg(args)).toBe('mine');
   });
 });

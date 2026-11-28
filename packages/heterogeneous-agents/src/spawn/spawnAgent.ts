@@ -45,7 +45,10 @@ import {
 } from './codexShellEnv';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
-import { prepareClaudeCodeLobeHubCli } from './lobeHubCliPlugin';
+import {
+  buildClaudeCodeLobeHubSystemPromptArgs,
+  prepareClaudeCodeLobeHubCli,
+} from './lobeHubCliPlugin';
 import { getHeterogeneousAgentSpawnEnv } from './presetEnv';
 import { assertSpawnableWorkingDirectory } from './workingDirectory';
 
@@ -525,19 +528,31 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   // `lh` guide as a Claude Code skill rather than in the user's turn. The
   // caller's env, not the inherited one: a standalone run nested inside some
   // other conversation is not answering it.
-  const lobeHubCli =
-    options.agentType === 'claude-code' && options.env?.LOBEHUB_TOPIC_ID
-      ? await prepareClaudeCodeLobeHubCli(options.prompt, options.extraArgs, {
-          resumed: Boolean(options.resumeSessionId),
+  const answersLobeHubConversation =
+    options.agentType === 'claude-code' && !!options.env?.LOBEHUB_TOPIC_ID;
+  const lobeHubCli = answersLobeHubConversation
+    ? await prepareClaudeCodeLobeHubCli(options.prompt, options.extraArgs, {
+        resumed: Boolean(options.resumeSessionId),
+        version: options.commandVersion,
+      })
+    : { args: [], prompt: options.prompt };
+  // The standing rules (`lobeHubSystemPrompt`) name `lh work`, which needs the
+  // run's server operation, so they follow `LOBEHUB_OPERATION_ID`.
+  const systemPromptArgs =
+    answersLobeHubConversation && options.env?.LOBEHUB_OPERATION_ID
+      ? buildClaudeCodeLobeHubSystemPromptArgs(options.extraArgs, {
           version: options.commandVersion,
         })
-      : { args: [], prompt: options.prompt };
+      : [];
   const promptPlan = await buildAgentInput(
     options.agentType,
     lobeHubCli.prompt,
     options.inputOptions,
   );
-  const inputPlan = { ...promptPlan, args: [...lobeHubCli.args, ...promptPlan.args] };
+  const inputPlan = {
+    ...promptPlan,
+    args: [...lobeHubCli.args, ...systemPromptArgs, ...promptPlan.args],
+  };
   const childEnv: NodeJS.ProcessEnv = getHeterogeneousAgentSpawnEnv(
     options.agentType,
     options.env,
