@@ -15,6 +15,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import type { GitStatusEntry } from '@pierre/trees';
 import * as stylex from '@stylexjs/stylex';
 import {
+  BoxIcon,
   EllipsisIcon,
   FileIcon,
   FilePlusIcon,
@@ -25,6 +26,7 @@ import {
   GitCompareArrowsIcon,
   RotateCwIcon,
   SearchIcon,
+  TimerOffIcon,
   XIcon,
 } from 'lucide-react';
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
@@ -58,6 +60,11 @@ interface FilesProps {
    * hidden for remote — there's no local filesystem to act on.
    */
   deviceId?: string;
+  /**
+   * The topic's temporary sandbox rather than its folder on the drive: read
+   * live from the conversation's session, and gone once it is recycled.
+   */
+  sandboxEphemeral?: boolean;
   /**
    * Serves the tree from a sandbox INSTANCE, with no conversation involved —
    * the environment panel browsing an instance nobody is talking to.
@@ -221,7 +228,7 @@ const FilesSearchBar = memo<FilesSearchBarProps>(({ onClose, onDebouncedChange }
 FilesSearchBar.displayName = 'FilesSearchBar';
 
 const Files = memo<FilesProps>(
-  ({ deviceId, sandboxInstanceId, sandboxTopicId, workingDirectory }) => {
+  ({ deviceId, sandboxEphemeral, sandboxInstanceId, sandboxTopicId, workingDirectory }) => {
     const { t } = useTranslation('chat');
     // Nothing here runs on this machine's filesystem: a remote device and the
     // sandbox both answer over the network, and neither can be handed to Electron
@@ -231,6 +238,7 @@ const Files = memo<FilesProps>(
       git: { data: gitFiles, error: gitError },
       project: { data, error, isLoading, isValidating },
     } = useFilesTreeSources(deviceId, workingDirectory, {
+      ephemeral: sandboxEphemeral,
       instanceId: sandboxInstanceId,
       topicId: sandboxTopicId,
     });
@@ -458,6 +466,7 @@ const Files = memo<FilesProps>(
       onClearDisplayFilter: clearDisplayFilter,
       onCollapseAll: handleCollapseAll,
       projectRoot,
+      sandboxEphemeral,
       sandboxInstanceId,
       sandboxTopicId,
       treeRef,
@@ -518,6 +527,29 @@ const Files = memo<FilesProps>(
 
     if (!data && isLoading) {
       return <SkeletonList compact className={stylex.props(styles.skeleton).className} rows={8} />;
+    }
+
+    // A temporary sandbox with no tree says why rather than showing an empty
+    // one: an empty tree after a recycle reads as "the agent wrote nothing".
+    if (data?.sandboxState) {
+      const expired = data.sandboxState === 'expired';
+      return (
+        <Center flex={1} height={'100%'} paddingBlock={24} paddingInline={16}>
+          <Empty
+            icon={expired ? TimerOffIcon : BoxIcon}
+            description={t(
+              expired
+                ? 'workingPanel.files.sandbox.expiredDesc'
+                : 'workingPanel.files.sandbox.notStartedDesc',
+            )}
+            title={t(
+              expired
+                ? 'workingPanel.files.sandbox.expired'
+                : 'workingPanel.files.sandbox.notStarted',
+            )}
+          />
+        </Center>
+      );
     }
 
     return (
@@ -630,6 +662,12 @@ const Files = memo<FilesProps>(
         ) : showsPartialIndex ? (
           <div {...stylex.props(styles.truncated)}>
             {t('workingPanel.files.partialIndexNotice')}
+          </div>
+        ) : data?.truncated ? (
+          // The host stopped at its entry cap: what is past it cannot be
+          // found in this tree, so the tree must not read as complete.
+          <div {...stylex.props(styles.truncated)}>
+            {t('workingPanel.files.indexTruncatedNotice')}
           </div>
         ) : (
           truncatedCount > 0 && (

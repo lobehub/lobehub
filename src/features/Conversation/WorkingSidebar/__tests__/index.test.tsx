@@ -223,6 +223,7 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
 
     expect(filesProps.current).toEqual({
       deviceId: undefined,
+      sandboxEphemeral: false,
       workingDirectory: '/Users/me/project',
     });
   });
@@ -242,7 +243,26 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
 
     expect(filesProps.current).toEqual({
       deviceId: 'workspace-device',
+      sandboxEphemeral: false,
       workingDirectory: '/workspace/project',
+    });
+  });
+
+  it("shows a temporary sandbox conversation's own files on web", () => {
+    platform.isDesktop = false;
+    agentStore.activeAgentId = 'agent';
+    // No local runtime on web, so this resolves to the cloud sandbox, and the
+    // topic picked no folder on the drive: a temporary sandbox.
+    effectiveConfig.agencyConfig = { executionTarget: 'local' };
+    chatStore.activeTopicId = 'topic-tmp';
+    globalStore.status.workingSidebarTab = 'files';
+
+    render(<AgentWorkingSidebar />);
+
+    expect(filesProps.current).toEqual({
+      sandboxEphemeral: true,
+      sandboxTopicId: 'topic-tmp',
+      workingDirectory: '',
     });
   });
 

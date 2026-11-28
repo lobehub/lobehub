@@ -6,6 +6,7 @@ import {
   ClipboardPasteIcon,
   CopyIcon,
   CopyPlusIcon,
+  DownloadIcon,
   FilePlusIcon,
   FileTextIcon,
   FolderPlusIcon,
@@ -34,6 +35,11 @@ export type FileMenuTarget =
     };
 
 export interface FileMenuEnv {
+  /**
+   * A file can be saved to this computer. Only a temporary sandbox offers it:
+   * its files go with it, and there is no other way to keep one.
+   */
+  canDownload?: boolean;
   /** Paste has something to paste in this scope. */
   canPaste: boolean;
   /** Publish is offered for this file (cloud, HTML only). */
@@ -58,6 +64,7 @@ export type FileMenuAction =
   | 'copyPath'
   | 'copyRelativePath'
   | 'cut'
+  | 'download'
   | 'duplicate'
   | 'newFile'
   | 'newFolder'
@@ -84,6 +91,7 @@ const ACTION_ICONS: Record<FileMenuAction, { icon: LucideIcon; sfSymbol: SFSymbo
   copyPath: { icon: LinkIcon, sfSymbol: 'link' },
   copyRelativePath: { icon: LinkIcon, sfSymbol: 'link' },
   cut: { icon: ScissorsIcon, sfSymbol: 'scissors' },
+  download: { icon: DownloadIcon, sfSymbol: 'arrow.down.circle' },
   duplicate: { icon: CopyPlusIcon, sfSymbol: 'plus.square.on.square' },
   newFile: { icon: FilePlusIcon, sfSymbol: 'doc.badge.plus' },
   newFolder: { icon: FolderPlusIcon, sfSymbol: 'folder.badge.plus' },
@@ -194,6 +202,9 @@ export const buildFileContextMenu = (
     ? newItems
     : [
         item('open', 'open', t('workingPanel.files.open')),
+        ...(env.canDownload
+          ? [item('download', 'download', t('workingPanel.files.download.action'))]
+          : []),
         ...(env.canPublish
           ? [item('publish', 'publish', t('workingPanel.localFile.publish.action'))]
           : []),

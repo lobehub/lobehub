@@ -14,6 +14,12 @@ import {
 export interface ProjectIndexParams {
   deviceId?: string;
   dirPath: string;
+  /**
+   * The topic's temporary sandbox rather than its folder on the drive. A
+   * separate host: the same topic can switch between the two, and the drive's
+   * root and the sandbox's starting directory are both `''`.
+   */
+  sandboxEphemeral?: boolean;
   sandboxInstanceId?: string;
   sandboxTopicId?: string;
 }
@@ -32,10 +38,16 @@ export interface GitWorkingTreeFilesParams {
  */
 export const projectIndexHost = ({
   deviceId,
+  sandboxEphemeral,
   sandboxInstanceId,
   sandboxTopicId,
-}: Omit<ProjectIndexParams, 'dirPath'>): string | undefined =>
-  sandboxInstanceId || sandboxTopicId ? `sandbox:${sandboxInstanceId ?? sandboxTopicId}` : deviceId;
+}: Omit<ProjectIndexParams, 'dirPath'>): string | undefined => {
+  if (sandboxEphemeral && sandboxTopicId) return `sandbox-ephemeral:${sandboxTopicId}`;
+
+  return sandboxInstanceId || sandboxTopicId
+    ? `sandbox:${sandboxInstanceId ?? sandboxTopicId}`
+    : deviceId;
+};
 
 const entryKey = (host: string | undefined, dirPath: string) =>
   JSON.stringify([host ?? 'local', dirPath]);

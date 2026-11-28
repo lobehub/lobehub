@@ -65,7 +65,7 @@ describe('readWorkspaceAsset', () => {
     expect(callTool).toHaveBeenCalledWith(
       'readLocalFile',
       { fullContent: true, path: '/sandbox/app.css' },
-      { topicId: 'tpc_1' },
+      { intent: 'view', topicId: 'tpc_1' },
     );
   });
 
@@ -93,7 +93,7 @@ describe('readWorkspaceAsset', () => {
       expect.objectContaining({
         command: expect.stringContaining('python3'),
       }),
-      { topicId: 'tpc_1' },
+      { intent: 'view', topicId: 'tpc_1' },
     );
     expect(callTool).not.toHaveBeenCalledWith(
       'readLocalFile',

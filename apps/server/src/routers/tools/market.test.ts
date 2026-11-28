@@ -79,6 +79,29 @@ vi.mock('@/server/services/sandbox', () => ({
   resolveSandboxSessionConfig: mockResolveSandboxSessionConfig,
 }));
 
+// The open-source role gate is a no-op; this stand-in refuses a caller marked
+// as a viewer, so a test can see which procedures are behind the gate.
+vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const { TRPCError } = await import('@trpc/server');
+  const { trpc } = await import('@/libs/trpc/lambda/init');
+  return {
+    ...actual,
+    requireWorkspaceRoleWhenScoped: () =>
+      trpc.middleware(async (opts) => {
+        if ((opts.ctx as { testRole?: string }).testRole === 'viewer') {
+          throw new TRPCError({ code: 'FORBIDDEN' });
+        }
+        return opts.next();
+      }),
+  };
+});
+
+const mockEphemeralActivity = vi.hoisted(() => ({ read: vi.fn() }));
+vi.mock('@/server/services/redis', () => ({
+  redisService: { ephemeralSandbox: mockEphemeralActivity },
+}));
+
 vi.mock('@/server/services/toolExecution/preprocessLhCommand', () => ({
   preprocessLhCommand: mockPreprocessLhCommand,
 }));
@@ -446,5 +469,68 @@ describe('tools marketRouter', () => {
     await expect(
       caller.connectCallTool({ provider: 'linear', toolName: 'createIssue' }),
     ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
+  });
+
+  describe('listEphemeralSandboxFiles', () => {
+    const caller = () =>
+      marketRouter.createCaller({ serverDB: {}, userId: 'user-1', workspaceId: null } as any);
+
+    it("lists the topic's own session as a viewer", async () => {
+      mockEphemeralActivity.read.mockResolvedValue({ activeAt: Date.now() });
+      mockSandboxCallTool.mockResolvedValue({
+        result: { stdout: '__LOBE_SANDBOX_ROOT__\t/workspace\nf\tnotes.md\n' },
+        success: true,
+      });
+
+      await expect(caller().listEphemeralSandboxFiles({ topicId: 'topic-1' })).resolves.toEqual({
+        entries: [{ isDirectory: false, name: 'notes.md', path: 'notes.md' }],
+        root: '/workspace',
+        status: 'ready',
+        truncated: false,
+      });
+      expect(mockCreateSandboxService).toHaveBeenCalledWith(
+        expect.objectContaining({ activity: 'viewer', topicId: 'topic-1', userId: 'user-1' }),
+      );
+    });
+
+    it('asks for a Market sign-in when the listing hits an expired token', async () => {
+      mockEphemeralActivity.read.mockResolvedValue({ activeAt: Date.now() });
+      mockSandboxCallTool.mockResolvedValue({
+        error: { message: 'token expired', name: 'token_expired' },
+        result: null,
+        success: false,
+      });
+
+      await expect(
+        caller().listEphemeralSandboxFiles({ topicId: 'topic-1' }),
+      ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    });
+
+    it('refuses a read-only workspace viewer, like the other sandbox calls', async () => {
+      const viewer = marketRouter.createCaller({
+        serverDB: {},
+        testRole: 'viewer',
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+      } as any);
+
+      await expect(viewer.listEphemeralSandboxFiles({ topicId: 'topic-1' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      expect(mockSandboxCallTool).not.toHaveBeenCalled();
+    });
+
+    it('refuses a conversation that keeps its files on the drive', async () => {
+      mockResolveSandboxSessionConfig.mockResolvedValueOnce({
+        claim: null,
+        cwd: 'reports',
+        mode: 'drive',
+      } as never);
+
+      await expect(
+        caller().listEphemeralSandboxFiles({ topicId: 'topic-1' }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(mockSandboxCallTool).not.toHaveBeenCalled();
+    });
   });
 });

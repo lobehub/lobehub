@@ -204,4 +204,14 @@ describe('buildFileContextMenu', () => {
       'trash',
     ]);
   });
+
+  it('offers Download on a file of a temporary sandbox only', () => {
+    const sandboxEnv: FileMenuEnv = { ...remoteEnv, canDownload: true, readOnly: true };
+
+    expect(keys(file, sandboxEnv)).toContain('download');
+    expect(keys(folder, sandboxEnv)).not.toContain('download');
+    expect(keys(root, sandboxEnv)).not.toContain('download');
+    expect(keys(file, { ...remoteEnv, readOnly: true })).not.toContain('download');
+    expect(keys(file, localEnv)).not.toContain('download');
+  });
 });

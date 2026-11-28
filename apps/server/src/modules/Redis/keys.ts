@@ -373,6 +373,12 @@ export const RedisKeys = {
      * Full key: lobechat:page_room_state:v1:{documentId}
      */
     pageRoomState: (documentId: string): string => `page_room_state:v1:${documentId}`,
+    /**
+     * When one conversation's temporary cloud sandbox was last used, seen alive, and found recycled.
+     * Full key: lobechat:ephemeral_sandbox:v1:{userId}:{topicId}
+     */
+    ephemeralSandbox: (userId: string, topicId: string): string =>
+      `ephemeral_sandbox:v1:${userId}:${topicId}`,
   },
   /**
    * Send-path cache scope — see {@link RedisKeyNamespace.SEND_PATH_CACHE}.

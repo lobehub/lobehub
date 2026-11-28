@@ -24,7 +24,13 @@ import {
   contentBlocksToString,
   processContentBlocks,
 } from '@/server/services/mcp/contentProcessor';
+import { redisService } from '@/server/services/redis';
 import { createSandboxService, resolveSandboxSessionConfig } from '@/server/services/sandbox';
+import {
+  type EphemeralSandboxFilesResult,
+  EphemeralSandboxListError,
+  listEphemeralSandboxFiles,
+} from '@/server/services/sandbox/ephemeralFiles';
 import { isSandboxAuthError } from '@/server/services/sandbox/errors';
 import { preprocessLhCommand } from '@/server/services/toolExecution/preprocessLhCommand';
 import { SkillConnectionErrorCode } from '@/types/skillConnectionError';
@@ -116,6 +122,12 @@ const metaSchema = z
 
 // Schema for sandbox tool execution request
 const execInSandboxSchema = z.object({
+  /**
+   * `view` for a read of what the agent left — a file preview — rather than a
+   * step of the agent's run. It does not prepare the sandbox for work, and a
+   * view that finds the session recreated marks the agent's files as gone.
+   */
+  intent: z.enum(['agent', 'view']).optional(),
   params: z.record(z.string(), z.any()),
   toolName: z.string(),
   topicId: z.string(),
@@ -202,7 +214,11 @@ interface SandboxRouteContext {
  * `/mnt/workspace/ws-*` were "not found" in `/workspace`, `/root` and `/tmp`,
  * and the live session could be torn down on the way.
  */
-const createTopicSandboxService = async (ctx: SandboxRouteContext, topicId: string) => {
+const openTopicSandbox = async (
+  ctx: SandboxRouteContext,
+  topicId: string,
+  { activity = 'agent' }: { activity?: 'agent' | 'viewer' } = {},
+) => {
   // The persistent workspace, resolved the same way the server runtimes do.
   // These routes are the client-side executor's way into the sandbox — the one
   // a conversation uses when its tool calls are not dispatched server-side.
@@ -225,7 +241,8 @@ const createTopicSandboxService = async (ctx: SandboxRouteContext, topicId: stri
       })
     : ctx.marketService;
 
-  return createSandboxService({
+  const service = createSandboxService({
+    activity,
     fileService: ctx.fileService,
     marketService,
     sandboxCwd: sandbox.cwd,
@@ -238,7 +255,15 @@ const createTopicSandboxService = async (ctx: SandboxRouteContext, topicId: stri
     topicId,
     userId: ctx.userId,
   });
+
+  return { placement: sandbox, service };
 };
+
+const createTopicSandboxService = async (
+  ctx: SandboxRouteContext,
+  topicId: string,
+  options?: { activity?: 'agent' | 'viewer' },
+) => (await openTopicSandbox(ctx, topicId, options)).service;
 
 const execInSandboxHandler = async ({
   input,
@@ -333,7 +358,9 @@ const execInSandboxHandler = async ({
     // This route used to open a session with no mode, no directory and no
     // claim, so every run through it was ephemeral: the composer showed the
     // instance the topic had chosen while `pwd` answered `/workspace`.
-    const sandboxService = await createTopicSandboxService(ctx, topicId);
+    const sandboxService = await createTopicSandboxService(ctx, topicId, {
+      activity: input.intent === 'view' ? 'viewer' : 'agent',
+    });
 
     const response = await sandboxService.callTool(toolName, enhancedParams);
 
@@ -800,5 +827,41 @@ export const marketRouter = router({
           success: false,
         } as ExportAndUploadFileResult;
       }
+    }),
+
+  /**
+   * The files in a conversation's temporary sandbox, for the Files panel —
+   * or that the sandbox is gone. Read through the topic's own session, so the
+   * tree is this conversation's and no other's. A conversation that keeps its
+   * files on the drive is browsed through `sandboxStorage` instead.
+   */
+  // A listing runs a command in the sandbox — it can keep one alive or start
+  // one — so it is gated like the other sandbox calls, even as a query.
+  listEphemeralSandboxFiles: marketToolWriteProcedure
+    .input(z.object({ topicId: z.string().min(1) }))
+    .query(async ({ input: { topicId }, ctx }): Promise<EphemeralSandboxFilesResult> => {
+      const { placement, service } = await openTopicSandbox(ctx, topicId, { activity: 'viewer' });
+      if (placement.mode !== 'ephemeral') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'This conversation keeps its files on the drive',
+        });
+      }
+
+      const result = await listEphemeralSandboxFiles({
+        activity: await redisService.ephemeralSandbox.read(ctx.userId, topicId),
+        callTool: (toolName, params) => service.callTool(toolName, params),
+        topicId,
+      }).catch((error: Error) => {
+        log('listEphemeralSandboxFiles failed for topic %s: %O', topicId, error);
+        // Same re-auth contract as execInSandbox and exportAndUploadFile: an
+        // expired Market sign-in must reach the client as UNAUTHORIZED.
+        if (error instanceof EphemeralSandboxListError && isSandboxAuthError(error.providerError)) {
+          throwSandboxAuthError();
+        }
+        throw new TRPCError({ cause: error, code: 'BAD_GATEWAY', message: error.message });
+      });
+
+      return result;
     }),
 });

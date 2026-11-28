@@ -40,6 +40,10 @@ const mockLocalFileService = vi.hoisted(() => ({
 
 const mockMutate = vi.hoisted(() => vi.fn());
 
+const mockToolsMarket = vi.hoisted(() => ({
+  listEphemeralSandboxFiles: { query: vi.fn() },
+}));
+
 vi.mock('@/libs/swr', () => ({
   mutate: mockMutate,
 }));
@@ -53,6 +57,7 @@ vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
     device: mockDeviceClient,
   },
+  toolsClient: { market: mockToolsMarket },
 }));
 
 vi.mock('@/services/electron/localFileService', async (importOriginal) => ({
@@ -95,6 +100,61 @@ describe('projectFileService', () => {
       .getLocalFilePreview({ deviceId: 'device-1', path: '/repo/a.md', workingDirectory: '/repo' })
       .catch((reason: unknown) => reason);
     expect(isTerminalLocalFileError(transient)).toBe(false);
+  });
+
+  describe('temporary sandbox index', () => {
+    it('reads the live sandbox through the topic, not the drive', async () => {
+      mockToolsMarket.listEphemeralSandboxFiles.query.mockResolvedValue({
+        entries: [
+          { isDirectory: true, name: 'out', path: 'out' },
+          { isDirectory: false, name: 'report.md', path: 'out/report.md' },
+        ],
+        root: '/workspace',
+        status: 'ready',
+        truncated: false,
+      });
+
+      const index = await projectFileService.getProjectFileIndex({
+        sandboxEphemeral: true,
+        sandboxTopicId: 'tpc_1',
+        scope: '',
+      });
+
+      expect(mockToolsMarket.listEphemeralSandboxFiles.query).toHaveBeenCalledWith({
+        topicId: 'tpc_1',
+      });
+      expect(mockSandboxStorageService.listFiles).not.toHaveBeenCalled();
+      expect(index).toMatchObject({
+        entries: [
+          { isDirectory: true, name: 'out', path: '/workspace/out', relativePath: 'out/' },
+          {
+            isDirectory: false,
+            name: 'report.md',
+            path: '/workspace/out/report.md',
+            relativePath: 'out/report.md',
+          },
+        ],
+        root: '/workspace',
+        source: 'sandbox',
+        truncated: false,
+      });
+      expect(index).not.toHaveProperty('sandboxState');
+    });
+
+    it.each(['expired', 'notStarted'] as const)(
+      'answers a %s sandbox with an index that says so',
+      async (status) => {
+        mockToolsMarket.listEphemeralSandboxFiles.query.mockResolvedValue({ status });
+
+        const index = await projectFileService.getProjectFileIndex({
+          sandboxEphemeral: true,
+          sandboxTopicId: 'tpc_1',
+          scope: '',
+        });
+
+        expect(index).toMatchObject({ entries: [], sandboxState: status, source: 'sandbox' });
+      },
+    );
   });
 
   it('gets remote local-file preview through device RPC', async () => {

@@ -78,7 +78,11 @@ describe('AgentWorkingSidebar — Files cold start', () => {
     projectFileActions.rememberFilesLocation('agent/agent', { directory: '/repo' });
 
     const { rerender } = render(<AgentWorkingSidebar />);
-    expect(filesProps.current).toEqual({ deviceId: undefined, workingDirectory: '/repo' });
+    expect(filesProps.current).toEqual({
+      deviceId: undefined,
+      sandboxEphemeral: false,
+      workingDirectory: '/repo',
+    });
 
     act(() => {
       // A hydrated list already counts as loaded but its `workingDirs` are

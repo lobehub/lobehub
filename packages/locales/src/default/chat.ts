@@ -4483,6 +4483,17 @@ export default {
   'workingPanel.files.validation.whitespace': "Names can't start or end with a space",
   'workingPanel.files.collapseAll': 'Collapse Folders in Explorer',
   'workingPanel.files.empty': 'No files in this workspace',
+  'workingPanel.files.indexTruncatedNotice':
+    'Too many files to list them all — only the first entries are shown',
+  'workingPanel.files.download.action': 'Download',
+  'workingPanel.files.download.failed': "Couldn't download {{name}} from the sandbox",
+  'workingPanel.files.download.preparing': 'Preparing {{name}}\u2026',
+  'workingPanel.files.sandbox.expired': 'Sandbox recycled',
+  'workingPanel.files.sandbox.expiredDesc':
+    "This conversation's temporary sandbox was recycled, and the files in it are no longer available. To keep files, pick a folder on your cloud drive in the sandbox menu below the input.",
+  'workingPanel.files.sandbox.notStarted': 'Sandbox not started yet',
+  'workingPanel.files.sandbox.notStartedDesc':
+    'Files the agent writes in its temporary sandbox show up here while it runs.',
   'workingPanel.files.unreadable':
     "Couldn't read this workspace — it may not exist yet, or the listing failed",
   'workingPanel.files.filters.changedOnly': 'Show Git Changes Only',

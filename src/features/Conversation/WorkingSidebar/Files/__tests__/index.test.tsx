@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ComponentType } from 'react';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { useUserStore } from '@/store/user';
 
@@ -18,7 +18,11 @@ import {
 } from './harness';
 
 // Loaded after the mock harness so module mocks are registered first.
-let Files: ComponentType<{ workingDirectory: string }>;
+let Files: ComponentType<{
+  sandboxEphemeral?: boolean;
+  sandboxTopicId?: string;
+  workingDirectory: string;
+}>;
 
 beforeAll(async () => {
   Files = (await import('../index')).default;
@@ -669,5 +673,55 @@ describe('Files — collapsed ignored directories', () => {
     await waitFor(() => {
       expect(screen.getByText('workingPanel.files.truncatedNotice')).toBeInTheDocument();
     });
+  });
+});
+
+describe('Files — temporary sandbox with nothing to show', () => {
+  const data = projectFilesMock.data as typeof projectFilesMock.data & {
+    sandboxState?: 'expired' | 'notStarted';
+  };
+
+  afterEach(() => {
+    data.sandboxState = undefined;
+  });
+
+  it('says a recycled sandbox is gone instead of showing an empty tree', () => {
+    data.sandboxState = 'expired';
+    data.entries = [];
+
+    render(<Files sandboxEphemeral sandboxTopicId="tpc_1" workingDirectory="" />);
+
+    expect(screen.getByText('workingPanel.files.sandbox.expiredDesc')).toBeInTheDocument();
+    expect(screen.queryByText('workingPanel.files.empty')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('explorer-tree')).not.toBeInTheDocument();
+  });
+
+  it('says nothing has run yet for a sandbox that never started', () => {
+    data.sandboxState = 'notStarted';
+    data.entries = [];
+
+    render(<Files sandboxEphemeral sandboxTopicId="tpc_1" workingDirectory="" />);
+
+    expect(screen.getByText('workingPanel.files.sandbox.notStartedDesc')).toBeInTheDocument();
+    expect(screen.queryByText('workingPanel.files.empty')).not.toBeInTheDocument();
+  });
+
+  it('shows the tree of a sandbox that answered', () => {
+    render(<Files sandboxEphemeral sandboxTopicId="tpc_1" workingDirectory="" />);
+
+    expect(screen.getByTestId('explorer-tree')).toBeInTheDocument();
+    expect(screen.queryByText('workingPanel.files.sandbox.expiredDesc')).not.toBeInTheDocument();
+  });
+
+  it('says a capped listing is not the whole tree', () => {
+    const capped = projectFilesMock.data as typeof projectFilesMock.data & {
+      truncated?: boolean;
+    };
+    capped.truncated = true;
+
+    render(<Files sandboxEphemeral sandboxTopicId="tpc_1" workingDirectory="" />);
+
+    expect(screen.getByText('workingPanel.files.indexTruncatedNotice')).toBeInTheDocument();
+    capped.truncated = undefined;
   });
 });
