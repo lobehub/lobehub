@@ -24,9 +24,9 @@ const styles = stylex.create({
 /**
  * The three row shapes a goal list settles into. Exported so a list that is
  * re-reading one of its tabs can hold the same shape instead of collapsing to
- * blank while the server answers. Compact rows (6px padding, 14px title over a
- * 12px requirement) settle at ~57px, so the skeleton pads 11px around its 35px
- * bar stack.
+ * blank while the server answers. Rows settle at ~57px (compact: 6px padding,
+ * 14px title) and ~66.4px (loose: 10px padding, 15px title), so the skeleton
+ * pads 11px / 15.7px around its 35px bar stack.
  */
 export const GoalListRowsSkeleton = () => {
   const compact = useInterfaceDensity() === 'compact';
@@ -34,7 +34,13 @@ export const GoalListRowsSkeleton = () => {
   return (
     <Flexbox aria-busy className={stylex.props(styles.listRows).className}>
       {Array.from({ length: 3 }).map((_, index) => (
-        <Flexbox horizontal align={'center'} gap={12} key={index} paddingBlock={compact ? 11 : 14}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          gap={12}
+          key={index}
+          paddingBlock={compact ? 11 : 15.7}
+        >
           <SkeletonBar height={20} radius={'50%'} width={20} />
           <Flexbox flex={1} gap={7}>
             <SkeletonBar height={16} width={`${36 + index * 8}%`} />

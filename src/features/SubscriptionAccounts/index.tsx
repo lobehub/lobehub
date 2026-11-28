@@ -13,6 +13,7 @@ import VisibilityFilter, {
 } from '@/components/VisibilityFilter';
 import { cacheScope } from '@/libs/replica';
 import { agentQuotaSelectors, type QuotaAccount, useAgentQuotaStore } from '@/store/agentQuota';
+import { useDensity } from '@/styles/density';
 
 import AccountDetailPanel from './AccountDetailPanel';
 import AccountRow, { AccountListHeader, LIST_MIN_WIDTH, PROVIDER_NAME } from './AccountRow';
@@ -39,6 +40,7 @@ const ALL = 'all';
  * together, the private ones marked with a lock (as on the Devices page).
  */
 const SubscriptionAccounts = () => {
+  const { compact } = useDensity();
   const { t } = useTranslation('setting');
   const useFetchQuotaAccounts = useAgentQuotaStore((s) => s.useFetchQuotaAccounts);
   const readQuotaReadings = useAgentQuotaStore((s) => s.readQuotaReadings);
@@ -91,7 +93,7 @@ const SubscriptionAccounts = () => {
   const body = settling ? (
     <Flexbox gap={4}>
       {Array.from({ length: 5 }, (_, i) => (
-        <SkeletonBar height={56} key={i} radius={cssVar.borderRadius} />
+        <SkeletonBar height={compact ? 56 : 68} key={i} radius={cssVar.borderRadius} />
       ))}
     </Flexbox>
   ) : error && accounts.length === 0 ? (
