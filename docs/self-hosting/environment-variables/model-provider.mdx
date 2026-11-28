@@ -304,6 +304,22 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 - Default: `-`
 - Example: `-all,+deepseek/deepseek-v3/community,+deepseek/deepseek-r1-distill-llama-70b`
 
+## Liquid Inference
+
+### `LIQUIDINFERENCE_API_KEY`
+
+- Type: Required
+- Description: This is your Liquid Inference buyer API key.
+- Default: -
+- Example: `sk-xxxxxxxxxx`
+
+### `LIQUIDINFERENCE_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to control the model list, use `+` to add a model, use `-` to hide a model, use `model_name=display_name` to customize the display name of a model, separated by commas. Definition syntax rules see [model-list][model-list]
+- Default: `-`
+- Example: `-all,+liquid.auto`
+
 ## Github
 
 ### `GITHUB_TOKEN`
