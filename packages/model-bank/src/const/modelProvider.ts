@@ -60,6 +60,7 @@ export enum ModelProvider {
   Perplexity = 'perplexity',
   PPIO = 'ppio',
   Qiniu = 'qiniu',
+  QuickSilverPro = 'quicksilverpro',
   Qwen = 'qwen',
   Replicate = 'replicate',
   SambaNova = 'sambanova',

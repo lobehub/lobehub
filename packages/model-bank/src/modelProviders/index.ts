@@ -62,6 +62,7 @@ import OpenRouterProvider from './openrouter';
 import PerplexityProvider from './perplexity';
 import PPIOProvider from './ppio';
 import QiniuProvider from './qiniu';
+import QuickSilverProProvider from './quicksilverpro';
 import QwenProvider from './qwen';
 import ReplicateProvider from './replicate';
 import SambaNovaProvider from './sambanova';
@@ -174,6 +175,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   XiaomiMiMoProvider,
   AiHubMixProvider,
   OpenRouterProvider,
+  QuickSilverProProvider,
   FalProvider,
   ElevenLabsProvider,
   FishAudioProvider,
@@ -372,6 +374,7 @@ export { default as OpenRouterProviderCard } from './openrouter';
 export { default as PerplexityProviderCard } from './perplexity';
 export { default as PPIOProviderCard } from './ppio';
 export { default as QiniuProviderCard } from './qiniu';
+export { default as QuickSilverProProviderCard } from './quicksilverpro';
 export { default as QwenProviderCard } from './qwen';
 export { default as ReplicateProviderCard } from './replicate';
 export { default as SambaNovaProviderCard } from './sambanova';
