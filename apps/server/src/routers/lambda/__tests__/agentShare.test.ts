@@ -125,6 +125,23 @@ vi.mock('@/business/server/agent-share/spendGate', () => ({
   getAgentShareMonthlySpend: (...args: unknown[]) => mockGetAgentShareMonthlySpend(...args),
 }));
 
+/** One observer per surface, so a test can tell which one a mutation was handed. */
+const authorizationObservers = {
+  agent_share_settings: vi.fn(),
+  channel_access_request: vi.fn(),
+  workspace_share_audit: vi.fn(),
+};
+const mockCreateAuthorizationObserver = vi.fn(
+  (_request: unknown, source: keyof typeof authorizationObservers) =>
+    authorizationObservers[source],
+);
+vi.mock('@/business/server/agent-share/authorizationObserver', () => ({
+  createAgentShareAuthorizationObserver: (
+    request: unknown,
+    source: keyof typeof authorizationObservers,
+  ) => mockCreateAuthorizationObserver(request, source),
+}));
+
 const mockFilterAddressBookPeople = vi.fn();
 const mockListAddressBookPeople = vi.fn();
 const mockFindUser = vi.fn();
@@ -357,7 +374,11 @@ describe('agentShareRouter', () => {
       expect.anything(),
       'workspace-1',
       shareId,
-      expect.objectContaining({ authorizeMutation: expect.any(Function) }),
+      expect.objectContaining({
+        actorUserId: 'admin-1',
+        authorizeMutation: expect.any(Function),
+        onAuthorizationChange: authorizationObservers.workspace_share_audit,
+      }),
     );
   });
 
@@ -415,7 +436,51 @@ describe('agentShareRouter', () => {
 
     await caller.updateShareConfig({ agentId: 'agent-1', config });
 
-    expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', config);
+    expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', config, { notice: undefined });
+  });
+
+  it('hands the request to the authorization observer and the confirmed notice to the model', async () => {
+    const { AgentShareModel } = await import('@/database/models/agentShare');
+    const request = { userAgent: 'LobeHub Desktop/2.1.0', userId: 'user-1' };
+    const caller = agentShareRouter.createCaller(await createContextInner(request));
+    const notice = { id: 'agent_share.device_access', locale: 'zh-CN', version: '1' };
+
+    await caller.updateShareConfig({
+      agentId: 'agent-1',
+      config: { deviceAccess: 'everyone' },
+      notice,
+    });
+
+    expect(mockUpdateConfig).toHaveBeenCalledWith(
+      'agent-1',
+      { deviceAccess: 'everyone' },
+      { notice },
+    );
+    expect(mockCreateAuthorizationObserver).toHaveBeenCalledWith(
+      expect.objectContaining(request),
+      'agent_share_settings',
+    );
+    expect(AgentShareModel).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-1',
+      undefined,
+      expect.objectContaining({
+        onAuthorizationChange: authorizationObservers.agent_share_settings,
+      }),
+    );
+  });
+
+  it('rejects a notice without the revision of its copy', async () => {
+    const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+    await expect(
+      caller.updateShareConfig({
+        agentId: 'agent-1',
+        config: { deviceAccess: 'everyone' },
+        notice: { id: 'agent_share.device_access' } as { id: string; version: string },
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
   });
 
   it('rejects an empty share configuration patch', () => {
@@ -462,14 +527,18 @@ describe('agentShareRouter', () => {
 
       const config = { deviceAccess: 'allowlist' as const, deviceAllowUserIds: ['user-bob'] };
       await caller.updateShareConfig({ agentId: 'agent-1', config });
-      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', config);
+      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', config, { notice: undefined });
     });
 
     it('stores an address-book-wide grant without a list', async () => {
       const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
 
       await caller.updateShareConfig({ agentId: 'agent-1', config: { deviceAccess: 'contacts' } });
-      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', { deviceAccess: 'contacts' });
+      expect(mockUpdateConfig).toHaveBeenCalledWith(
+        'agent-1',
+        { deviceAccess: 'contacts' },
+        { notice: undefined },
+      );
     });
 
     it('stores an open grant for every visitor even while contacts are off', async () => {
@@ -477,7 +546,11 @@ describe('agentShareRouter', () => {
       mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: true, enableChannels: false });
 
       await caller.updateShareConfig({ agentId: 'agent-1', config: { deviceAccess: 'everyone' } });
-      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', { deviceAccess: 'everyone' });
+      expect(mockUpdateConfig).toHaveBeenCalledWith(
+        'agent-1',
+        { deviceAccess: 'everyone' },
+        { notice: undefined },
+      );
     });
 
     // The runtime grants nothing while contacts are off, so a grant must not be
@@ -559,7 +632,7 @@ describe('agentShareRouter', () => {
         deviceAllowUserIds: ['user-bob', 'user-dave'],
       };
       await caller.updateShareConfig({ agentId: 'agent-1', config });
-      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', config);
+      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', config, { notice: undefined });
       expect(mockRequestGrantedUserIds).toHaveBeenCalledWith(expect.anything(), share.id, [
         'user-dave',
       ]);
@@ -584,7 +657,7 @@ describe('agentShareRouter', () => {
 
     await caller.updateShareConfig({ agentId: 'agent-1', config });
 
-    expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', config);
+    expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', config, { notice: undefined });
   });
 
   it('rejects a malformed toolGrants entry', async () => {

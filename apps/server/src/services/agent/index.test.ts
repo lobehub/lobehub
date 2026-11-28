@@ -911,7 +911,8 @@ describe('AgentService', () => {
 
     it('preserves workspace scope and rechecks management permission under the lock', async () => {
       const workspaceService = new AgentService(mockDb, mockUserId, 'workspace-1');
-      await workspaceService.withShareModelLock('agent-1', async () => undefined);
+      const options = { onAuthorizationChange: vi.fn() };
+      await workspaceService.withShareModelLock('agent-1', async () => undefined, options);
       expect(AgentShareModel.lockScopedAgentRow).toHaveBeenCalledWith(mockDb, 'agent-1', {
         userId: mockUserId,
         workspaceId: 'workspace-1',
@@ -924,7 +925,7 @@ describe('AgentService', () => {
           workspaceId: 'workspace-1',
         }),
       );
-      expect(AgentShareModel).toHaveBeenCalledWith(mockDb, mockUserId, 'workspace-1');
+      expect(AgentShareModel).toHaveBeenCalledWith(mockDb, mockUserId, 'workspace-1', options);
     });
 
     it('rechecks visibility after acquiring the publication lock', async () => {

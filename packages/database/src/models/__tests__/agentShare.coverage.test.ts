@@ -104,6 +104,7 @@ describe('AgentShareModel coverage edges', () => {
 
       await expect(
         AgentShareModel.forceDisableWorkspaceShare(serverDB, workspaceId, share.id, {
+          actorUserId: 'admin',
           authorizeMutation,
         }),
       ).resolves.toBeNull();
@@ -124,6 +125,7 @@ describe('AgentShareModel coverage edges', () => {
 
       await expect(
         AgentShareModel.forceDisableWorkspaceShare(serverDB, workspaceId, share.id, {
+          actorUserId: 'admin',
           authorizeMutation,
         }),
       ).resolves.toBeNull();

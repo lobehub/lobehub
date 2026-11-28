@@ -2,6 +2,7 @@ import { lambdaClient } from '@/libs/trpc/client';
 import type {
   AgentShareConfigInput,
   AgentShareConfigPatchInput,
+  AgentShareNoticeInput,
 } from '@/server/routers/lambda/agentShare';
 
 class AgentShareService {
@@ -59,8 +60,13 @@ class AgentShareService {
     return lambdaClient.agentShare.listDeviceGrantablePeople.query({ agentId });
   }
 
-  async updateShareConfig(agentId: string, config: AgentShareConfigPatchInput) {
-    return lambdaClient.agentShare.updateShareConfig.mutate({ agentId, config });
+  /** `notice` is the notice the creator confirmed before saving this patch. */
+  async updateShareConfig(
+    agentId: string,
+    config: AgentShareConfigPatchInput,
+    notice?: AgentShareNoticeInput,
+  ) {
+    return lambdaClient.agentShare.updateShareConfig.mutate({ agentId, config, notice });
   }
 
   /**
@@ -81,4 +87,4 @@ class AgentShareService {
 }
 
 export const agentShareService = new AgentShareService();
-export type { AgentShareConfigInput, AgentShareConfigPatchInput };
+export type { AgentShareConfigInput, AgentShareConfigPatchInput, AgentShareNoticeInput };

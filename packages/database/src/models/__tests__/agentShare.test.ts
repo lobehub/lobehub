@@ -251,7 +251,9 @@ describe('AgentShareModel', () => {
         otherWorkspaceAgentShareModel.deleteByAgentId(workspaceAgentId),
       ).resolves.toBeNull();
       await expect(
-        AgentShareModel.forceDisableWorkspaceShare(serverDB, otherWorkspaceId, share.id),
+        AgentShareModel.forceDisableWorkspaceShare(serverDB, otherWorkspaceId, share.id, {
+          actorUserId: userId,
+        }),
       ).resolves.toBeNull();
       await expect(
         workspaceAgentShareModel.updateConfig(workspaceAgentId, { maxMessagesPerVisitor: 4 }),
@@ -275,7 +277,9 @@ describe('AgentShareModel', () => {
         }),
       ).resolves.toEqual([]);
       await expect(
-        AgentShareModel.forceDisableWorkspaceShare(serverDB, workspaceId, share.id),
+        AgentShareModel.forceDisableWorkspaceShare(serverDB, workspaceId, share.id, {
+          actorUserId: userId,
+        }),
       ).resolves.toMatchObject({
         shareId: share.id,
         visibility: 'private',
@@ -318,10 +322,14 @@ describe('AgentShareModel', () => {
       expect(auditRows[0]).not.toHaveProperty('agentTitle');
 
       await expect(
-        AgentShareModel.forceDisableWorkspaceShare(serverDB, otherWorkspaceId, workspaceShare.id),
+        AgentShareModel.forceDisableWorkspaceShare(serverDB, otherWorkspaceId, workspaceShare.id, {
+          actorUserId: userId,
+        }),
       ).resolves.toBeNull();
       await expect(
-        AgentShareModel.forceDisableWorkspaceShare(serverDB, workspaceId, workspaceShare.id),
+        AgentShareModel.forceDisableWorkspaceShare(serverDB, workspaceId, workspaceShare.id, {
+          actorUserId: userId,
+        }),
       ).resolves.toMatchObject({
         agentId: workspaceAgentId,
         shareId: workspaceShare.id,
@@ -338,6 +346,7 @@ describe('AgentShareModel', () => {
 
       await expect(
         AgentShareModel.forceDisableWorkspaceShare(serverDB, workspaceId, workspaceShare.id, {
+          actorUserId: userId,
           authorizeMutation,
         }),
       ).rejects.toThrow('stale-admin-authority');
