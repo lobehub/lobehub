@@ -8,6 +8,12 @@ export interface InputState {
   chatInputOverlayHeight: number;
 
   /**
+   * Reply after which the user closed the idle prompt-cache notice. The next reply restarts the
+   * cache, so a newer reply can raise the notice again.
+   */
+  dismissedIdleCacheNoticeId?: string;
+
+  /**
    * Editor instance (for ChatInput)
    */
   editor: any | null;
@@ -29,6 +35,7 @@ export interface InputState {
 
 export const inputInitialState: InputState = {
   chatInputOverlayHeight: 0,
+  dismissedIdleCacheNoticeId: undefined,
   editor: null,
   inputMessage: '',
   scheduledSendAt: undefined,

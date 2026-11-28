@@ -35,7 +35,10 @@ import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspa
 import AsyncError from '@/components/AsyncError';
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import NavItem from '@/features/NavPanel/components/NavItem';
-import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
+import SectionTitle, {
+  sectionItemClassName,
+  useSectionTriggerStyle,
+} from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useNavItemMetrics } from '@/features/NavPanel/density';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -53,6 +56,7 @@ import { openCreateChannel } from './CreateChannel';
 import { matchChannel, matchChannelThread } from './paths';
 import { sortChannels } from './sortChannels';
 import { threadTitle } from './threadTitle';
+import { duplicateTitleHints } from './titleHints';
 import { useChannelEvents } from './useChannelEvents';
 import { useChannelMenu } from './useChannelMenu';
 import { useChannelsEnabled } from './useChannelsEnabled';
@@ -101,6 +105,8 @@ const styles = stylex.create({
   // The first thread reaches up under the Channel's icon.
   firstElbow: { insetBlockStart: -8 },
   channel: { position: 'relative' },
+  // Muted like the role tag after an Agent's name in the same sidebar.
+  titleHint: { marginInlineStart: 6, fontSize: 12, opacity: 0.6 },
   // An unread Channel gets a pill on the row's leading edge and a title one step brighter, the
   // way Discord marks it; an @mention adds a count badge. The accordion panel clips anything
   // outside the row, so the pill sits in the row's own inline padding.
@@ -200,6 +206,8 @@ interface ChannelRowProps {
   activeChannelId: string | undefined;
   activeThreadId: string | null;
   channel: ChannelListItem;
+  /** Set when another Channel in the list has the same name; see `duplicateTitleHints`. */
+  hint?: string;
   menuItems: ReturnType<typeof useChannelMenu>;
 }
 
@@ -208,7 +216,13 @@ interface ChannelRowProps {
  * threads are listed swaps its `#` for a chevron that folds them away; the fold is kept per
  * Channel on this device.
  */
-const ChannelRow = ({ activeChannelId, activeThreadId, channel, menuItems }: ChannelRowProps) => {
+const ChannelRow = ({
+  activeChannelId,
+  activeThreadId,
+  channel,
+  hint,
+  menuItems,
+}: ChannelRowProps) => {
   const { t } = useTranslation('channel');
   const navigate = useWorkspaceAwareNavigate();
   const slug = useActiveWorkspaceSlug();
@@ -275,7 +289,6 @@ const ChannelRow = ({ activeChannelId, activeThreadId, channel, menuItems }: Cha
         icon={toggle ? undefined : Hash}
         iconSize={14}
         slots={toggle ? { iconPostfix: toggle } : undefined}
-        title={channel.title}
         titleColor={unread ? cssVar.colorText : joined ? undefined : cssVar.colorTextTertiary}
         actions={
           joined
@@ -302,6 +315,16 @@ const ChannelRow = ({ activeChannelId, activeThreadId, channel, menuItems }: Cha
             </span>
           ) : undefined
         }
+        title={
+          hint ? (
+            <>
+              {channel.title}
+              <span {...stylex.props(styles.titleHint)}>{hint}</span>
+            </>
+          ) : (
+            channel.title
+          )
+        }
         onClick={() => navigate(path)}
         onPointerEnter={() => setPointed(true)}
         onPointerLeave={() => setPointed(false)}
@@ -320,6 +343,8 @@ const ChannelRow = ({ activeChannelId, activeThreadId, channel, menuItems }: Cha
 };
 
 interface ChannelSectionProps {
+  /** Class for the section's `AccordionItem`, for hosts that space sections by expanded state. */
+  itemClassName?: string;
   /** The accordion item value; the parent `AccordionRoot` owns the expanded state. */
   itemKey?: string;
   /**
@@ -339,11 +364,12 @@ interface ChannelSectionProps {
  * Channel's threads nested under it.
  */
 const EnabledChannelSection = ({
+  itemClassName,
   itemKey = 'channels',
   layoutMenuItems,
   projectId,
 }: ChannelSectionProps) => {
-  const { t } = useTranslation('channel');
+  const { t, i18n } = useTranslation('channel');
   const sectionTriggerStyle = useSectionTriggerStyle();
   const { pathname } = useActiveLocation();
   const navigate = useWorkspaceAwareNavigate();
@@ -355,6 +381,11 @@ const EnabledChannelSection = ({
     const scoped = channelsInScope(allChannels, projectId);
     return scoped && sortChannels(scoped, sort);
   }, [allChannels, projectId, sort]);
+  const separator = t('autoTitle.separator');
+  const hints = useMemo(
+    () => duplicateTitleHints(channels ?? [], { locale: i18n.language, separator }),
+    [channels, i18n.language, separator],
+  );
   useChannelEvents();
 
   const [showArchived, setShowArchived] = useState(false);
@@ -404,6 +435,7 @@ const EnabledChannelSection = ({
       activeChannelId={activeChannelId}
       activeThreadId={activeThreadId}
       channel={channel}
+      hint={hints.get(channel.id)}
       key={channel.id}
       menuItems={menuItems}
     />
@@ -474,7 +506,7 @@ const EnabledChannelSection = ({
   );
 
   return (
-    <AccordionItem value={itemKey}>
+    <AccordionItem className={itemClassName} value={itemKey}>
       {layoutMenuItems ? (
         <ContextMenuTrigger items={layoutMenuItems}>{header}</ContextMenuTrigger>
       ) : (
@@ -521,7 +553,10 @@ export const ChannelSection = (props: ChannelSectionProps) =>
 const ChannelList = ({ layoutMenuItems }: Pick<ChannelSectionProps, 'layoutMenuItems'>) =>
   useChannelsEnabled() ? (
     <AccordionRoot defaultValue={['channels']} indicatorPlacement="inline">
-      <EnabledChannelSection layoutMenuItems={layoutMenuItems} />
+      <EnabledChannelSection
+        itemClassName={sectionItemClassName}
+        layoutMenuItems={layoutMenuItems}
+      />
     </AccordionRoot>
   ) : null;
 

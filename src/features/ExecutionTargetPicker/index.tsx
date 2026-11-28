@@ -249,42 +249,6 @@ export const findOwnWorkspaceDevice = (
       localMachineIds.includes(device.deviceId),
   );
 
-/**
- * The target a desktop picker writes on its own, or `undefined` to leave the
- * agent alone.
- *
- * - Nothing stored yet: this machine — its workspace row through the gateway
- *   when it has one, else the in-app `local` path.
- * - The member's own plain `local` pick on a workspace agent whose machine now
- *   has a workspace row moves to that row, so runs go through the gateway. A
- *   sandboxed `local` stays: only the in-app path can fence commands. A shared
- *   `local` the member merely inherits (`isOwnPick: false`) is not theirs to move.
- */
-export const getMachineDefaultTarget = ({
-  boundDeviceId,
-  executionTarget,
-  isOwnPick,
-  localSandboxEnabled,
-  ownWorkspaceDeviceId,
-}: {
-  boundDeviceId?: string;
-  executionTarget?: DeviceExecutionTarget;
-  isOwnPick: boolean;
-  localSandboxEnabled: boolean;
-  ownWorkspaceDeviceId?: string;
-}): ExecutionTargetSelection | undefined => {
-  if (executionTarget === undefined && boundDeviceId === undefined) {
-    return ownWorkspaceDeviceId
-      ? { deviceId: ownWorkspaceDeviceId, target: 'device' }
-      : { target: 'local' };
-  }
-
-  if (executionTarget === 'local' && isOwnPick && !localSandboxEnabled && ownWorkspaceDeviceId)
-    return { deviceId: ownWorkspaceDeviceId, target: 'device' };
-
-  return undefined;
-};
-
 interface ExecutionTargetIconProps {
   devicePlatform?: string | null;
   size?: number;

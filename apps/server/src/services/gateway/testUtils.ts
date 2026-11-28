@@ -53,6 +53,7 @@ export const mockGetBotFeatureBlockedMessage = vi.fn();
 export const mockGetBotRuntimeStatus = vi.fn();
 export const mockResolveMessengerInstallation = vi.fn();
 export const mockFindAllLinksByPlatform = vi.fn();
+export const mockGetBotSleepState = vi.fn();
 
 // ─── Module factories (point each file's `vi.mock` here) ───
 
@@ -120,6 +121,7 @@ export const runtimeStatusModule = () => ({
     dormant: 'dormant',
     failed: 'failed',
     queued: 'queued',
+    sleeping: 'sleeping',
     starting: 'starting',
   },
   getBotRuntimeStatus: mockGetBotRuntimeStatus,
@@ -131,6 +133,8 @@ export const featureAccessModule = () => ({
   getBotFeatureBlockedMessage: mockGetBotFeatureBlockedMessage,
   isBotFeatureAccessAllowed: mockIsBotFeatureAccessAllowed,
 });
+
+export const botSleepSlotModule = () => ({ getBotSleepState: mockGetBotSleepState });
 
 export const messengerInstallationsModule = () => ({
   getInstallationStore: vi.fn(() => ({ resolveByKey: mockResolveMessengerInstallation })),
@@ -221,4 +225,5 @@ export const resetGatewayServiceMocks = () => {
   mockGetBotFeatureBlockedMessage.mockReturnValue('This bot channel requires a paid plan.');
   mockGetBotRuntimeStatus.mockResolvedValue({});
   mockResolveMessengerInstallation.mockResolvedValue(null);
+  mockGetBotSleepState.mockResolvedValue({ asleep: false });
 };

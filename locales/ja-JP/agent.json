@@ -845,7 +845,6 @@
   "transfer.confirm.botChannels": "転送後、ボットチャンネル接続を更新する必要がある場合があります",
   "transfer.confirm.chatGroups": "マルチエージェントグループの関連付けは削除されます",
   "transfer.confirm.desc": "エージェントと関連するすべてのデータ（トピック、メッセージ、ファイルなど）をターゲットワークスペースに移動します。",
-  "transfer.confirm.plugins": "カスタムプラグインはターゲットワークスペースで利用できない場合があります",
   "transfer.confirm.title": "エージェントの転送",
   "transfer.confirm.warning": "一部の機能は転送されません:",
   "transfer.copyTo": "コピー先",

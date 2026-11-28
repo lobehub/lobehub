@@ -845,7 +845,6 @@
   "transfer.confirm.botChannels": "Kết nối kênh bot có thể cần được làm mới sau khi chuyển",
   "transfer.confirm.chatGroups": "Liên kết nhóm nhiều tác nhân sẽ bị xóa",
   "transfer.confirm.desc": "Điều này sẽ chuyển tác nhân và tất cả dữ liệu liên quan (chủ đề, tin nhắn, tệp, v.v.) đến không gian làm việc mục tiêu.",
-  "transfer.confirm.plugins": "Plugin tùy chỉnh có thể không khả dụng trong không gian làm việc mục tiêu",
   "transfer.confirm.title": "Chuyển Tác Nhân",
   "transfer.confirm.warning": "Một số tính năng không được chuyển:",
   "transfer.copyTo": "Sao chép đến",

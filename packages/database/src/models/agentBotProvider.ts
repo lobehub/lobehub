@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, gt, gte, inArray, lt, sql } from 'drizzle-orm';
 
 import type { AgentBotProviderItem, NewAgentBotProvider } from '../schemas';
 import { agentBotProviders } from '../schemas';
@@ -354,6 +354,129 @@ export class AgentBotProviderModel {
     }
 
     return decrypted;
+  };
+
+  // --------------- Activity ---------------
+
+  /**
+   * Record that the owner's bot `platform`/`applicationId` was just used,
+   * scoped to this model's owner. Returns the bot's activity before the write,
+   * or `undefined` when no such bot is visible to the owner.
+   *
+   * `updatedAt` is kept as is: activity is not a configuration change, and
+   * lists ordered by `updatedAt` must not reshuffle each time a bot replies.
+   */
+  markActive = async (
+    platform: string,
+    applicationId: string,
+    now: Date = new Date(),
+  ): Promise<{ id: string; previousLastActiveAt: Date } | undefined> => {
+    const [row] = await this.db
+      .select({ id: agentBotProviders.id, lastActiveAt: agentBotProviders.lastActiveAt })
+      .from(agentBotProviders)
+      .where(
+        and(
+          eq(agentBotProviders.platform, platform),
+          eq(agentBotProviders.applicationId, applicationId),
+          this.ownership(),
+        ),
+      )
+      .limit(1);
+    if (!row) return;
+
+    await this.db
+      .update(agentBotProviders)
+      .set({ lastActiveAt: now, updatedAt: sql`${agentBotProviders.updatedAt}` })
+      .where(eq(agentBotProviders.id, row.id));
+
+    return { id: row.id, previousLastActiveAt: row.lastActiveAt };
+  };
+
+  /**
+   * Record activity for the bot `platform`/`applicationId`, whoever owns it
+   * (the reply path knows the bot, not the owner).
+   *
+   * Throttled: a bot whose activity is younger than `minIntervalMs` is not
+   * written again, so a busy bot costs one write per interval rather than one
+   * per reply. Idle detection works in days, so an hour of slack is invisible.
+   */
+  static touchActivity = async (
+    db: LobeChatDatabase,
+    platform: string,
+    applicationId: string,
+    options: { minIntervalMs?: number; now?: Date } = {},
+  ): Promise<boolean> => {
+    const now = options.now ?? new Date();
+    const staleBefore = new Date(now.getTime() - (options.minIntervalMs ?? 60 * 60 * 1000));
+
+    const rows = await db
+      .update(agentBotProviders)
+      .set({ lastActiveAt: now, updatedAt: sql`${agentBotProviders.updatedAt}` })
+      .where(
+        and(
+          eq(agentBotProviders.platform, platform),
+          eq(agentBotProviders.applicationId, applicationId),
+          lt(agentBotProviders.lastActiveAt, staleBefore),
+        ),
+      )
+      .returning({ id: agentBotProviders.id });
+
+    return rows.length > 0;
+  };
+
+  /**
+   * Mark as active every enabled bot `userId` created whose activity is older
+   * than `idleBefore`, and return them. For waking a returning owner's idle
+   * bots in one statement; bots used more recently are left untouched.
+   */
+  static wakeIdleByUser = async (
+    db: LobeChatDatabase,
+    userId: string,
+    idleBefore: Date,
+    now: Date = new Date(),
+  ): Promise<Array<Pick<AgentBotProviderItem, 'applicationId' | 'id' | 'platform'>>> =>
+    db
+      .update(agentBotProviders)
+      .set({ lastActiveAt: now, updatedAt: sql`${agentBotProviders.updatedAt}` })
+      .where(
+        and(
+          eq(agentBotProviders.userId, userId),
+          eq(agentBotProviders.enabled, true),
+          lt(agentBotProviders.lastActiveAt, idleBefore),
+        ),
+      )
+      .returning({
+        applicationId: agentBotProviders.applicationId,
+        id: agentBotProviders.id,
+        platform: agentBotProviders.platform,
+      });
+
+  /**
+   * One page of enabled bots whose activity is older than `idleBefore` (and,
+   * when given, no older than `idleAfter`),
+   * ordered by id for keyset paging (`afterId` is the last id of the previous
+   * page). Credentials are not loaded: most idle bots only need their owner
+   * looked up.
+   */
+  static listIdleEnabled = async (
+    db: LobeChatDatabase,
+    params: { afterId?: string; idleAfter?: Date; idleBefore: Date; limit: number },
+  ): Promise<Array<Omit<AgentBotProviderItem, 'credentials'>>> => {
+    const { credentials: _credentials, ...columns } = getTableColumns(agentBotProviders);
+
+    return db
+      .select(columns)
+      .from(agentBotProviders)
+      .where(
+        and(
+          eq(agentBotProviders.enabled, true),
+          lt(agentBotProviders.lastActiveAt, params.idleBefore),
+          params.idleAfter ? gte(agentBotProviders.lastActiveAt, params.idleAfter) : undefined,
+          params.afterId ? gt(agentBotProviders.id, params.afterId) : undefined,
+        ),
+      )
+      .orderBy(asc(agentBotProviders.id))
+      .limit(params.limit);
   };
 
   // --------------- Private helpers ---------------

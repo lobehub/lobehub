@@ -165,4 +165,21 @@ describe('useChatMarkdown (assistant / grouped message pipeline)', () => {
     rerender({ content: 'Shown reply, continued', enableStream: true });
     expect(result.current.markdownProps.animated).toBe(true);
   });
+
+  // @lobehub/ui rebuilds its code-block renderer when componentProps changes,
+  // which remounts every code block and replays their fade-in at once.
+  it('keeps componentProps stable when the reply finishes generating', () => {
+    mockTransitionMode = 'fadeIn';
+
+    const { result, rerender } = renderHook(
+      ({ isGenerating }) =>
+        useChatMarkdown({ content: 'Shown reply', id: 'finish-1', isGenerating }),
+      { initialProps: { isGenerating: true } },
+    );
+    const streaming = result.current.markdownProps;
+    rerender({ isGenerating: false });
+
+    expect(result.current.markdownProps.animated).not.toBe(streaming.animated);
+    expect(result.current.markdownProps.componentProps).toBe(streaming.componentProps);
+  });
 });

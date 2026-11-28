@@ -58,7 +58,7 @@ const xaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-09-21',
     settings: {
-      extendParams: ['grok4_7ReasoningEffort'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -122,7 +122,7 @@ const xaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-08-12',
     settings: {
-      extendParams: ['grok4_6ReasoningEffort'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -187,7 +187,7 @@ const xaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-07-08',
     settings: {
-      extendParams: ['grok4_5ReasoningEffort'],
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -248,7 +248,7 @@ const xaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-05-01',
     settings: {
-      extendParams: ['grok4_3ReasoningEffort'],
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -404,7 +404,7 @@ const xaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-09',
     settings: {
-      extendParams: ['grok4_20ReasoningEffort'],
+      reasoningEffort: { levels: ['low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',

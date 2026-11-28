@@ -528,6 +528,13 @@ describe('a contact’s shared Agent in a direct conversation', () => {
       ).rejects.toThrow('A shared Agent can only read its own conversation');
     });
 
+    it('admits listing and posting, which narrow themselves to the Agent’s own Channels', async () => {
+      const { channel, operationId } = await start();
+      await expect(
+        new ChannelHistoryRepository(db, ownerId).currentRun(operationId, { allowShared: true }),
+      ).resolves.toMatchObject({ channelId: channel.id });
+    });
+
     it('does not open the run to the visitor or to another scope', async () => {
       const { operationId } = await start();
       await expect(

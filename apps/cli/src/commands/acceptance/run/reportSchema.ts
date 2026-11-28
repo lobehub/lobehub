@@ -5,8 +5,10 @@ import path from 'node:path';
 import { verifyEvidenceTypes, verifyRunScenarios, verifySurfaces } from '@lobechat/const/verify';
 import { verifyCheckDefinitionSchema } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
+import { type CoverageEvidence, coverageGaps } from '@lobechat/utils/verify/evidenceCoverage';
 import { z } from 'zod';
 
+import { loadTerminalBundle, terminalBundleDir } from '../../../utils/terminalEvidence/bundle';
 import { evidenceTypeForFile, reportEvidence, visualizationMetadata } from '../utils';
 
 const evidenceDescriptorFields = {
@@ -24,7 +26,13 @@ const evidenceSchema = z
 
 const requiredEvidenceSchema = z.union([
   z.enum(verifyEvidenceTypes),
-  z.object({ type: z.enum(verifyEvidenceTypes), hint: z.string().optional() }).passthrough(),
+  z
+    .object({
+      type: z.enum(verifyEvidenceTypes),
+      hint: z.string().optional(),
+      provenance: z.literal('execution').optional(),
+    })
+    .passthrough(),
 ]);
 
 const planItemSchema = z
@@ -174,17 +182,50 @@ export async function validateAcceptanceReport(
       });
     }
 
+    /** What this case would publish, for the required-evidence check below. */
+    const caseCoverage: CoverageEvidence[] = [];
     for (const [evidenceIndex, evidence] of item.evidence.entries()) {
-      const inferredType = evidenceTypeForFile(evidence.path);
+      const absoluteReportDir = path.resolve(reportDir);
+      const absoluteEvidencePath = path.resolve(absoluteReportDir, evidence.path);
+      // A terminal evidence bundle is a directory (or its terminal.json); ingest
+      // publishes it as one `terminal` row carrying the bundle's record.
+      const bundleDir = terminalBundleDir(absoluteEvidencePath);
+      const inferredType = bundleDir ? 'terminal' : evidenceTypeForFile(evidence.path);
       if (evidence.type && evidence.type !== inferredType) {
         errors.push({
           path: `cases[${index}].evidence[${evidenceIndex}].type`,
           message: `Evidence type "${evidence.type}" conflicts with filename inference ("${inferredType}"). Ingest infers the type from the file suffix.`,
         });
       }
+      if (bundleDir) {
+        const relativeBundle = path.relative(absoluteReportDir, bundleDir);
+        if (
+          path.isAbsolute(evidence.path) ||
+          relativeBundle === '..' ||
+          relativeBundle.startsWith(`..${path.sep}`) ||
+          path.isAbsolute(relativeBundle)
+        ) {
+          errors.push({
+            path: `cases[${index}].evidence[${evidenceIndex}].path`,
+            message: 'Evidence path must stay within the report directory.',
+          });
+          continue;
+        }
+        try {
+          caseCoverage.push({
+            metadata: { terminal: loadTerminalBundle(bundleDir).metadata },
+            type: 'terminal',
+          });
+        } catch (error) {
+          errors.push({
+            path: `cases[${index}].evidence[${evidenceIndex}].path`,
+            message: `Terminal evidence bundle "${evidence.path}" is invalid: ${(error as Error).message}`,
+          });
+        }
+        continue;
+      }
+      caseCoverage.push({ type: inferredType });
 
-      const absoluteReportDir = path.resolve(reportDir);
-      const absoluteEvidencePath = path.resolve(absoluteReportDir, evidence.path);
       const relativePath = path.relative(absoluteReportDir, absoluteEvidencePath);
       const escapesReportDir =
         relativePath === '..' ||
@@ -242,11 +283,19 @@ export async function validateAcceptanceReport(
       const planItem = report.plan[planItemIndex];
       if (planItem) {
         for (const [requiredIndex, required] of planItem.requiredEvidence.entries()) {
-          const type = typeof required === 'string' ? required : required.type;
-          if (!item.evidence.some((evidence) => evidenceTypeForFile(evidence.path) === type)) {
+          const spec = typeof required === 'string' ? { type: required } : required;
+          const execution = (spec as { provenance?: unknown }).provenance === 'execution';
+          // The ingest / server coverage rule, including same-medium substitutes
+          // and execution provenance — validate must not pass what ingest gates.
+          if (
+            coverageGaps(
+              [{ ...(execution ? { provenance: 'execution' as const } : {}), type: spec.type }],
+              caseCoverage,
+            ).length > 0
+          ) {
             errors.push({
               path: `cases[${index}].evidence`,
-              message: `Claimed pass is missing required evidence "${type}" (plan[${planItemIndex}].requiredEvidence[${requiredIndex}]).`,
+              message: `Claimed pass is missing required evidence "${spec.type}"${execution ? ' from a real command execution' : ''} (plan[${planItemIndex}].requiredEvidence[${requiredIndex}]).`,
             });
           }
         }

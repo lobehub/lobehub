@@ -28,13 +28,13 @@ import {
   devicePoolForAgent,
   ExecutionTargetIcon,
   findOwnWorkspaceDevice,
-  getMachineDefaultTarget,
   groupExecutionTargetDevices,
 } from '@/features/ExecutionTargetPicker';
 import { getPrivateDeviceBlock } from '@/features/HeterogeneousAgent/ExecutionEnvironment/heteroTargetSelection';
 import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgentManagementAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import {
+  isExecutionTargetUnselected,
   isHeterogeneousSandboxExecutionAvailable,
   isLocalSandboxEnabled,
   resolveExecutionTarget,
@@ -313,20 +313,27 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     ? executionTarget
     : (agencyConfig?.executionTarget ?? executionTarget);
 
-  // Device-only CLIs cannot fall back to the cloud sandbox. When a web/legacy
-  // config has no usable device target, open the picker once so `none` is an
-  // explicit setup prompt rather than a disabled-but-active sandbox row.
+  // Nothing stored means nothing chosen: the desktop's `local` fallback is not
+  // a pick, and the chat input blocks sending until there is one. Never write
+  // a default in on the user's behalf — a persisted guess outlives this window
+  // and routes channel and task runs to this machine.
+  const targetUnselected = isExecutionTargetUnselected(agencyConfig, executionTarget);
+
+  // Device-only CLIs cannot fall back to the cloud sandbox, and an unselected
+  // target has nothing to run on yet. Open the picker once so either case is
+  // an explicit setup prompt rather than a disabled-but-active row.
   useEffect(() => {
     if (!canShowExecutionTargetSelector) return;
-    if (supportsSandbox) return;
     if (isWorkspacePreferenceLoading) return;
-    if (executionTarget !== 'none') return;
+    const deviceOnlyMissing = !supportsSandbox && executionTarget === 'none';
+    if (!deviceOnlyMissing && !targetUnselected) return;
     setOpen(true);
   }, [
     canShowExecutionTargetSelector,
     executionTarget,
     isWorkspacePreferenceLoading,
     supportsSandbox,
+    targetUnselected,
   ]);
 
   // The sandbox is a modifier on `local`, not a target of its own, so the two
@@ -412,64 +419,6 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     isHetero,
     selectExecutionTarget,
   });
-
-  // Auto-default to THIS desktop's local execution on first open when the
-  // unset target does not resolve to `auto` (hetero agents, or gateway mode
-  // off), for both personal and workspace agents (workspace behaviour used to be a hostname
-  // lookup against the workspace device pool — see — but with
-  // per-user overrides that lookup is unnecessary: `useSelectExecutionTarget`
-  // resolves `'local'` to this desktop's personal gateway `deviceId` and, for
-  // a workspace agent, persists it into `users.preference.agentDeviceOverrides`,
-  // so it never touches other members' choices).
-  //
-  // Fires only when the effective (merged) target and bound device are both
-  // unset — an explicit prior selection, mine or (for personal) shared,
-  // is preserved. Waits for the workspace preference fetch to settle first:
-  // before it returns, an existing per-user override looks unset and the
-  // default would clobber it.
-  useEffect(() => {
-    if (!isDesktop) return;
-    if (!canShowExecutionTargetSelector) return;
-    if (isWorkspacePreferenceLoading) return;
-    // the unset target already defaults to `auto` wherever the gateway routes,
-    // and canary's `getMachineDefaultTarget` below owns the stored-target
-    // decisions — this only keeps the auto default from being overwritten.
-    if (executionTarget === 'auto') return;
-    if (!currentDeviceId) return;
-    // Whether this machine has a workspace row is only known once the server
-    // confirms the list; deciding earlier would write `local` and then move it.
-    // A failed list falls back to `local` rather than leaving no default.
-    if (isWorkspaceAgent && !isDeviceListConfirmed && !deviceListError) return;
-    // A workspace agent whose pool holds this machine runs on that row through
-    // the gateway. A plain `local` pick (not the sandboxed one, which only the
-    // in-app path can fence) moves over to it too.
-    const defaultTarget = getMachineDefaultTarget({
-      executionTarget: agencyConfig?.executionTarget,
-      boundDeviceId: agencyConfig?.boundDeviceId,
-      // Without an override of the member's own, a stored `local` is the
-      // agent's legacy shared value, not their pick: leave it alone.
-      isOwnPick: !workspaceScoped,
-      localSandboxEnabled,
-      ownWorkspaceDeviceId: ownWorkspaceDevice?.deviceId,
-    });
-    if (!defaultTarget) return;
-    // `silent`: this is a mount-time default, so a rejected write must not
-    // surface a save-failure toast on an agent the user only opened.
-    void selectExecutionTarget(defaultTarget.target, defaultTarget.deviceId, { silent: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    agencyConfig?.executionTarget,
-    agencyConfig?.boundDeviceId,
-    currentDeviceId,
-    executionTarget,
-    canShowExecutionTargetSelector,
-    deviceListError,
-    isDeviceListConfirmed,
-    isWorkspacePreferenceLoading,
-    workspaceScoped,
-    localSandboxEnabled,
-    ownWorkspaceDevice?.deviceId,
-  ]);
 
   const boundDevice =
     canShowExecutionTargetSelector && executionTarget === 'device'
@@ -624,6 +573,10 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     chipIcon = <ExecutionTargetIcon target={'device'} />;
     chipLabel = t('heteroAgent.executionTarget.unknownDevice');
   }
+  if (targetUnselected && canShowExecutionTargetSelector) {
+    chipIcon = <ExecutionTargetIcon target={'none'} />;
+    chipLabel = t('heteroAgent.executionTarget.unselected');
+  }
 
   // Tag the row that runs this topic, so it reads as the conversation's own
   // machine rather than the agent default. A `fixed` target may point
@@ -645,7 +598,8 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     if (target === 'device') return executionTarget === 'device' && boundDeviceId === deviceId;
     // The two local rows share one target and are told apart by the sandbox
     // flag, so neither may claim the checkmark on the other's behalf.
-    if (target === 'local') return executionTarget === 'local' && !localSandboxEnabled;
+    if (target === 'local')
+      return !targetUnselected && executionTarget === 'local' && !localSandboxEnabled;
     return executionTarget === target;
   };
 

@@ -127,6 +127,12 @@ export const leaveChannel = async (tx: Transaction, access: ChannelAccess): Prom
   });
 };
 
+/** Every Channel grouped under a project, trashed ones included. */
+export const projectChannelIds = async (db: LobeChatDatabase, projectId: string) =>
+  (
+    await db.select({ id: channels.id }).from(channels).where(eq(channels.projectId, projectId))
+  ).map(({ id }) => id);
+
 /**
  * An Agent that leaves a project leaves its Channels too: a project Channel only seats the
  * project's own Agents. Called by project member management after its own permission check.

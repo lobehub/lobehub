@@ -1,13 +1,15 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { CheckAgentCredentialResult } from '@lobechat/types';
+import type { CheckAgentCredentialResult, DeviceAgentCredentialProvider } from '@lobechat/types';
 
 import { scrubAgentCredentialText } from './redact';
 import {
   type AgentCredentialStoreOptions,
+  hasInstalledAgentCredential,
   isAgentCredentialExpired,
   parseAgentCredentialProviderParams,
+  parseInstallAgentCredentialParams,
   readInstalledAgentCredential,
 } from './store';
 
@@ -203,6 +205,45 @@ const probeCodex = async (
 };
 
 /**
+ * Check a secret the server sent instead of the installed one (a credential it
+ * hands runs rather than installing). The store is never read or changed;
+ * `installed` still reports whether one is on disk.
+ */
+const checkGivenSecret = async (
+  params: unknown,
+  provider: DeviceAgentCredentialProvider,
+  checkedAt: string,
+  now: number,
+  options: CheckAgentCredentialOptions,
+): Promise<CheckAgentCredentialResult> => {
+  const installed = await hasInstalledAgentCredential(provider, options).catch(() => false);
+  const base = { checkedAt, checkedProvidedSecret: true as const, installed };
+  if (provider !== 'claude-code') {
+    return {
+      ...base,
+      ok: false,
+      reason: 'Checking a Codex credential that is not installed is not supported.',
+    };
+  }
+  // Same validation as an install; its errors name the bad field, never the value.
+  const { secret } = parseInstallAgentCredentialParams(params);
+  if (secret.type !== 'claude-oauth-token') {
+    return { ...base, ok: false, reason: 'Unsupported secret type.' };
+  }
+  const { expiresAt } = secret;
+  if (isAgentCredentialExpired(expiresAt, now)) {
+    return {
+      ...base,
+      expiresAt,
+      ok: false,
+      reason: `The credential expired at ${expiresAt}.`,
+    };
+  }
+  const probe = await probeClaude(secret.token, options);
+  return { ...base, expiresAt, ...probe };
+};
+
+/**
  * Prove the installed credential is usable without spending model quota.
  * Never throws for a provider-side failure: `ok: false` carries the reason.
  */
@@ -213,6 +254,10 @@ export const checkAgentCredential = async (
   const { provider } = parseAgentCredentialProviderParams(params);
   const now = options.now?.() ?? Date.now();
   const checkedAt = new Date(now).toISOString();
+
+  if ((params as { secret?: unknown }).secret !== undefined) {
+    return checkGivenSecret(params, provider, checkedAt, now, options);
+  }
 
   const credential = await readInstalledAgentCredential(provider, options);
   if (credential.status === 'missing') {

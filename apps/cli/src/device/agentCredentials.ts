@@ -14,13 +14,20 @@ import {
  */
 export const agentCredentialRootDir = () => defaultAgentCredentialRootDir();
 
-/** The device-control handlers that let the server manage those credentials. */
+/**
+ * The device-control handlers that let the server manage those credentials,
+ * plus the store root that file RPCs must never enter.
+ */
 export const createAgentCredentialDeps = (
   rootDir = agentCredentialRootDir(),
 ): Pick<
   DeviceControlDeps,
-  'checkAgentCredential' | 'installAgentCredential' | 'removeAgentCredential'
+  | 'agentCredentialRootDir'
+  | 'checkAgentCredential'
+  | 'installAgentCredential'
+  | 'removeAgentCredential'
 > => ({
+  agentCredentialRootDir: rootDir,
   checkAgentCredential: (params) => checkAgentCredential(params, { rootDir }),
   installAgentCredential: (params) => installAgentCredential(params, { rootDir }),
   removeAgentCredential: (params) => removeAgentCredential(params, { rootDir }),

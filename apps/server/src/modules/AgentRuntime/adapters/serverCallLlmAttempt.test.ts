@@ -28,13 +28,19 @@ vi.mock('@lobechat/model-runtime', async () => {
     await import('../../../../../../packages/model-runtime/src/errors/modelRefusal');
   const { consumeStreamUntilDone } =
     await import('../../../../../../packages/model-runtime/src/utils/consumeStream');
+  const { cacheTTLToSeconds } =
+    await import('../../../../../../packages/model-runtime/src/core/protocols/anthropicMessages/resolveCacheTTL');
+  const { resolveImplicitCacheTTLSeconds } =
+    await import('../../../../../../packages/model-runtime/src/utils/implicitCacheTTL');
 
   return {
+    cacheTTLToSeconds,
     consumeStreamUntilDone,
     isEmptyModelCompletion,
     isModelRefusalFinishReason,
     ModelEmptyError,
     ModelRefusalError,
+    resolveImplicitCacheTTLSeconds,
   };
 });
 
@@ -72,6 +78,7 @@ const createAttempt = (
     clientIp?: string;
     agentShareVisitorIds?: { agentId: string; shareId: string; visitorUserId: string };
     enforceInvocationDeadline?: boolean;
+    model?: string;
     userAgent?: string;
   },
   abortSignal?: AbortSignal,
@@ -195,6 +202,84 @@ describe('ServerCallLlmAttempt', () => {
       2,
       expect.objectContaining({ chunkType: 'tools_calling' }),
     );
+  });
+
+  it('records the requested prompt-cache lifetime from the completion pricing options', async () => {
+    vi.useFakeTimers({ now: 1_700_000_000_000, toFake: ['Date'] });
+    try {
+      const { attempt } = createAttempt(async ({ callback }) => {
+        await callback?.onText?.('Answer');
+        await callback?.onCompletion?.({
+          pricingOptions: { lookupParams: { ttl: '1h' } },
+          text: '',
+          usage: { totalOutputTokens: 1 },
+        });
+      });
+
+      await attempt.execute();
+
+      expect(attempt.snapshot().promptCache).toEqual({
+        requestStartedAt: 1_700_000_000_000,
+        ttlSeconds: 3600,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('records no prompt-cache lifetime when the request did not ask for caching', async () => {
+    const { attempt } = createAttempt(async ({ callback }) => {
+      await callback?.onText?.('Answer');
+      await callback?.onCompletion?.({ text: '', usage: { totalOutputTokens: 1 } });
+    });
+
+    await attempt.execute();
+
+    expect(attempt.snapshot().promptCache).toBeUndefined();
+  });
+
+  it('records the implicit cache lifetime of a family whose reply read from cache', async () => {
+    vi.useFakeTimers({ now: 1_700_000_000_000, toFake: ['Date'] });
+    try {
+      const { attempt } = createAttempt(
+        async ({ callback }) => {
+          await callback?.onText?.('Answer');
+          await callback?.onCompletion?.({
+            text: '',
+            usage: { inputCachedTokens: 9000, totalInputTokens: 10_000, totalOutputTokens: 1 },
+          });
+        },
+        undefined,
+        { model: 'gpt-6.2-sol' },
+      );
+
+      await attempt.execute();
+
+      expect(attempt.snapshot().promptCache).toEqual({
+        requestStartedAt: 1_700_000_000_000,
+        ttlSeconds: 3600,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('records no implicit lifetime when the reply shows the channel did not cache', async () => {
+    const { attempt } = createAttempt(
+      async ({ callback }) => {
+        await callback?.onText?.('Answer');
+        await callback?.onCompletion?.({
+          text: '',
+          usage: { totalInputTokens: 10_000, totalOutputTokens: 1 },
+        });
+      },
+      undefined,
+      { model: 'gpt-6.2-sol' },
+    );
+
+    await attempt.execute();
+
+    expect(attempt.snapshot().promptCache).toBeUndefined();
   });
 
   it('forwards clientIp / userAgent into the chat call metadata when provided', async () => {

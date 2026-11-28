@@ -20,6 +20,8 @@ export interface AppPresentationOptions {
   messageId?: string;
   onThisDevice?: boolean;
   preferred?: 'inline' | 'fullscreen';
+  relayDeviceId?: string;
+  relayWorkspaceId?: string;
   resourceUri: string;
   scope: string;
   server?: string;
@@ -40,6 +42,8 @@ export const useMcpAppPresentation = ({
   messageId,
   onThisDevice = false,
   preferred,
+  relayDeviceId,
+  relayWorkspaceId,
   resourceUri,
   scope,
   server,
@@ -70,6 +74,8 @@ export const useMcpAppPresentation = ({
   const { data, isLoading } = useFetchMcpAppResource(identifier, resourceUri, {
     agentId,
     onThisDevice,
+    relayDeviceId,
+    relayWorkspaceId,
     server,
     toolArguments,
   });

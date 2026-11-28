@@ -231,6 +231,8 @@ export const useProjectStore = createWithEqualityFn<ProjectStore>()(
         await projectService.delete(id);
         projectEntity.remove(id);
         void refreshList();
+        // Its Channels stay, now standalone and named after it: show them in the home sidebar.
+        refreshChannelListIfEnabled();
       },
       refreshProjectList: async () => {
         await refreshList();

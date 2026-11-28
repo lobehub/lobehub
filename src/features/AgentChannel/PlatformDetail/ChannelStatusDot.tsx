@@ -33,6 +33,7 @@ const TONES: Partial<Record<BotRuntimeStatus, keyof typeof styles>> = {
   [BOT_RUNTIME_STATUSES.dormant]: 'dormant',
   [BOT_RUNTIME_STATUSES.failed]: 'failed',
   [BOT_RUNTIME_STATUSES.queued]: 'pending',
+  [BOT_RUNTIME_STATUSES.sleeping]: 'dormant',
   [BOT_RUNTIME_STATUSES.starting]: 'pending',
 };
 
@@ -42,6 +43,7 @@ const LABELS: Partial<Record<BotRuntimeStatus, string>> = {
   [BOT_RUNTIME_STATUSES.dormant]: 'channel.statusDormant',
   [BOT_RUNTIME_STATUSES.failed]: 'channel.statusFailed',
   [BOT_RUNTIME_STATUSES.queued]: 'channel.statusQueued',
+  [BOT_RUNTIME_STATUSES.sleeping]: 'channel.statusSleeping',
   [BOT_RUNTIME_STATUSES.starting]: 'channel.statusStarting',
 };
 

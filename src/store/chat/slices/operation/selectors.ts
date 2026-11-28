@@ -373,6 +373,22 @@ const isQueueDrainedAtRunEnd =
     return !!host && isCliRun(host);
   };
 
+/**
+ * Whether a running run the context's queue waits behind is known to take no
+ * messages mid-run (`steerUnsupported`). Unlike {@link isQueueDrainedAtRunEnd},
+ * a run whose ability is still unknown does not count: this is what decides
+ * whether "restart agents that can't steer" stops it.
+ */
+const isRunSteerUnsupported =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): boolean => {
+    if (!context.agentId) return false;
+    const hasQueuedMessages = getQueuedMessages(context)(s).length > 0;
+    return getOperationsByContext(context)(s).some(
+      (op) => !!op.metadata.steerUnsupported && isQueueBlockingOperation(op, { hasQueuedMessages }),
+    );
+  };
+
 const getOperationTurnStartTime = (op: Operation) =>
   op.metadata.turnStartTime ?? op.metadata.startTime;
 
@@ -1129,6 +1145,7 @@ export const operationSelectors = {
   isMessageRegenerating,
   isRegenerating,
   isQueueDrainedAtRunEnd,
+  isRunSteerUnsupported,
   isQueueDrainPending,
   isSendingMessage,
   isSteerHandoffPending,

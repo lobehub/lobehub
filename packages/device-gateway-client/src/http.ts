@@ -1,4 +1,5 @@
 import type {
+  AgentRunCredential,
   CodexCollaborationMode,
   DeviceClient,
   DeviceMetricSample,
@@ -22,6 +23,10 @@ import type {
 } from './types';
 
 const DEFAULT_GATEWAY_TOOL_CALL_TIMEOUT_MS = 30_000;
+
+/** Replace every occurrence of `secret` in `text`. */
+const withoutSecret = (text: string, secret: string | undefined) =>
+  secret ? text.split(secret).join('[redacted]') : text;
 /**
  * Device *reads* are on the critical path of every routing decision, and `post`
  * has no deadline of its own — an unanswered read would otherwise hang for as
@@ -351,6 +356,11 @@ export class GatewayHttpClient {
     prompt: string;
     resumeFallbackSystemContext?: string;
     resumeSessionId?: string;
+    /**
+     * Per-run credential; see `AgentRunRequestMessage.runCredential`. A secret:
+     * it travels only in the request body, which no failure path here echoes.
+     */
+    runCredential?: AgentRunCredential;
     systemContext?: string;
     timeout?: number;
     topicId: string;
@@ -366,7 +376,12 @@ export class GatewayHttpClient {
   }): Promise<{ success: boolean; error?: string; errorData?: DeviceUnavailableErrorData }> {
     const res = await this.post('/api/device/agent/run', params);
     if (!res.ok) {
-      const text = await res.text().catch(() => '');
+      // A gateway that echoes the request in its error must not carry the
+      // run credential into the error this returns (and the logs it reaches).
+      const text = withoutSecret(
+        await res.text().catch(() => ''),
+        params.runCredential?.secret.token,
+      );
       const failure = describeGatewayResponseFailure(res.status, text, 'agent run', params);
       return {
         error: failure.error,

@@ -63,6 +63,7 @@ const resolveDefaultAnthropicTimeout = () => {
 
 export {
   buildDefaultAnthropicPayload,
+  resolveAnthropicPricingOptions,
   resolveDefaultAnthropicPricingOptions,
 } from '../protocols/anthropicMessages/payload';
 

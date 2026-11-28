@@ -1,8 +1,13 @@
-import { getMcpToolVisibility } from '@lobechat/const/mcpApp';
+import { buildListedMcpAppMeta, getMcpToolVisibility } from '@lobechat/const/mcpApp';
 
 export interface LocalMcpTool {
   description?: string;
   inputSchema?: Record<string, unknown>;
+  /**
+   * The tool's MCP Apps metadata (thread entrypoint, display preference), kept
+   * by the server only while the user's `mcp_apps` flag is on.
+   */
+  mcpAppMeta?: NonNullable<ReturnType<typeof buildListedMcpAppMeta>>;
   toolName: string;
   /** The tool's MCP Apps `_meta.ui.visibility`, when it declares one. */
   visibility?: string[];
@@ -57,14 +62,19 @@ export async function listLocalMcpTools(params: LocalMcpParams): Promise<LocalMc
   try {
     await client.connect(transport);
     const { tools } = await client.listTools();
-    return tools.map((tool) => ({
-      description: tool.description,
-      inputSchema: tool.inputSchema as Record<string, unknown> | undefined,
-      toolName: tool.name,
-      // `syncToolsFromClientById` stores a missing visibility as null, which
-      // would make a view-only (`['app']`) tool model-visible.
-      visibility: getMcpToolVisibility(tool._meta),
-    }));
+    return tools.map((tool) => {
+      const mcpAppMeta = buildListedMcpAppMeta(tool);
+      return {
+        description: tool.description,
+        inputSchema: tool.inputSchema as Record<string, unknown> | undefined,
+        // Left out when none: the sync input refuses null
+        ...(mcpAppMeta && { mcpAppMeta }),
+        toolName: tool.name,
+        // `syncToolsFromClientById` stores a missing visibility as null, which
+        // would make a view-only (`['app']`) tool model-visible.
+        visibility: getMcpToolVisibility(tool._meta),
+      };
+    });
   } catch (error) {
     const message = (error as Error)?.message ?? String(error);
     throw new Error(stderr.length > 0 ? `${message}\n${stderr.join('\n')}` : message, {

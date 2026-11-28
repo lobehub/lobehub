@@ -423,9 +423,20 @@ describe('AgentShareModel', () => {
         maxMessagesPerVisitor: 100,
         monthlySpendLimit: 10,
         slug: undefined,
+        tipsEnabled: true,
         toolGrants: [],
       });
       expect(resolvedShare?.shareConfig).toEqual(ownerShare?.shareConfig);
+    });
+
+    it('keeps tipping off once the owner turns it off', async () => {
+      await agentShareModel.create(agentId);
+      await agentShareModel.updateConfig(agentId, { tipsEnabled: false });
+
+      expect((await agentShareModel.getByAgentId(agentId))?.shareConfig.tipsEnabled).toBe(false);
+      await expect(
+        AgentShareModel.readCurrentVisitorCaps(serverDB, agentId),
+      ).resolves.toMatchObject({ tipsEnabled: false });
     });
 
     it('reads and updates the complete config', async () => {
@@ -452,6 +463,7 @@ describe('AgentShareModel', () => {
         demoCases: [],
         featuredWorkIds: [],
         seedDefaultGrants: true,
+        tipsEnabled: true,
         ...config,
         slug: 'shareable-agent',
       };
@@ -874,6 +886,7 @@ describe('AgentShareModel', () => {
         maxMessagesPerVisitor: 3,
         monthlySpendLimit: 2.5,
         shareId: created!.id,
+        tipsEnabled: true,
         workspaceId: null,
       });
     });
@@ -898,6 +911,7 @@ describe('AgentShareModel', () => {
         maxMessagesPerVisitor: 100,
         monthlySpendLimit: 10,
         shareId: null,
+        tipsEnabled: true,
         workspaceId: null,
       });
     });

@@ -9,3 +9,11 @@ import { userGeneralSettingsSelectors } from '@/store/user/selectors';
  */
 export const getFollowUpMode = (): FollowUpBehavior =>
   userGeneralSettingsSelectors.followUpBehavior(getUserStoreState());
+
+/**
+ * Whether, in Steer, a follow-up sent behind a run that can't take messages
+ * mid-run stops that run and restarts with it. Read at each decision.
+ */
+export const getRestartUnsteerableRun = (): boolean =>
+  getFollowUpMode() === 'steer' &&
+  userGeneralSettingsSelectors.restartUnsteerableRun(getUserStoreState());

@@ -202,6 +202,30 @@ export class DeviceMcpRuntime {
     }
   }
 
+  /** Sessions that announce MCP Apps, or elicitation, and ones that don't are pooled apart. */
+  private poolKey(
+    params: MCPClientParams,
+    { mcpApps = false, elicitationEnabled = false }: McpSessionOptions,
+  ) {
+    return `${elicitationEnabled ? 'elicitation:' : ''}${serializeMcpClientParams(params)}${mcpApps ? '#mcp-apps' : ''}`;
+  }
+
+  /**
+   * The session an MCP App view's reads and calls run on: the one its tool
+   * ran on, so the view sees the state that call established. An agent run's
+   * call carries an interaction host and runs on the session that announces
+   * elicitation; a view's never does, so it reuses that session while it is
+   * pooled instead of starting a second process. Otherwise the MCP Apps one.
+   */
+  private async acquireViewClient(params: MCPClientParams): Promise<MCPClient> {
+    const interactiveKey = this.poolKey(params, { elicitationEnabled: true, mcpApps: true });
+    const interactive = this.pool.get(interactiveKey);
+    if (!interactive) return this.acquireClient(params, { mcpApps: true });
+
+    this.lastUsedAt.set(interactiveKey, Date.now());
+    return interactive;
+  }
+
   /**
    * Return a pooled client for the given params, creating (and caching) a new
    * one when the pool has no healthy entry. Callers must NOT disconnect the
@@ -211,8 +235,7 @@ export class DeviceMcpRuntime {
     params: MCPClientParams,
     { mcpApps = false, elicitationEnabled = false }: McpSessionOptions = {},
   ): Promise<MCPClient> {
-    // Sessions that announce MCP Apps and ones that don't are pooled apart
-    const key = `${elicitationEnabled ? 'elicitation:' : ''}${serializeMcpClientParams(params)}${mcpApps ? '#mcp-apps' : ''}`;
+    const key = this.poolKey(params, { elicitationEnabled, mcpApps });
 
     // Every acquire refreshes the session's idle clock (fire-and-forget —
     // reaping must never delay or fail the tool call it runs alongside).
@@ -367,7 +390,7 @@ export class DeviceMcpRuntime {
       isStaleSessionError(error) || isDeadTransportError(error);
 
     // Views are read only while MCP Apps are on, on a session that announces them
-    const client = await this.acquireClient(params, { mcpApps: true });
+    const client = await this.acquireViewClient(params);
     try {
       return await read(client);
     } catch (error) {
@@ -380,7 +403,7 @@ export class DeviceMcpRuntime {
         },
       );
       await this.evictClient(params, client);
-      const retryClient = await this.acquireClient(params, { mcpApps: true });
+      const retryClient = await this.acquireViewClient(params);
       try {
         return await read(retryClient);
       } catch (retryError) {
@@ -561,13 +584,16 @@ export class DeviceMcpRuntime {
           }
         });
 
+      // A view's call runs where its tool did (see acquireViewClient)
+      const acquire = () =>
+        mcpApps && !options.interaction && (options.fromApp || options.fromEntrypoint)
+          ? this.acquireViewClient(params)
+          : this.acquireClient(params, {
+              mcpApps,
+              ...(options.interaction && { elicitationEnabled: true }),
+            });
       try {
-        return await runOn(
-          await this.acquireClient(params, {
-            mcpApps,
-            ...(options.interaction && { elicitationEnabled: true }),
-          }),
-        );
+        return await runOn(await acquire());
       } catch (firstError) {
         const failedClient = (firstError as { ranOnClient?: MCPClient })?.ranOnClient;
         if (!isStaleSessionError(firstError, failedClient?.getProtocolEra())) {
@@ -599,10 +625,7 @@ export class DeviceMcpRuntime {
         // Route replacement creation through acquireClient: it single-flights
         // per key, so two concurrent calls that shared the same stale client
         // and both failed build ONE replacement process.
-        const retryClient = await this.acquireClient(params, {
-          mcpApps,
-          ...(options.interaction && { elicitationEnabled: true }),
-        });
+        const retryClient = await acquire();
         try {
           return await runOn(retryClient);
         } catch (retryError) {

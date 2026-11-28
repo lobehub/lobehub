@@ -18,7 +18,10 @@ import { memo, Suspense, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useSidebarSectionMenuItems } from '@/features/HomeSidebar/Body/useSidebarSectionMenuItems';
-import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
+import SectionTitle, {
+  sectionItemClassName,
+  useSectionTriggerStyle,
+} from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -74,7 +77,7 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
   if (items && items.length === 0) return null;
 
   return (
-    <AccordionItem value={itemKey}>
+    <AccordionItem className={sectionItemClassName} value={itemKey}>
       <ContextMenuTrigger items={dropdownMenu}>
         <AccordionHeader>
           <AccordionTrigger style={sectionTriggerStyle}>

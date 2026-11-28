@@ -2,7 +2,6 @@ import type { TaskDetailSubtask } from '@lobechat/types';
 import type { TreeDataNode } from '@lobehub/ui';
 import {
   ActionIcon,
-  Block,
   Collapsible,
   confirmModal,
   cssVar,
@@ -12,6 +11,8 @@ import {
   toast,
   Tree,
 } from '@lobehub/ui';
+import { cssVar as sxVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArchiveIcon, ListTodoIcon, PlayCircle, Plus } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -36,12 +37,13 @@ import TaskSubtaskProgressTag from '../features/TaskSubtaskProgressTag';
 import TaskTriggerTag from '../features/TaskTriggerTag';
 import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
 import { useTaskContextMenuActions } from '../features/useTaskItemContextMenu';
-import AccordionArrowIcon from '../shared/AccordionArrowIcon';
 import { shouldShowMemberAssignee } from '../shared/memberAssigneeMode';
 import { styles } from '../shared/style';
 import { taskDetailPath } from '../shared/taskDetailPath';
 import { useTaskListOriginState } from '../shared/taskListOrigin';
 import RunSubtasksPreview from './RunSubtasksPreview';
+import TaskSectionHeader from './TaskSectionHeader';
+import TaskSubtaskStatusBar from './TaskSubtaskStatusBar';
 import TopicStatusIcon from './TopicStatusIcon';
 
 type TaskStatus = 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running';
@@ -57,6 +59,35 @@ const TASK_STATUS_SET = new Set<TaskStatus>([
 
 const toTaskStatus = (status: string): TaskStatus =>
   TASK_STATUS_SET.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
+
+// The empty section's add target: a dashed full-width row under the heading,
+// so "no subtasks yet" and "add one" read as one place.
+const emptyStyles = stylex.create({
+  add: {
+    alignItems: 'center',
+    backgroundColor: { 'default': 'transparent', ':hover': sxVar.colorFillTertiary },
+    borderColor: sxVar.colorBorder,
+    borderRadius: sxVar.borderRadius,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    color: { 'default': sxVar.colorTextTertiary, ':hover': sxVar.colorTextSecondary },
+    cursor: 'pointer',
+    display: 'flex',
+    font: 'inherit',
+    gap: 6,
+    height: 36,
+    outlineColor: sxVar.colorPrimary,
+    outlineOffset: 2,
+    outlineStyle: { 'default': 'none', ':focus-visible': 'solid' },
+    outlineWidth: 2,
+    paddingInline: 12,
+    width: '100%',
+  },
+  disabled: {
+    cursor: 'not-allowed',
+    opacity: 0.6,
+  },
+});
 
 interface TaskTreeNode {
   children: TaskTreeNode[];
@@ -327,54 +358,41 @@ const TaskSubtasks = memo(() => {
     <Flexbox gap={8}>
       {hasSubtasks ? (
         <>
-          <Flexbox horizontal align="center" justify="space-between">
-            <Flexbox horizontal align="center" gap={8}>
-              <Block
-                clickable
-                horizontal
-                align="center"
-                gap={8}
-                paddingBlock={4}
-                paddingInline={8}
-                style={{ cursor: 'pointer', marginInlineStart: -8, width: 'fit-content' }}
-                variant="borderless"
-                onClick={() => setIsExpanded((prev) => !prev)}
-              >
-                <Icon color={cssVar.colorTextDescription} icon={ListTodoIcon} size={16} />
-                <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
-                  {t('taskDetail.subtasks')}
-                </Text>
-                <AccordionArrowIcon
-                  isOpen={isExpanded}
-                  style={{ color: cssVar.colorTextDescription }}
-                />
-              </Block>
+          <TaskSectionHeader
+            icon={ListTodoIcon}
+            isOpen={isExpanded}
+            title={t('taskDetail.subtasks')}
+            count={
               <TaskSubtaskProgressTag
                 currentIdentifier={taskId}
                 subtasks={subtasks}
                 onSubtaskClick={handleNavigate}
               />
-            </Flexbox>
-            <Flexbox horizontal align="center" gap={4}>
-              <ActionIcon
-                disabled={!canEditTask || isPlanning}
-                icon={PlayCircle}
-                loading={isPlanning}
-                size="small"
-                title={canEditTask ? t('taskDetail.runAll') : reason}
-                onClick={handleRunAll}
-              />
-              <ActionIcon
-                disabled={!canEditTask}
-                icon={Plus}
-                size="small"
-                title={canEditTask ? t('taskDetail.addSubtask') : reason}
-                onClick={toggleCreating}
-              />
-            </Flexbox>
-          </Flexbox>
+            }
+            extra={
+              <>
+                <ActionIcon
+                  disabled={!canEditTask || isPlanning}
+                  icon={PlayCircle}
+                  loading={isPlanning}
+                  size="small"
+                  title={canEditTask ? t('taskDetail.runAll') : reason}
+                  onClick={handleRunAll}
+                />
+                <ActionIcon
+                  disabled={!canEditTask}
+                  icon={Plus}
+                  size="small"
+                  title={canEditTask ? t('taskDetail.addSubtask') : reason}
+                  onClick={toggleCreating}
+                />
+              </>
+            }
+            onToggle={() => setIsExpanded((prev) => !prev)}
+          />
           <Collapsible open={isExpanded}>
             <Flexbox gap={8}>
+              <TaskSubtaskStatusBar subtasks={subtasks} />
               {isCreating && (
                 <CreateTaskInlineEntry
                   autoFocus
@@ -403,24 +421,20 @@ const TaskSubtasks = memo(() => {
         </>
       ) : (
         <>
-          <Block
-            clickable
-            horizontal
-            align="center"
-            gap={8}
-            paddingBlock={4}
-            paddingInline={8}
-            style={{ marginInlineStart: -8, width: 'fit-content' }}
-            title={canEditTask ? undefined : reason}
-            variant="borderless"
-            onClick={toggleCreating}
-          >
-            <Icon color={cssVar.colorTextDescription} icon={Plus} size={16} />
-            <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
-              {t('taskDetail.addSubtask')}
-            </Text>
-          </Block>
-          {isCreating && (
+          <TaskSectionHeader
+            icon={ListTodoIcon}
+            title={t('taskDetail.subtasks')}
+            extra={
+              <ActionIcon
+                disabled={!canEditTask}
+                icon={Plus}
+                size="small"
+                title={canEditTask ? t('taskDetail.addSubtask') : reason}
+                onClick={toggleCreating}
+              />
+            }
+          />
+          {isCreating ? (
             <CreateTaskInlineEntry
               autoFocus
               agentId={agentId ?? undefined}
@@ -430,6 +444,19 @@ const TaskSubtasks = memo(() => {
               onCollapse={() => setIsCreating(false)}
               onCreated={() => setIsCreating(false)}
             />
+          ) : (
+            // aria-disabled rather than disabled: a disabled button swallows the
+            // hover that shows why it is unavailable.
+            <button
+              aria-disabled={!canEditTask}
+              title={canEditTask ? undefined : reason}
+              type={'button'}
+              onClick={toggleCreating}
+              {...stylex.props(emptyStyles.add, !canEditTask && emptyStyles.disabled)}
+            >
+              <Icon icon={Plus} size={14} />
+              {t('taskDetail.addSubtask')}
+            </button>
           )}
         </>
       )}

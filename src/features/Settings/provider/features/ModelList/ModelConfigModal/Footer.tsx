@@ -39,7 +39,15 @@ const ModelConfigFooter = memo<ModelConfigFooterProps>(({ formRef, id, showDeplo
           onClick={async () => {
             const form = formRef.current;
             if (!editingProvider || !id || !form) return;
-            const data = pickModelConfigFormValues(form.getValues(), { showDeployName });
+            const builtinCard = useAiInfraStore
+              .getState()
+              .builtinAiModelList.find(
+                (item) => item.id === id && item.providerId === editingProvider,
+              );
+            const data = pickModelConfigFormValues(form.getValues(), {
+              cardReasoningEffort: builtinCard?.settings?.reasoningEffort,
+              showDeployName,
+            });
 
             setError(null);
             setLoading(true);

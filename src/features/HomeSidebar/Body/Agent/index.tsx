@@ -16,7 +16,10 @@ import { ArrowRight } from 'lucide-react';
 import React, { memo, type MouseEvent, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
+import SectionTitle, {
+  sectionItemClassName,
+  useSectionTriggerStyle,
+} from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchAgentLabels } from '@/hooks/useFetchAgentLabels';
@@ -61,7 +64,7 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
   );
 
   return (
-    <AccordionItem value={itemKey}>
+    <AccordionItem className={sectionItemClassName} value={itemKey}>
       <ContextMenuTrigger items={dropdownMenu}>
         <AccordionHeader>
           <AccordionTrigger style={sectionTriggerStyle}>

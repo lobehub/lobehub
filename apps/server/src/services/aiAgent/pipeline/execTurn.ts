@@ -336,6 +336,13 @@ export const execAgentTurn = async (
     topicId: appContext?.topicId,
   });
   await claimRunFee(runFee, {
+    agentShare: requestedShareGate
+      ? {
+          agentId: requestedShareGate.agentId,
+          shareId: requestedShareGate.shareId,
+          visitorUserId: requestedShareGate.visitorUserId,
+        }
+      : undefined,
     hold: shouldHoldRunFee(params, { workspaceId: deps.workspaceId }),
     model: startingModel.model,
     provider: startingModel.provider,

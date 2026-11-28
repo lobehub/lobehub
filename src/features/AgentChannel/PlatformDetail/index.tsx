@@ -70,6 +70,7 @@ import {
   tabOfModule,
 } from './saveModules';
 import { getSchemaFields, groupSettingsFields, REPLY_KEYS } from './settingsGroups';
+import SleepNotice from './SleepNotice';
 import { useFoldPreviewOnRecords } from './useFoldPreviewOnRecords';
 import { useNarrowLayout } from './useNarrowLayout';
 
@@ -1047,6 +1048,15 @@ const PlatformDetail = memo<PlatformDetailProps>(
                 }
               />
             )}
+            <SleepNotice
+              applicationId={currentConfig?.applicationId}
+              platform={platformDef.id}
+              schema={platformDef.schema}
+              scope={paidFeatureScope}
+              snapshot={currentConfig?.enabled ? runtimeSnapshot : undefined}
+              onUpgrade={handlePaidFeatureUpgrade}
+              onWoke={refreshRuntimeStatus}
+            />
             <div
               className={styles.layout}
               data-narrow={narrow}

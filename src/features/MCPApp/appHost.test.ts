@@ -43,7 +43,13 @@ const setup = ({
   canSendMessage = true,
   args = '{"city":"Paris"}',
   linkId,
-}: { canSendMessage?: boolean; args?: string; linkId?: string } = {}) => {
+  relay,
+}: {
+  canSendMessage?: boolean;
+  args?: string;
+  linkId?: string;
+  relay?: { relayDeviceId: string; relayWorkspaceId?: string };
+} = {}) => {
   const iframe = document.createElement('iframe');
   document.body.append(iframe);
   const target = iframe.contentWindow!;
@@ -61,7 +67,8 @@ const setup = ({
       canSendMessage,
       identifier: 'weather-demo',
       isDark: false,
-      onThisDevice: true,
+      onThisDevice: !relay,
+      ...relay,
       result: { content: 'sunny' },
       sendMessage,
       server: 'weather-server',
@@ -423,6 +430,24 @@ describe('connectAppView', () => {
         signal: expect.any(AbortSignal),
         topicId: 'tpc_1',
       },
+    );
+  });
+
+  it("runs a relayed view's call through the server, on the device it came from", async () => {
+    confirmAppToolCall.mockResolvedValue(true);
+    invokeMcpToolCall.mockResolvedValue({ content: 'rainy', success: true });
+    const { call } = setup({ relay: { relayDeviceId: 'home-linux', relayWorkspaceId: 'ws-1' } });
+
+    await call(1, 'Rome');
+
+    expect(invokeMcpToolCall).toHaveBeenCalledWith(
+      expect.objectContaining({ apiName: 'get_forecast' }),
+      expect.objectContaining({
+        fromMcpApp: true,
+        onThisDevice: false,
+        relayDeviceId: 'home-linux',
+        relayWorkspaceId: 'ws-1',
+      }),
     );
   });
 

@@ -10,6 +10,7 @@ import { viteMarkdownImport } from '../../plugins/vite/markdownImport';
 import { viteNodeModuleStub } from '../../plugins/vite/nodeModuleStub';
 import { vitePlatformResolve } from '../../plugins/vite/platformResolve';
 import {
+  sharedRendererClientBuild,
   sharedRendererDedupe,
   sharedRendererDefine,
 } from '../../plugins/vite/sharedRendererConfig';
@@ -184,7 +185,7 @@ export const createShareRrConfig = ({
   return defineConfig({
     base: isDev ? '/' : process.env.VITE_CDN_BASE || '/',
     environments: {
-      client: { define },
+      client: { build: sharedRendererClientBuild, define },
       ssr: { define: ssrDefine, optimizeDeps: { exclude: [...stylexTokenModules] } },
     },
     optimizeDeps: { exclude: [...stylexTokenModules] },

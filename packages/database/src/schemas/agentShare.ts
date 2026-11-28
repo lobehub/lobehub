@@ -142,12 +142,17 @@ export interface AgentShareConfig {
    */
   slug?: string;
   /**
+   * Whether visitors see the entry to tip this share. On by default. Turning it off only hides
+   * the entry: what visitors already gave keeps paying for their runs. The deployment decides
+   * what tipping means; one without it never reads this.
+   */
+  tipsEnabled?: boolean;
+  /**
    * Tools visitors may invoke. A tool absent from the list is not granted, so
    * an empty/undefined list grants nothing. An entry without `apis` grants
    * every API of that tool; an entry with `apis` grants only those.
    */
   toolGrants?: AgentShareToolGrant[];
-  // tipSplitRatio is platform-controlled, not configurable by the creator
 }
 
 /**
@@ -159,6 +164,7 @@ export type NormalizedAgentShareConfig = AgentShareConfig & {
   maxFileStorage: number;
   maxMessagesPerVisitor: number;
   monthlySpendLimit: number;
+  tipsEnabled: boolean;
 };
 
 /**
