@@ -1,22 +1,8 @@
 import { matchesTaskListFilter, type TaskListFilter } from '@lobechat/types';
-import {
-  AccordionHeader,
-  AccordionItem,
-  AccordionRoot,
-  AccordionTrigger,
-  ActionIcon,
-  Block,
-  Center,
-  cssVar,
-  Divider,
-  Empty,
-  Flexbox,
-  Text,
-} from '@lobehub/ui';
-import * as stylex from '@stylexjs/stylex';
+import { ActionIcon, Block, Center, Divider, Empty, Flexbox, Text } from '@lobehub/ui';
 import { ClipboardCheckIcon, Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Components } from 'react-virtuoso';
 import { Virtuoso } from 'react-virtuoso';
@@ -36,7 +22,7 @@ import {
   getTaskGroupCreateDefaults,
   getTaskSubGroupCreateDefaults,
 } from './kanbanBoardModel';
-import type { TaskGroupBy, TaskGroupMeta, TaskListViewOptions } from './listViewOptions';
+import type { TaskListViewOptions } from './listViewOptions';
 import {
   buildTaskRows,
   collapseSubTasks,
@@ -46,17 +32,16 @@ import {
   normalizeTaskGroupBy,
 } from './listViewOptions';
 import SelectableTaskRow, { selectableTaskItemClassName } from './selection/SelectableTaskRow';
-import { useTaskSelectionStore } from './selection/store';
 import TaskBulkActionBar from './selection/TaskBulkActionBar';
-import { isEditableTarget } from './selection/taskSelectionModel';
-import { useTaskBatchUndo } from './selection/undo/useTaskBatchUndo';
-import { useSelectionScope } from './selection/useSelectionScope';
+import { useTaskListSelection } from './selection/useTaskListSelection';
 import TaskGroupLabel from './TaskGroupLabel';
 import TaskItemSkeleton from './TaskItemSkeleton';
+import TaskListGroupHeader from './TaskListGroupHeader';
 import type { TaskListGroupEntry, TaskListVirtualItem } from './taskListVirtualModel';
 import { flattenTaskListEntries } from './taskListVirtualModel';
 import TaskRowIndent from './TaskRowIndent';
 import { useClosestScrollParent } from './useClosestScrollParent';
+import { useTaskListGroupCollapse } from './useTaskListGroupCollapse';
 
 /** Scope inherited by tasks created from a group header. */
 export interface TaskListCreateScope {
@@ -65,6 +50,11 @@ export interface TaskListCreateScope {
 }
 
 interface TaskListProps {
+  /**
+   * The view this list renders (`taskListCollapseScopeKey`). Folded groups are
+   * remembered per view, so another tab or page does not inherit them.
+   */
+  collapseScope: string;
   /**
    * Offers a create entry on group headers (like the board's column headers),
    * pinning the group's field on the new task. Omit where creating is not
@@ -111,49 +101,9 @@ interface TaskListProps {
 /** Row height the window sizes itself by before it has measured real rows. */
 const DEFAULT_ROW_HEIGHT = 52;
 
-const styles = stylex.create({
-  // A flex box centres the icon instead of a transform on the icon itself,
-  // which its own pressed / focused styles would override.
-  action: {
-    alignItems: 'center',
-    display: 'flex',
-    insetBlock: 0,
-    insetInlineEnd: 10,
-    position: 'absolute',
-  },
-  header: {
-    position: 'relative',
-  },
-});
-
-/** Room kept at the title's end for the create entry, so a sub-group rule stops before it. */
-const CREATE_ENTRY_GUTTER = 28;
-
-const renderGroupTitle = (
-  group: TaskGroupMeta,
-  count: number,
-  sub?: boolean,
-  withCreateEntry?: boolean,
-) => (
-  <Flexbox
-    horizontal
-    align={'center'}
-    gap={8}
-    justify={'space-between'}
-    style={withCreateEntry ? { marginInlineEnd: CREATE_ENTRY_GUTTER } : undefined}
-  >
-    <TaskGroupLabel group={group} />
-    <Text fontSize={12} type={'secondary'}>
-      {count}
-    </Text>
-    {sub ? <Divider style={{ borderColor: cssVar.colorBorder, flex: 1 }} /> : <Flexbox flex={1} />}
-  </Flexbox>
-);
-
 /**
- * Group / sub-group header as a standalone (context-free) AccordionItem so the
- * virtual list keeps the Accordion look while owning the expand state itself.
- * It renders no content: the rows it opens are the sibling virtual items.
+ * Group / sub-group header of the virtual list. It renders no content: the
+ * rows it opens are the sibling virtual items.
  */
 const TaskGroupHeader = memo<{
   createScope?: TaskListCreateScope;
@@ -173,37 +123,28 @@ const TaskGroupHeader = memo<{
   }, [createDefaults, createScope]);
 
   return (
-    <div style={{ paddingTop: item.first ? 0 : sub ? 6 : 16 }}>
-      <div {...stylex.props(styles.header)}>
-        <AccordionRoot
-          indicatorPlacement={'start'}
-          value={item.collapsed ? [] : [item.key]}
-          variant={sub ? 'borderless' : 'filled'}
-          onValueChange={() => onToggle(item.key)}
-        >
-          <AccordionItem value={item.key}>
-            <AccordionHeader>
-              <AccordionTrigger style={{ paddingBlock: sub ? 6 : 8, paddingInline: 14 }}>
-                {renderGroupTitle(item.meta, item.count, sub, !!createDefaults)}
-              </AccordionTrigger>
-            </AccordionHeader>
-          </AccordionItem>
-        </AccordionRoot>
-        {createDefaults && (
-          // Outside the trigger so clicking it opens the modal without toggling
+    <TaskListGroupHeader
+      collapsed={item.collapsed}
+      count={item.count}
+      first={item.first}
+      groupKey={item.key}
+      sub={sub}
+      title={<TaskGroupLabel listHeader group={item.meta} />}
+      action={
+        createDefaults && (
+          // Outside the toggle so clicking it opens the modal without folding
           // the group; the collapse indicator sits at the start (like Linear),
           // so the entry takes the header's far end.
-          <div {...stylex.props(styles.action)}>
-            <ActionIcon
-              icon={Plus}
-              size={'small'}
-              title={t('taskList.kanban.addTask')}
-              onClick={openCreate}
-            />
-          </div>
-        )}
-      </div>
-    </div>
+          <ActionIcon
+            icon={Plus}
+            size={'small'}
+            title={t('taskList.kanban.addTask')}
+            onClick={openCreate}
+          />
+        )
+      }
+      onToggle={() => onToggle(item.key)}
+    />
   );
 });
 
@@ -221,6 +162,7 @@ const VIRTUAL_LIST_COMPONENTS: Components<TaskListVirtualItem, TaskListVirtualCo
 
 const TaskList = memo<TaskListProps>((props) => {
   const {
+    collapseScope,
     createScope,
     data,
     error,
@@ -309,16 +251,14 @@ const TaskList = memo<TaskListProps>((props) => {
 
   // Collapse state lives here (not in the Accordion) because headers and rows
   // are flattened into one virtual list; a collapsed key simply drops its rows
-  // from that list. Keys survive a re-group only when the group keys do.
-  const [collapsedKeys, setCollapsedKeys] = useState<ReadonlySet<string>>(() => new Set());
-  const toggleCollapsed = useCallback((key: string) => {
-    setCollapsedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }, []);
+  // from that list. It is persisted per view and grouping, so a folded group
+  // stays folded across navigation and reloads, and comes back when its
+  // grouping does.
+  const { collapsedKeys, toggleCollapsed } = useTaskListGroupCollapse(
+    collapseScope,
+    groupBy,
+    effectiveSubGroupBy,
+  );
 
   // Selectable rows in display order, collapsed groups included (⌘A selects
   // every task the current view shows, not only the expanded ones). Grey
@@ -334,63 +274,11 @@ const TaskList = memo<TaskListProps>((props) => {
     return [...ids];
   }, [groupedTaskEntries]);
   const listRef = useRef<HTMLDivElement>(null);
-  const selectableIdsRef = useRef(selectableIds);
-  selectableIdsRef.current = selectableIds;
-  const getSelectionOrder = useCallback(() => selectableIdsRef.current, []);
-
-  // A selection never outlives the rows it names: prune on every list change,
-  // and drop it when this list (or its collection) goes away.
-  useEffect(() => {
-    useTaskSelectionStore.getState().prune(new Set(selectableIds));
-  }, [selectableIds]);
-  const selectionScope = props.selectionScope ?? (items ? 'items' : (queryKey ?? ''));
-  useSelectionScope(selectionScope);
-  const { undoLast } = useTaskBatchUndo();
-  const undoLastRef = useRef(undoLast);
-  useEffect(() => {
-    undoLastRef.current = undoLast;
-  }, [undoLast]);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || isEditableTarget(event.target)) return;
-      // Only when nothing else holds focus, or focus is on the list itself:
-      // ⌘A over a side panel's text keeps selecting that text, and Esc inside
-      // a drawer or popover stays theirs.
-      const target = event.target as Node | null;
-      const onList = !!target && !!listRef.current?.contains(target);
-      if (target !== document.body && !onList) return;
-      const selection = useTaskSelectionStore.getState();
-      if (
-        event.key.toLowerCase() === 'a' &&
-        (event.metaKey || event.ctrlKey) &&
-        !event.shiftKey &&
-        !event.altKey
-      ) {
-        if (selectableIdsRef.current.length === 0) return;
-        event.preventDefault();
-        selection.selectAll(selectableIdsRef.current);
-        return;
-      }
-      // ⌘/Ctrl+Z: undo the most recent batch action (session-wide stack, so it
-      // still works after its toast is gone). Shift+⌘Z is left to the page.
-      if (
-        event.key.toLowerCase() === 'z' &&
-        (event.metaKey || event.ctrlKey) &&
-        !event.shiftKey &&
-        !event.altKey
-      ) {
-        if (undoLastRef.current()) event.preventDefault();
-        return;
-      }
-      if (event.key === 'Escape' && selection.selectedIds.length > 0 && !selection.progress) {
-        event.preventDefault();
-        selection.clear();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  const { getSelectionOrder } = useTaskListSelection({
+    listRef,
+    scope: props.selectionScope ?? (items ? 'items' : (queryKey ?? '')),
+    selectableIds,
+  });
 
   const virtualItems = useMemo(
     () =>

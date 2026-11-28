@@ -1,4 +1,4 @@
-import { cx, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { type FC, type PropsWithChildren } from 'react';
 import { useEffect, useMemo, useRef } from 'react';
 
@@ -10,15 +10,7 @@ import { getInnerCssVariables, getOuterCssVariables } from './cssVariables';
 import { LayoutContainerContext } from './LayoutContainerContext';
 import { styles } from './style';
 
-interface DesktopLayoutContainerProps extends PropsWithChildren {
-  /**
-   * Fill the parent edge to edge, with no outer padding or own border: the
-   * `im_layout` rail wrap already draws the rounded border around it.
-   */
-  flush?: boolean;
-}
-
-const DesktopLayoutContainer: FC<DesktopLayoutContainerProps> = ({ children, flush }) => {
+const DesktopLayoutContainer: FC<PropsWithChildren> = ({ children }) => {
   const innerContainerRef = useRef<HTMLDivElement>(null);
   const isDarkMode = useIsDark();
   const [expand] = useGlobalStore((s) => [systemStatusSelectors.showLeftPanel(s)]);
@@ -46,14 +38,14 @@ const DesktopLayoutContainer: FC<DesktopLayoutContainerProps> = ({ children, flu
 
   return (
     <Flexbox
-      className={cx(styles.outerContainer, flush && styles.outerFlush)}
+      className={styles.outerContainer}
       height={'100%'}
-      padding={flush ? 0 : 8}
-      style={flush ? undefined : outerCssVariables}
+      padding={8}
+      style={outerCssVariables}
       width={'100%'}
     >
       <Flexbox
-        className={cx(styles.innerContainer, flush && styles.innerFlush)}
+        className={styles.innerContainer}
         height={'100%'}
         ref={innerContainerRef}
         style={innerCssVariables}

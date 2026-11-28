@@ -165,13 +165,21 @@ export type TerminalTextSource =
   | { kind: 'inline'; text: string }
   | { kind: 'url'; url: string };
 
+export interface PipeOutputSource {
+  command?: string;
+  kind: 'pipe';
+  stderr?: TerminalTextSource;
+  stdout?: TerminalTextSource;
+  transcriptUrl?: string;
+}
+
 export type TerminalTextViewKey = 'output' | 'stderr' | 'stdout' | 'transcript';
 
 export interface TerminalTextView {
   key: TerminalTextViewKey;
   /** Strip escape sequences before display — terminal streams, never the transcript. */
   plain: boolean;
-  source: TerminalTextSource;
+  source: PipeOutputSource | TerminalTextSource;
 }
 
 export interface TerminalViewPlan {
@@ -210,10 +218,9 @@ const transcriptSource = (input: TerminalEvidenceInput): TerminalTextSource | un
 };
 
 /**
- * Decide the card's body: stdout / stderr apart for a pipe capture, one merged
- * output otherwise, the recording for replay when there is one, and the row's
- * own transcript as the always-reachable text path. Without a readable record
- * the transcript is the whole body.
+ * Lead with the execution output and keep the original streams, replay and
+ * transcript available for inspection. Without a readable record the
+ * transcript is the whole body.
  */
 export const resolveTerminalViews = (input: TerminalEvidenceInput): TerminalViewPlan => {
   const terminal = readTerminalEvidenceMetadata(input.metadata);
@@ -232,6 +239,17 @@ export const resolveTerminalViews = (input: TerminalEvidenceInput): TerminalView
   if (terminal.capture.streamLayout === 'separate') {
     const stdout = streamSource('stdout', terminal, links);
     const stderr = streamSource('stderr', terminal, links);
+    streams.push({
+      key: 'output',
+      plain: true,
+      source: {
+        command: terminal.execution.command?.trim() || undefined,
+        kind: 'pipe',
+        stderr,
+        stdout,
+        transcriptUrl: input.fileUrl || undefined,
+      },
+    });
     // Both or neither: a lone stdout tab next to a stream we cannot load would
     // read as "stderr was empty" when it was only unavailable.
     if (stdout && stderr)
@@ -252,9 +270,7 @@ export const resolveTerminalViews = (input: TerminalEvidenceInput): TerminalView
   }
 
   const views = [...streams, ...transcriptView];
-  // Open on the stream that has something to say: stderr when stdout is empty.
-  const firstWithText = streams.find((view) => view.source.kind !== 'empty');
-  const defaultView = firstWithText?.key ?? views[0]?.key ?? (replayUrl ? 'replay' : 'transcript');
+  const defaultView = views[0]?.key ?? (replayUrl ? 'replay' : 'transcript');
   return { defaultView, replayUrl, terminal, views };
 };
 

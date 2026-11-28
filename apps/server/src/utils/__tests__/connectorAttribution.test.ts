@@ -7,7 +7,7 @@ import {
   collectBorrowedConnectors,
   resolveConnectorAuthorizerId,
   resolveUserDisplayMap,
-  withTrustedLinkedByUserId,
+  withServerOwnedMetadata,
 } from '../connectorAttribution';
 
 vi.mock('@/database/models/user', () => ({
@@ -138,52 +138,81 @@ describe('buildConnectorOwnershipPrompt', () => {
   });
 });
 
-describe('withTrustedLinkedByUserId', () => {
-  it('drops a client-supplied linkedByUserId on create (no server row)', () => {
-    const result = withTrustedLinkedByUserId(
+describe('withServerOwnedMetadata', () => {
+  it('drops a client-supplied composio block on create (no server row)', () => {
+    const result = withServerOwnedMetadata(
       { composio: { connectedAccountId: 'acc_1', linkedByUserId: 'victim' }, other: 1 },
       undefined,
     );
-    // linkedByUserId stripped; all other metadata preserved.
-    expect(result).toEqual({ composio: { connectedAccountId: 'acc_1' }, other: 1 });
+    // The whole block goes; all other metadata is preserved.
+    expect(result).toEqual({ other: 1 });
   });
 
   it('leaves metadata untouched when the client sends no composio block on create', () => {
     const meta = { headers: { a: 'b' } };
-    expect(withTrustedLinkedByUserId(meta, undefined)).toBe(meta);
+    expect(withServerOwnedMetadata(meta, undefined)).toBe(meta);
   });
 
-  it('forces linkedByUserId back to the stored server value on update (ignores spoof)', () => {
-    const result = withTrustedLinkedByUserId(
-      { composio: { connectedAccountId: 'acc_1', linkedByUserId: 'victim' } },
-      { composio: { linkedByUserId: 'real-owner' } },
+  it("keeps the stored block on update, ignoring the client's account and linker", () => {
+    // Regression: only `linkedByUserId` was trusted, so an edit could point a
+    // row at a teammate's account id read from the shared connections.
+    const result = withServerOwnedMetadata(
+      { composio: { connectedAccountId: 'acc_mate', linkedByUserId: 'victim' }, other: 1 },
+      { composio: { connectedAccountId: 'acc_1', linkedByUserId: 'real-owner' } },
     );
     expect(result).toEqual({
       composio: { connectedAccountId: 'acc_1', linkedByUserId: 'real-owner' },
+      other: 1,
     });
   });
 
-  it('drops the client value on update when the server row has no linkedByUserId', () => {
-    const result = withTrustedLinkedByUserId(
-      { composio: { linkedByUserId: 'victim' } },
-      { composio: { connectedAccountId: 'acc_1' } },
+  it('drops the client block on update when the stored row has none', () => {
+    const result = withServerOwnedMetadata(
+      { composio: { connectedAccountId: 'acc_mate' }, other: 1 },
+      { other: 0 },
     );
-    expect(result).toEqual({ composio: {} });
+    expect(result).toEqual({ other: 1 });
   });
 
-  it('injects the trusted server value even when the client omits the composio block', () => {
-    const result = withTrustedLinkedByUserId(
+  it('carries the stored block over when the client omits it', () => {
+    const result = withServerOwnedMetadata(
       { other: 1 },
-      { composio: { linkedByUserId: 'owner' } },
+      { composio: { connectedAccountId: 'acc_1', linkedByUserId: 'owner' } },
     );
-    expect(result).toEqual({ composio: { linkedByUserId: 'owner' }, other: 1 });
+    expect(result).toEqual({
+      composio: { connectedAccountId: 'acc_1', linkedByUserId: 'owner' },
+      other: 1,
+    });
   });
 
   it('passes through undefined (untouched) and null (clear)', () => {
     expect(
-      withTrustedLinkedByUserId(undefined, { composio: { linkedByUserId: 'x' } }),
+      withServerOwnedMetadata(undefined, { composio: { linkedByUserId: 'x' } }),
     ).toBeUndefined();
-    expect(withTrustedLinkedByUserId(null, { composio: { linkedByUserId: 'x' } })).toBeNull();
+    expect(withServerOwnedMetadata(null, { composio: { linkedByUserId: 'x' } })).toBeNull();
+  });
+
+  // Regression: a member added a shared connector naming a teammate's private
+  // agent as its mount, under the identifier of the owner's private connector.
+  // The mount outranked the owner's row, so the agent's tool calls went to the
+  // member's server.
+  it('drops a client-supplied mount on create', () => {
+    expect(
+      withServerOwnedMetadata({ mountedByAgentId: 'agt-victim', other: 1 }, undefined),
+    ).toEqual({ other: 1 });
+  });
+
+  it("keeps the stored mount on update, ignoring the client's", () => {
+    expect(
+      withServerOwnedMetadata({ mountedByAgentId: 'agt-victim' }, { mountedByAgentId: 'agt-mine' }),
+    ).toEqual({ mountedByAgentId: 'agt-mine' });
+    // Setting one on an unmounted row, or clearing a stored one, goes through
+    // mountToAgent / unmountFromAgent.
+    expect(withServerOwnedMetadata({ mountedByAgentId: 'agt-victim' }, { other: 0 })).toEqual({});
+    expect(withServerOwnedMetadata({ other: 1 }, { mountedByAgentId: 'agt-mine' })).toEqual({
+      mountedByAgentId: 'agt-mine',
+      other: 1,
+    });
   });
 });
 

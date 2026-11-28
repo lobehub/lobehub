@@ -581,6 +581,31 @@ describe('GatewayHttpClient', () => {
       expect(result).toEqual({ error: 'DEVICE_OFFLINE', success: false });
     });
 
+    it('sends the run credential in the body and never echoes it in a failure', async () => {
+      const token = 'sk-ant-oat01-run-credential';
+      const runCredential = {
+        provider: 'claude-code' as const,
+        secret: {
+          expiresAt: '2026-12-01T00:00:00.000Z',
+          token,
+          type: 'claude-oauth-token' as const,
+        },
+      };
+      mockFetch({
+        ok: false,
+        status: 400,
+        text: vi.fn().mockResolvedValue(`bad request: {"token":"${token}"}`),
+      });
+
+      const result = await client.dispatchAgentRun({ ...createAgentRunInput(), runCredential });
+
+      const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);
+      expect(body.runCredential).toEqual(runCredential);
+      expect(result.success).toBe(false);
+      expect(JSON.stringify(result)).not.toContain(token);
+      expect(result.error).toContain('[redacted]');
+    });
+
     /** @example A pre-acceptance 404 keeps enough context for an outer agent to retry. */
     it('returns structured retry context for a missing agent-run target', async () => {
       mockFetch({
@@ -656,6 +681,27 @@ describe('GatewayHttpClient', () => {
       // Routing fields are lifted out of the call descriptor, not tunneled.
       expect(body.toolCall.deviceId).toBeUndefined();
       expect(body.deviceId).toBe('device-1');
+    });
+
+    it('sends the client the caller picked for the device', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
+        ok: true,
+      });
+
+      await client.executeMcpCall({
+        apiName: 'echo',
+        arguments: '{}',
+        clientKinds: ['cli'],
+        deviceId: 'device-1',
+        identifier: 'echo-mcp',
+        params: { args: [], command: 'echo-mcp', name: 'echo-mcp', type: 'stdio' },
+        userId: 'user-1',
+      });
+
+      const body = JSON.parse((vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string);
+      expect(body.clientKinds).toEqual(['cli']);
+      expect(body.toolCall.clientKinds).toBeUndefined();
     });
 
     it('should surface non-ok responses as a failed result', async () => {

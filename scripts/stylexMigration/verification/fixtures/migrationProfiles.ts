@@ -2,6 +2,13 @@ import type { FixtureProfile } from './fixtureRegistry';
 
 export const migrationFixtures = [
   ['AskUserQuestionView', 'packages/shared-tool-ui/src/AskUserQuestion/AskUserQuestionView.tsx'],
+  ['AttachmentThumbs', 'src/features/Acceptance/Viewer/Evidence/attachments.tsx'],
+  ['VideoEvidencePlayer', 'src/features/Acceptance/Viewer/Evidence/Video/VideoEvidencePlayer.tsx'],
+  ['ConversationChatItem', 'src/features/Conversation/ChatItem/ChatItem.tsx'],
+  [
+    'PullRequestDockActionButton',
+    'src/features/Conversation/WorkingSidebar/PullRequest/DockActionButton.tsx',
+  ],
   ['SidebarGroupItem', 'src/features/HomeSidebar/Body/Agent/Modals/ConfigGroupModal/GroupItem.tsx'],
   ['ToolbarActionButton', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
   ['PreviewToolbar', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
@@ -10,10 +17,12 @@ export const migrationFixtures = [
   ['AcceptanceReport', 'src/features/Acceptance/Report/ReportViewer.tsx'],
   ['AcceptanceEvidenceList', 'src/features/Acceptance/Viewer/Evidence/EvidenceList.tsx'],
   ['VoiceMessageControl', 'src/features/ChatInput/VoiceMessage/index.tsx'],
+  ['ReviewFileList', 'src/features/Conversation/WorkingSidebar/Review/index.tsx'],
 ] as const;
 
 const voiceMessageImporter = 'src/features/ChatInput/VoiceMessage/index.tsx';
 const voiceMessageData = 'fixtures/VoiceMessageFixtureData.ts';
+const reviewDirectory = 'src/features/Conversation/WorkingSidebar/Review';
 
 export const migrationProfiles: Record<string, FixtureProfile> = {
   AskUserQuestionView: {
@@ -50,6 +59,68 @@ export const migrationProfiles: Record<string, FixtureProfile> = {
       './useVoiceMessageCapability',
       './useVoiceMessageRecorder',
     ].map((source) => ({ importer: voiceMessageImporter, source, replacement: voiceMessageData })),
+  },
+  AttachmentThumbs: {
+    dependencies: ['lucide-react', 'i18next', 'react-i18next'],
+    exportName: 'AttachmentThumbs',
+    variants: [{ id: 'chip' }, { id: 'comment' }, { id: 'dark-comment', appearance: 'dark' }],
+    boundaries: [
+      {
+        importer: 'src/features/Acceptance/Viewer/Evidence/attachments.tsx',
+        source: '@/store/file',
+        replacement: 'fixtures/FixtureBusinessData.ts',
+      },
+    ],
+  },
+  VideoEvidencePlayer: {
+    dependencies: ['lucide-react', 'i18next', 'react-i18next'],
+    exportName: 'VideoEvidencePlayer',
+    settleFrames: 2,
+    variants: [{ id: 'player' }, { id: 'frame-height' }, { id: 'dark-player', appearance: 'dark' }],
+  },
+  ConversationChatItem: {
+    boundaries: [
+      ['ChatItem/ChatItem.tsx', '../store'],
+      ['ChatItem/ChatItem.tsx', '../FollowUp/FollowUpChips'],
+      ['ChatItem/ChatItem.tsx', './components/Avatar'],
+      ['ChatItem/ChatItem.tsx', './components/ErrorContent'],
+      ['ChatItem/ChatItem.tsx', './components/MessageContent'],
+      ['ChatItem/components/Actions.tsx', '../../store'],
+      ['ChatItem/components/Actions.tsx', '@/store/agent'],
+      ['ChatItem/components/Actions.tsx', '@/store/agent/selectors'],
+      ['ChatItem/components/Actions.tsx', '@/utils/env'],
+      ['ChatItem/components/Title.tsx', '@/hooks/useActivityTime'],
+      ['MessageForward/MessageSelectionWrapper.tsx', '../store'],
+      ['MessageForward/MessageSelectionWrapper.tsx', '@/store/global'],
+      ['MessageForward/MessageSelectionWrapper.tsx', '@/store/global/selectors'],
+    ].map(([file, source]) => ({
+      importer: `src/features/Conversation/${file}`,
+      source,
+      replacement: 'fixtures/ChatItemFixtureData.tsx',
+    })),
+    dependencies: ['lucide-react', 'i18next', 'react-i18next', 'zod'],
+    selector: '[data-component-mount] .message-wrapper',
+    variants: [
+      { id: 'assistant', states: ['default', 'hover'] },
+      { id: 'user', states: ['default', 'hover'] },
+      { id: 'popup-open' },
+      { id: 'locate-highlight' },
+      { id: 'selection-assistant', states: ['default', 'hover'] },
+      { id: 'selection-user' },
+      { id: 'dark-assistant', appearance: 'dark', states: ['default', 'hover'] },
+    ],
+  },
+  PullRequestDockActionButton: {
+    dependencies: ['lucide-react', 'i18next', 'react-i18next'],
+    selector: '[data-component-mount] button',
+    variants: [
+      { id: 'merge-success', states: ['default', 'hover', 'focus-visible'] },
+      { id: 'merge-error', states: ['default', 'hover', 'focus-visible'] },
+      { id: 'merge-plain', states: ['default', 'hover'] },
+      { id: 'update-busy', states: ['default', 'hover'] },
+      { id: 'secondary', states: ['default', 'hover'] },
+      { id: 'dark-merge-error', appearance: 'dark', states: ['default', 'hover'] },
+    ],
   },
   SidebarGroupItem: {
     dependencies: ['lucide-react', 'i18next', 'react-i18next'],
@@ -164,6 +235,31 @@ export const migrationProfiles: Record<string, FixtureProfile> = {
         source: '@/features/FileViewer/hooks/useTextFileLoader',
       },
     ].map((boundary) => ({ ...boundary, replacement: 'fixtures/AcceptanceReportData.ts' })),
+  },
+  ReviewFileList: {
+    boundaries: [
+      ['index.tsx', '@/store/device'],
+      ['index.tsx', './useReviewPatches'],
+      ['index.tsx', './FileTreeNav'],
+      ['index.tsx', './reviewTreeNodes'],
+      ['FileItem.tsx', '@lobechat/utils'],
+      ['FileItem.tsx', '@/services/git'],
+      ['FileItem.tsx', '@/store/file'],
+      ['FileItem.tsx', '@/store/global'],
+    ].map(([file, source]) => ({
+      importer: `${reviewDirectory}/${file}`,
+      source,
+      replacement: 'fixtures/ReviewFileListFixtureData.ts',
+    })),
+    dependencies: ['lucide-react', 'i18next', 'react-i18next', 'path-browserify-esm'],
+    i18n: true,
+    selector: '[data-component-mount] [data-review-row]',
+    settleFrames: 2,
+    variants: [
+      { id: 'grouped', states: ['default', 'hover'] },
+      { id: 'flat', states: ['default', 'hover'] },
+      { id: 'dark-grouped', appearance: 'dark', states: ['default', 'hover'] },
+    ],
   },
   AcceptanceEvidenceList: {
     assets: ['fixtures/AcceptanceEvidenceData.ts'],

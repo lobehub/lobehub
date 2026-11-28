@@ -1,9 +1,19 @@
-import { Button, confirmModal, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { parsePluginEntry } from '@lobechat/types';
+import {
+  Button,
+  confirmModal,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  stopPropagation,
+  toast,
+} from '@lobehub/ui';
 import { MoreHorizontalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { createMcpSettingsModal } from '@/features/MCP/MCPSettings/McpSettingsModal';
+import CustomConnectorModal from '@/features/Connectors/CustomConnectorModal';
+import { asLegacyMigrationPlugin } from '@/features/Connectors/legacyMigrationPlugin';
 import { createPluginDetailModal } from '@/features/PluginDetailModal';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
@@ -11,8 +21,10 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { pluginHelpers, useToolStore } from '@/store/tool';
 import { mcpStoreSelectors, pluginSelectors } from '@/store/tool/selectors';
+import { connectorSelectors } from '@/store/tool/slices/connector';
 import { type LobeToolType } from '@/types/tool/tool';
 
+import ConnectorConfigureButton from './ConnectorConfigureButton';
 import EditCustomPlugin from './EditCustomPlugin';
 
 interface ActionsProps {
@@ -23,42 +35,94 @@ interface ActionsProps {
 
 const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
   const mobile = useServerConfigStore((s) => s.isMobile);
-  const [installed, installing, unInstallPlugin, installMCPPlugin] = useToolStore((s) => [
-    pluginSelectors.isPluginInstalled(identifier)(s),
-    mcpStoreSelectors.isPluginInstallLoading(identifier)(s),
-    s.uninstallCustomPlugin,
-    s.installMCPPlugin,
-  ]);
-
   const isCustomPlugin = type === 'customPlugin';
+  const isCommunityMCP = !isCustomPlugin && isMCP;
+  const [installed, installing, unInstallPlugin, installMCPPlugin, migrateLegacyPlugin] =
+    useToolStore((s) => [
+      pluginSelectors.isPluginInstalled(identifier)(s),
+      mcpStoreSelectors.isPluginInstallLoading(identifier)(s),
+      // A community MCP may be installed as a connector, which only this removes.
+      isCommunityMCP ? s.uninstallMCPPlugin : s.uninstallCustomPlugin,
+      s.installMCPPlugin,
+      s.migrateLegacyPluginToConnector,
+    ]);
+
   const { t } = useTranslation('plugin');
   const plugin = useToolStore(pluginSelectors.getToolManifestById(identifier));
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
-  const [togglePlugin, isPluginEnabledInAgent] = useAgentStore((s) => [
+  const [togglePlugin, removePlugin, hasPluginEntry] = useAgentStore((s) => [
     s.togglePlugin,
-    agentSelectors.currentAgentPlugins(s).includes(identifier),
+    s.removePlugin,
+    (agentSelectors.currentAgentConfig(s)?.plugins ?? []).some(
+      (entry) => parsePluginEntry(entry).identifier === identifier,
+    ),
   ]);
+  // A marketplace MCP installed as a connector, a reinstall over a legacy row
+  // included: its tools run on the connector, so its settings are edited there,
+  // not in the plugin settings modal.
+  const marketConnector = useToolStore((s) =>
+    isCommunityMCP
+      ? connectorSelectors.marketplaceMcpConnectorByIdentifier(identifier)(s)
+      : undefined,
+  );
   const hasSettings = pluginHelpers.isSettingSchemaNonEmpty(plugin?.settings);
   // Painted from the local cache: settings and connection parameters only
   // arrive with the server's records, so configuring waits for them.
   const isConfirming = useToolStore(pluginSelectors.isInstalledPluginsCacheOnly);
 
   const [showModal, setModal] = useState(false);
+  const [showMigrationRepair, setShowMigrationRepair] = useState(false);
+  const [migrating, setMigrating] = useState(false);
+  const legacyPluginRow = useToolStore(pluginSelectors.getInstalledPluginById(identifier));
+  const migrationRepairPlugin =
+    isCommunityMCP &&
+    legacyPluginRow?.type === 'plugin' &&
+    legacyPluginRow.customParams?.mcp?.type !== 'cloud'
+      ? asLegacyMigrationPlugin(legacyPluginRow)
+      : undefined;
 
-  const isCommunityMCP = !isCustomPlugin && isMCP;
-  const showConfigureButton = isCustomPlugin || isMCP || hasSettings;
+  // A market-hosted (cloud) connector has no connection settings to edit.
+  const showConfigureButton = marketConnector
+    ? marketConnector.mcpConnectionType !== 'cloud'
+    : isCustomPlugin || isMCP || hasSettings;
+  // Server-side migration reads the confirmed row itself; editing settings still waits for it.
+  const confirming = isConfirming && !isCommunityMCP;
 
-  const configureButton = (
+  const configureButton = marketConnector ? (
+    <ConnectorConfigureButton canEdit={canEdit} connector={marketConnector} />
+  ) : (
     <Button
-      disabled={!canEdit || isConfirming}
-      loading={isConfirming}
+      disabled={!canEdit || confirming || migrating}
+      loading={confirming || migrating}
       onClick={() => {
-        if (!canEdit || isConfirming) return;
+        if (!canEdit || confirming || migrating) return;
         if (isCustomPlugin) {
           setModal(true);
         } else if (isCommunityMCP) {
-          createMcpSettingsModal({ identifier });
+          confirmModal({
+            content: t('store.actions.confirmMigrate'),
+            okText: t('store.actions.upgrade'),
+            onOk: async () => {
+              setMigrating(true);
+              try {
+                await migrateLegacyPlugin(identifier);
+                toast.success(t('store.actions.migrateSuccess'));
+              } catch (error) {
+                toast.error(
+                  error instanceof Error ? error.message : t('store.actions.migrateFailed'),
+                );
+                // The legacy settings editor used to be the repair path for a
+                // moved endpoint or broken launch command. Migration keeps that
+                // path by reopening the connection form with the failed values;
+                // saving it retries the server-side migration with those repairs.
+                if (migrationRepairPlugin) setShowMigrationRepair(true);
+              } finally {
+                setMigrating(false);
+              }
+            },
+            title: t('store.actions.upgrade'),
+          });
         } else {
           createPluginDetailModal({
             id: identifier,
@@ -68,7 +132,7 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
         }
       }}
     >
-      {t('store.actions.configure')}
+      {isCommunityMCP ? t('store.actions.upgrade') : t('store.actions.configure')}
     </Button>
   );
 
@@ -99,9 +163,9 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
                     confirmModal({
                       okButtonProps: { danger: true },
                       onOk: async () => {
-                        // If plugin is enabled in current agent, disable it first
-                        if (isPluginEnabledInAgent) {
-                          await togglePlugin(identifier, false);
+                        // Drop any agent-level entry (auto / pinned / disabled) before uninstalling
+                        if (hasPluginEntry) {
+                          await removePlugin(identifier);
                         }
                         await unInstallPlugin(identifier);
                       },
@@ -125,7 +189,7 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
               if (!canCreate || !canEdit) return;
               if (isMCP) {
                 await installMCPPlugin(identifier);
-                await togglePlugin(identifier);
+                await togglePlugin(identifier, true);
               }
             }}
           >
@@ -133,6 +197,14 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
           </Button>
         )}
       </Flexbox>
+      {migrationRepairPlugin && (
+        <CustomConnectorModal
+          legacyPlugin={migrationRepairPlugin}
+          open={showMigrationRepair}
+          onClose={() => setShowMigrationRepair(false)}
+          onEditSuccess={() => setShowMigrationRepair(false)}
+        />
+      )}
     </>
   );
 });

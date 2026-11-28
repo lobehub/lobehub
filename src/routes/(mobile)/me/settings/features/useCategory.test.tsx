@@ -21,12 +21,17 @@ vi.hoisted(() => {
 });
 
 const navigate = vi.fn();
+const mocks = vi.hoisted(() => ({ codingPlans: false }));
+
+vi.mock('@/business/client/hooks/useCodingPlansTab', () => ({
+  useCodingPlansTab: () => (mocks.codingPlans ? { label: 'Business tab' } : null),
+}));
 
 vi.mock('react-router', () => ({
   useNavigate: () => navigate,
 }));
 
-const createWrapper = (showProvider: boolean) => {
+const createWrapper = (showProvider: boolean, enableBusinessFeatures = false) => {
   const Wrapper = ({ children }: { children: ReactNode }) => (
     <Provider
       createStore={() =>
@@ -37,6 +42,7 @@ const createWrapper = (showProvider: boolean) => {
             }),
             showProvider,
           },
+          serverConfig: { aiProvider: {}, enableBusinessFeatures, telemetry: {} },
         })
       }
     >
@@ -52,6 +58,7 @@ const initialUserStoreState = useUserStore.getState();
 afterEach(() => {
   cleanup();
   navigate.mockReset();
+  mocks.codingPlans = false;
   useUserStore.setState(initialUserStoreState, true);
 });
 
@@ -100,5 +107,26 @@ describe('mobile settings useCategory', () => {
     const systemGroup = result.current.find((group) => group.key === SettingsGroupKey.System);
 
     expect(systemGroup?.items.map((item) => item.key)).toContain(SettingsTabs.OAuthApps);
+  });
+
+  it('lists Coding Plans under Runtime, right after Agent, only where the slot supplies it', () => {
+    const groups = () =>
+      renderHook(() => useCategory(), { wrapper: createWrapper(true, true) }).result.current;
+    const keysOf = (key: SettingsGroupKey) =>
+      groups()
+        .find((group) => group.key === key)
+        ?.items.map((item) => item.key);
+
+    expect(groups().map((group) => group.key)).not.toContain(SettingsGroupKey.Resource);
+
+    mocks.codingPlans = true;
+    const order = groups().map((group) => group.key);
+    // A real key: a missing enum member would make both sides `undefined`.
+    expect(order).toContain('resource');
+    expect(order.indexOf(SettingsGroupKey.Resource)).toBe(
+      order.indexOf(SettingsGroupKey.Agent) + 1,
+    );
+    expect(keysOf(SettingsGroupKey.Resource)).toEqual([SettingsTabs.CodingPlans]);
+    expect(keysOf(SettingsGroupKey.Subscription)).not.toContain(SettingsTabs.CodingPlans);
   });
 });

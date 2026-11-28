@@ -4,10 +4,13 @@ import path from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { DSH_MIN_VERSION, DSH_VERSION_PATTERN } from '../spawn/dshAcpSession';
+import type { CliCommandStatus } from '../spawn/resolveCliCommand';
 import {
   probeRemotePlatform,
   resolveRemotePlatformCommand,
   resolveRemotePlatformRuntime,
+  scanHeterogeneousAgentsOnHost,
 } from './scanHost';
 
 vi.mock('node:child_process', () => ({ execFile: vi.fn() }));
@@ -19,17 +22,28 @@ vi.mock('node:os', async () => {
 
 const {
   detectHeterogeneousCliCommandMock,
+  detectInUserBinDirsMock,
+  detectInWslWhenMissingMock,
   detectValidatedCommandCandidatesMock,
+  invalidateLoginShellPathCacheMock,
   resolveCliSpawnPlanMock,
 } = vi.hoisted(() => ({
   detectHeterogeneousCliCommandMock: vi.fn(),
+  // The dsh detector's fallback sweeps (npm global folders, WSL) pass a found
+  // command straight through; these tests drive it from the PATH probe alone.
+  detectInUserBinDirsMock: vi.fn(async (status: unknown) => status),
+  detectInWslWhenMissingMock: vi.fn(async (status: unknown) => status),
   detectValidatedCommandCandidatesMock: vi.fn(),
+  invalidateLoginShellPathCacheMock: vi.fn(),
   resolveCliSpawnPlanMock: vi.fn(),
 }));
 
 vi.mock('../spawn/resolveCliCommand', () => ({
   detectHeterogeneousCliCommand: detectHeterogeneousCliCommandMock,
+  detectInUserBinDirs: detectInUserBinDirsMock,
+  detectInWslWhenMissing: detectInWslWhenMissingMock,
   detectValidatedCommandCandidates: detectValidatedCommandCandidatesMock,
+  invalidateLoginShellPathCache: invalidateLoginShellPathCacheMock,
 }));
 
 vi.mock('../spawn/cliSpawn', () => ({
@@ -140,6 +154,21 @@ describe('platform command scanning', () => {
     });
   });
 
+  it('drops the cached login-shell PATH before a host scan probes anything', async () => {
+    detectHeterogeneousCliCommandMock.mockResolvedValue({ available: false });
+    detectValidatedCommandCandidatesMock.mockResolvedValue({ available: false });
+
+    await scanHeterogeneousAgentsOnHost();
+
+    expect(invalidateLoginShellPathCacheMock).toHaveBeenCalledTimes(1);
+    const invalidatedAt = invalidateLoginShellPathCacheMock.mock.invocationCallOrder[0]!;
+    const firstProbeAt = Math.min(
+      ...detectHeterogeneousCliCommandMock.mock.invocationCallOrder,
+      ...detectValidatedCommandCandidatesMock.mock.invocationCallOrder,
+    );
+    expect(invalidatedAt).toBeLessThan(firstProbeAt);
+  });
+
   it('binds spawn preparation to the validated executable and recovered PATH', async () => {
     detectValidatedCommandCandidatesMock.mockResolvedValue({
       available: true,
@@ -222,5 +251,75 @@ describe('platform command scanning', () => {
       available: false,
       reason: 'hermes was not found or failed validation',
     });
+  });
+});
+
+describe('scanHeterogeneousAgentsOnHost', () => {
+  /** Answer the `dsh` PATH probe with `result`; every other command is missing. */
+  const mockDshProbe = (result: CliCommandStatus | Error) => {
+    detectValidatedCommandCandidatesMock.mockImplementation(async (commands: string[]) => {
+      if (commands[0] !== 'dsh') return { available: false };
+      if (result instanceof Error) throw result;
+      return result;
+    });
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    platformMock.mockReturnValue('darwin');
+    detectHeterogeneousCliCommandMock.mockResolvedValue({ available: true, version: '1.0.0' });
+    detectValidatedCommandCandidatesMock.mockResolvedValue({ available: false });
+  });
+
+  it('probes DeepSeek Harness through its version-gated dsh detector', async () => {
+    mockDshProbe({
+      available: true,
+      path: '/private/bin/dsh',
+      resolvedPathEnv: '/private/bin:/usr/bin',
+      version: DSH_MIN_VERSION,
+    });
+
+    const agents = await scanHeterogeneousAgentsOnHost();
+
+    expect(agents['deepseek-harness']).toEqual({ available: true, version: DSH_MIN_VERSION });
+    expect(detectValidatedCommandCandidatesMock).toHaveBeenCalledWith(
+      ['dsh'],
+      { validatePattern: DSH_VERSION_PATTERN },
+      undefined,
+    );
+  });
+
+  it('explains a missing dsh, which the detector reports without an error', async () => {
+    mockDshProbe({ available: false });
+
+    const agents = await scanHeterogeneousAgentsOnHost();
+
+    expect(agents['deepseek-harness']).toEqual({
+      available: false,
+      reason: 'DeepSeek Harness (dsh) was not found or failed validation',
+    });
+  });
+
+  it('keeps the upgrade hint for a dsh older than the minimum version', async () => {
+    mockDshProbe({ available: true, path: '/private/bin/dsh', version: '0.1.9' });
+
+    const agents = await scanHeterogeneousAgentsOnHost();
+    const status = agents['deepseek-harness'];
+
+    expect(status).toMatchObject({ available: false, version: '0.1.9' });
+    expect(status?.reason).toContain(DSH_MIN_VERSION);
+    expect(status?.reason).toContain('npm i -g @deepseek-ai/dsh');
+  });
+
+  it('keeps other providers when only the dsh probe throws', async () => {
+    mockDshProbe(new Error('unexpected probe failure'));
+
+    const agents = await scanHeterogeneousAgentsOnHost();
+
+    expect(agents['deepseek-harness']).toEqual({
+      available: false,
+      reason: 'unexpected probe failure',
+    });
+    expect(agents['claude-code']).toEqual({ available: true, version: '1.0.0' });
   });
 });

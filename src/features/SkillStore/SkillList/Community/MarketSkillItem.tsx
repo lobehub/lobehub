@@ -11,11 +11,9 @@ import {
   DropdownMenu,
   Flexbox,
   Icon,
-  Tag,
 } from '@lobehub/ui';
-import { SkillsIcon } from '@lobehub/ui/icons';
 import { t as translate } from 'i18next';
-import { DownloadIcon, Loader2, MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
+import { DownloadIcon, Loader2, MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,6 +21,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { agentSkillService } from '@/services/skill';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
+import { densityVars } from '@/styles/densityVars';
 import { type DiscoverSkillItem } from '@/types/discover';
 import { downloadFile } from '@/utils/client/downloadFile';
 
@@ -35,12 +34,19 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     overflow: hidden;
+    align-self: flex-start;
+    max-width: 100%;
+    padding: 0;
+    border: 0;
 
-    font-size: 14px;
+    font-family: inherit;
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
+    line-height: inherit;
     color: ${cssVar.colorText};
     text-overflow: ellipsis;
     white-space: nowrap;
+    background: transparent;
 
     &:hover {
       color: ${cssVar.colorPrimary};
@@ -144,12 +150,17 @@ const MarketSkillItem = memo<DiscoverSkillItem>(({ name, icon, description, iden
             },
           ]}
         >
-          <ActionIcon disabled={!canEdit} icon={MoreVerticalIcon} loading={loading} />
+          <ActionIcon
+            aria-label={t('connectorMarket.action.manage', { ns: 'setting' })}
+            disabled={!canEdit}
+            icon={MoreHorizontalIcon}
+            loading={loading}
+          />
         </DropdownMenu>
       );
     }
 
-    if (installing) return <ActionIcon loading icon={Loader2} />;
+    if (installing) return <ActionIcon loading aria-label={tc('loading')} icon={Loader2} />;
 
     return (
       <ActionIcon
@@ -173,12 +184,13 @@ const MarketSkillItem = memo<DiscoverSkillItem>(({ name, icon, description, iden
       >
         <Avatar avatar={icon || name} shape={'square'} size={40} style={{ flex: 'none' }} />
         <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
-          <Flexbox horizontal align="center" gap={8}>
-            <span className={styles.title} onClick={() => openMarketSkillDetailModal(identifier)}>
-              {name}
-            </span>
-            <Tag icon={<Icon icon={SkillsIcon} />} size={'small'} />
-          </Flexbox>
+          <button
+            className={styles.title}
+            type="button"
+            onClick={() => openMarketSkillDetailModal(identifier)}
+          >
+            {name}
+          </button>
           {description && <span className={itemStyles.description}>{description}</span>}
         </Flexbox>
         {renderAction()}

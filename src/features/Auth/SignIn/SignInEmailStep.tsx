@@ -16,8 +16,10 @@ import { type CSSProperties, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AuthIcons from '@/components/AuthIcons';
+import InlineErrorText from '@/components/InlineErrorText';
 import AuthCard from '@/features/AuthCard';
 import AuthAgreement from '@/features/AuthShell/AuthAgreement';
+import { isEmbeddedAuth } from '@/features/AuthShell/embedded';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   inlineLink: css`
@@ -56,9 +58,13 @@ export interface SignInEmailStepProps {
   onResetEmail: () => void;
   onSetPassword: () => void;
   onSocialSignIn: (provider: string) => void;
+  /** Why sending the "set a password" email failed, shown under the social-only hint */
+  sendError?: string;
   serverConfigInit: boolean;
   sessionExpired?: boolean;
   setAgreementChecked: (checked: boolean) => void;
+  /** Provider whose sign-in just failed; explained under the provider buttons */
+  socialErrorProvider?: string | null;
   socialLoading: string | null;
 }
 
@@ -71,9 +77,11 @@ export const SignInEmailStep = ({
   lastAuthProvider,
   loading,
   oAuthSSOProviders,
+  sendError,
   serverConfigInit,
   sessionExpired,
   setAgreementChecked,
+  socialErrorProvider,
   socialLoading,
   onGoToSignup,
   onResetEmail,
@@ -107,7 +115,14 @@ export const SignInEmailStep = ({
   const showEmailForm = !disableEmailPassword && !isSocialOnly;
 
   return (
-    <AuthCard title={t('signin.subtitle', { appName: BRANDING_NAME })}>
+    <AuthCard
+      title={
+        // Lobot's window carries no brand: the page reads as Lobot's own sign-in step.
+        isEmbeddedAuth()
+          ? t('signin.embeddedTitle')
+          : t('signin.subtitle', { appName: BRANDING_NAME })
+      }
+    >
       {sessionExpired && (
         <Alert
           showIcon
@@ -156,6 +171,13 @@ export const SignInEmailStep = ({
               button
             );
           })}
+          {socialErrorProvider && (
+            <InlineErrorText>
+              {t('betterAuth.signin.socialFailed', {
+                provider: getProviderName(socialErrorProvider),
+              })}
+            </InlineErrorText>
+          )}
           {showEmailForm && divider}
         </Flexbox>
       )}
@@ -216,6 +238,9 @@ export const SignInEmailStep = ({
             </>
           }
         />
+      )}
+      {isSocialOnly && sendError && (
+        <InlineErrorText style={{ marginTop: 12 }}>{sendError}</InlineErrorText>
       )}
       {isSocialOnly && (
         <Text align={'center'} fontSize={13} style={{ marginTop: 12 }} type={'secondary'}>

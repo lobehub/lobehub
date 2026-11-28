@@ -2,9 +2,6 @@ import { TokenTag } from '@lobehub/ui/chat';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors } from '@/store/user/selectors';
-
 import ActionPopover from '../components/ActionPopover';
 import TokenDetails from './TokenDetails';
 import { useTokenBreakdown } from './useTokenBreakdown';
@@ -12,28 +9,12 @@ import { useTokenBreakdown } from './useTokenBreakdown';
 const Token = memo(() => {
   const { t } = useTranslation('chat');
 
-  const { chatsToken, historySummaryToken, maxTokens, systemRoleToken, toolsToken, totalToken } =
-    useTokenBreakdown();
-  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
-  const content = useMemo(
-    () => (
-      <TokenDetails
-        breakdown={{
-          chatsToken,
-          historySummaryToken,
-          maxTokens,
-          systemRoleToken,
-          toolsToken,
-          totalToken,
-        }}
-      />
-    ),
-    [chatsToken, historySummaryToken, maxTokens, systemRoleToken, toolsToken, totalToken],
-  );
+  const breakdown = useTokenBreakdown();
+  const { maxTokens, totalToken } = breakdown;
+  const content = useMemo(() => <TokenDetails breakdown={breakdown} />, [breakdown]);
 
-  // Keep the composer quiet for regular users until context pressure is real;
-  // dev mode always shows the tag for inspection.
-  if (!isDevMode && maxTokens > 0 && totalToken / maxTokens <= 0.5) return null;
+  // Keep the composer quiet until context pressure is real.
+  if (maxTokens > 0 && totalToken / maxTokens <= 0.5) return null;
 
   return (
     <ActionPopover content={content}>

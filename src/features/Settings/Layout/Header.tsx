@@ -1,24 +1,31 @@
 'use client';
 
-import { type PropsWithChildren } from 'react';
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
+import { useSettingsBreadcrumb } from '@/features/SettingsSwitch/useSettingsBreadcrumb';
 
-const Header = memo<PropsWithChildren>(() => {
-  const { t } = useTranslation('common');
+import {
+  PERSONAL_SETTINGS_SPACE_KEY,
+  usePersonalSettingsScope,
+} from '../hooks/usePersonalSettingsScope';
 
-  return (
-    <SideBarHeaderLayout
-      breadcrumb={[
-        {
-          href: '/settings',
-          title: t('tab.setting'),
-        },
-      ]}
-    />
-  );
+const PERSONAL_SPACE = { kind: 'personal' } as const;
+
+const Header = memo(() => {
+  const { activeTab, categoryGroups, scope, tabUrl } = usePersonalSettingsScope();
+  // "Personal Space Settings", then "› Account Settings" in the account set.
+  const breadcrumb = useSettingsBreadcrumb({
+    activeTab,
+    fallbackHref: '/settings',
+    groups: categoryGroups,
+    scope,
+    space: PERSONAL_SPACE,
+    spaceKey: PERSONAL_SETTINGS_SPACE_KEY,
+    tabUrl,
+  });
+
+  return <SideBarHeaderLayout breadcrumb={breadcrumb} />;
 });
 
 export default Header;

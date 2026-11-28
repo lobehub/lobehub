@@ -13,6 +13,8 @@ import { EntityLinkHostProvider } from '@/features/EntityLink/host';
  * every refresh, painting it empty before the cards arrived.
  */
 import HomeInbox from '@/features/HomeInbox';
+import type { RailContentState } from '@/features/HomeInbox/railContentState';
+import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -21,9 +23,11 @@ import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import { HOME_ENTITY_PORTAL_SCOPE, isAcceptancePortalView } from './acceptancePortalView';
 import { isHomeMinimalLayout } from './CustomizeModal/config';
+import { useHomeSpacing } from './homeDensity';
 import HomeHeader from './HomeHeader';
 import HomeModeContent from './HomeModeContent';
 import HomePortrait from './HomePortrait';
@@ -36,7 +40,7 @@ import {
   HOME_PORTRAIT_INSET,
   HOME_PORTRAIT_WIDTH,
 } from './portraitFraming';
-import { RAIL_INBOX_PROPS, resolveRailVisibility } from './railVisibility';
+import { RAIL_INBOX_PROPS, resolveRailEmpty, resolveRailVisibility } from './railVisibility';
 import type { HomeMode } from './types';
 
 export const DEFAULT_HOME_MODE: HomeMode = 'chat';
@@ -91,6 +95,13 @@ const COMPACT_PORTRAIT_HEIGHT = 150;
 const COMPACT_PORTRAIT_WIDTH =
   HOME_PORTRAIT_WIDTH * (COMPACT_PORTRAIT_HEIGHT / HOME_PORTRAIT_HEIGHT);
 const COMPACT_PORTRAIT_OVERLAP = getHomePortraitOverlap(COMPACT_PORTRAIT_HEIGHT);
+/**
+ * Compact density tightens the hero-to-composer gap and always shows the small
+ * portrait; the overlap is recomputed so the card still cuts the artwork at the
+ * studio's visible ratio.
+ */
+const DENSE_ROW_GAP = 16;
+const DENSE_PORTRAIT_OVERLAP = getHomePortraitOverlap(COMPACT_PORTRAIT_HEIGHT, DENSE_ROW_GAP);
 const MINIMAL_STACK_GAP = 24;
 /**
  * The minimal header stacks the agent switcher (24px avatar + 2px paddings,
@@ -104,6 +115,8 @@ const MINIMAL_SWITCHER_ROW = 28;
 const MINIMAL_HEADER_GAP = 8;
 const MINIMAL_HEADER_HEIGHT = MINIMAL_SWITCHER_ROW + MINIMAL_HEADER_GAP + MINIMAL_GREETING_LINE;
 const MINIMAL_LIFT = MINIMAL_HEADER_HEIGHT + MINIMAL_STACK_GAP;
+/** The same stack in compact density: 20px greeting, 20px avatar switcher, 16px gap. */
+const DENSE_MINIMAL_LIFT = Math.round(20 * 1.4) + MINIMAL_HEADER_GAP + 24 + 16;
 
 const styles = createStaticStyles(({ css }) => ({
   // Both rows size to their content and the page scrolls around the whole grid
@@ -120,6 +133,10 @@ const styles = createStaticStyles(({ css }) => ({
     gap: ${HOME_PORTRAIT_CARD_GAP}px ${RAIL_COLUMN_GAP}px;
 
     width: 100%;
+
+    html[data-density='compact'] & {
+      row-gap: ${DENSE_ROW_GAP}px;
+    }
 
     @media (width <= 1100px) {
       grid-template-columns: 1fr;
@@ -157,7 +174,7 @@ const styles = createStaticStyles(({ css }) => ({
     display: grid;
     grid-area: 1 / 1 / 2 / -1;
     grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     align-items: end;
 
     width: 100%;
@@ -201,7 +218,7 @@ const styles = createStaticStyles(({ css }) => ({
     --home-portrait-overlap: -${COMPACT_PORTRAIT_OVERLAP}px;
 
     display: flex;
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     align-items: flex-end;
     justify-self: end;
 
@@ -241,6 +258,20 @@ const styles = createStaticStyles(({ css }) => ({
       );
       min-height: 0;
     }
+
+    html[data-density='compact'] & {
+      --home-portrait-overlap: -${DENSE_PORTRAIT_OVERLAP}px;
+
+      min-height: ${COMPACT_PORTRAIT_HEIGHT - DENSE_PORTRAIT_OVERLAP}px;
+
+      @container home (width >= ${SPEECH_INLINE_MIN}px) {
+        --home-portrait-width: ${COMPACT_PORTRAIT_WIDTH}px;
+        --home-portrait-height: ${COMPACT_PORTRAIT_HEIGHT}px;
+        --home-portrait-overlap: -${DENSE_PORTRAIT_OVERLAP}px;
+
+        min-height: 0;
+      }
+    }
   `,
   bubbleSlot: css`
     width: max-content;
@@ -276,6 +307,10 @@ const styles = createStaticStyles(({ css }) => ({
     max-inline-size: 760px;
     margin-inline: auto;
     padding-block-end: ${MINIMAL_LIFT}px;
+
+    html[data-density='compact'] & {
+      padding-block-end: ${DENSE_MINIMAL_LIFT}px;
+    }
   `,
   railSurface: css`
     transform: translateX(0);
@@ -335,6 +370,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 const Home = memo(() => {
   const isLogin = useUserStore(authSelectors.isLogin);
+  const { mainGap, minimalStackGap } = useHomeSpacing();
   const showHomeRail = useGlobalStore(systemStatusSelectors.showHomeRail);
   const showHomePortrait = useGlobalStore(systemStatusSelectors.showHomePortrait);
   const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
@@ -366,9 +402,26 @@ const Home = memo(() => {
    * judging by an empty DOM node also matched while the lazy inbox was
    * suspended and while its feeds were still loading, so every refresh painted one column first and
    * slid back once the cards arrived.
+   *
+   * While the feeds load, the last settled answer for this scope decides, so a
+   * rail that is usually empty does not show skeletons beside a narrowed page
+   * and slide it back on every reload.
    */
-  const [railEmpty, setRailEmpty] = useState(false);
+  const cacheScope = useCacheScope();
+  const railEmptyLastTime = useGlobalStore(systemStatusSelectors.homeRailEmpty(cacheScope));
+  const [railState, setRailState] = useState<RailContentState>('pending');
+  const railEmpty = resolveRailEmpty(railState, railEmptyLastTime);
   const contentCollapsed = railCollapsed || (isLogin && railEmpty);
+  const handleRailStateChange = useCallback(
+    (state: RailContentState) => {
+      setRailState(state);
+      if (state === 'pending') return;
+      useGlobalStore
+        .getState()
+        .updateSystemStatus({ homeRailEmptyByScope: { [cacheScope]: state === 'empty' } });
+    },
+    [cacheScope],
+  );
   const portraitVisible = Boolean(isLogin && showHomePortrait);
 
   useEffect(() => {
@@ -411,7 +464,7 @@ const Home = memo(() => {
 
   if (minimal)
     return (
-      <Flexbox className={styles.minimal} gap={MINIMAL_STACK_GAP}>
+      <Flexbox className={styles.minimal} gap={minimalStackGap}>
         <HomeHeader centered />
         <div className={styles.inputArea}>
           <InputArea
@@ -451,7 +504,7 @@ const Home = memo(() => {
         className={cx(styles.main, styles.content, styles.contentCollapsed)}
         data-rail-collapsed={contentCollapsed}
         data-testid={'home-main'}
-        gap={24}
+        gap={mainGap}
       >
         <Flexbox className={styles.inputArea} gap={12}>
           <InputArea
@@ -470,18 +523,26 @@ const Home = memo(() => {
       </Flexbox>
 
       {isLogin && (
+        // An empty rail collapses with the main column: the widened column runs
+        // under this aside, which would otherwise sit on top (z-index 1) as an
+        // invisible layer swallowing clicks on the column's right-hand buttons.
+        // The inbox stays mounted so it can report new cards and reopen the rail.
         <aside
-          aria-hidden={railCollapsed}
+          aria-hidden={contentCollapsed}
           className={cx(styles.rail, styles.railSurface)}
-          data-collapsed={railCollapsed}
+          data-collapsed={contentCollapsed}
           data-testid={'home-rail'}
           id={'home-rail'}
-          inert={railCollapsed}
+          inert={contentCollapsed}
         >
           {/* The inbox reads assistant replies, which carry internal entity
               links; only the acceptance drawer can show a detail here. */}
           <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
-            <HomeInbox {...RAIL_INBOX_PROPS} variant={'rail'} onRailEmptyChange={setRailEmpty} />
+            <HomeInbox
+              {...RAIL_INBOX_PROPS}
+              variant={'rail'}
+              onRailStateChange={handleRailStateChange}
+            />
           </EntityLinkHostProvider>
         </aside>
       )}

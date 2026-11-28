@@ -1,7 +1,6 @@
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { log } from '../utils/logger';
 import { registerLegacyPluginCommand } from './plugin';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
@@ -12,7 +11,6 @@ const { mockTrpcClient } = vi.hoisted(() => ({
     plugin: {
       getPlugins: { query: vi.fn() },
       removePlugin: { mutate: vi.fn() },
-      updatePlugin: { mutate: vi.fn() },
     },
   },
 }));
@@ -23,12 +21,11 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
 describe('legacy-plugin command', () => {
-  let exitSpy: ReturnType<typeof vi.spyOn>;
   let consoleSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    mockGetTrpcClient.mockReset();
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
     for (const method of [
       ...Object.values(mockTrpcClient.plugin),
@@ -41,7 +38,6 @@ describe('legacy-plugin command', () => {
   });
 
   afterEach(() => {
-    exitSpy.mockRestore();
     consoleSpy.mockRestore();
   });
 
@@ -53,36 +49,21 @@ describe('legacy-plugin command', () => {
   }
 
   describe('command name', () => {
-    it('should register legacy-plugin with a plugin alias and a legacy description', () => {
+    it('should register legacy-plugin with its legacy description and subcommands', () => {
       const program = createProgram();
       const command = program.commands.find((c) => c.name() === 'legacy-plugin');
 
       expect(command).toBeDefined();
-      expect(command!.aliases()).toEqual(['plugin']);
+      expect(command!.aliases()).toEqual([]);
       expect(command!.description()).toBe(
-        'Manage legacy 1.0 plugins (user_installed_plugins). Add new MCP servers with lh connector add',
+        'List, search, or uninstall legacy 1.0 plugins (user_installed_plugins). Add MCP servers with lh connector add',
       );
-      expect(program.commands.some((c) => c.name() === 'plugin')).toBe(false);
-    });
-
-    it('should resolve legacy-plugin and its plugin alias to the same subcommands', async () => {
-      const program = createProgram();
-      const subcommands = (name: string) =>
-        program.commands
-          .find((c) => c.name() === name || c.aliases().includes(name))!
-          .commands.map((c) => c.name());
-
-      expect(subcommands('plugin')).toEqual(subcommands('legacy-plugin'));
-      expect(subcommands('legacy-plugin')).toEqual(['list', 'search', 'uninstall', 'update']);
-
-      mockTrpcClient.plugin.getPlugins.query.mockResolvedValue([
-        { id: 'p1', identifier: 'search', type: 'plugin' },
+      expect(command!.commands.map((subcommand) => subcommand.name())).toEqual([
+        'list',
+        'search',
+        'uninstall',
       ]);
-      await createProgram().parseAsync(['node', 'test', 'legacy-plugin', 'list', '--json']);
-      await createProgram().parseAsync(['node', 'test', 'plugin', 'list', '--json']);
-
-      expect(mockTrpcClient.plugin.getPlugins.query).toHaveBeenCalledTimes(2);
-      expect(consoleSpy.mock.calls[1]).toEqual(consoleSpy.mock.calls[0]);
+      expect(program.commands.some((c) => c.name() === 'plugin')).toBe(false);
     });
   });
 
@@ -176,35 +157,6 @@ describe('legacy-plugin command', () => {
       await program.parseAsync(['node', 'test', 'legacy-plugin', 'uninstall', 'p1', '--yes']);
 
       expect(mockTrpcClient.plugin.removePlugin.mutate).toHaveBeenCalledWith({ id: 'p1' });
-    });
-  });
-
-  describe('update', () => {
-    it('should update plugin settings', async () => {
-      mockTrpcClient.plugin.updatePlugin.mutate.mockResolvedValue({});
-
-      const program = createProgram();
-      await program.parseAsync([
-        'node',
-        'test',
-        'legacy-plugin',
-        'update',
-        'p1',
-        '--settings',
-        '{"key":"value"}',
-      ]);
-
-      expect(mockTrpcClient.plugin.updatePlugin.mutate).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'p1', settings: { key: 'value' } }),
-      );
-    });
-
-    it('should exit when no changes', async () => {
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'legacy-plugin', 'update', 'p1']);
-
-      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('No changes'));
-      expect(exitSpy).toHaveBeenCalledWith(1);
     });
   });
 });

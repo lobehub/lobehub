@@ -10,6 +10,7 @@ const mockInitWithEnvKey = vi.hoisted(() => vi.fn());
 const mockGetServerDB = vi.hoisted(() => vi.fn());
 const mockIsBotFeatureAccessAllowed = vi.hoisted(() => vi.fn());
 const mockUpdateBotRuntimeStatus = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const mockIsBotAsleep = vi.hoisted(() => vi.fn());
 
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: mockGetServerDB,
@@ -34,6 +35,8 @@ vi.mock('@/business/server/bot/featureAccess', () => ({
   }),
   isBotFeatureAccessAllowed: mockIsBotFeatureAccessAllowed,
 }));
+
+vi.mock('../botSleep', () => ({ isBotAsleep: mockIsBotAsleep }));
 
 vi.mock('../runtimeStatus', () => ({
   BOT_RUNTIME_STATUSES: { failed: 'failed' },
@@ -82,6 +85,7 @@ describe('GatewayManager', () => {
     mockFindEnabledByPlatform.mockResolvedValue([]);
     mockFindEnabledByPlatformAndAppId.mockResolvedValue(null);
     mockIsBotFeatureAccessAllowed.mockResolvedValue(true);
+    mockIsBotAsleep.mockResolvedValue(false);
     mockStartedClient.start.mockClear();
     mockStartedClient.stop.mockClear();
 
@@ -152,6 +156,54 @@ describe('GatewayManager', () => {
       );
     });
 
+    it('stops a running persistent bot once it falls asleep from disuse', async () => {
+      mockFindEnabledByPlatform.mockResolvedValue([
+        {
+          applicationId: 'app-1',
+          credentials: { key: 'value' },
+          settings: { connectionMode: 'websocket' },
+          userId: 'owner-1',
+        },
+      ]);
+
+      await manager.start();
+      expect(mockStartedClient.start).toHaveBeenCalledTimes(1);
+
+      mockIsBotAsleep.mockClear();
+      mockIsBotAsleep.mockResolvedValue(true);
+      await (manager as any).syncPlatform('fakeplatform');
+
+      expect(mockIsBotAsleep).toHaveBeenCalledWith(
+        'fakeplatform',
+        expect.objectContaining({ applicationId: 'app-1' }),
+      );
+      expect(mockStartedClient.stop).toHaveBeenCalledTimes(1);
+      expect(mockStartedClient.start).toHaveBeenCalledTimes(1);
+      // The client's stop() writes `disconnected`; the sleeping label is
+      // re-recorded after it, so the settings page still shows the bot asleep.
+      expect(mockIsBotAsleep).toHaveBeenCalledTimes(2);
+      expect(mockIsBotAsleep.mock.invocationCallOrder[1]).toBeGreaterThan(
+        mockStartedClient.stop.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('never puts a webhook bot to sleep', async () => {
+      mockIsBotAsleep.mockResolvedValue(true);
+      mockFindEnabledByPlatform.mockResolvedValue([
+        {
+          applicationId: 'app-1',
+          credentials: { key: 'value' },
+          settings: { connectionMode: 'webhook' },
+          userId: 'owner-1',
+        },
+      ]);
+
+      await manager.start();
+
+      expect(mockIsBotAsleep).not.toHaveBeenCalled();
+      expect(mockStartedClient.start).toHaveBeenCalledTimes(1);
+    });
+
     it('should handle sync errors gracefully', async () => {
       mockFindEnabledByPlatform.mockRejectedValue(new Error('DB connection failed'));
 
@@ -166,6 +218,45 @@ describe('GatewayManager', () => {
       await manager.start();
 
       await expect(manager.startClient('fakeplatform', 'app-1')).resolves.toBeUndefined();
+    });
+
+    it('reaches a client whose start is still pending when it is stopped', async () => {
+      await manager.start();
+      mockFindEnabledByPlatformAndAppId.mockResolvedValue({
+        applicationId: 'app-1',
+        credentials: { key: 'value' },
+        userId: 'owner-1',
+      });
+      let finishStart!: () => void;
+      mockStartedClient.start.mockImplementationOnce(
+        () => new Promise<void>((resolve) => (finishStart = resolve)),
+      );
+
+      const starting = manager.startClient('fakeplatform', 'app-1');
+      await vi.waitFor(() => expect(mockStartedClient.start).toHaveBeenCalledTimes(1));
+
+      await manager.stopClient('fakeplatform', 'app-1');
+      expect(mockStartedClient.stop).toHaveBeenCalledTimes(1);
+
+      finishStart();
+      await starting;
+      // The stop removed the entry; the late start does not re-register it.
+      expect((manager as any).clients.size).toBe(0);
+    });
+
+    it('does not keep a client whose start failed', async () => {
+      await manager.start();
+      mockFindEnabledByPlatformAndAppId.mockResolvedValue({
+        applicationId: 'app-1',
+        credentials: { key: 'value' },
+        userId: 'owner-1',
+      });
+      mockStartedClient.start.mockRejectedValueOnce(new Error('subscribe rejected'));
+
+      await expect(manager.startClient('fakeplatform', 'app-1')).rejects.toThrow(
+        'subscribe rejected',
+      );
+      expect((manager as any).clients.size).toBe(0);
     });
   });
 

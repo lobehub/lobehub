@@ -41,7 +41,51 @@ const vertexaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-11-10',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high'] },
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      audio: true,
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'Gemini 4 Neon sits between Hydrogen and Carbon, bringing near-Carbon quality to complex software engineering, knowledge work and science workflows at faster speeds and lower cost.',
+    displayName: 'Gemini 4 Neon',
+    enabled: true,
+    family: 'gemini',
+    generation: 'gemini-4',
+    id: 'gemini-4-neon',
+    maxOutput: 65_536,
+    /** Global endpoint rates, matching the Gemini API; OpenRouter's `google-vertex/global`
+     * endpoint lists the same $3 / $15 / $0.15 cached.
+     * @see https://ai.google.dev/gemini-api/docs/pricing
+     */
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-11-18',
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -89,7 +133,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-09-02',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -136,7 +181,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-08-13',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -183,7 +229,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-07-21',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -226,7 +273,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-05-19',
     settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -271,7 +319,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-07-21',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'minimal', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -305,7 +354,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-26',
     settings: {
-      extendParams: ['imageAspectRatio2', 'imageResolution2', 'thinkingLevel4'],
+      extendParams: ['imageAspectRatio2', 'imageResolution2'],
+      reasoningEffort: { levels: ['minimal', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -397,7 +447,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-19',
     settings: {
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -436,7 +487,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-05-07',
     settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -473,7 +525,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-04',
     settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -536,7 +589,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-11-18',
     settings: {
-      extendParams: ['thinkingLevel2', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { levels: ['low', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -578,7 +632,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-12-17',
     settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },

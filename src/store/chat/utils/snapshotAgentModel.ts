@@ -8,6 +8,8 @@ import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra';
 import { aiModelSelectors } from '@/store/aiInfra/slices/aiModel/selectors';
+import { pendingHeteroPermissionModeMetadata } from '@/store/chat/heteroPermissionMode';
+import { pendingHeteroPlanModeMetadata } from '@/store/chat/heteroPlanMode';
 
 /**
  * Snapshot the given agent's current model/provider so a newly created topic
@@ -47,7 +49,7 @@ export const snapshotAgentModel = (
 
 export type TopicReasoningSnapshot = Pick<
   ChatTopicMetadata,
-  'heteroEffort' | 'heteroSpeed' | 'reasoningConfig'
+  'heteroEffort' | 'heteroPermissionMode' | 'heteroPlanMode' | 'heteroSpeed' | 'reasoningConfig'
 >;
 
 /**
@@ -75,7 +77,12 @@ export const snapshotAgentReasoning = async (
   const heterogeneousProvider =
     agentByIdSelectors.getAgencyConfigById(agentId)(getAgentStoreState())?.heterogeneousProvider;
   if (heterogeneousProvider) {
-    const snapshot = resolveHeterogeneousTopicRuntimeSnapshot(heterogeneousProvider);
+    const snapshot = {
+      ...resolveHeterogeneousTopicRuntimeSnapshot(heterogeneousProvider),
+      // The Claude Code permission mode / Codex Plan switch the new-topic composer showed.
+      ...pendingHeteroPermissionModeMetadata(agentId, heterogeneousProvider.type),
+      ...pendingHeteroPlanModeMetadata(agentId, heterogeneousProvider.type),
+    };
     return Object.keys(snapshot).length === 0 ? undefined : snapshot;
   }
 
@@ -85,7 +92,7 @@ export const snapshotAgentReasoning = async (
   /** Creation must settle the saved config before persistence, including a first send after reload. */
   await getAiInfraStoreState().ensureModelReasoningConfig(model, provider);
   const aiInfraState = getAiInfraStoreState();
-  if (!aiModelSelectors.isModelHasReasoningExtendParams(model, provider)(aiInfraState)) return;
+  if (!aiModelSelectors.isModelHasReasoningControls(model, provider)(aiInfraState)) return;
   if (!aiModelSelectors.isModelReasoningConfigLoaded(model, provider)(aiInfraState)) return;
 
   return {

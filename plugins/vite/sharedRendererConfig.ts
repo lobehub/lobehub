@@ -1,6 +1,6 @@
 import react from '@vitejs/plugin-react';
 import { codeInspectorPlugin } from 'code-inspector-plugin';
-import type { ModulePreloadOptions, Plugin } from 'vite';
+import type { BuildOptions, ModulePreloadOptions, Plugin } from 'vite';
 
 import { canvasRuntime } from './canvasRuntime';
 import { viteCompletionSounds } from './completionSounds';
@@ -8,6 +8,7 @@ import { lobeIconImports } from './lobeIconImports';
 import { lobeUiImports } from './lobeUiImports';
 import { viteMarkdownImport } from './markdownImport';
 import { viteNodeModuleStub } from './nodeModuleStub';
+import { optionalPeerDepAssets } from './optionalPeerDepAssets';
 import { vitePlatformResolve } from './platformResolve';
 import { stylexPlugin, stylexTokenModules } from './stylex';
 
@@ -328,6 +329,12 @@ export const sharedModulePreload = {
     deps.filter((dep) => !isI18nChunkFileName(dep) && !isDevtoolsChunkFileName(dep)),
 } satisfies ModulePreloadOptions;
 
+// Chunking can introduce cycles between otherwise acyclic source modules.
+// Micro-app clients need the same initialization ordering as the main SPA.
+export const sharedRendererClientBuild = {
+  rolldownOptions: { output: { strictExecutionOrder: true } },
+} satisfies BuildOptions;
+
 export const sharedRollupOutput = {
   chunkFileNames: sharedChunkFileNames,
   manualChunks: sharedManualChunks,
@@ -578,6 +585,8 @@ export function sharedRendererDefine(options: { isElectron: boolean; isMobile: b
 }
 
 export const sharedOptimizeDeps = {
+  // Keep Markdown inside pre-bundling: externalizing it loses the CJK extension's
+  // importer path and resolves its required 2.2 handlers to the root's pinned 2.1.
   exclude: [...stylexTokenModules],
   include: [
     'react',
@@ -585,6 +594,7 @@ export const sharedOptimizeDeps = {
     'react-dom/client',
     'react-router',
     'react-router/dom',
+    'remark-cjk-friendly',
     '@lobehub/ui',
     '@lobehub/ui > @emotion/react',
     'zustand',
@@ -615,6 +625,7 @@ export const sharedOptimizeDeps = {
     'ahooks',
     'motion/react',
   ],
+  rolldownOptions: { plugins: [optionalPeerDepAssets()] },
 };
 
 // Workspace packages can resolve @lobehub/editor through different peer-dependency

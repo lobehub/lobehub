@@ -12,9 +12,11 @@ vi.mock('@/store/tool', () => ({
 
 // Mock toolSelectors.availableToolsForDiscovery
 const mockAvailableToolsForDiscovery = vi.fn();
+const mockConnectorManifests = vi.fn((): unknown[] => []);
 vi.mock('@/store/tool/selectors/tool', () => ({
   toolSelectors: {
     availableToolsForDiscovery: (s: any) => mockAvailableToolsForDiscovery(s),
+    executableConnectorManifests: () => mockConnectorManifests(),
   },
 }));
 
@@ -42,6 +44,7 @@ const makePlugin = (identifier: string) => ({
 describe('lobe-activator executor discovery allowlist', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockConnectorManifests.mockReturnValue([]);
   });
 
   it('should only return manifests for discoverable tools', async () => {
@@ -75,6 +78,25 @@ describe('lobe-activator executor discovery allowlist', () => {
     expect(activatedIds).toContain('web-browsing');
     expect(activatedIds).not.toContain('internal-admin');
   }, 10_000);
+
+  it('only activates tools in the operation snapshot, including a contextual attachment reader', async () => {
+    mockGetState.mockReturnValue({
+      builtinTools: [
+        makeBuiltinTool('lobe-attachments', false),
+        makeBuiltinTool('lobe-user-memory'),
+      ],
+      installedPlugins: [],
+    });
+    mockAvailableToolsForDiscovery.mockReturnValue([{ identifier: 'lobe-user-memory' }]);
+    const result = await activatorExecutor.invoke(
+      'activateTools',
+      { identifiers: ['lobe-user-memory', 'lobe-attachments'], reason: 'Read an attachment' },
+      { messageId: 'msg', stepContext: { discoverableToolIds: ['lobe-attachments'] } },
+    );
+    expect(result.state?.activatedTools?.map((item) => item.identifier)).toEqual([
+      'lobe-attachments',
+    ]);
+  });
 
   it('should reject all identifiers when none are discoverable', async () => {
     const hiddenTool = makeBuiltinTool('secret-tool', false);
@@ -274,5 +296,33 @@ describe('lobe-activator executor discovery allowlist', () => {
     const state = result.state as any;
     const activatedIds = state.activatedTools?.map((t: any) => t.identifier) ?? [];
     expect(activatedIds).toContain('notion');
+  }, 10_000);
+
+  // Marketplace and custom MCP installs land only in `user_connectors` now
+  it('activates a connector-only MCP with its connector manifest', async () => {
+    mockGetState.mockReturnValue({ builtinTools: [], installedPlugins: [] });
+    mockAvailableToolsForDiscovery.mockReturnValue([
+      { description: 'Notes', identifier: 'notes-mcp', name: 'Notes' },
+    ]);
+    mockConnectorManifests.mockReturnValue([
+      {
+        api: [{ description: 'Search notes', name: 'search', parameters: { type: 'object' } }],
+        identifier: 'notes-mcp',
+        meta: { avatar: 'MCP_AVATAR', description: 'Notes connector', title: 'Notes' },
+        type: 'mcp',
+      },
+    ]);
+
+    const result = await activatorExecutor.invoke(
+      'activateTools',
+      { identifiers: ['notes-mcp'], reason: 'Search the notes the user asked about.' },
+      { messageId: 'msg-1', operationId: 'op-1' },
+    );
+
+    expect(result.success).toBe(true);
+    const activated = (result.state as any).activatedTools?.find(
+      (t: any) => t.identifier === 'notes-mcp',
+    );
+    expect(activated).toMatchObject({ apiCount: 1, identifier: 'notes-mcp', name: 'Notes' });
   }, 10_000);
 });

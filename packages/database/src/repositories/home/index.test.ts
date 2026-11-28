@@ -43,7 +43,7 @@ describe('HomeRepository', () => {
   });
 
   describe('getSidebarAgentList - agents', () => {
-    it('should return agents without projecting legacy session info', async () => {
+    it('returns linked agents with their agent-owned sidebar fields', async () => {
       // Create agent
       const [agent] = await serverDB
         .insert(agents)

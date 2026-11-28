@@ -6,8 +6,6 @@ import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 
 import AsyncError from '@/components/AsyncError';
-import { useFetchTopicMemories } from '@/hooks/useFetchMemoryForTopic';
-import { useFetchNotebookDocuments } from '@/hooks/useFetchNotebookDocuments';
 import { getMessageListCacheIdentity, isMessageListServerVerified } from '@/services/message/cache';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
@@ -18,13 +16,14 @@ import {
 } from '@/store/chat/utils/interventionSync';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useUserStore } from '@/store/user';
-import { authSelectors, labPreferSelectors, settingsSelectors } from '@/store/user/selectors';
+import { authSelectors, labPreferSelectors } from '@/store/user/selectors';
 
 import WideScreenContainer from '../../WideScreenContainer';
 import SkeletonList from '../components/SkeletonList';
 import MessageItem from '../Messages';
 import type { WorkflowExpandLevelDefault } from '../Messages/AssistantGroup/components/WorkflowCollapse';
 import { BackgroundRunHintContext } from '../Messages/Contexts/BackgroundRunHintContext';
+import { CompressedHistoryInlineContext } from '../Messages/Contexts/CompressedHistoryInlineContext';
 import { MessageActionProvider } from '../Messages/Contexts/MessageActionProvider';
 import {
   dataSelectors,
@@ -33,6 +32,9 @@ import {
   useConversationStoreApi,
 } from '../store';
 import AgentSignalReceiptList from './components/AgentSignalReceiptList';
+import CompressedHistoryGap from './components/CompressedHistoryGap';
+import CompressedMemberRow from './components/CompressedMemberRow';
+import ConversationContextLoader from './components/ConversationContextLoader';
 import PreviewTail from './components/PreviewTail';
 import { resolveTopicPreview } from './components/PreviewTail/resolveTopicPreview';
 import { usePreviewHandoff } from './components/PreviewTail/usePreviewHandoff';
@@ -48,6 +50,8 @@ import { type InitialScrollPosition } from './hooks/useTopicScrollPersist';
 import { resolveMessageListFeedback } from './resolveMessageListFeedback';
 import { buildChatRows } from './utils/chatRows';
 import { hoistCompressedGroups } from './utils/compressedGroupOrder';
+import { expandCompressedRows } from './utils/compressedHistory';
+import { keepRowInPlace } from './utils/keepRowInPlace';
 import type { MessageDeepLink } from './utils/messageDeepLink';
 import { resolveMessageDeepLink } from './utils/messageDeepLink';
 import { resolveRefreshingRowId } from './utils/refreshingRow';
@@ -144,7 +148,7 @@ export interface ChatListProps {
  *
  * Uses ConversationStore for message data and fetching.
  */
-const ChatList = memo<ChatListProps>(
+const ChatListContent = memo<ChatListProps>(
   ({
     defaultWorkflowExpandLevel,
     disableActionsBar,
@@ -164,7 +168,6 @@ const ChatList = memo<ChatListProps>(
     // The chat store owns the transcript; this view keeps its sync mounted.
     const context = useConversationStore((s) => s.context);
     const paging = context.messageReadMode === 'forward' ? 'forward' : 'backward';
-    const enableUserMemories = useUserStore(settingsSelectors.memoryEnabled);
     const skipFetch = useConversationStore(dataSelectors.skipFetch);
     const useFetchMessages = useChatStore((s) => s.useFetchMessages);
     const activeAgentId = useChatStore((s) => s.activeAgentId);
@@ -219,26 +222,68 @@ const ChatList = memo<ChatListProps>(
       [orderedMessages, filterItem],
     );
     const displayMessageIds = useMemo(() => displayMessages.map((m) => m.id), [displayMessages]);
-    // Steered follow-up turns fold into the turn they interrupted. Custom item
-    // renderers address messages by id, so they keep the flat list.
-    const rows = useMemo(
-      () => (itemContent ? undefined : buildChatRows(displayMessages)),
-      [displayMessages, itemContent],
+    const compressedHistoryPages = useConversationStore((s) => s.compressedHistoryPages);
+    // Share views cannot page a group's older members (owner-only endpoint).
+    const canPageCompressedHistory = !context.agentShareId && !context.topicShareId;
+    // A compression group's original conversation unfolds into rows above the
+    // group on every surface; this list renders those rows itself. Steered
+    // follow-up turns fold into the turn they interrupted only for the default
+    // renderer: custom ones render each message on its own.
+    const expandedRows = useMemo(
+      () =>
+        expandCompressedRows(
+          itemContent
+            ? displayMessages.map((message) => ({ id: message.id }))
+            : buildChatRows(displayMessages),
+          displayMessages,
+          compressedHistoryPages,
+          { pageable: canPageCompressedHistory },
+        ),
+      [canPageCompressedHistory, compressedHistoryPages, displayMessages, itemContent],
     );
-    const rowIds = useMemo(
-      () => rows?.map((row) => row.id) ?? displayMessageIds,
-      [displayMessageIds, rows],
-    );
-    const rowById = useMemo(() => new Map(rows?.map((row) => [row.id, row])), [rows]);
+    const rows = expandedRows.rows;
+    const rowIds = useMemo(() => rows.map((row) => row.id), [rows]);
+    const rowById = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows]);
     const resolvedMessageDeepLink = useMemo(
-      () => resolveMessageDeepLink(displayMessages, rowIds, messageDeepLink),
-      [displayMessages, messageDeepLink, rowIds],
+      () => resolveMessageDeepLink(expandedRows.messages, rowIds, messageDeepLink),
+      [expandedRows, messageDeepLink, rowIds],
+    );
+    const resolveMessageRow = useCallback(
+      (messageId: string) =>
+        resolveMessageDeepLink(expandedRows.messages, rowIds, {
+          id: messageId,
+          navigationKey: messageId,
+        })?.index ?? -1,
+      [expandedRows, rowIds],
+    );
+    const storeApi = useConversationStoreApi();
+    const rowIdsRef = useRef(rowIds);
+    useEffect(() => {
+      rowIdsRef.current = rowIds;
+    });
+    // A later group's gap loads members above the row the reader is on.
+    const loadCompressedGap = useCallback(
+      (groupId: string, anchorId: string | undefined, retry: boolean) => {
+        const run = () => storeApi.getState().loadCompressedGroupHistory(groupId, { retry });
+        if (!anchorId) return run();
+        return keepRowInPlace({
+          anchorId,
+          getRowIds: () => rowIdsRef.current,
+          getScrollMethods: () => storeApi.getState().virtuaScrollMethods,
+          // One frame commits the new rows, the next lets virtua lay them out.
+          nextRender: () =>
+            new Promise((resolve) => {
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+            }),
+          run,
+        });
+      },
+      [storeApi],
     );
     const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
     const latestMessageId = displayMessageIds.at(-1);
 
-    // Skip fetching notebook and memories for share pages — topic shares may be
-    // anonymous, and agent-share visitors are not the owner these APIs scope to.
+    // Agent-share visitors are not the owner the receipt APIs scope to.
     const isSharePage = !!context.topicShareId || !!context.agentShareId;
     // TODO: Migrate Agent Signal receipts behind a dedicated user-visible receipt capability.
     const canShowAgentSignalReceipts = enableSelfLearning && !isSharePage;
@@ -250,21 +295,8 @@ const ChatList = memo<ChatListProps>(
       topicId: canShowAgentSignalReceipts ? context.topicId : undefined,
     });
 
-    // Ensure this conversation's agent config (meta) is loaded into the agent
-    // store, so message author titles resolve via useAgentMeta instead of
-    // falling back to "Untitled Agent". Route-level layouts already init the
-    // active agent, but secondary mounts never do — e.g. the share page mounts
-    // an arbitrary author's agent; without this they render "未命名助理".
-    // Idempotent: SWR dedupes against any route-level init by the same key,
-    // and is gated on isLogin (no fetch for anonymous share viewers).
-    // Agent-share visitors are signed in but NOT the owner: the owner-scoped
-    // config API resolves to null and `markAgentNotFound` would wipe the
-    // share-seeded agentMap entry, so skip the fetch entirely — the visitor
-    // page already seeds the meta from `getSharedAgent`.
     const isLogin = useUserStore(authSelectors.isLogin);
     const isAgentShareVisitor = !!context.agentShareId;
-    const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
-    useFetchAgentConfig(isLogin && !isAgentShareVisitor, context.agentId);
     const messageAuthorAgentIds = useMemo(
       () =>
         [...new Set(displayMessages.map((message) => message.agentId).filter(Boolean))].filter(
@@ -272,15 +304,6 @@ const ChatList = memo<ChatListProps>(
         ) as string[],
       [context.agentId, displayMessages],
     );
-
-    // Fetch conversation context data when a conversation is visible (skip for share pages).
-    // NOTE: the agent-document list is intentionally NOT pre-warmed here — this
-    // mount discarded its result (nothing in the message list renders documents),
-    // yet it pulled the full unbounded list into the homepage batch. The surfaces
-    // that actually render documents (working sidebar / doc page) fetch on their
-    // own mount; the slash menu fetches the slim `non-web` variant.
-    useFetchNotebookDocuments(isSharePage ? undefined : context.topicId!);
-    useFetchTopicMemories(enableUserMemories && !isSharePage ? context.topicId : undefined);
 
     // Use selectors for data
 
@@ -305,7 +328,26 @@ const ChatList = memo<ChatListProps>(
           />
         );
       },
-      [rowIds.length, rowById, defaultWorkflowExpandLevel, receiptsByAnchor],
+      [rowIds, rowById, defaultWorkflowExpandLevel, receiptsByAnchor],
+    );
+    // Compressed-history rows are this list's own, whichever renderer draws the
+    // messages: custom renderers only know message ids.
+    const renderItem = useCallback(
+      (index: number, id: string) => {
+        const row = rowById.get(id);
+        if (row?.compressedMember) return <CompressedMemberRow id={id} index={index} />;
+        if (row?.compressedGap)
+          return (
+            <CompressedHistoryGap
+              anchorId={rowIds[index + 1]}
+              groupId={row.compressedGap}
+              onLoad={loadCompressedGap}
+            />
+          );
+
+        return (itemContent ?? defaultItemContent)(index, id);
+      },
+      [defaultItemContent, itemContent, loadCompressedGap, rowById, rowIds],
     );
     const messagesInit = useConversationStore(dataSelectors.messagesInit);
     const dbMessages = useConversationStore(dataSelectors.dbMessages);
@@ -371,7 +413,6 @@ const ChatList = memo<ChatListProps>(
         feedback.showRefreshing ? resolveRefreshingRowId(displayMessages, !itemContent) : undefined,
       [displayMessages, feedback.showRefreshing, itemContent],
     );
-    const storeApi = useConversationStoreApi();
     useEffect(() => {
       storeApi.setState({ refreshingRowId });
     }, [refreshingRowId, storeApi]);
@@ -425,17 +466,20 @@ const ChatList = memo<ChatListProps>(
       ) : (
         <MessageActionProvider withSingletonActionsBar={!disableActionsBar}>
           <BackgroundRunHintContext value={!hideBackgroundRunHint}>
-            <VirtualizedList
-              dataSource={rowIds}
-              footerSlot={footerSlot}
-              headerSlot={headerSlot}
-              initialScrollPosition={initialScrollPosition}
-              itemContent={itemContent ?? defaultItemContent}
-              messageDeepLink={resolvedMessageDeepLink}
-              paging={paging}
-              printable={printable}
-              rememberReadingPosition={rememberReadingPosition}
-            />
+            <CompressedHistoryInlineContext value>
+              <VirtualizedList
+                dataSource={rowIds}
+                footerSlot={footerSlot}
+                headerSlot={headerSlot}
+                initialScrollPosition={initialScrollPosition}
+                itemContent={renderItem}
+                messageDeepLink={resolvedMessageDeepLink}
+                paging={paging}
+                printable={printable}
+                rememberReadingPosition={rememberReadingPosition}
+                resolveMessageRow={resolveMessageRow}
+              />
+            </CompressedHistoryInlineContext>
           </BackgroundRunHintContext>
         </MessageActionProvider>
       );
@@ -476,6 +520,15 @@ const ChatList = memo<ChatListProps>(
     );
   },
 );
+
+ChatListContent.displayName = 'ConversationChatListContent';
+
+const ChatList = memo<ChatListProps>((props) => (
+  <>
+    <ConversationContextLoader />
+    <ChatListContent {...props} />
+  </>
+));
 
 ChatList.displayName = 'ConversationChatList';
 

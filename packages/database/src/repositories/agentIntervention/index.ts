@@ -1,4 +1,7 @@
-import type { AgentInterventionContext } from '../../models/agentIntervention/context';
+import type {
+  AgentInterventionContext,
+  AgentInterventionFamily,
+} from '../../models/agentIntervention/context';
 import type {
   AgentInterventionBatchMutationResult,
   AgentInterventionBatchSupersessionResult,
@@ -26,8 +29,13 @@ import * as supersession from './supersession';
 export class AgentInterventionRepository {
   private readonly ctx: AgentInterventionContext;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
-    this.ctx = { db, userId, workspaceId };
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    family?: AgentInterventionFamily,
+  ) {
+    this.ctx = { db, userId, workspaceId, family };
   }
 
   /**

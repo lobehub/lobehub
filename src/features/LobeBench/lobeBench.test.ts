@@ -54,11 +54,10 @@ describe('lobeBench helpers', () => {
           enableReasoning: false,
           textVerbosity: 'low',
           thinking: 'enabled',
-          thinkingLevel: 'high',
         },
       ),
     ).toBe(
-      'presence penalty 0.5 · reasoning off · thinking enabled · thinking level high · verbosity low',
+      'presence penalty 0.5 · reasoning off · thinking enabled · verbosity low',
     );
   });
 

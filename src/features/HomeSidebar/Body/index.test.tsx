@@ -34,8 +34,21 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
   const factories: ((original: typeof importOriginal) => unknown)[] = [
     async (importOriginal) => ({
       ...(await importOriginal<object>()),
-      Flexbox: ({ children, flex }: { children: React.ReactNode; flex?: number }) => (
-        <div data-testid={flex ? 'sidebar-body' : 'sidebar-sections'}>{children}</div>
+      Flexbox: ({
+        children,
+        gap,
+        paddingInline,
+      }: {
+        children: React.ReactNode;
+        gap?: number;
+        paddingInline?: number;
+      }) => (
+        <div
+          data-gap={gap}
+          data-testid={paddingInline === undefined ? 'sidebar-sections' : 'sidebar-body'}
+        >
+          {children}
+        </div>
       ),
     }),
     async (importOriginal) => ({
@@ -44,12 +57,18 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
         children,
         value,
         onValueChange,
+        style,
       }: {
         children: React.ReactNode;
         onValueChange?: (keys: string[]) => void;
+        style?: React.CSSProperties;
         value?: string[];
       }) => (
-        <div data-expanded-keys={JSON.stringify(value)} data-testid="sidebar-accordion">
+        <div
+          data-expanded-keys={JSON.stringify(value)}
+          data-gap={style?.gap}
+          data-testid="sidebar-accordion"
+        >
           <button aria-label="collapse recents" onClick={() => onValueChange?.(['agent'])} />
           {children}
         </div>
@@ -97,11 +116,11 @@ vi.mock('@/features/Channels/ChannelList', () => ({
   default: () => <div data-testid="sidebar-channels" />,
 }));
 
-vi.mock('./Agent', () => ({
-  default: ({ itemKey }: { itemKey: string }) => <div data-testid={`sidebar-item-${itemKey}`} />,
+vi.mock('@/features/Channels/useChannelsEnabled', () => ({
+  useChannelsEnabled: () => true,
 }));
 
-vi.mock('./Private', () => ({
+vi.mock('./Agent', () => ({
   default: ({ itemKey }: { itemKey: string }) => <div data-testid={`sidebar-item-${itemKey}`} />,
 }));
 
@@ -154,7 +173,7 @@ describe('Home sidebar body', () => {
     expect(mocks.updateSystemStatus).toHaveBeenCalledWith({ sidebarExpandedKeys: ['agent'] });
   });
 
-  it('renders items strictly in sidebarItems order with the spacer at its stored position', () => {
+  it('renders items strictly in sidebarItems order as one continuous list', () => {
     mocks.navLayout = {
       bottomMenuItems: [
         { key: 'image', title: 'Image', url: '/image' },
@@ -178,20 +197,17 @@ describe('Home sidebar body', () => {
     render(<Body />);
 
     const children = Array.from(screen.getByTestId('sidebar-body').children);
-    const spacerIndex = children.findIndex((child) =>
-      child.hasAttribute('data-sidebar-bottom-spacer'),
-    );
-
-    expect(spacerIndex).toBe(2);
+    // A saved `__spacer__` no longer pushes the links after it to the bottom.
+    expect(children).toHaveLength(5);
     expect(children[0]).toHaveTextContent('Pages');
     expect(children[1]).toContainElement(screen.getByTestId('sidebar-item-agent'));
     expect(children[1]).toContainElement(screen.getByTestId('sidebar-channels'));
-    expect(children[3]).toHaveTextContent('Image');
-    expect(children[4]).toHaveTextContent('Tasks');
-    expect(children[5]).toHaveTextContent('Resource');
+    expect(children[2]).toHaveTextContent('Image');
+    expect(children[3]).toHaveTextContent('Tasks');
+    expect(children[4]).toHaveTextContent('Resource');
   });
 
-  it('keeps a top item that was dragged past the spacer in its new position', () => {
+  it('keeps a top item dragged below the sections in its new position', () => {
     mocks.navLayout = {
       bottomMenuItems: [{ key: 'image', title: 'Image', url: '/image' }],
       topNavItems: [{ key: 'tasks', title: 'Tasks', url: '/tasks' }],
@@ -205,9 +221,8 @@ describe('Home sidebar body', () => {
 
     expect(children[0]).toContainElement(screen.getByTestId('sidebar-item-agent'));
     expect(children[0]).toContainElement(screen.getByTestId('sidebar-channels'));
-    expect(children[1]).toHaveAttribute('data-sidebar-bottom-spacer');
-    expect(children[2]).toHaveTextContent('Image');
-    expect(children[3]).toHaveTextContent('Tasks');
+    expect(children[1]).toHaveTextContent('Image');
+    expect(children[2]).toHaveTextContent('Tasks');
   });
 
   it('keeps Channels between adjacent sections in the same spacing group with its own accordion', () => {
@@ -220,6 +235,40 @@ describe('Home sidebar body', () => {
     expect(children[0]).toContainElement(screen.getByTestId('sidebar-item-agent'));
     expect(children[1]).toHaveAttribute('data-testid', 'sidebar-channels');
     expect(children[2]).toContainElement(screen.getByTestId('sidebar-item-recents'));
+  });
+
+  it('leaves collapsed section headers unspaced, like nav rows', () => {
+    mocks.globalState.status.sidebarExpandedKeys = [];
+    mocks.globalState.status.sidebarItems = ['recents', 'agent', 'channels'];
+
+    render(<Body />);
+
+    // Each expanded section spaces itself (`sectionItemClassName`); a group gap would
+    // also push apart collapsed headers.
+    expect(screen.getByTestId('sidebar-sections')).not.toHaveAttribute('data-gap');
+    expect(screen.getByTestId('sidebar-accordion')).not.toHaveAttribute('data-gap');
+  });
+
+  it('places Channels where the saved order puts them', () => {
+    mocks.globalState.status.sidebarItems = ['channels', 'recents', 'agent', 'favorites'];
+
+    render(<Body />);
+
+    const children = Array.from(screen.getByTestId('sidebar-sections').children);
+
+    expect(children[0]).toHaveAttribute('data-testid', 'sidebar-channels');
+    expect(children[1]).toContainElement(screen.getByTestId('sidebar-item-recents'));
+    expect(children[1]).toContainElement(screen.getByTestId('sidebar-item-agent'));
+  });
+
+  it('leaves Channels out once they are hidden', () => {
+    mocks.globalState.status.sidebarItems = ['recents', 'agent', 'channels'];
+    mocks.globalState.status.hiddenSidebarSections = ['channels'];
+
+    render(<Body />);
+
+    expect(screen.queryByTestId('sidebar-channels')).toBeNull();
+    expect(screen.getByTestId('sidebar-item-agent')).toBeInTheDocument();
   });
 
   // The Projects entry is keyed `project` like its sidebar layout id, but its page is `/projects`.

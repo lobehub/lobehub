@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agents, channelMembers, channelThreads, topics } from '../../../schemas';
+import { agents, channelJobs, channelMembers, channelThreads, topics } from '../../../schemas';
 import { ChannelExecutionRepository } from '..';
 import { createChannelFixture, jobsOf, lease } from './testUtils';
 
@@ -145,6 +145,31 @@ describe('Channel topic continuation', () => {
     await state.finish(second.job.id);
     const third = (await state.claim((await state.send()).id))!;
     expect(await state.input(third.job.id)).toEqual(['Request 3']);
+  });
+
+  it('starts a new topic when a gathered run still holds the one it answered in', async () => {
+    const state = await setup();
+    const first = (await state.claim((await state.send()).id))!;
+    await state.finish(first.job.id);
+    const gathered = (await state.claim((await state.send()).id))!;
+    expect(gathered.topic.id).toBe(first.topic.id);
+    // Gathering moves the running peer's branch only: the topic it answered in stays its own.
+    const [thread] = await db
+      .insert(channelThreads)
+      .values({
+        channelId: state.channel.id,
+        followerMemberIds: [state.agent.id],
+        rootMessageId: gathered.job.messageId,
+        rootSequence: 1,
+      })
+      .returning();
+    await db
+      .update(channelJobs)
+      .set({ threadId: thread.id })
+      .where(eq(channelJobs.id, gathered.job.id));
+    const next = (await state.claim((await state.send()).id))!;
+    expect(next.topic.id).not.toBe(first.topic.id);
+    expect(await state.input(next.job.id)).toEqual(['Request 3']);
   });
 
   it('starts a new topic when failed routing is explicitly retried after a newer delivery', async () => {

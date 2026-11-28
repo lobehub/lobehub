@@ -1,4 +1,5 @@
 import { type AgentState } from '@lobechat/agent-runtime';
+import type { SkillIndexSnapshot } from '@lobechat/context-engine';
 import type { AgentDocumentIndexSnapshot } from '@lobechat/context-engine/agent-document';
 import {
   type AgentShareVisitorContext,
@@ -51,6 +52,13 @@ export interface RuntimeExecutorContext {
    * the same index and change notes and keep the prompt-cache prefix.
    */
   bindAgentDocumentIndex?: (snapshot: AgentDocumentIndexSnapshot) => void;
+  /**
+   * Receives the skill-index snapshot a step pinned (the run's first step, or
+   * a mid-run compression). `executeStep` writes it into `binding.skillIndex`
+   * of the state it saves, so later steps render the same `<available_skills>`
+   * block and `<skills_changes>` notes and keep the prompt-cache prefix.
+   */
+  bindSkillIndex?: (snapshot: SkillIndexSnapshot) => void;
   botContext?: unknown;
   /**
    * Callback to stop a running `lobe-agent.callSubAgent` child dispatched by
@@ -90,6 +98,23 @@ export interface RuntimeExecutorContext {
     >,
   ) => Promise<boolean>;
   operationId: string;
+  /**
+   * Register the one-shot deadline for a parked shell command.
+   *
+   * The wait itself costs nothing — the device reports completion as a late
+   * tool result — so something has to fail the run when the device never comes
+   * back (closed app, killed process, lost session). One delayed message per
+   * command, fired once; never a polling loop.
+   *
+   * Absent on hosts without a queue: the caller then relies on the gateway's
+   * own watchdog deadline.
+   */
+  scheduleShellExpiry?: (params: {
+    delayMs: number;
+    operationId: string;
+    toolCallId: string;
+    toolMessageId: string;
+  }) => Promise<void>;
   serverDB: LobeChatDatabase;
   stepIndex: number;
   stream?: boolean;

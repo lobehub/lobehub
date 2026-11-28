@@ -28,6 +28,7 @@ const createScrollMethods = (): VirtuaScrollMethods => ({
   scrollTo: vi.fn(),
   scrollToEnd: vi.fn(),
   scrollToIndex: vi.fn(),
+  scrollToMessage: vi.fn(),
 });
 
 const createStoreWithMethods = () => {
@@ -60,5 +61,24 @@ describe('scrollToBottom', () => {
 
     expect(methods.scrollToIndex).toHaveBeenCalledWith(1, { align: 'end', smooth: true });
     expect(methods.scrollToEnd).not.toHaveBeenCalled();
+  });
+});
+
+describe('setActiveIndex', () => {
+  it('does not notify subscribers when the index is unchanged', () => {
+    // Regression: the list's scroll handler reports the active index on every
+    // scroll event; publishing equal values woke every activeIndex subscriber.
+    const { store } = createStoreWithMethods();
+    act(() => store.getState().setActiveIndex(1));
+
+    const listener = vi.fn();
+    const unsubscribe = store.subscribe(listener);
+    act(() => store.getState().setActiveIndex(1));
+    expect(listener).not.toHaveBeenCalled();
+
+    act(() => store.getState().setActiveIndex(0));
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(store.getState().activeIndex).toBe(0);
+    unsubscribe();
   });
 });

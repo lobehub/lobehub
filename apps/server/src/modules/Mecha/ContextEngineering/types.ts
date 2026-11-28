@@ -16,6 +16,8 @@ import type {
   OnboardingContext,
   PlanTodoConfig,
   ProjectInstructionFile,
+  RevokedDocumentReads,
+  SkillChangesByMessage,
   SkillMeta,
   ToolDiscoveryConfig,
   TopicReferenceItem,
@@ -97,10 +99,13 @@ export interface ServerMessagesEngineParams {
   agentDocuments?: AgentContextDocument[];
   /** Agent-document change notes keyed by the user message each belongs to */
   agentDocumentChanges?: AgentDocumentChangesByMessage;
+  /** Documents deleted or disabled since earlier turns read them, per reading agent */
+  revokedDocumentReads?: RevokedDocumentReads[];
   /** Immutable expertise captured when the operation started. */
   expertise?: ExpertiseContextSnapshot;
   /** Whether to inject the operation expertise snapshot. */
   enableExpertise?: boolean;
+  enableMcpAppContext?: boolean;
   /** User's timezone for time-related variables (e.g. 'Asia/Shanghai') */
   userTimezone?: string;
   // ========== Extended contexts ==========
@@ -195,6 +200,8 @@ export interface ServerMessagesEngineParams {
   agentAccountContext?: AgentAccountContext;
 
   // ========== Skills ==========
+  /** Skill-index change notes keyed by the user message each belongs to */
+  skillChanges?: SkillChangesByMessage;
   /** Skills configuration for <available_skills> injection */
   skillsConfig?: { enabledSkills?: SkillMeta[] };
   /** Tool discovery configuration for <available_tools> injection */

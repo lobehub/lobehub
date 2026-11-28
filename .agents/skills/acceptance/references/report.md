@@ -110,6 +110,13 @@ but then keeping it out of git is on you.
 supersedes? }`.
    A planned item that never produces a case renders as **未执行** rather than
    vanishing — cut coverage in the open.
+   **A visual item's `method` states its fixture data**: the item counts, title
+   lengths and state mix the screenshot will show, matching what real users
+   see. A grouped list or sidebar has several groups with several items each,
+   including long titles; a settings-page width change is shot with data
+   present (devices listed), not the empty state. An empty or single-item
+   fixture is allowed only when that state is itself the criterion, and the
+   `method` says so.
    Every item is an outcome the reader can judge — never a programmatic gate
    ([what is not an acceptance check](#what-is-not-an-acceptance-check)).
    **Use an acquired CLI schema or the linked report schema rather than reconstructing it**: a
@@ -119,7 +126,9 @@ supersedes? }`.
    Before executing the **first round only**, send the draft for
    [acceptance-checker plan review](acceptance-checker.md) and save the agreed plan and
    requirement mapping after resolving material gaps. In follow-up rounds the
-   execution owner carries the agreed plan forward using its existing context.
+   execution owner carries the agreed plan forward using its existing context;
+   before recapturing a visual case, it writes that case's fixture data into the
+   round's review notes and seeds to it, since no checker reviews the plan again.
 2. **Collect evidence into `assets/` as you test.** Screenshots must be
    **visually verified by their designated inspector before supporting a pass**.
    In the first round this is normally the checker; the runner captures and
@@ -220,7 +229,7 @@ Ordinary screenshot cases do not load these examples.
 | field                           | values                                                                                                | what it does                                                                                                         |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `verifier`                      | `program` \| `agent` \| `llm` (default `agent`)                                                       | How the verdict is reached. A command-asserted check is `program`; calling it `agent` hides what actually judged it. |
-| `requiredEvidence`              | `screenshot` \| `gif` \| `video` \| `audio` \| `text` \| `markdown` \| `dom_snapshot` \| `transcript` | The artifact this check **must** produce. The coverage gate **fails** an item whose required medium is missing.      |
+| `requiredEvidence`              | `screenshot` \| `gif` \| `video` \| `audio` \| `text` \| `markdown` \| `dom_snapshot` \| `transcript` \| `terminal`; object form adds `"provenance": "execution"` | The artifact this check **must** produce. The coverage gate **fails** an item whose required medium is missing — and, with `provenance: execution`, one that no real captured/imported run backs. |
 | `surfaces` / per-case `surface` | `web` \| `desktop` \| `cli` \| `mobile` \| `bot` (`electron` → `desktop`)                             | The product surface a check ran **on**. A test kind (`unit`, `backend`) or runtime mode is not a surface.            |
 
 `category` names the user-facing requirement area (e.g. `Task hierarchy`,

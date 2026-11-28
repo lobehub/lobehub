@@ -1,17 +1,22 @@
 import { type AgentState, selectToolSourceMap } from '@lobechat/agent-runtime';
 import { formatWebOnboardingStateMessage } from '@lobechat/builtin-tool-web-onboarding/utils';
-import { defaultUninstalledBuiltinTools } from '@lobechat/builtin-tools';
+import {
+  resolveUninstalledBuiltinTools,
+  type UninstalledBuiltinToolsScope,
+} from '@lobechat/builtin-tools';
 import { AGENT_PLAN_FILE_TYPE } from '@lobechat/const';
+import type { AvailablePluginInfo } from '@lobechat/context-engine';
 import {
   type AgentContextDocument,
   agentDocumentChangesByMessage,
   type AgentDocumentIndexSnapshot,
   agentDocumentsFromSnapshot,
+  reusablePinnedAgentDocumentIndex,
 } from '@lobechat/context-engine/agent-document';
 import type { ContextFactProviders, ContextFactRequest } from '@lobechat/mecha';
 import {
   agentShareDocumentAccessScope,
-  getActivePluginIds,
+  getOptedInPluginIds,
   isLiveAgentAccount,
   ordinaryDocumentAccessScope,
 } from '@lobechat/types';
@@ -20,8 +25,10 @@ import { loadModels } from '@/business/client/model-bank/loadModels';
 import { composioEnv } from '@/config/composio';
 import { AgentModel } from '@/database/models/agent';
 import { AgentAccountModel } from '@/database/models/agentAccount';
+import { AgentDocumentModel } from '@/database/models/agentDocuments';
 import { AiModelModel } from '@/database/models/aiModel';
 import { ChatGroupModel } from '@/database/models/chatGroup';
+import { ConnectorModel } from '@/database/models/connector';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
@@ -34,7 +41,9 @@ import { appEnv } from '@/envs/app';
 import { loadConnectedComposioIds } from '@/server/modules/AgentRuntime/adapters/composioConnectedIds';
 import type { RuntimeExecutorContext } from '@/server/modules/AgentRuntime/context';
 import { buildPostProcessUrl, log } from '@/server/modules/AgentRuntime/executorHelpers';
+import { resolveModelMediaCapabilities } from '@/server/modules/AgentRuntime/resolveModelMediaCapabilities';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { findRevokedDocumentReads } from '@/server/services/agentDocuments/revokedReads';
 import { AgentInboxService } from '@/server/services/agentIdentity/inbox';
 import { MarketService } from '@/server/services/market';
 import { OnboardingService } from '@/server/services/onboarding';
@@ -104,6 +113,15 @@ export const createServerContextFactProviders = ({
     let pending = agentDocumentIndexes.get(agentId);
     if (!pending) {
       pending = (async () => {
+        // A later step of a run renders the index from the snapshot its first
+        // step pinned, so it needs no progressive document. Skip reading them:
+        // an agent can hold over 10k, and every step used to read them all.
+        const pinned = documentIndexTurn
+          ? reusablePinnedAgentDocumentIndex({
+              messages: documentIndexTurn.messages,
+              pinned: state.binding?.agentDocumentIndex,
+            })
+          : undefined;
         const docs = toAgentContextDocuments(
           await new AgentDocumentsService(
             db,
@@ -111,8 +129,9 @@ export const createServerContextFactProviders = ({
             workspaceId,
             undefined,
             documentAccessScope,
-          ).getAgentContextDocuments(agentId),
+          ).getAgentContextDocuments(agentId, { excludeProgressive: !!pinned }),
         );
+        if (pinned) return { docs, snapshot: pinned };
         if (!documentIndexTurn) return { docs };
         try {
           const snapshot = await resolveServerAgentDocumentIndex({
@@ -146,6 +165,13 @@ export const createServerContextFactProviders = ({
       return doc ? { content: doc.content, title: doc.title } : null;
     },
 
+    findRevokedDocumentReads: async (agentId, documentIds) =>
+      findRevokedDocumentReads(
+        new AgentDocumentModel(db, userId, workspaceId, documentAccessScope),
+        agentId,
+        documentIds,
+      ),
+
     findTopic: async (topicId) => {
       const topic = await new TopicModel(db, userId, ctx.workspaceId).findById(topicId);
       if (!topic) return null;
@@ -166,7 +192,7 @@ export const createServerContextFactProviders = ({
       if (!config) return null;
       return {
         ...config,
-        plugins: getActivePluginIds(Array.isArray(config.plugins) ? config.plugins : undefined),
+        plugins: getOptedInPluginIds(Array.isArray(config.plugins) ? config.plugins : undefined),
       };
     },
 
@@ -245,7 +271,7 @@ export const createServerContextFactProviders = ({
 
     getUserInfo: async (targetUserId) => {
       const info = await UserModel.getInfoForAIGeneration(db, targetUserId ?? userId);
-      return { language: info.responseLanguage, username: info.userName };
+      return { language: info.preferredReplyLanguage, username: info.userName };
     },
 
     getWorkspaceContext: async (targetWorkspaceId) => {
@@ -314,7 +340,10 @@ export const createServerContextFactProviders = ({
     // discovered for this run (their manifests are only fetched for connected
     // providers, so presence in the tool set is the connection).
     listConnectedConnectorIds: async (agentId) => {
-      const connected = await loadConnectedComposioIds(db, userId, ctx.workspaceId, agentId);
+      const connected = await loadConnectedComposioIds(db, userId, ctx.workspaceId, {
+        agentId,
+        topicId: ctx.topicId,
+      });
       const sourceMap = selectToolSourceMap(state);
       for (const [identifier, source] of Object.entries(sourceMap)) {
         if (source === 'lobehubSkill') connected.add(identifier);
@@ -360,21 +389,37 @@ export const createServerContextFactProviders = ({
       }));
     },
 
-    // Custom MCP connectors the user installed, beyond the shared catalog.
-    // Read from the installed-plugins table: the run's tool source map only
-    // classifies skill / Composio / client tools, so it cannot tell a custom
-    // connector apart, and a connector the agent has not pinned yet must
+    // Custom MCP servers the user installed, beyond the shared catalog: custom
+    // connectors (every install now) and the custom plugin rows older installs
+    // left, one entry per identifier. Read from the tables: the run's tool
+    // source map only classifies skill / Composio / client tools, so it cannot
+    // tell a custom connector apart, and one the agent has not pinned yet must
     // still be offered to createAgent / updateAgent.
     listCustomPlugins: async () => {
-      const installed = await new PluginModel(db, userId, ctx.workspaceId).query();
-      return installed
-        .filter((plugin) => plugin.type === 'customPlugin')
-        .map((plugin) => ({
+      const [connectors, installed] = await Promise.all([
+        new ConnectorModel(db, userId, ctx.workspaceId).queryPublic(),
+        new PluginModel(db, userId, ctx.workspaceId).query(),
+      ]);
+      const plugins = new Map<string, AvailablePluginInfo>();
+      for (const connector of connectors) {
+        if (connector.sourceType !== 'custom') continue;
+        plugins.set(connector.identifier, {
+          description: connector.description ?? undefined,
+          identifier: connector.identifier,
+          name: connector.name || connector.identifier,
+          type: 'custom',
+        });
+      }
+      for (const plugin of installed) {
+        if (plugin.type !== 'customPlugin' || plugins.has(plugin.identifier)) continue;
+        plugins.set(plugin.identifier, {
           description: plugin.manifest?.meta?.description,
           identifier: plugin.identifier,
           name: plugin.manifest?.meta?.title || plugin.identifier,
-          type: 'custom' as const,
-        }));
+          type: 'custom',
+        });
+      }
+      return [...plugins.values()];
     },
 
     listEnabledProviders: async () => {
@@ -403,7 +448,18 @@ export const createServerContextFactProviders = ({
           });
         }
         providerMap.get(userModel.providerId)!.models.push({
-          abilities: userModel.abilities || modelInfo?.abilities,
+          // Same resolution as the run itself, so the list can't promise media
+          // the run would drop: an empty row falls back to the card, a non-empty
+          // one replaces it.
+          abilities: {
+            ...userModel.abilities,
+            ...resolveModelMediaCapabilities({
+              builtinModels,
+              model: userModel.id,
+              provider: userModel.providerId,
+              userAbilities: userModel.abilities,
+            }),
+          },
           description: modelInfo?.description,
           id: userModel.id,
           name: userModel.displayName || modelInfo?.displayName || userModel.id,
@@ -424,20 +480,10 @@ export const createServerContextFactProviders = ({
     // workspace plus the personal one — the same slot the tool store reads.
     listUninstalledBuiltinIds: async () => {
       const settings = await new UserModel(db, userId).getUserSettings();
-      const tool = settings?.tool as
-        | {
-            uninstalledBuiltinTools?: string[];
-            uninstalledBuiltinToolsByWorkspace?: Record<string, string[] | undefined>;
-          }
-        | null
-        | undefined;
-      const stored = workspaceId
-        ? tool?.uninstalledBuiltinToolsByWorkspace?.[workspaceId]
-        : tool?.uninstalledBuiltinTools;
-      // Never configured (new account, or a workspace without its own slot)
-      // means the default seed — non-recommended builtins start uninstalled —
-      // exactly as the browser's tool store resolves it.
-      return stored === undefined ? defaultUninstalledBuiltinTools : stored;
+      return resolveUninstalledBuiltinTools(
+        settings?.tool as UninstalledBuiltinToolsScope | undefined,
+        workspaceId,
+      );
     },
 
     listSandboxFiles: async (topicId) =>
@@ -449,7 +495,7 @@ export const createServerContextFactProviders = ({
     // the runtime is: that is the workspace the trust token carries, and the
     // entitlement has to agree with the token that presents it.
     resolveSandboxPersistence: async () => {
-      const { mode, cwd, claim, workingDir } = await resolveSandboxSessionConfig({
+      const { mode, cwd, claim, initialization, workingDir } = await resolveSandboxSessionConfig({
         isShareVisitorRun: Boolean(ctx.agentShareVisitor),
         serverDB: db,
         topicId: ctx.topicId ?? state.origin?.topicId,
@@ -462,7 +508,19 @@ export const createServerContextFactProviders = ({
         workspaceId,
       });
 
-      return claim ? { cwd, mode, workingDir } : undefined;
+      // What the topic's environment checks out, for the model to be told where
+      // each repository is — on any sandbox, persistent or not.
+      const repositories = (initialization?.sources ?? []).map((source) => ({
+        ...(source.path && source.path !== '.' && { folder: source.path }),
+        ...(source.ref && { ref: source.ref }),
+        repository: source.url
+          .replace(/^https:\/\/(www\.)?github\.com\//, '')
+          .replace(/\.git$/, '')
+          .replace(/\/$/, ''),
+      }));
+
+      if (claim) return { cwd, mode, workingDir, ...(repositories.length && { repositories }) };
+      return repositories.length ? { mode: 'ephemeral' as const, repositories } : undefined;
     },
 
     listTopicMessages: async (topic) => {

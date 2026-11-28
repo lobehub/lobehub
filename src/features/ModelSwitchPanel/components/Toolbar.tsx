@@ -4,6 +4,8 @@ import { Brain } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useDensityTokens, useInterfaceDensity } from '@/styles/density';
+
 import { styles } from '../styles';
 import { type GroupMode } from '../types';
 
@@ -18,6 +20,8 @@ interface ToolbarProps {
 export const Toolbar = memo<ToolbarProps>(
   ({ groupMode, onGroupModeChange, searchKeyword, onSearchKeywordChange, showGroupModeSwitch }) => {
     const { t } = useTranslation('components');
+    const compact = useInterfaceDensity() === 'compact';
+    const { toolbarHeight } = useDensityTokens();
 
     return (
       <Flexbox
@@ -25,8 +29,9 @@ export const Toolbar = memo<ToolbarProps>(
         align="center"
         className={styles.toolbar}
         gap={4}
+        height={toolbarHeight}
         justify="space-between"
-        paddingBlock={8}
+        paddingBlock={compact ? 4 : 8}
         paddingInline={8}
         width="100%"
       >

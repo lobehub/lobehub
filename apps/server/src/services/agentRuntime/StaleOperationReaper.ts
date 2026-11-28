@@ -48,6 +48,21 @@ const DEFAULT_LIMIT = 50;
  */
 const DEFAULT_LOOKBACK_MS = 24 * 60 * 60_000;
 
+/**
+ * Oldest `created_at` a candidate may have, applied to both `running` scans.
+ *
+ * It is what lets them use the partial index
+ * `agent_operations_running_created_at_idx`: without it they read every
+ * `running` row through `agent_operations_status_idx` and discard all but a
+ * few dozen, and the dead rows described above made each sweep read ~75k
+ * blocks (8.8s mean in production). An index on `updated_at` would avoid the
+ * bound, but every write bumps `updated_at` through `$onUpdate`, so it would
+ * turn the table's HOT updates (62% of all updates) into full index rewrites;
+ * `created_at` never changes. A week is far past any real run: over three days
+ * of production rows the longest-lived `running` operation was ~5h.
+ */
+const DEFAULT_MAX_RUN_AGE_MS = 7 * 24 * 60 * 60_000;
+
 const isHeterogeneousProvider = (provider: string | null | undefined): boolean =>
   !!provider &&
   (isLocalHeterogeneousType(provider) ||
@@ -64,6 +79,8 @@ export interface ReapStaleOperationsParams {
   /** Ignore rows whose lease froze longer ago than this. */
   lookbackMs?: number;
   maxRedriveAttempts?: number;
+  /** Ignore rows created longer ago than this — see `DEFAULT_MAX_RUN_AGE_MS`. */
+  maxRunAgeMs?: number;
   staleAfterMs?: number;
 }
 
@@ -147,8 +164,9 @@ export class StaleOperationReaper {
     const staleBefore = new Date(now - staleAfterMs);
     const heteroStaleBefore = new Date(now - (params?.heteroSilenceMs ?? HETERO_SILENCE_MS));
     const notBefore = new Date(now - (params?.lookbackMs ?? DEFAULT_LOOKBACK_MS));
+    const createdAfter = new Date(now - (params?.maxRunAgeMs ?? DEFAULT_MAX_RUN_AGE_MS));
 
-    const candidates = await this.listStaleRunning(staleBefore, notBefore, limit);
+    const candidates = await this.listStaleRunning({ createdAfter, limit, notBefore, staleBefore });
     const result: ReapStaleOperationsResult = {
       abandoned: 0,
       alive: 0,
@@ -176,8 +194,10 @@ export class StaleOperationReaper {
     }
 
     try {
-      result.concurrentForegroundTopics =
-        await this.reportConcurrentForegroundRuns(heteroStaleBefore);
+      result.concurrentForegroundTopics = await this.reportConcurrentForegroundRuns(
+        heteroStaleBefore,
+        createdAfter,
+      );
     } catch (e) {
       log('concurrent foreground patrol failed: %O', e);
     }
@@ -198,7 +218,10 @@ export class StaleOperationReaper {
    * made up the bulk of production warn logs. Every live run refreshes its
    * lease well inside this window (90s heartbeat, or a hetero ingest batch).
    */
-  private async reportConcurrentForegroundRuns(liveSince: Date): Promise<number> {
+  private async reportConcurrentForegroundRuns(
+    liveSince: Date,
+    createdAfter: Date,
+  ): Promise<number> {
     const rows = await this.db
       .select({
         operationIds: sql<
@@ -214,6 +237,8 @@ export class StaleOperationReaper {
           isNull(agentOperations.threadId),
           isNull(agentOperations.parentOperationId),
           gte(agentOperations.updatedAt, liveSince),
+          // Index bound only — see DEFAULT_MAX_RUN_AGE_MS.
+          gte(agentOperations.createdAt, createdAfter),
           or(
             isNull(agentOperations.trigger),
             notInArray(agentOperations.trigger, [...BACKGROUND_OPERATION_TRIGGERS]),
@@ -251,7 +276,17 @@ export class StaleOperationReaper {
    * model with the row's own owner so ownership is still enforced where it
    * matters.
    */
-  private async listStaleRunning(staleBefore: Date, notBefore: Date, limit: number) {
+  private async listStaleRunning({
+    createdAfter,
+    limit,
+    notBefore,
+    staleBefore,
+  }: {
+    createdAfter: Date;
+    limit: number;
+    notBefore: Date;
+    staleBefore: Date;
+  }) {
     return (
       this.db
         // Only what recovery needs: everything else about the run is read from
@@ -271,6 +306,8 @@ export class StaleOperationReaper {
             // See DEFAULT_LOOKBACK_MS: without this floor the oldest-first
             // window is permanently filled by long-dead rows.
             gte(agentOperations.updatedAt, notBefore),
+            // Index bound only — see DEFAULT_MAX_RUN_AGE_MS.
+            gte(agentOperations.createdAt, createdAfter),
             // A never-heartbeated row is only meaningful once it is older than
             // the window too; `startedAt` is the lease's initial value.
             or(isNull(agentOperations.startedAt), lt(agentOperations.startedAt, staleBefore)),

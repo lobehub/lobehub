@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => {
     gated,
     getFullFileUrl: vi.fn(),
     getResumeSessionId: vi.fn(),
+    getThreadResumeSessionId: vi.fn(),
     reset: () => {
       started.length = 0;
       spans.ended.length = 0;
@@ -44,6 +45,7 @@ const mocks = vi.hoisted(() => {
         openBarrier = resolve;
       });
     },
+    resolveInlineImages: vi.fn(),
     resolveSandboxSessionConfig: vi.fn(),
     signHeteroOperationJWT: vi.fn(),
     span,
@@ -60,7 +62,10 @@ vi.mock('@lobechat/observability-otel/modules/agent-runtime', () => ({
 
 vi.mock('@/server/services/heterogeneousAgent', () => ({
   HeterogeneousAgentService: vi.fn().mockImplementation(function () {
-    return { getHeterogeneousResumeSessionId: mocks.getResumeSessionId };
+    return {
+      getHeterogeneousResumeSessionId: mocks.getResumeSessionId,
+      getThreadResumeSessionId: mocks.getThreadResumeSessionId,
+    };
   }),
 }));
 
@@ -68,6 +73,10 @@ vi.mock('@/server/services/file', () => ({
   FileService: vi.fn().mockImplementation(function () {
     return { getFullFileUrl: mocks.getFullFileUrl };
   }),
+}));
+
+vi.mock('@/server/services/file/inlineImages', () => ({
+  resolveInlineImages: mocks.resolveInlineImages,
 }));
 
 vi.mock('@/libs/trpc/utils/internalJwt', () => ({
@@ -144,6 +153,7 @@ beforeEach(() => {
   mocks.getResumeSessionId.mockImplementation(mocks.gated('resume_session', () => undefined));
   mocks.signHeteroOperationJWT.mockImplementation(mocks.gated('sign_operation_jwt', () => 'jwt'));
   mocks.resolveSandboxSessionConfig.mockResolvedValue(undefined);
+  mocks.resolveInlineImages.mockResolvedValue([]);
 });
 
 describe('prepareHeteroRun — overlapping reads', () => {
@@ -179,6 +189,46 @@ describe('prepareHeteroRun — overlapping reads', () => {
       ]),
     );
     expect(mocks.spans.failed).toEqual([]);
+  });
+
+  // A sub-agent resumes its own session, never the topic's.
+  it('resumes a sub-agent run from its isolation thread', async () => {
+    const { deps } = createDeps();
+    mocks.getThreadResumeSessionId.mockImplementation(
+      mocks.gated('resume_session', () => 'cc-thread-sess'),
+    );
+
+    const prepared = await prepareHeteroRun(
+      deps,
+      { ...ctx, appContext: { isolationThread: true, threadId: 'thread-1' } },
+      input,
+      'op-1',
+    );
+
+    expect(mocks.getThreadResumeSessionId).toHaveBeenCalledWith('thread-1', 'topic-1');
+    expect(mocks.getResumeSessionId).not.toHaveBeenCalled();
+    expect(prepared.resumeSessionId).toBe('cc-thread-sess');
+  });
+
+  // A message the user sends in that thread later is an ordinary run: it has
+  // the thread but not the spawn-time `isolationThread` flag. It still writes
+  // its session to the thread, so it has to read it from there too.
+  it('resumes a later message in the sub-agent thread from that thread', async () => {
+    const { deps } = createDeps();
+    mocks.getThreadResumeSessionId.mockImplementation(
+      mocks.gated('resume_session', () => 'cc-thread-sess'),
+    );
+
+    const prepared = await prepareHeteroRun(
+      deps,
+      { ...ctx, appContext: { threadId: 'thread-1' } },
+      input,
+      'op-1',
+    );
+
+    expect(mocks.getThreadResumeSessionId).toHaveBeenCalledWith('thread-1', 'topic-1');
+    expect(mocks.getResumeSessionId).not.toHaveBeenCalled();
+    expect(prepared.resumeSessionId).toBe('cc-thread-sess');
   });
 
   it('keeps the best-effort reads best-effort when they fail', async () => {
@@ -249,5 +299,71 @@ describe('prepareHeteroRun — overlapping reads', () => {
     expect(prepared.unansweredUserTurns).toBeUndefined();
     // A resumed run still gets its fallback context built from that history.
     expect(prepared.heteroParams.resumeFallbackSystemContext).toBeDefined();
+  });
+
+  it('hands images pasted into the prompt to the CLI after the attached ones', async () => {
+    const { deps } = createDeps();
+    const pasted = '![image.png](https://app.lobehub.com/f/file_pasted)\n\nCI 挂了';
+    mocks.resolveInlineImages.mockResolvedValue([
+      { id: 'file_pasted', url: 'https://bucket.example.com/pasted.png?sig=1' },
+    ]);
+    const attached = {
+      ...input,
+      runAttachments: {
+        ...input.runAttachments,
+        imageList: [
+          { alt: 'a.png', id: 'file_attached', url: 'https://bucket.example.com/a.png?sig=2' },
+        ],
+      },
+    };
+
+    const prepared = await prepareHeteroRun(deps, { ...ctx, prompt: pasted }, attached, 'op-1');
+
+    expect(mocks.resolveInlineImages).toHaveBeenCalledWith(deps, pasted, ['file_attached']);
+    expect(prepared.heteroParams.imageList).toEqual([
+      { id: 'file_attached', url: 'https://bucket.example.com/a.png?sig=2' },
+      { id: 'file_pasted', url: 'https://bucket.example.com/pasted.png?sig=1' },
+    ]);
+  });
+
+  it('never resolves pasted images or the GitHub credential for a share visitor', async () => {
+    // A share run skips the GitHub read, so the barrier would never open.
+    const { credsGet, deps, messageModel, topicModel } = createDeps();
+    messageModel.query.mockResolvedValue([]);
+    topicModel.findById.mockResolvedValue({ metadata: {} });
+    mocks.getResumeSessionId.mockResolvedValue(undefined);
+    mocks.signHeteroOperationJWT.mockResolvedValue('jwt');
+
+    const prepared = await prepareHeteroRun(
+      deps,
+      { ...ctx, shareGate: { shareId: 'share-1', visitorUserId: 'visitor-1' } },
+      input,
+      'op-1',
+    );
+
+    expect(mocks.resolveInlineImages).not.toHaveBeenCalled();
+    expect(prepared.heteroParams.imageList).toBeUndefined();
+    expect(deps.getMarketService).not.toHaveBeenCalled();
+    expect(credsGet).not.toHaveBeenCalled();
+    expect(mocks.signHeteroOperationJWT).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capabilities: ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read', 'work:write'],
+      }),
+    );
+  });
+
+  it('dispatches without pasted images when resolving them fails', async () => {
+    const { deps, messageModel, topicModel } = createDeps();
+    deps.getMarketService.mockRejectedValue(new Error('market down'));
+    messageModel.query.mockResolvedValue([]);
+    topicModel.findById.mockResolvedValue({ metadata: {} });
+    mocks.getResumeSessionId.mockResolvedValue(undefined);
+    mocks.signHeteroOperationJWT.mockResolvedValue('jwt');
+    mocks.resolveInlineImages.mockRejectedValue(new Error('db down'));
+
+    const prepared = await prepareHeteroRun(deps, ctx, input, 'op-1');
+
+    expect(prepared.heteroParams.imageList).toBeUndefined();
+    expect(prepared.heteroParams.jwt).toBe('jwt');
   });
 });

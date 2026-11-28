@@ -9,6 +9,7 @@ import type {
   OperationSkillSet,
   OperationToolSet,
   ProjectInstructionFile,
+  SkillIndexSnapshot,
   ToolExecutor,
   ToolSource,
   UserMemoryConfig,
@@ -185,6 +186,7 @@ export interface AgentRunPlan {
  * carried by the runtime without interpretation.
  */
 export interface AgentRunHostEnvelope {
+  acceptsArtboardWorks?: boolean;
   /**
    * The client that started this run renders `file` Works, so the pushed
    * `uiMessages` snapshots and `message_patch` revisions may carry them.
@@ -309,6 +311,12 @@ export interface RunAgentSnapshot extends Partial<LobeAgentConfig> {
 export interface AgentWorldSnapshot {
   /** Agent definition snapshot: systemRole, chatConfig, agencyConfig … */
   agent?: RunAgentSnapshot;
+  /**
+   * Library skills the agent set to `auto` (explicit tri-state entries). A
+   * library skill is opt-in per agent and `agent.plugins` is already collapsed
+   * to pinned ids, so the skill pool reads the opted-in ones from here.
+   */
+  autoSkillIds?: string[];
   /** Channel-specific facts the model should know (bot platform, Discord …). */
   channel?: {
     botPlatform?: BotPlatformContext;
@@ -367,6 +375,37 @@ export interface AgentRunBinding {
     platform?: string;
     systemInfo?: Record<string, string>;
   };
+  /**
+   * The skill-index snapshot (rows + change notes) this run renders from,
+   * pinned on its first step so later steps send the same `<available_skills>`
+   * block and `<skills_changes>` notes (see `resolveSkillIndex`). Replaced only
+   * when the history is compressed mid-run.
+   */
+  skillIndex?: SkillIndexSnapshot;
+}
+
+/** A filesystem skill found on the device after the run started. */
+export interface DiscoveredAgentSkill {
+  description: string;
+  /** Absolute path of its `SKILL.md`. */
+  location: string;
+  name: string;
+}
+
+/**
+ * Agent files (`AGENTS.md` / `CLAUDE.md`, project skills) found while the run
+ * was working, when a file tool touched a directory the start-of-run scan did
+ * not cover. The instructions themselves travel in that tool's result; this
+ * record keeps them from being injected twice and lets `activateSkill` load
+ * the skills. Bound to one device: a different device starts a fresh record.
+ */
+export interface DiscoveredAgentFiles {
+  deviceId: string;
+  /** Directories already walked, so a later call there skips the device round-trip. */
+  dirs: string[];
+  /** Absolute paths of the instruction files already shown to the model. */
+  instructionPaths: string[];
+  skills: DiscoveredAgentSkill[];
 }
 
 /**
@@ -384,7 +423,6 @@ export interface AgentState {
    * index facts). The only business slot the host may write after creation.
    */
   binding?: AgentRunBinding;
-
   /**
    * Current calculated cost for this session.
    * Updated after each billable operation.
@@ -394,6 +432,7 @@ export interface AgentState {
    * needs the user's device and no client was there to run it.
    */
   clientLlmWait?: AgentRunClientLlmWait;
+
   cost: Cost;
   /**
    * Optional cost limits configuration.
@@ -409,6 +448,8 @@ export interface AgentState {
    * operation — before the LLM runs again — instead of being dropped.
    */
   deferredHumanApproval?: AgentInstructionRequestHumanApprove;
+  /** Agent files found mid-run; see {@link DiscoveredAgentFiles}. */
+  discoveredAgentFiles?: DiscoveredAgentFiles;
   /** @deprecated Use `world.enableExpertise`. */
   enableExpertise?: boolean;
   error?: any;
@@ -611,7 +652,20 @@ export interface AgentState {
    * Only signatures present in the latest tool-calling turn are retained.
    */
   toolCallRepeatGuard?: {
+    /**
+     * Calls each budgeted API (`maxCallsPerOperation` on its manifest entry)
+     * was asked for so far in this operation, keyed by tool identity without
+     * arguments. Unlike `counts` it is never reset by a turn that skips the
+     * API: the budget is for the whole operation.
+     */
+    apiCalls?: Record<string, number>;
     counts: Record<string, number>;
+    /**
+     * Consecutive LLM turns that asked for a budgeted API past its budget.
+     * Each of those turns got a rejected tool result; the run stops once the
+     * model has ignored that feedback too many turns in a row.
+     */
+    overBudgetRounds?: number;
     /**
      * Set on the turn the guard cut short. The run still lands in `status:
      * 'done'` — the turn was finalized without tool calls, which is what
@@ -644,8 +698,10 @@ export interface AgentState {
   toolSourceMap?: Record<string, ToolSource>;
 
   /**
-   * How many times this operation has answered unresolvable tool calls with a
-   * rejected tool result. Operation-scoped on purpose: the same rejection rows
+   * How many consecutive LLM turns this operation has answered unresolvable
+   * tool calls with a rejected tool result. Any resolved tool call reaching a
+   * tool executor resets it to 0, so it measures a model stuck on names that do not exist,
+   * not the run's lifetime total of typos. Operation-scoped on purpose: the same rejection rows
    * are also readable from the message history, but that history is rehydrated
    * from the DB on every step and carries earlier operations' rejections, so
    * counting rows there would spend a new operation's budget before it starts.

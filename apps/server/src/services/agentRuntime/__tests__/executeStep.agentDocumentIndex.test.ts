@@ -19,6 +19,7 @@ vi.mock('@/server/modules/AgentRuntime', () => ({
       hasQueuedMessages: vi.fn().mockResolvedValue(false),
       isInterrupted: vi.fn().mockResolvedValue(false),
       loadAgentState: vi.fn(),
+      loadAgentStatus: vi.fn().mockResolvedValue(null),
       refreshStepLock: vi.fn().mockResolvedValue(true),
       releaseStepLock: vi.fn().mockResolvedValue(undefined),
       saveAgentState: vi.fn(),
@@ -96,18 +97,24 @@ describe('AgentRuntimeService.executeStep - agent-document index snapshot', () =
       rows: [{ contentCharCount: 9400, filename: 'report.md', id: 'agent-doc-1' }],
       takenAt: '2026-05-01T00:00:00.000Z',
     };
+    const skillSnapshot = {
+      notes: [],
+      rows: [{ description: 'Writes docs', identifier: 'doc-writer', name: 'doc-writer' }],
+      takenAt: '2026-05-01T00:00:00.000Z',
+    };
     vi.spyOn(service as any, 'createAgentRuntime').mockImplementation(
-      async ({ bindAgentDocumentIndex }: any) => ({
+      async ({ bindAgentDocumentIndex, bindSkillIndex }: any) => ({
         runtime: {
           step: vi.fn().mockImplementation(async () => {
             bindAgentDocumentIndex(snapshot);
+            bindSkillIndex(skillSnapshot);
             return { events: [], newState: { ...state, status: 'done', stepCount: 1 } };
           }),
         },
       }),
     );
     vi.spyOn(completionLifecycle, 'emitSignalEvents').mockResolvedValue([]);
-    vi.spyOn(completionLifecycle as any, 'persistCompletion').mockResolvedValue(true);
+    vi.spyOn(completionLifecycle as any, 'persistCompletion').mockResolvedValue({});
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
 
     await service.executeStep({
@@ -119,6 +126,7 @@ describe('AgentRuntimeService.executeStep - agent-document index snapshot', () =
     expect(savedState.binding).toEqual({
       agentDocumentIndex: snapshot,
       device: { id: 'device-1' },
+      skillIndex: skillSnapshot,
     });
   });
 });

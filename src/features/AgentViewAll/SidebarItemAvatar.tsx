@@ -4,6 +4,7 @@ import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import { memo } from 'react';
 
 import AgentAvatar from '@/components/AgentAvatar';
+import { useAgentAvatarActivity } from '@/features/AgentAvatarActivity/useAgentAvatarActivity';
 import AgentGroupAvatar from '@/features/AgentGroupAvatar';
 
 interface SidebarItemAvatarProps {
@@ -16,6 +17,7 @@ interface SidebarItemAvatarProps {
 /** Agent avatar that renders the stacked group variant for group chats. */
 const SidebarItemAvatar = memo<SidebarItemAvatarProps>(({ item, shape, size }) => {
   const { avatar, backgroundColor, id, type } = item;
+  const activity = useAgentAvatarActivity(type === 'group' ? undefined : id);
 
   return type === 'group' ? (
     <AgentGroupAvatar
@@ -26,6 +28,8 @@ const SidebarItemAvatar = memo<SidebarItemAvatarProps>(({ item, shape, size }) =
     />
   ) : (
     <AgentAvatar
+      {...activity.avatar}
+      {...activity.hover}
       agentId={id}
       avatar={typeof avatar === 'string' ? avatar : undefined}
       background={backgroundColor || undefined}

@@ -1,8 +1,11 @@
+import { recordDeviceOperation } from '@/business/server/deviceOperationAudit';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { DeviceModel } from '@/database/models/device';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import { assertWorkspaceDeviceVisible } from '../deviceWorkspaceGuard';
+import { deviceOperationRecordOf, isAuditedDeviceOperation } from './operationAudit';
 
 // Workspace-aware (compat): with an `X-Workspace-Id` header the device list also
 // surfaces the workspace's shared devices; without it, the personal path is
@@ -23,11 +26,23 @@ export const deviceProcedure = wsCompatProcedure.use(serverDatabase).use(async (
     }
   }
 
-  return opts.next({
+  const result = await opts.next({
     ctx: {
       deviceModel,
       userId: ctx.userId,
       workspaceId: wsId,
     },
   });
+
+  if (result.ok && isAuditedDeviceOperation(opts.path)) {
+    const record = deviceOperationRecordOf({
+      input: await opts.getRawInput(),
+      operation: opts.path,
+      userId: ctx.userId,
+      workspaceId: wsId,
+    });
+    if (record) afterUnscoped(() => recordDeviceOperation(record));
+  }
+
+  return result;
 });

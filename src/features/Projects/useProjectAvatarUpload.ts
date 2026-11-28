@@ -1,4 +1,3 @@
-import { toast } from '@lobehub/ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -36,6 +35,11 @@ export const useProjectAvatarUpload = ({
   const { t } = useTranslation('project');
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
   const [uploading, setUploadingState] = useState(false);
+  /**
+   * Why the last upload failed (or was refused); the avatar field renders it under the row,
+   * since the create modal stays open. It clears when the next upload starts.
+   */
+  const [error, setError] = useState('');
   const setUploading = (next: boolean) => {
     setUploadingState(next);
     onUploadingChange?.(next);
@@ -43,18 +47,19 @@ export const useProjectAvatarUpload = ({
 
   /** `crop` center-crops a raw image; the picker's uploader has already done it. */
   const upload = async (file: File, { crop }: { crop: boolean }) => {
+    setError('');
     setUploading(true);
     try {
       const result = await uploadWithProgress({ file: crop ? await toAvatarFile(file) : file });
       if (!result?.url) throw new Error('Upload returned no URL');
       onChange(result.url);
-    } catch (error) {
-      console.error('Failed to upload project avatar', error);
-      toast.error(t('create.avatarUploadFailed'));
+    } catch (err) {
+      console.error('Failed to upload project avatar', err);
+      setError(t('create.avatarUploadFailed'));
     } finally {
       setUploading(false);
     }
   };
 
-  return { upload, uploading };
+  return { error, setError, upload, uploading };
 };

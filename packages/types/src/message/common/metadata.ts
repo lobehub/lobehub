@@ -2,10 +2,14 @@ import { z } from 'zod';
 
 import { RequestTrigger } from '../../agentRuntime';
 import type { WorkRegistrationIntent } from '../../work';
+import type { MessageContextAccounting } from './contextAccounting';
+import { MessageContextAccountingSchema } from './contextAccounting';
 import type { ContextSelection } from './contextSelection';
 import { ContextSelectionSchema } from './contextSelection';
 import type { PageSelection } from './pageSelection';
 import { PageSelectionSchema } from './pageSelection';
+import type { MessagePromptCache } from './promptCache';
+import { MessagePromptCacheSchema } from './promptCache';
 
 const ToolWorkRegistrationSchema: z.ZodType<WorkRegistrationIntent> = z.union([
   z.object({
@@ -452,6 +456,11 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   agentDispatch: AgentDispatchMetadataSchema.optional(),
   agentSender: AgentSenderMetadataSchema.optional(),
   collapsed: z.boolean().optional(),
+  // Server-computed estimate of the request behind an assistant message. Listed
+  // so client-runtime writes through UpdateMessageParamsSchema keep it.
+  contextAccounting: MessageContextAccountingSchema.optional(),
+  // Server-written prompt-cache lifetime of the request behind an assistant message.
+  promptCache: MessagePromptCacheSchema.optional(),
   contextSelections: z.array(ContextSelectionSchema).optional(),
   // Hetero-agent (Claude Code) per-message provenance. Listed here so zod does
   // NOT strip them from writes going through UpdateMessageParamsSchema /
@@ -482,6 +491,7 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   reactions: z.array(EmojiReactionSchema).optional(),
   scope: z.string().optional(),
   selectedSkillIds: z.array(z.string()).optional(),
+  selectedToolIds: z.array(z.string()).optional(),
   // External-signal lineage for Monitor-style callback turns ().
   signal: MessageSignalSchema.optional(),
   steer: z.boolean().optional(),
@@ -592,6 +602,13 @@ export interface MessageMetadata {
   collapsed?: boolean;
   compare?: boolean;
   /**
+   * Estimated token accounting of the request that produced this assistant
+   * message (system messages, `tools` array and every message part), written
+   * by the agent runtime. The chat input's context breakdown reads the latest
+   * one; see {@link MessageContextAccounting}.
+   */
+  contextAccounting?: MessageContextAccounting;
+  /**
    * Generic context selections attached to user messages.
    * Page selections remain mirrored in `pageSelections` for compatibility.
    */
@@ -701,11 +718,11 @@ export interface MessageMetadata {
   isSupervisor?: boolean;
   /** @deprecated use `metadata.performance` instead */
   latency?: number;
-
   /**
    * Local-system tool snapshots materialized when the user sent @file mentions.
    */
   localSystemToolSnapshots?: LocalSystemToolSnapshot[];
+
   /**
    * Present on a user message an MCP App view posted into the conversation
    * (`ui/message`). The bubble names the view, so the message reads as a
@@ -750,6 +767,13 @@ export interface MessageMetadata {
    */
   pinned?: boolean;
   /**
+   * Prompt-cache lifetime of the request that produced this assistant message,
+   * written by the agent runtime. The chat input reads the latest one to tell
+   * the user when an idle conversation's next reply re-reads the whole history;
+   * see {@link MessagePromptCache}.
+   */
+  promptCache?: MessagePromptCache;
+  /**
    * Emoji reactions on this message
    */
   reactions?: EmojiReaction[];
@@ -766,6 +790,12 @@ export interface MessageMetadata {
    * on this and every later turn of the topic by the server runtime.
    */
   selectedSkillIds?: string[];
+  /**
+   * Tools the user selected (or triggered via @agent mention) for this user
+   * turn, kept enabled on this and every later turn of the topic by the server
+   * runtime so the prompt-cache prefix and tool availability stay stable.
+   */
+  selectedToolIds?: string[];
   /**
    * External-signal lineage for messages produced as reactive replies
    * to an out-of-band trigger (Monitor stdout push, webhook callback,

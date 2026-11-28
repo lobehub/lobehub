@@ -5,6 +5,7 @@ import type { TaskContext, TaskItem, TaskSchedulerContext, TaskStatus } from '@l
 import { TRPCError } from '@trpc/server';
 import pMap from 'p-map';
 
+import { onTaskSettled } from '@/business/server/task/onTaskSettled';
 import { taskActivityActor, TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 
@@ -42,6 +43,23 @@ export interface UpdateStatusCascadeResult {
   updatedSubtasks: string[];
   updatedSubtaskTasks?: { id: string; identifier: string }[];
 }
+
+/**
+ * Completed / canceled follow-up through the `@/business` slot (default impl
+ * is a no-op). A failure is logged and never fails the transition.
+ */
+const notifyTaskSettled = async (
+  deps: TaskServiceDeps,
+  status: TaskStatus,
+  taskIds: string[],
+): Promise<void> => {
+  if ((status !== 'completed' && status !== 'canceled') || taskIds.length === 0) return;
+  try {
+    await onTaskSettled({ status, taskIds, userId: deps.userId, workspaceId: deps.workspaceId });
+  } catch (error) {
+    console.error('[TaskService] task-settled follow-up failed (non-fatal):', error);
+  }
+};
 
 /**
  * Transition a task to a new status, cascading the side effects:
@@ -152,6 +170,7 @@ export async function updateStatus(
   if (startedMeanwhile) {
     return { paused: [], skippedRunning: true, task: startedMeanwhile, unlocked: [] };
   }
+  if (resolved.status !== status) await notifyTaskSettled(deps, status, [task.id]);
 
   // Stamp the schedule run-count window each time the user (re)starts a
   // scheduled task. The cron dispatcher itself flips a task running →
@@ -375,6 +394,11 @@ export async function updateStatusCascade(
 
   const task = updatedTasks.find(({ id }) => id === resolved.id);
   if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
+  await notifyTaskSettled(
+    deps,
+    input.status,
+    targetTasks.filter((before) => before.status !== input.status).map(({ id }) => id),
+  );
 
   const unlocked: string[] = [];
   const paused: string[] = [];

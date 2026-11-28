@@ -13,6 +13,8 @@ const createDeps = (ctr: Partial<GatewayAgentRunDeps['heterogeneousAgentCtr']> =
       ...ctr,
     },
     platformTasks: new Map(),
+    // Never read this machine's real credential store.
+    resolveAgentCredential: vi.fn().mockResolvedValue({ kind: 'none' }),
   }) as unknown as GatewayAgentRunDeps;
 
 const request = (extra: Record<string, unknown> = {}) =>

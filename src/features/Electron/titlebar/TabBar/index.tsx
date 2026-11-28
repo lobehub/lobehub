@@ -24,7 +24,7 @@ import { useStripWidth } from './hooks/useStripWidth';
 import { useTabDrag } from './hooks/useTabDrag';
 import { TAB_SPRING } from './motion';
 import { resolveCloseShortcut } from './resolveCloseShortcut';
-import { resolveNewTabUrl } from './scope';
+import { resolveNewTabUrl, tabScopeKey } from './scope';
 import { useStyles } from './styles';
 import TabItem from './TabItem';
 import {
@@ -59,6 +59,10 @@ const TabBar = () => {
   const unpinTab = useElectronStore((s) => s.unpinTab);
   const closeSplitView = useElectronStore((s) => s.closeSplitView);
   const openTabInSplitView = useElectronStore((s) => s.openTabInSplitView);
+  const reopenClosedTab = useElectronStore((s) => s.reopenClosedTab);
+  const canReopenClosed = useElectronStore(
+    (s) => (s.closedTabBuckets[tabScopeKey(s.activeTabScope)]?.length ?? 0) > 0,
+  );
 
   const tabIds = useMemo(() => tabs.map((tab) => tab.tab.id), [tabs]);
   const pinnedCount = useMemo(() => tabs.filter((tab) => tab.tab.pinned).length, [tabs]);
@@ -224,6 +228,8 @@ const TabBar = () => {
     handleNewTab(data?.path);
   });
 
+  useWatchBroadcast('reopenClosedTab', reopenClosedTab);
+
   const overflowItems = useCallback((): DropdownItem[] => {
     const visible = new Set(visibleIndices);
 
@@ -268,6 +274,7 @@ const TabBar = () => {
 
               return (
                 <TabItem
+                  canReopenClosed={canReopenClosed}
                   drag={drag.session?.id === placement.id ? dragFollow : undefined}
                   enterWidth={settleInstantly ? placement.width : 0}
                   enterX={settleInstantly ? placement.x : previousTotal.current}
@@ -295,6 +302,7 @@ const TabBar = () => {
                   onDragStart={drag.startDrag}
                   onMoveBy={handleMoveBy}
                   onOpenInSplitView={openTabInSplitView}
+                  onReopenClosed={reopenClosedTab}
                   onTogglePin={handleTogglePin}
                 />
               );

@@ -150,13 +150,13 @@ describe('createProjectForm', () => {
     });
   });
 
-  it('creates a dedicated main agent by default', () => {
+  it('leads the project with the default agent (LobeAI) instead of creating one', () => {
     expect(
       buildCreateProjectRequest(
         { name: 'Launch' },
         { ids, mainAgentId: 'inbox', mainAgentMode: DEFAULT_MAIN_AGENT_MODE },
       ),
-    ).toEqual({ dedicatedAgentId: 'agt_AAAAAAAAAAAA', id: 'prj_BBBBBBBBBBBB', name: 'Launch' });
+    ).toEqual({ coordinatorAgentId: 'inbox', id: 'prj_BBBBBBBBBBBB', name: 'Launch' });
   });
 
   it('sends the picked agent, and no dedicated id, when the project reuses an existing one', () => {

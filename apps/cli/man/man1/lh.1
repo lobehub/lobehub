@@ -150,10 +150,16 @@ Manage dashboards (boards of monitoring widgets)
 Build monitoring widgets: sandboxed scripts rendered as dashboard cards
 .TP
 .B legacy\-plugin
-Manage legacy 1.0 plugins (user_installed_plugins) Alias: plugin.
+List, search, or uninstall legacy 1.0 plugins (user_installed_plugins). Add MCP servers with lh connector add
 .TP
 .B connector
 Manage MCP connectors (user connectors and their synced tools) Alias: mcp.
+.TP
+.B webhook
+Manage custom webhooks: URLs any system calls to wake an agent (MCP Events subscriptions are under lh automation) Alias: webhooks.
+.TP
+.B automation
+Manage automations: MCP Events subscriptions that run an agent on a connector event (an agent creates them in a conversation) Alias: automations.
 .TP
 .B workspace
 Manage workspaces and the workspace scope commands run under Alias: ws.

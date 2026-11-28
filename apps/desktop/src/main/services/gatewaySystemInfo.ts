@@ -6,6 +6,7 @@ import { BROWSER_IDENTIFIER } from '@lobechat/device-control/agent-browser';
 import { COMPUTER_USE_IDENTIFIER } from '@lobechat/device-control/computer-use';
 import type { DeviceSystemInfo } from '@lobechat/device-gateway-client';
 import type { RuntimeProbeCache } from '@lobechat/heterogeneous-agents/runtimeProbeCache';
+import { CODEX_COLLABORATION_MODE_RUNTIME } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { app } from 'electron';
 
@@ -44,9 +45,11 @@ export const collectBundledCliAgentRuntimes = async (): Promise<string[]> => {
     );
     const result: unknown = JSON.parse(stdout);
     if (!isRecord(result) || !Array.isArray(result.supportedAgentRuntimes)) return [];
-    return result.supportedAgentRuntimes.includes('codex-app-server-v1')
-      ? ['codex-app-server-v1']
-      : [];
+    // Forward only the native runtimes this build knows how to dispatch.
+    return result.supportedAgentRuntimes.filter(
+      (runtime): runtime is string =>
+        runtime === 'codex-app-server-v1' || runtime === CODEX_COLLABORATION_MODE_RUNTIME,
+    );
   } catch (error) {
     logger.debug('Bundled CLI native capability probe unavailable', error);
     return [];
@@ -61,6 +64,9 @@ export const collectGatewaySystemInfo = async (
   return {
     supportedTools: [COMPUTER_USE_IDENTIFIER, BROWSER_IDENTIFIER],
     supportedAgentRuntimes: await agentRuntimes.get(),
+    // Tunneled MCP calls run with their MCP Apps options, and views are read
+    // here (`readMcpUiResource`), so the server keeps a result's view.
+    supportedMcpFeatures: ['apps'],
     arch: os.arch(),
     // Tell the server-side prompt builder which shell runCommand spawns here.
     defaultShell: (await getShellInfo()).displayName,

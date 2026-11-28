@@ -4,8 +4,11 @@ import { useTranslation } from 'react-i18next';
 
 import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
 import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
+import { SkeletonBar } from '@/components/Skeleton';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
+import { useAgentStore } from '@/store/agent';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import SelectorTrigger from '../../components/SelectorTrigger';
@@ -22,7 +25,7 @@ const ModelSwitch = memo(() => {
   const { dropdownPlacement } = useActionBarContext();
   const agentId = useAgentId();
   const selection = useAgentModelSelection(agentId);
-  const { canDisplayModel, canSelectModel, selectionLockReason } = selection;
+  const { canDisplayModel, canSelectModel, isModelLoading, selectionLockReason } = selection;
   // The composer topic's pin when present, else the agent selection; a switch
   // pins that topic, otherwise updates the agent.
   const {
@@ -32,9 +35,12 @@ const ModelSwitch = memo(() => {
     topicId,
   } = useTopicModelSwitch(selection);
   const { isShared } = useAgentShareSupported(agentId);
+  const shareModelExempt = useAgentStore(
+    agentByIdSelectors.isAgentShareModelRestrictionExemptById(agentId),
+  );
   const chatModels = useEnabledChatModels();
   const enabledList =
-    !topicId && isShared && AGENT_SHARE_ALLOWED_PROVIDERS
+    !topicId && isShared && AGENT_SHARE_ALLOWED_PROVIDERS && !shareModelExempt
       ? chatModels.filter((item) => AGENT_SHARE_ALLOWED_PROVIDERS?.includes(item.id))
       : undefined;
   const modelNotice = enabledList ? (
@@ -73,7 +79,10 @@ const ModelSwitch = memo(() => {
     />
   );
 
-  if (!canDisplayModel) return null;
+  // Hold the chip's footprint while access or the caller's preference loads, so
+  // the trigger neither vanishes nor shifts the action bar when it resolves.
+  if (!canDisplayModel)
+    return isModelLoading ? <SkeletonBar height={28} radius={6} width={96} /> : null;
 
   // Model + effort in one menu, so the two settings that decide how a turn runs
   // are picked in the same place (see SelectorMenu).

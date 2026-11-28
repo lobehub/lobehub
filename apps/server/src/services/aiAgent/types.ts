@@ -4,6 +4,7 @@ import type {
   AgentSenderMetadata,
   BotSenderMetadata,
   ChatTopicBotContext,
+  ChatTopicWebhookContext,
   ExecAgentParams,
   ExternalOriginMetadata,
   LobeAgentChatConfig,
@@ -47,6 +48,8 @@ export interface ExecRunContext {
    * that re-runs later reads them back from there rather than from the turn's
    * request.
    */
+  /** Library skills the agent set to `auto`; mirrored on `world.autoSkillIds`. */
+  autoSkillIds: string[];
   botContext?: InternalExecAgentParams['botContext'];
   botPlatformContext?: InternalExecAgentParams['botPlatformContext'];
   canUseDevice: boolean;
@@ -96,6 +99,7 @@ export interface ExecRunContext {
  * This extends the public ExecAgentParams with server-side only options
  */
 export interface InternalExecAgentParams extends ExecAgentParams {
+  acceptsArtboardWorks?: boolean;
   /**
    * The calling client renders `file` Works in pushed snapshots, derived from
    * the `streamFeatures` it declared on `aiAgent.execAgent`. See
@@ -223,6 +227,13 @@ export interface InternalExecAgentParams extends ExecAgentParams {
    * relays on (`channelOperationId`), which a client never can.
    */
   llmExecutor?: AgentRunLlmExecutor;
+  /**
+   * Explicit server-only opt-in for an unattended topic run to surface in Inbox.
+   * Set running atomically with its operation marker before dispatch; existing
+   * terminal settlement then projects done to unread and errors to active.
+   * Never inferred from trigger or accepted from client/API parameters.
+   */
+  markTopicRunning?: boolean;
   /** Maximum steps for the agent operation */
   maxSteps?: number;
   /**
@@ -237,6 +248,8 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   onOperationCreated?: (operationId: string) => Promise<void>;
   /** Parent message ID to continue from. Only takes effect when resume is true */
   parentMessageId?: string;
+  /** User turn already saved and verified by a trusted server dispatcher. */
+  persistedUserMessageId?: string;
   /**
    * A server-started turn that takes over where a finished run left off (the
    * server-side drain of queued follow-ups). Non-interactive thread starts
@@ -253,6 +266,8 @@ export interface InternalExecAgentParams extends ExecAgentParams {
    * device is a preference the target policy may override.
    */
   requireDevice?: boolean;
+  /** Stable assistant row for a worker dispatching a pre-persisted worktree turn. */
+  reservedAssistantMessageId?: string;
   /** An idle operation reserved by the dispatcher for this exact Agent, topic and requester. */
   reservedOperationId?: string;
   /** Whether to continue execution from an existing persisted message */
@@ -330,6 +345,12 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   /** Abort startup before the agent runtime operation is created */
   signal?: AbortSignal;
   /**
+   * With `agentConfigSnapshot`, still layer the caller's own device override on top, as an
+   * ordinary conversation would. Set by a Channel run whose member has no device picked in the
+   * Channel; the snapshot keeps deciding everything else. Server-only, never client-passable.
+   */
+  snapshotFollowsCallerDevice?: boolean;
+  /**
    * The send directly steered the turn it replaces: an interrupting "send
    * now", not a follow-up that waited in queue and started as the next turn.
    * The user message is persisted with `metadata.steer` so it renders as a
@@ -379,6 +400,12 @@ export interface InternalExecAgentParams extends ExecAgentParams {
    * Use { approvalMode: 'headless' } for async tasks that should never wait for human approval
    */
   userInterventionConfig?: UserInterventionConfig;
+  /**
+   * Server-only: the generic webhook thread a run starts for. Written to a
+   * Topic the run creates as `metadata.webhook`, which is how later deliveries
+   * of the same thread find that Topic. Ignored when the run continues one.
+   */
+  webhookThread?: ChatTopicWebhookContext;
 }
 
 /**

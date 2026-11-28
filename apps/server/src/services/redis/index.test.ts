@@ -32,6 +32,31 @@ describe('Redis domain service', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("scopes an MCP device's features to its client and pool, keeping only an answer", async () => {
+    const scope = { clientKinds: ['cli' as const], deviceId: 'd', userId: 'u', workspaceId: 'w' };
+    await redisService.mcpDeviceRelay.rememberFeatures(scope, async () => undefined);
+    expect(set).not.toHaveBeenCalled();
+
+    await redisService.mcpDeviceRelay.rememberFeatures(scope, async () => ['apps']);
+    expect(set).toHaveBeenCalledWith('mcp_device_features:v1:u:w:d:cli', JSON.stringify(['apps']), {
+      px: 60_000,
+    });
+  });
+
+  it("keeps a view's relay target per user, connector and device for a short while", async () => {
+    const target = { apps: true, clientKinds: ['cli'], deviceId: 'd' };
+    const fetch = vi.fn().mockResolvedValue(target);
+    const scope = { connectorId: 'c', deviceId: 'd', userId: 'u' };
+    await expect(redisService.mcpDeviceRelay.rememberTarget(scope, fetch)).resolves.toEqual(target);
+    expect(set).toHaveBeenCalledWith('mcp_relay_target:v1:u:personal:c:d', JSON.stringify(target), {
+      px: 15_000,
+    });
+
+    get.mockResolvedValue(JSON.stringify(target));
+    await redisService.mcpDeviceRelay.rememberTarget(scope, fetch);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('does not retain empty or static skill discoveries and scopes successful reads to the connection', async () => {
     const scope = {
       connection: { createdAt: 'date', providerUserId: 'account' },

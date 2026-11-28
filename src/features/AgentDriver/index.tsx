@@ -2,18 +2,26 @@
 
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import { DEFAULT_MODEL } from '@lobechat/const';
-import { confirmModal, cssVar, Flexbox, Icon, Text, toast } from '@lobehub/ui';
-import { SparklesIcon } from 'lucide-react';
+import { confirmModal, cssVar, Flexbox, Text, toast } from '@lobehub/ui';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
+import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
+import { ProductLogo } from '@/components/Branding';
 import { CONNECTABLE_PROVIDERS, getConnectableProvider } from '@/features/ConnectAgent/providers';
+import { useSelectableChatModels } from '@/hooks/useSelectableChatModels';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
-import { type DriverTarget, planDriverRollback, planDriverSwitch } from './switchPlan';
+import {
+  type DriverTarget,
+  planDriverSwitch,
+  resolveHarnessModel,
+  runDriverSwitch,
+} from './switchPlan';
 
 const HARNESS = 'lobehub';
 
@@ -80,6 +88,8 @@ const AgentDriverSelect = memo<AgentDriverSelectProps>(({ agentId, canEdit }) =>
   );
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const defaults = useUserStore(settingsSelectors.defaultAgentConfig);
+  const { isShared } = useAgentShareSupported(agentId);
+  const enabledChatModels = useSelectableChatModels();
 
   const harnessName = t('settingAgent.driver.harness');
   const current = heterogeneousProvider?.type ?? HARNESS;
@@ -101,10 +111,15 @@ const AgentDriverSelect = memo<AgentDriverSelectProps>(({ agentId, canEdit }) =>
       onOk: async () => {
         const plan = planDriverSwitch({
           currentlyHeterogeneous: !!heterogeneousProvider,
-          defaults: {
-            model: defaults.model ?? DEFAULT_MODEL,
-            provider: defaults.provider ?? DEFAULT_PROVIDER,
-          },
+          defaults: resolveHarnessModel({
+            allowedProviders: isShared ? AGENT_SHARE_ALLOWED_PROVIDERS : undefined,
+            defaults: {
+              model: defaults.model ?? DEFAULT_MODEL,
+              provider: defaults.provider ?? DEFAULT_PROVIDER,
+            },
+            enabledChatModels,
+            fallback: { model: DEFAULT_MODEL, provider: DEFAULT_PROVIDER },
+          }),
           target,
         });
 
@@ -115,23 +130,14 @@ const AgentDriverSelect = memo<AgentDriverSelectProps>(({ agentId, canEdit }) =>
           provider: before?.provider,
         };
 
-        try {
-          // Sequential on purpose: the second write must merge into the cleared block.
-          for (const patch of plan) await updateAgentConfigById(agentId, patch);
-          toast.success(t('settingAgent.driver.switched', { name }));
-        } catch {
-          // Switching between two external drivers is clear-then-write. If the write fails after
-          // the clear, put the previous driver back rather than leave the agent on LobeHub with a
-          // stale provider stamp.
-          if (plan.length > 1 && previous.heterogeneousProvider) {
-            try {
-              await updateAgentConfigById(agentId, planDriverRollback(previous));
-            } catch {
-              // The failure toast below still tells the person the switch did not happen.
-            }
-          }
-          toast.error(t('settingAgent.driver.switchFailed'));
-        }
+        const result = await runDriverSwitch({
+          agentId,
+          plan,
+          previous,
+          write: updateAgentConfigById,
+        });
+        if (result === 'switched') toast.success(t('settingAgent.driver.switched', { name }));
+        else if (result === 'failed') toast.error(t('settingAgent.driver.switchFailed'));
       },
     });
   };
@@ -187,7 +193,7 @@ const AgentDriverSelect = memo<AgentDriverSelectProps>(({ agentId, canEdit }) =>
         grid(
           <DriverTile
             disabled={!canEdit}
-            icon={<Icon icon={SparklesIcon} size={20} />}
+            icon={<ProductLogo size={20} style={{ flex: 'none' }} />}
             label={harnessName}
             selected={current === HARNESS}
             onChoose={() => choose(HARNESS)}

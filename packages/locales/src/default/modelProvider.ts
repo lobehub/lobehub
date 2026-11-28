@@ -62,6 +62,18 @@ export default {
   'cloudflare.baseURLOrAccountID.desc': 'Enter your Cloudflare account ID or custom API address',
   'cloudflare.baseURLOrAccountID.placeholder': 'Cloudflare Account ID / custom API URL',
   'cloudflare.baseURLOrAccountID.title': 'Cloudflare Account ID / API Address',
+  'doubaospeech.accessToken.desc':
+    'Legacy speech console only: the Access Token paired with the App ID. Leave empty when using an API Key',
+  'doubaospeech.accessToken.placeholder': 'Access Token',
+  'doubaospeech.accessToken.title': 'Access Token (legacy console)',
+  'doubaospeech.apiKey.desc':
+    'API Key from the new Volcengine speech console (API Key management). Recommended; it takes precedence over App ID + Access Token',
+  'doubaospeech.apiKey.placeholder': 'Doubao Speech API Key',
+  'doubaospeech.apiKey.title': 'API Key',
+  'doubaospeech.appId.desc':
+    'Legacy speech console only: the App ID of your application, used together with the Access Token',
+  'doubaospeech.appId.placeholder': 'App ID',
+  'doubaospeech.appId.title': 'App ID (legacy console)',
   'comfyui.apiKey.desc': 'API key for Bearer Token authentication',
   'comfyui.apiKey.placeholder': 'Enter API key',
   'comfyui.apiKey.required': 'Please enter the API key',
@@ -256,52 +268,12 @@ export default {
   'providerModels.item.modelConfig.displayName.title': 'Model Display Name',
   'providerModels.item.modelConfig.extendParams.extra':
     'Choose extended parameters supported by the model. Hover an option to preview controls. Incorrect configs may cause request failures.',
-  'providerModels.item.modelConfig.extendParams.options.codexMaxReasoningEffort.hint':
-    'For Codex models; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint':
     'For Claude models; can lower cost and speed up responses.',
-  'providerModels.item.modelConfig.extendParams.options.effort.hint':
-    'For Claude Opus 4.6; controls effort level (low/medium/high/max).',
   'providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint':
     'For Claude Opus 4.6; toggles adaptive thinking on or off.',
   'providerModels.item.modelConfig.extendParams.options.enableReasoning.hint':
     'For Claude, DeepSeek and other reasoning models; unlock deeper thinking.',
-  'providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint':
-    'For GPT-5 series; controls reasoning intensity.',
-  'providerModels.item.modelConfig.extendParams.options.gpt5_1ReasoningEffort.hint':
-    'For GPT-5.1 series; controls reasoning intensity.',
-  'providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint':
-    'For GPT-5.2 Pro series; controls reasoning intensity.',
-  'providerModels.item.modelConfig.extendParams.options.gpt5_2ReasoningEffort.hint':
-    'For GPT-5.2 series; controls reasoning intensity.',
-  'providerModels.item.modelConfig.extendParams.options.gpt5_6ReasoningEffort.hint':
-    'For GPT-5.6 series; controls reasoning intensity from None through Max.',
-  'providerModels.item.modelConfig.extendParams.options.gpt6ReasoningEffort.hint':
-    'For GPT-6 series; controls reasoning intensity from Low through Max. Reasoning cannot be disabled.',
-  'providerModels.item.modelConfig.extendParams.options.glm5_2ReasoningEffort.hint':
-    'For GLM-5.2; controls reasoning effort with High and Max levels.',
-  'providerModels.item.modelConfig.extendParams.options.glm5_3ReasoningEffort.hint':
-    'For GLM-5.3; controls reasoning effort with Low, High, and Max levels. Thinking cannot be disabled.',
-  'providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint':
-    'For Grok 4.20 series; controls reasoning intensity. Low/Medium uses 4 agents, High/XHigh uses 16 agents.',
-  'providerModels.item.modelConfig.extendParams.options.grok4_3ReasoningEffort.hint':
-    'For Grok 4.3 series; controls reasoning intensity.',
-  'providerModels.item.modelConfig.extendParams.options.grok4_5ReasoningEffort.hint':
-    'For Grok 4.5 series; controls reasoning intensity (low/medium/high, default high).',
-  'providerModels.item.modelConfig.extendParams.options.grok4_6ReasoningEffort.hint':
-    'For Grok 4.6 series; controls reasoning intensity (low/medium/high/xhigh, default high). Reasoning cannot be disabled.',
-  'providerModels.item.modelConfig.extendParams.options.grok4_7ReasoningEffort.hint':
-    'For Grok 4.7; controls reasoning intensity (low/medium/high/xhigh, default high). Reasoning cannot be disabled.',
-  'providerModels.item.modelConfig.extendParams.options.hy3ReasoningEffort.hint':
-    'For Hy3 models; controls reasoning intensity. no_think (ultra-fast response), low (quick reasoning), and high (deep reasoning)—to accommodate varying latency and depth requirements, from high-frequency interactions to complex engineering tasks.',
-  'providerModels.item.modelConfig.extendParams.options.ring2_6ReasoningEffort.hint':
-    'For Ring 2.6 series; controls reasoning intensity.',
-  'providerModels.item.modelConfig.extendParams.options.deepseekV4GAReasoningEffort.hint':
-    'For DeepSeek V4 GA thinking mode; controls reasoning intensity. Adds a `low` tier on top of the original V4 levels. `high` is the default, `max` unlocks the deepest reasoning used by complex agent workflows.',
-  'providerModels.item.modelConfig.extendParams.options.deepseekV4ReasoningEffort.hint':
-    'For DeepSeek V4 thinking mode; controls reasoning intensity. `high` is the default, `max` unlocks the deepest reasoning used by complex agent workflows.',
-  'providerModels.item.modelConfig.extendParams.options.qwen38ReasoningEffort.hint':
-    'For Qwen3.8 Max hybrid thinking; controls reasoning intensity. `none` disables thinking; `low`/`medium` trade depth for speed and cost; `xhigh` is the API default for complex analysis.',
   'providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint':
     'For Gemini image generation models; controls aspect ratio of generated images.',
   'providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint':
@@ -310,8 +282,6 @@ export default {
     'For Gemini 3 image generation models; controls resolution of generated images.',
   'providerModels.item.modelConfig.extendParams.options.imageResolution2.hint':
     'For Gemini 3.1 Flash Image models; controls resolution of generated images (supports 512px).',
-  'providerModels.item.modelConfig.extendParams.options.opus47Effort.hint':
-    'For Claude Opus 4.7 and later; controls effort level (low/medium/high/xhigh/max).',
   'providerModels.item.modelConfig.extendParams.options.preserveThinking.hint':
     'For Qwen3.6 Plus, GLM-5 and GLM-4.7; sends historical assistant reasoning back to model context (preserve_thinking / clear_thinking=false).',
   'providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint':
@@ -320,28 +290,14 @@ export default {
     'For GLM-5 and GLM-4.7; controls token budget for reasoning (max 32k).',
   'providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint':
     'For Qwen3 series; controls token budget for reasoning (max 80k).',
-  'providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint':
-    'For OpenAI and other reasoning-capable models; controls reasoning effort.',
   'providerModels.item.modelConfig.extendParams.options.reasoningMode.hint':
     'For GPT-5.6 Responses API; switches between Standard and Pro reasoning modes.',
-  'providerModels.item.modelConfig.extendParams.options.step3_5ReasoningEffort.hint':
-    'For Step 3.5 series; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.textVerbosity.hint':
     'For GPT-5+ series; controls output verbosity.',
   'providerModels.item.modelConfig.extendParams.options.thinking.hint':
     'For some Doubao models; allow model to decide whether to think deeply.',
   'providerModels.item.modelConfig.extendParams.options.thinkingBudget.hint':
     'For Gemini series; controls thinking budget.',
-  'providerModels.item.modelConfig.extendParams.options.thinkingLevel.hint':
-    'For Gemini 3 Flash Preview models; controls thinking depth.',
-  'providerModels.item.modelConfig.extendParams.options.thinkingLevel2.hint':
-    'For Gemini 3 Pro Preview models; controls thinking depth.',
-  'providerModels.item.modelConfig.extendParams.options.thinkingLevel3.hint':
-    'For Gemini 3.1 Pro Preview models; controls thinking depth with low/medium/high levels.',
-  'providerModels.item.modelConfig.extendParams.options.thinkingLevel4.hint':
-    'For Gemini 3.1 Flash Image models; toggle thinking on/off.',
-  'providerModels.item.modelConfig.extendParams.options.thinkingLevel5.hint':
-    'For Gemini 4 Hydrogen models; controls thinking depth with low/medium/high/xhigh levels.',
   'providerModels.item.modelConfig.extendParams.options.urlContext.hint':
     'For Gemini series; supports providing URL context.',
   'providerModels.item.modelConfig.extendParams.placeholder':
@@ -352,7 +308,7 @@ export default {
     'The current file upload implementation is just a hack solution, limited to self-experimentation. Please wait for complete file upload capabilities in future implementations.',
   'providerModels.item.modelConfig.files.title': 'File Upload Support',
   'providerModels.item.modelConfig.functionCall.extra':
-    "This configuration will only enable the model's ability to use tools, allowing for the addition of tool-type skills. However, whether the model can truly use the tools depends entirely on the model itself; please test for usability on your own.",
+    "This configuration will only enable the model's ability to use tools, allowing tools to be added to the model. However, whether the model can truly use the tools depends entirely on the model itself; please test for usability on your own.",
   'providerModels.item.modelConfig.functionCall.title': 'Support for Tool Calling',
   'providerModels.item.modelConfig.id.duplicate':
     'A model with this ID already exists. Use a different model ID.',
@@ -368,6 +324,14 @@ export default {
   'providerModels.item.modelConfig.reasoning.extra':
     "This configuration will enable the model's deep thinking capabilities, and the specific effects depend entirely on the model itself. Please test whether this model has usable deep thinking abilities.",
   'providerModels.item.modelConfig.reasoning.title': 'Support Deep Thinking',
+  'providerModels.item.modelConfig.reasoningEffort.controlsThinking':
+    'Effort also switches thinking: Off disables thinking, any other level enables it',
+  'providerModels.item.modelConfig.reasoningEffort.default': 'Default',
+  'providerModels.item.modelConfig.reasoningEffort.defaultPlaceholder':
+    'Not set: uses the same model from other providers, else the middle level',
+  'providerModels.item.modelConfig.reasoningEffort.extra':
+    'Select the effort levels this model accepts. The default is sent when the user has not picked one. Leave all unchecked to inherit the levels of the same model from other providers; without any, the model has no effort control.',
+  'providerModels.item.modelConfig.reasoningEffort.title': 'Reasoning Effort',
   'providerModels.item.modelConfig.search.extra':
     "This setting enables the model's built-in web search capability. Whether the built-in search engine is supported depends on the model itself. Please test the model to verify the availability of this feature.",
   'providerModels.item.modelConfig.search.title': 'Supports Web Search',
@@ -375,6 +339,11 @@ export default {
     'Set the maximum number of tokens supported by the model',
   'providerModels.item.modelConfig.tokens.title': 'Maximum Context Window',
   'providerModels.item.modelConfig.tokens.unlimited': 'Unlimited',
+  'providerModels.item.modelConfig.ttsVoice.extra':
+    'Used when a speech request does not name a voice. Leave empty to use the model default.',
+  'providerModels.item.modelConfig.ttsVoice.placeholder': 'Model default ({{voice}})',
+  'providerModels.item.modelConfig.ttsVoice.placeholderCustom': 'Enter a voice ID',
+  'providerModels.item.modelConfig.ttsVoice.title': 'Default Voice',
   'providerModels.item.modelConfig.type.extra':
     'Different model types have distinct use cases and capabilities',
   'providerModels.item.modelConfig.type.options.asr': 'Speech-to-Text',
@@ -400,6 +369,8 @@ export default {
   'providerModels.item.pricing.inputMinutes': '${{amount}}/Minutes',
   'providerModels.item.pricing.inputTokens': 'Input ${{amount}}/M',
   'providerModels.item.pricing.outputTokens': 'Output ${{amount}}/M',
+  'providerModels.item.pricing.second': '${{amount}}/Second',
+  'providerModels.item.pricing.song': '${{amount}}/Song',
   'providerModels.item.releasedAt': 'Released at {{releasedAt}}',
   'providerModels.list.addNew': 'Add Model',
   'providerModels.list.disabled': 'Disabled',
@@ -443,6 +414,7 @@ export default {
   'providerModels.tabs.decision': 'Decision',
   'providerModels.tabs.embedding': 'Embedding',
   'providerModels.tabs.image': 'Image',
+  'providerModels.tabs.text2music': 'Music',
   'providerModels.tabs.tts': 'TTS',
   'providerModels.tabs.video': 'Video',
   'sortModal.success': 'Sort update successful',

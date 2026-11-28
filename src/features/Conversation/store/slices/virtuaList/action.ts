@@ -33,6 +33,14 @@ export interface VirtuaListAction {
   ) => void;
 
   /**
+   * Scroll to the row that renders a display message
+   */
+  scrollToMessage: (
+    messageId: string,
+    options?: { align?: 'start' | 'center' | 'end'; smooth?: boolean },
+  ) => void;
+
+  /**
    * Set active index directly (derived from scroll position)
    */
   setActiveIndex: (index: number | null) => void;
@@ -128,7 +136,14 @@ export const virtuaListSlice: StateCreator<State & VirtuaListAction, [], [], Vir
     virtuaScrollMethods?.scrollToIndex(index, options);
   },
 
+  scrollToMessage: (messageId, options) => {
+    get().virtuaScrollMethods?.scrollToMessage(messageId, options);
+  },
+
   setActiveIndex: (index) => {
+    // Scroll handlers call this on every scroll event; skipping equal values
+    // keeps activeIndex subscribers (minimap) from waking up for nothing.
+    if (get().activeIndex === index) return;
     set({ activeIndex: index });
   },
 

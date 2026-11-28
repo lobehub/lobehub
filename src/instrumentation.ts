@@ -42,6 +42,9 @@ export async function register() {
     });
   }
 
+  // MCP recovery starts with the Agent runtime (see `ensureMcpRecoveryWorker`), not here: importing
+  // it from this entry copies the whole runtime graph into every server route's build.
+
   // Note: messenger system bot connections (Discord/Telegram) are managed
   // entirely from dc-center's System Bots admin — save / enable / forceReconnect
   // mutations call MessageGateway directly. The main app's only role here is

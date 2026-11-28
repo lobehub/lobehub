@@ -8,7 +8,6 @@ interface GlobalStateMock {
 const mocks = vi.hoisted(() => ({
   activeWorkspaceSlug: null as string | null,
   enableDashboard: false,
-  enableGoals: false,
   showMarket: true,
 }));
 
@@ -33,13 +32,12 @@ vi.mock('@/store/serverConfig', () => ({
       : { hideGitHub: false, showMarket: mocks.showMarket },
 }));
 
-const ENABLE_GOALS = 'enableGoals';
 vi.mock('@/store/user', () => ({
-  useUserStore: (selector: unknown) => (selector === ENABLE_GOALS ? mocks.enableGoals : undefined),
+  useUserStore: () => false,
 }));
 
 vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: { enableGoals: ENABLE_GOALS },
+  labPreferSelectors: { enableProjects: vi.fn() },
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
@@ -51,7 +49,6 @@ describe('useNavLayout', () => {
     mocks.activeWorkspaceSlug = null;
     mocks.showMarket = true;
     mocks.enableDashboard = false;
-    mocks.enableGoals = false;
   });
 
   const dashboardItem = async () => {
@@ -60,17 +57,16 @@ describe('useNavLayout', () => {
     return result.current.topNavItems.find((item) => item.key === 'dashboard');
   };
 
-  it('hides Dashboards while the dashboard feature flag is off', async () => {
-    expect((await dashboardItem())?.hidden).toBe(true);
-  });
-
-  it('shows Dashboards in personal mode once the flag is on', async () => {
-    mocks.enableDashboard = true;
-    expect((await dashboardItem())?.hidden).toBe(false);
-
-    mocks.activeWorkspaceSlug = 'lobe-team';
-    expect((await dashboardItem())?.hidden).toBe(true);
-  });
+  // Boards stay reachable at /dashboard and from widget links; the home
+  // sidebar no longer carries an entry for them.
+  it.each([null, 'lobe-team'])(
+    'keeps Dashboards out of the home sidebar even with the flag on (workspace: %s)',
+    async (slug) => {
+      mocks.enableDashboard = true;
+      mocks.activeWorkspaceSlug = slug as typeof mocks.activeWorkspaceSlug;
+      expect(await dashboardItem()).toBeUndefined();
+    },
+  );
 
   const goalsItem = async () => {
     const { useNavLayout } = await import('./useNavLayout');
@@ -78,20 +74,14 @@ describe('useNavLayout', () => {
     return result.current.topNavItems.find((item) => item.key === 'goals');
   };
 
-  it('hides Goals while the goals lab is off', async () => {
-    expect((await goalsItem())?.hidden).toBe(true);
-  });
-
-  it('shows Goals next to Tasks once the goals lab is on', async () => {
-    mocks.enableGoals = true;
-    const item = await goalsItem();
-    expect(item?.hidden).toBe(false);
-    expect(item?.url).toBe('/goals');
+  it.each([null, 'acme'])('merges Goals into Tasks (workspace: %s)', async (slug) => {
+    mocks.activeWorkspaceSlug = slug as typeof mocks.activeWorkspaceSlug;
+    expect(await goalsItem()).toBeUndefined();
 
     const { useNavLayout } = await import('./useNavLayout');
     const { result } = renderHook(() => useNavLayout());
-    const keys = result.current.topNavItems.map((navItem) => navItem.key);
-    expect(keys.indexOf('goals')).toBe(keys.indexOf('tasks') + 1);
+    const tasks = result.current.topNavItems.find((item) => item.key === 'tasks');
+    expect(tasks?.additionalActiveTabs).toEqual(['goals', 'goal', 'task']);
   });
 
   it('keeps Memory visible in personal mode', async () => {

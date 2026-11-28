@@ -5,7 +5,6 @@ import { isDesktop } from '@lobechat/const';
 import {
   type BuiltinSkillEnvironment,
   isBuiltinSkillEnabled,
-  USER_HIDDEN_BUILTIN_SKILLS,
 } from '@lobechat/mecha/builtinSkillGate';
 import { type BuiltinSkill } from '@lobechat/types';
 
@@ -29,5 +28,3 @@ export const filterBuiltinSkills = <T extends Pick<BuiltinSkill, 'identifier'>>(
   skills: T[],
   context: BuiltinSkillFilterContext = DEFAULT_CONTEXT,
 ): T[] => skills.filter((skill) => shouldEnableBuiltinSkill(skill.identifier, context));
-
-export { USER_HIDDEN_BUILTIN_SKILLS };

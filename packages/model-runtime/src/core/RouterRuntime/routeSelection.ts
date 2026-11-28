@@ -81,10 +81,12 @@ export const resolveMatchedRouter = async (
   deps: RouterRuntimeDeps,
   model: string,
   pricingContext?: ModelPricingContext,
+  metadata?: Record<string, unknown>,
 ): Promise<RouterInstance> => {
   const startedAt = Date.now();
   const resolvedRouters = await resolveRouters(deps, {
     model,
+    ...(metadata ? { metadata } : {}),
     ...(pricingContext ? { pricingContext } : {}),
   });
   const baseURL = deps.options.baseURL;
@@ -258,9 +260,10 @@ export const selectRouteOptions = async (
   model: string,
   routeContext: RouteAttemptContext,
 ) => {
-  const { allowedApiTypes, pinnedRoute, pricingContext } = routeContext;
+  const { allowedApiTypes, metadata, pinnedRoute, pricingContext } = routeContext;
   const pinned = await resolvePinnedRoute(deps, model, pinnedRoute);
-  const matchedRouter = pinned?.router ?? (await resolveMatchedRouter(deps, model, pricingContext));
+  const matchedRouter =
+    pinned?.router ?? (await resolveMatchedRouter(deps, model, pricingContext, metadata));
   const eligibleRouterOptions = normalizeRouterOptions(deps, matchedRouter).filter(
     (option) => !allowedApiTypes || allowedApiTypes.has(option.apiType ?? matchedRouter.apiType),
   );

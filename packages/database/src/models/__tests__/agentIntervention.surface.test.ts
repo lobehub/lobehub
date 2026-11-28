@@ -94,6 +94,7 @@ describe('AgentInterventionModel public surface', () => {
       'claimBatch',
       'claimCustomExecution',
       'completeCustomExecution',
+      'completeMcpResolution',
       'completeRuntimeResolution',
       'createBatch',
       'createBatchWithSupersession',

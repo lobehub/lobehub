@@ -378,11 +378,9 @@ describe('ConversationLifecycle actions', () => {
           expect.any(Object),
           { creationOrigin: 'client' },
         );
-        expect(createCompressionGroupSpy).toHaveBeenCalledWith({
-          agentId,
-          messageIds: ['user-1', 'assistant-1'],
-          topicId,
-        });
+        expect(createCompressionGroupSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ agentId, messageIds: ['user-1', 'assistant-1'], topicId }),
+        );
       });
 
       it('should not process AI when onlyAddUserMessage is true', async () => {
@@ -1881,7 +1879,7 @@ describe('ConversationLifecycle actions', () => {
       it('should snapshot the agent model onto the newTopic (top-level) when the send creates the topic', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;
-        vi.spyOn(aiModelSelectors, 'isModelHasReasoningExtendParams').mockReturnValue(() => true);
+        vi.spyOn(aiModelSelectors, 'isModelHasReasoningControls').mockReturnValue(() => true);
         let loaded = false;
         vi.spyOn(aiModelSelectors, 'isModelReasoningConfigLoaded').mockReturnValue(() => loaded);
         vi.spyOn(useAiInfraStore.getState(), 'ensureModelReasoningConfig').mockImplementation(

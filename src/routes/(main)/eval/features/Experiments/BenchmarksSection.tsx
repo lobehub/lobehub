@@ -7,6 +7,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { densityVars } from '@/styles/densityVars';
 
 import DatasetRow from './DatasetRow';
 import type { useExperimentActions } from './useExperimentActions';
@@ -21,7 +22,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-inline: 24px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
-    font-size: 16px;
+    font-size: ${densityVars.pageTitleFontSize};
     font-weight: 600;
   `,
   listCard: css`
@@ -29,7 +30,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   sectionTitle: css`
     margin: 0;
-    font-size: 16px;
+    font-size: ${densityVars.pageTitleFontSize};
     font-weight: 600;
   `,
 }));

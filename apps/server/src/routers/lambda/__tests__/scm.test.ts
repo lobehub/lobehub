@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   consumeClaim: vi.fn(),
   fetchInstallation: vi.fn(),
   listRepositories: vi.fn(),
+  onAutoFixChanged: vi.fn(),
 }));
 vi.mock('@/server/services/scm/oauth/stateStore', () => ({
   consumeScmInstallClaim: mocks.consumeClaim,
@@ -35,6 +36,12 @@ vi.mock('@/server/services/scm/oauth/stateStore', () => ({
 vi.mock('@/server/services/scm/github/app', () => ({
   fetchGitHubInstallation: mocks.fetchInstallation,
   listGitHubInstallationRepositoryDetails: mocks.listRepositories,
+}));
+// The comment it rewrites is covered with the service; here only that it is asked to.
+vi.mock('@/server/services/scm/ScmControlService', () => ({
+  ScmControlService: vi.fn().mockImplementation(function () {
+    return { onAutoFixChanged: mocks.onAutoFixChanged };
+  }),
 }));
 
 vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async () => {
@@ -303,6 +310,82 @@ describe('scmRouter', () => {
     await expect(
       caller({ userId, workspaceId: workspace.id }).connectInstallation({ claim: 'c6' }),
     ).resolves.toMatchObject({ userId, workspaceId: workspace.id });
+  });
+
+  describe('setChangeRequestAutoFix', () => {
+    const pullRequest = (scope: { userId: string; workspaceId?: string }) =>
+      ScmChangeRequestModel.upsert(serverDB, {
+        number: 8,
+        provider: 'github',
+        repoFullName: 'a/autofix',
+        state: 'open',
+        url: 'https://github.com/a/autofix/pull/8',
+        ...scope,
+      });
+
+    it('switches Auto-fix off and back on, starting the wake count over', async () => {
+      const row = await pullRequest({ userId });
+      await ScmChangeRequestModel.reserveWake(serverDB, row.id, 3, 'ci_failed');
+
+      await expect(
+        caller({ userId }).setChangeRequestAutoFix({ changeRequestId: row.id, enabled: false }),
+      ).resolves.toEqual({ autoFix: false, maxWakes: 3, wakeCount: 1 });
+      await expect(
+        caller({ userId }).setChangeRequestAutoFix({ changeRequestId: row.id, enabled: true }),
+      ).resolves.toEqual({ autoFix: true, maxWakes: 3, wakeCount: 0 });
+    });
+
+    it('refuses a pull request another tenant owns', async () => {
+      const row = await pullRequest({ userId });
+
+      await expect(
+        caller({ userId: otherUserId }).setChangeRequestAutoFix({
+          changeRequestId: row.id,
+          enabled: false,
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.metadata.autoFix).toBe(
+        undefined,
+      );
+    });
+
+    it('requires the member role in a workspace', async () => {
+      const [workspace] = await serverDB
+        .insert(workspaces)
+        .values({ name: 'ws', primaryOwnerId: userId, slug: 'scm-ws-autofix' })
+        .returning();
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'viewer', userId: otherUserId, workspaceId: workspace.id },
+        { role: 'member', userId, workspaceId: workspace.id },
+      ]);
+      const row = await pullRequest({ userId, workspaceId: workspace.id });
+
+      await expect(
+        caller({ userId: otherUserId, workspaceId: workspace.id }).setChangeRequestAutoFix({
+          changeRequestId: row.id,
+          enabled: false,
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(
+        caller({ userId, workspaceId: workspace.id }).setChangeRequestAutoFix({
+          changeRequestId: row.id,
+          enabled: false,
+        }),
+      ).resolves.toMatchObject({ autoFix: false });
+    });
+
+    it('rewrites the tracking comment, and keeps the switch when that fails', async () => {
+      const row = await pullRequest({ userId });
+
+      await caller({ userId }).setChangeRequestAutoFix({ changeRequestId: row.id, enabled: false });
+      expect(mocks.onAutoFixChanged).toHaveBeenCalledWith(row.id);
+
+      mocks.onAutoFixChanged.mockRejectedValueOnce(new Error('rate limited'));
+      await expect(
+        caller({ userId }).setChangeRequestAutoFix({ changeRequestId: row.id, enabled: true }),
+      ).resolves.toMatchObject({ autoFix: true });
+      expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.metadata.autoFix).toBe(true);
+    });
   });
 
   describe('listRepositories', () => {

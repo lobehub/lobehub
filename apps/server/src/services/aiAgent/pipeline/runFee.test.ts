@@ -75,6 +75,18 @@ describe('run fee claim', () => {
     expect(claim.holderId).toBeUndefined();
   });
 
+  it('passes the model the run starts on to the hold', async () => {
+    const claim: RunFeeClaim = {};
+    await claimRunFee(claim, { hold: true, model: 'm1', provider: 'p1', userId: 'u1' });
+
+    expect(fees.holdAgentRunFee).toHaveBeenCalledWith({
+      holderId: claim.holderId,
+      model: 'm1',
+      provider: 'p1',
+      userId: 'u1',
+    });
+  });
+
   it('moves the fee to the operation and releases it when the run never started', async () => {
     const claim: RunFeeClaim = {};
     await claimRunFee(claim, { hold: true, userId: 'u1' });
@@ -84,6 +96,20 @@ describe('run fee claim', () => {
 
     expect(fees.rebindAgentRunFee).toHaveBeenCalledWith('u1', provisional, 'op_1');
     expect(fees.releaseAgentRunFee).toHaveBeenCalledWith('u1', 'op_1');
+  });
+
+  it("names a shared Agent's visitor run, so its fee is paid from what funds the share", async () => {
+    const agentShare = { agentId: 'agt_1', shareId: 'share_1', visitorUserId: 'visitor_1' };
+    const claim: RunFeeClaim = {};
+    await claimRunFee(claim, { agentShare, hold: true, userId: 'owner_1' });
+    await claimRunFee({}, { hold: true, userId: 'owner_1' });
+
+    expect(fees.holdAgentRunFee).toHaveBeenNthCalledWith(1, {
+      agentShare,
+      holderId: claim.holderId,
+      userId: 'owner_1',
+    });
+    expect(fees.holdAgentRunFee.mock.calls[1][0]).not.toHaveProperty('agentShare');
   });
 
   it('leaves a started run’s fee to its completion', async () => {

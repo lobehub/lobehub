@@ -16,6 +16,8 @@ import type {
   OnboardingContext,
   PlanTodoConfig,
   ProjectInstructionFile,
+  RevokedDocumentReads,
+  SkillChangesByMessage,
   SkillMeta,
   ToolDiscoveryConfig,
   TopicReferenceItem,
@@ -56,6 +58,8 @@ export interface ContextAgentSnapshot {
   inputTemplate?: string;
   /** Files and knowledge bases attached to the agent. */
   knowledge?: KnowledgeConfig;
+  /** Documents deleted or disabled since earlier turns read them, per reading agent. */
+  revokedDocumentReads?: RevokedDocumentReads[];
   systemRole?: string;
 }
 
@@ -82,6 +86,7 @@ export interface ContextRunSnapshot {
    */
   enableAgentMode?: boolean;
   enableExpertise?: boolean;
+  enableMcpAppContext?: boolean;
   expertise?: ExpertiseContextSnapshot;
   /** maxSteps exceeded: tools are stripped and a summary prompt is injected. */
   forceFinish?: boolean;
@@ -108,6 +113,8 @@ export interface ContextToolsSnapshot {
   selectedSkills?: RuntimeSelectedSkill[];
   /** Tools the user pinned for this request. */
   selectedTools?: RuntimeSelectedTool[];
+  /** Change notes for `<available_skills>`, keyed by the user message each belongs to. */
+  skillChanges?: SkillChangesByMessage;
   toolDiscoveryConfig?: ToolDiscoveryConfig;
 }
 

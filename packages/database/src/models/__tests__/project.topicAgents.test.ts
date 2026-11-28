@@ -3,8 +3,9 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { deleteTestUsers } from '../../core/testCleanup';
 import { ProjectRepository } from '../../repositories/project';
-import { agents, projectAgents, projects, topics, users, workspaces } from '../../schemas';
+import { agents, projectAgents, projects, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
 import type { CreateProjectInput } from '../project';
@@ -30,12 +31,12 @@ describe('project members from project topics', () => {
   const topicModel = new TopicModel(serverDB, userId);
 
   beforeEach(async () => {
-    await serverDB.delete(users);
+    await deleteTestUsers(serverDB);
     await serverDB.insert(users).values({ id: userId });
   });
 
   afterEach(async () => {
-    await serverDB.delete(users);
+    await deleteTestUsers(serverDB);
   });
 
   it('adds the agent of a topic created in the project', async () => {
@@ -131,34 +132,5 @@ describe('project members from project topics', () => {
     });
 
     expect(await memberIds(creator, sharedProject.id)).not.toContain(privateAgent.id);
-  });
-
-  // TODO(2026-12-31): remove with `ProjectModel.joinTopicAgents`.
-  it('backfills agents of topics filed before members were added on write', async () => {
-    const project = await createProject(repo, { name: 'Legacy' });
-    const agent = await new AgentModel(serverDB, userId).create({ title: 'Architect' });
-    await serverDB
-      .insert(topics)
-      .values({ agentId: agent.id, id: 'tpc_legacy', projectId: project.id, userId });
-    expect(await memberIds(model, project.id)).not.toContain(agent.id);
-
-    await model.joinTopicAgents(project.id);
-
-    expect(await memberIds(model, project.id)).toContain(agent.id);
-  });
-
-  // TODO(2026-12-31): remove with `ProjectModel.joinTopicAgents`.
-  it('leaves members alone when a read-only viewer opens the project', async () => {
-    const project = await createProject(repo, { name: 'Legacy' });
-    const agent = await new AgentModel(serverDB, userId).create({ title: 'Architect' });
-    await serverDB
-      .insert(topics)
-      .values({ agentId: agent.id, id: 'tpc_legacy_viewer', projectId: project.id, userId });
-
-    await new ProjectModel(serverDB, userId, undefined, { readOnly: true }).joinTopicAgents(
-      project.id,
-    );
-
-    expect(await memberIds(model, project.id)).not.toContain(agent.id);
   });
 });

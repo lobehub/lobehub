@@ -1,148 +1,168 @@
-import { createStaticStyles, cx, Flexbox, Icon, type IconProps } from '@lobehub/ui';
+import { Flexbox, Icon, type IconProps } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRightIcon, ChevronsUpDownIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 
-export const rowStyles = createStaticStyles(({ css, cssVar }) => ({
-  changeAdditions: css`
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorSuccess};
-  `,
-  changeDeletions: css`
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorError};
-  `,
-  icon: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  num: css`
-    margin-inline-end: 5px;
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
+import { sx } from '@/styles/sx';
 
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  row: css`
-    cursor: pointer;
+import { overviewRowMarker } from './markers.stylex';
 
-    flex-shrink: 0;
-
-    min-height: 32px;
-    padding-block: 5px;
-    padding-inline: 8px;
-    border-radius: 8px;
-
-    transition: background-color 0.12s ease;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  rowAction: css`
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  rowStatic: css`
-    cursor: default;
-
-    &:hover {
-      background: transparent;
-    }
-  `,
-  rowTrailing: css`
-    display: flex;
-    flex-shrink: 0;
-    gap: 6px;
-    align-items: center;
-
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    line-height: 18px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  rowValue: css`
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 0;
-
-    font-size: 13px;
-    line-height: 20px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  rowValueDanger: css`
-    color: ${cssVar.colorError};
-  `,
-  rowValueWeak: css`
-    font-size: 12.5px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+export const rowStyles = stylex.create({
+  actions: {
+    position: 'absolute',
+    insetBlockStart: '50%',
+    insetInlineEnd: '2px',
+    transform: 'translateY(-50%)',
+    display: 'flex',
+    gap: '2px',
+    alignItems: 'center',
+    opacity: {
+      'default': 0,
+      [stylex.when.ancestor(':hover', overviewRowMarker)]: 1,
+      [stylex.when.ancestor(':focus-within', overviewRowMarker)]: 1,
+      ':has([aria-expanded="true"])': 1,
+    },
+    pointerEvents: {
+      'default': 'none',
+      [stylex.when.ancestor(':hover', overviewRowMarker)]: 'auto',
+      [stylex.when.ancestor(':focus-within', overviewRowMarker)]: 'auto',
+      ':has([aria-expanded="true"])': 'auto',
+    },
+    transition: 'opacity 0.12s ease',
+  },
+  changeAdditions: { fontVariantNumeric: 'tabular-nums', color: cssVar.colorSuccess },
+  changeDeletions: { fontVariantNumeric: 'tabular-nums', color: cssVar.colorError },
+  icon: { flexShrink: 0, color: cssVar.colorTextTertiary },
+  iconBox: {
+    display: 'grid',
+    flexShrink: 0,
+    placeItems: 'center',
+    width: sidebarRow.iconBox,
+    height: sidebarRow.iconBox,
+    color: cssVar.colorTextTertiary,
+  },
+  num: {
+    marginInlineEnd: '5px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    fontWeight: 500,
+    color: cssVar.colorTextTertiary,
+  },
+  row: {
+    cursor: 'pointer',
+    position: 'relative',
+    flexShrink: 0,
+    gap: sidebarRow.gap,
+    minHeight: sidebarRow.height,
+    paddingBlock: 0,
+    paddingInline: sidebarRow.paddingInline,
+    borderRadius: sidebarRow.radius,
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    transition: 'background-color 0.12s ease',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  rowAction: { fontSize: '12px', fontWeight: 500, color: cssVar.colorTextSecondary },
+  rowStatic: {
+    cursor: 'default',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorTextSecondary },
+    backgroundColor: { 'default': null, ':hover': 'transparent' },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  rowTrailing: {
+    display: 'flex',
+    flexShrink: 0,
+    gap: '6px',
+    alignItems: 'center',
+    fontSize: sidebarRow.metaFontSize,
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: '18px',
+    color: cssVar.colorTextTertiary,
+  },
+  rowTrailingConcealed: {
+    visibility: {
+      default: null,
+      [stylex.when.ancestor(':hover', overviewRowMarker)]: 'hidden',
+      [stylex.when.ancestor(':focus-within', overviewRowMarker)]: 'hidden',
+    },
+  },
+  rowValue: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: '0',
+    fontSize: sidebarRow.textFontSize,
+    lineHeight: sidebarRow.textLineHeight,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  rowValueDanger: { color: cssVar.colorError },
+});
 
 export interface OverviewRowProps {
+  actions?: ReactNode;
   danger?: boolean;
   icon?: IconProps['icon'];
   iconColor?: string;
   iconNode?: ReactNode;
-  iconSize?: number;
   interactive?: boolean;
   onClick?: () => void;
   spin?: boolean;
   title?: string;
   trailing?: ReactNode;
   value: ReactNode;
-  weak?: boolean;
 }
 
 export const OverviewRow = memo<OverviewRowProps>(
   ({
+    actions,
     danger,
     icon,
     iconColor,
     iconNode,
-    iconSize = 16,
     interactive,
     onClick,
     spin,
     title,
     trailing,
     value,
-    weak,
-  }) => (
-    <Flexbox
-      horizontal
-      align={'center'}
-      className={cx(rowStyles.row, !onClick && !interactive && rowStyles.rowStatic)}
-      gap={10}
-      role={onClick || interactive ? 'button' : undefined}
-      onClick={onClick}
-    >
-      {iconNode ?? (
-        <Icon
-          className={rowStyles.icon}
-          icon={icon!}
-          size={iconSize}
-          spin={spin}
-          style={iconColor ? { color: iconColor } : undefined}
-        />
-      )}
-      <span
-        title={title}
-        className={cx(
-          rowStyles.rowValue,
-          danger && rowStyles.rowValueDanger,
-          weak && rowStyles.rowValueWeak,
+  }) => {
+    const { iconSize } = useDensityTokens();
+
+    return (
+      <Flexbox
+        horizontal
+        align={'center'}
+        {...stylex.props(
+          rowStyles.row,
+          !onClick && !interactive && rowStyles.rowStatic,
+          overviewRowMarker,
         )}
+        role={onClick || interactive ? 'button' : undefined}
+        onClick={onClick}
       >
-        {value}
-      </span>
-      {trailing ? <span className={rowStyles.rowTrailing}>{trailing}</span> : null}
-    </Flexbox>
-  ),
+        <span {...sx(rowStyles.iconBox, iconColor ? { color: iconColor } : undefined)}>
+          {iconNode ?? <Icon icon={icon!} size={iconSize} spin={spin} />}
+        </span>
+        <span
+          title={title}
+          {...stylex.props(rowStyles.rowValue, danger && rowStyles.rowValueDanger)}
+        >
+          {value}
+        </span>
+        {trailing ? (
+          <span
+            {...stylex.props(rowStyles.rowTrailing, !!actions && rowStyles.rowTrailingConcealed)}
+          >
+            {trailing}
+          </span>
+        ) : null}
+        {actions ? <span {...stylex.props(rowStyles.actions)}>{actions}</span> : null}
+      </Flexbox>
+    );
+  },
 );
 
 OverviewRow.displayName = 'OverviewRow';

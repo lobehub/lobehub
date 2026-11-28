@@ -268,8 +268,9 @@ describe('resolveCliCommand', () => {
       try {
         callExecFile('/Users/x/.grok/bin/agent\n');
         callExecFile('Usage: agent [flags]\nGrok CLI agent');
+        callExecFileError(new Error('cursor-agent not found'));
         callExecFile('Usage: agent [flags]\nGrok CLI agent');
-        callExecFile('Usage: agent [options] [command] [prompt...]\nStart the Cursor Agent');
+        callExecFile('Usage: cursor-agent [options] [command] [prompt...]\nStart the Cursor Agent');
 
         const { detectHeterogeneousCliCommand } = await importModule();
         const status = await detectHeterogeneousCliCommand('cursor', 'agent');
@@ -279,9 +280,8 @@ describe('resolveCliCommand', () => {
           path: path.join(os.homedir(), '.local', 'bin', 'cursor-agent'),
           version: undefined,
         });
-        expect(execFileMock.mock.calls[1]![1]).toEqual(['--help']);
-        expect(execFileMock.mock.calls[2]![1]).toEqual(['--help']);
-        expect(execFileMock.mock.calls[3]![1]).toEqual(['--help']);
+        const argv = execFileMock.mock.calls.map((call) => call[1]);
+        expect(argv).toEqual([['agent'], ['--help'], ['cursor-agent'], ['--help'], ['--help']]);
       } finally {
         process.env.PATH = originalPath;
         if (originalShell === undefined) delete process.env.SHELL;

@@ -31,6 +31,7 @@ import {
   formatFieldFormatViolations,
   mergeWithDefaults,
   platformRegistry,
+  restrictPlatformToWebhook,
   withResolvedConcurrencySettings,
 } from '@/server/services/bot/platforms';
 import {
@@ -39,7 +40,9 @@ import {
 } from '@/server/services/bot/platforms/feishu/registration';
 import { flattenBotWakeSettings } from '@/server/services/conversationWake/config';
 import { GatewayService } from '@/server/services/gateway';
-import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
+import { isMessageGatewayHostingUnavailable } from '@/server/services/gateway/nodeGatewayOnly';
+import { getReplyConnectionUnavailableReason } from '@/server/services/gateway/replyConnectionHost';
+import { BOT_RUNTIME_STATUSES, getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 
 import {
   agentBotProviderProcedure,
@@ -171,13 +174,26 @@ const withFormSettings = (platform: string, settings?: Record<string, unknown>) 
 
 export const agentBotProviderRouter = router({
   listPlatforms: authedProcedure.query(async ({ ctx }) => {
+    const { useMessageGateway } = new GatewayService();
+
+    // A platform that replies over its own connection only runs where something here can hold
+    // that connection (see `resolveReplyConnectionHost`). Elsewhere it is marked, not dropped, so
+    // a bot configured before the deployment changed can still be opened and removed.
     return Promise.all(
-      platformRegistry.listSerializedPlatforms().map((platform) =>
-        withBotPlatformAccessMeta(platform, {
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId ?? undefined,
-        }),
-      ),
+      platformRegistry.listSerializedPlatforms().map((platform) => {
+        const offered =
+          useMessageGateway && isMessageGatewayHostingUnavailable(platform)
+            ? restrictPlatformToWebhook(platform)
+            : platform;
+        const unavailableReason = getReplyConnectionUnavailableReason(offered);
+        return withBotPlatformAccessMeta(
+          unavailableReason ? { ...offered, unavailableReason } : offered,
+          {
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId ?? undefined,
+          },
+        );
+      }),
     );
   }),
 
@@ -200,6 +216,14 @@ export const agentBotProviderRouter = router({
           code: 'BAD_REQUEST',
           message: 'Enter the real credential value — the masked placeholder cannot be saved.',
         });
+      }
+
+      // A bot this deployment can never connect would only fail later, on connect.
+      const unavailableReason = getReplyConnectionUnavailableReason(
+        platformRegistry.getPlatform(input.platform),
+      );
+      if (unavailableReason) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: unavailableReason });
       }
 
       await assertBotFeatureAccess({
@@ -409,10 +433,41 @@ export const agentBotProviderRouter = router({
         workspaceId: ctx.workspaceId ?? undefined,
       });
 
+      // Connecting by hand is its owner using it: restart its idle clock, which
+      // also wakes a bot that was put to sleep for being idle.
+      await ctx.agentBotProviderModel.markActive(input.platform, input.applicationId);
+
       const service = new GatewayService();
       const status = await service.startClient(input.platform, input.applicationId, ctx.userId);
 
       return { status };
+    }),
+
+  /**
+   * Wake a bot put to sleep for being idle: its owner opening the bot is
+   * activity, so the idle clock restarts and the connection comes back now
+   * instead of on the next sync. A bot that is not asleep only gets its clock
+   * restarted.
+   */
+  wakeBot: agentBotProviderProcedureWrite
+    .input(z.object({ applicationId: z.string(), platform: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const marked = await ctx.agentBotProviderModel.markActive(
+        input.platform,
+        input.applicationId,
+      );
+      if (!marked) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `No bot found for ${input.platform}/${input.applicationId}`,
+        });
+      }
+
+      const current = await getBotRuntimeStatus(input.platform, input.applicationId);
+      if (current.status !== BOT_RUNTIME_STATUSES.sleeping) return { woke: false };
+
+      await new GatewayService().startClient(input.platform, input.applicationId, ctx.userId);
+      return { woke: true };
     }),
 
   testConnection: agentBotProviderProcedureWrite
@@ -684,12 +739,17 @@ export const agentBotProviderRouter = router({
         }
       }
 
-      const result = await ctx.agentBotProviderModel.update(id, value);
+      // Configuring a bot is its owner using it: restart its idle clock.
+      const result = await ctx.agentBotProviderModel.update(id, {
+        ...value,
+        lastActiveAt: new Date(),
+      });
 
       if (existing) {
         await invalidateBotAfterUpdate(
           {
             applicationId: existing.applicationId,
+            credentials: existing.credentials,
             platform: existing.platform,
             settings: existing.settings,
             userId: ctx.userId,

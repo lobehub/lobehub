@@ -15,8 +15,10 @@ import {
   type PlatformClient,
   type PlatformDefinition,
   resolveBotProviderConfig,
+  resolveConnectionMode,
 } from '@/server/services/bot/platforms';
 
+import { isBotAsleep } from './botSleep';
 import { BOT_RUNTIME_STATUSES, updateBotRuntimeStatus } from './runtimeStatus';
 
 const log = debug('lobe-server:bot-gateway');
@@ -126,8 +128,7 @@ export class GatewayManager {
       return;
     }
 
-    await client.start();
-    this.clients.set(key, client);
+    await this.startTracked(key, client);
     log('Started client %s', key);
   }
 
@@ -139,6 +140,29 @@ export class GatewayManager {
     await client.stop();
     this.clients.delete(key);
     log('Stopped client %s', key);
+  }
+
+  /**
+   * Register the client before awaiting `start()`. A slow start (WeCom waits for
+   * its subscribe receipt) must stay reachable by `stopClient` / `stop`, or a
+   * disable that races it finds nothing to stop and the connection comes up
+   * afterwards, still receiving messages and displacing its replacement.
+   */
+  private async startTracked(key: string, client: PlatformClient): Promise<void> {
+    // A concurrent start may have registered a client while this one loaded.
+    const raced = this.clients.get(key);
+    if (raced && raced !== client) {
+      log('Stopping client %s registered by a concurrent start', key);
+      await raced.stop();
+    }
+
+    this.clients.set(key, client);
+    try {
+      await client.start();
+    } catch (error) {
+      if (this.clients.get(key) === client) this.clients.delete(key);
+      throw error;
+    }
   }
 
   // ------------------------------------------------------------------
@@ -204,6 +228,24 @@ export class GatewayManager {
         continue;
       }
 
+      // Webhook bots hold no connection, so only persistent ones are put to sleep.
+      const definition = this.definitionByPlatform.get(platform);
+      if (
+        resolveConnectionMode(definition, provider.settings) !== 'webhook' &&
+        (await isBotAsleep(platform, provider))
+      ) {
+        const asleep = this.clients.get(key);
+        if (asleep) {
+          await asleep.stop();
+          this.clients.delete(key);
+          // Platform clients record `disconnected` when they stop, overwriting
+          // the `sleeping` label just written; ask again so it is restored.
+          await isBotAsleep(platform, provider);
+        }
+        log('Sync: %s is asleep, not connecting', key);
+        continue;
+      }
+
       const existing = this.clients.get(key);
       if (existing) {
         log('Sync: client %s already running, skipping', key);
@@ -217,8 +259,7 @@ export class GatewayManager {
           continue;
         }
 
-        await client.start();
-        this.clients.set(key, client);
+        await this.startTracked(key, client);
         log('Sync: started client %s', key);
       } catch (err) {
         log('Sync: failed to start client %s: %O', key, err);

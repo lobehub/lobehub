@@ -1,3 +1,4 @@
+import { useParams } from 'react-router';
 import useSWR from 'swr';
 
 import { gatewayKeys } from '@/libs/swr/keys';
@@ -45,6 +46,7 @@ export const useGatewayReconnect = (
    */
   agentShareId?: string,
 ) => {
+  const { workspaceSlug } = useParams<'workspaceSlug'>();
   const agentGatewayUrl = useServerConfigStore((s) => s.serverConfig.agentGatewayUrl);
 
   useSWR(
@@ -64,6 +66,7 @@ export const useGatewayReconnect = (
         startedAt: runningOperation.startedAt,
         threadId: runningOperation.threadId,
         topicId,
+        workspaceSlug,
       });
     },
     {

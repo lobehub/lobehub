@@ -3,13 +3,20 @@ import { INBOX_SESSION_ID, isHeterogeneousAgentModelId } from '@lobechat/const';
 import { applyWorkingDirByDevicePatch } from '@lobechat/types';
 import { toRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull, type SQL } from 'drizzle-orm';
+import {
+  type ReasoningEffortLevel,
+  stripLegacyEffortKeys,
+  translateLegacyReasoningConfig,
+} from 'model-bank/aiModel';
 import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
 
+import { writeAgent } from '../../repositories/channel/agentRename';
 import type { AgentItem } from '../../schemas';
 import { agents, sessionGroups } from '../../schemas';
+import type { LobeChatDatabase } from '../../type';
 import { sanitizeAgentApiConfig } from '../../utils/sanitizeAgentApiConfig';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { RESERVED_AGENT_SLUGS } from './constants';
@@ -132,10 +139,10 @@ export const update = async (ctx: AgentModelContext, agentId: string, data: Part
   const sanitizedData = stripImmutableFields(apiSafeData);
   await assertNotAgentBuilderProtectedWrite(ctx, agentId, sanitizedData);
 
-  return ctx.db
-    .update(agents)
-    .set({ ...sanitizedData, updatedAt: new Date() })
-    .where(and(eq(agents.id, agentId), ctx.ownership()));
+  return writeAgent(ctx.db, and(eq(agents.id, agentId), ctx.ownership()), agentId, {
+    ...sanitizedData,
+    updatedAt: new Date(),
+  });
 };
 
 /**
@@ -199,6 +206,7 @@ export const setVisibility = async (
   const groupVisibility = current?.groupVisibility as 'private' | 'public' | null | undefined;
   const clearGroup = groupVisibility != null && groupVisibility !== visibility;
 
+  const pinConfig = visibility === 'public' && current;
   const [updated] = await ctx.db
     .update(agents)
     .set({
@@ -206,8 +214,15 @@ export const setVisibility = async (
       visibility,
       ...(clearGroup ? { sessionGroupId: null } : {}),
     })
-    .where(and(eq(agents.id, agentId), ctx.ownership()))
+    .where(
+      and(
+        eq(agents.id, agentId),
+        ctx.ownership(),
+        pinConfig ? sameAgencyConfig(current.agencyConfig) : undefined,
+      ),
+    )
     .returning();
+  if (!updated && pinConfig) throw agentPublishedConcurrentlyError();
   return updated ?? null;
 };
 
@@ -279,6 +294,25 @@ export const updateConfig = async (
     mergedApiConfig
   ) {
     delete mergedApiConfig.source;
+  }
+
+  // A new sub-agent effort pick replaces the legacy per-model effort keys
+  // instead of merging next to them. Released clients still send the pick
+  // under a legacy key, which is translated so the pick is kept.
+  const mergedSubAgent = mergedValue.agencyConfig?.subagent;
+  const subAgentChatConfig = toRecord(mergedSubAgent?.chatConfig);
+  const subAgentPatch = toRecord(data.agencyConfig?.subagent?.chatConfig);
+  const subAgentEffort =
+    subAgentPatch &&
+    translateLegacyReasoningConfig(subAgentPatch, {
+      model: mergedSubAgent?.model,
+      provider: mergedSubAgent?.provider,
+    }).reasoningEffort;
+  if (subAgentChatConfig && subAgentEffort !== undefined) {
+    mergedValue.agencyConfig!.subagent!.chatConfig = stripLegacyEffortKeys({
+      ...subAgentChatConfig,
+      reasoningEffort: subAgentEffort as ReasoningEffortLevel,
+    });
   }
 
   mergedValue.agencyConfig = sanitizeAgentApiConfig(mergedValue.agencyConfig) ?? null;
@@ -361,7 +395,19 @@ export const updateConfig = async (
     replaceWorkingDirDeviceIds,
   );
 
-  await ctx.assertFixedExecutionTarget(agent.workspaceId, mergedValue.agencyConfig);
+  await ctx.assertFixedExecutionTarget(
+    agent.workspaceId,
+    mergedValue.agencyConfig,
+    agent.visibility,
+  );
+  // The check above trusted `agent.visibility` as read; publication may land
+  // between that read and the write below. Pin the write to the still-private
+  // row so a fixed target that skipped the public-device check cannot reach a
+  // published Agent (publication pins its write to the config it validated).
+  const pinPrivate =
+    !!agent.workspaceId &&
+    agent.visibility === 'private' &&
+    mergedValue.agencyConfig?.executionTargetSelectionPolicy === 'fixed';
 
   // Timestamp fields are left to Drizzle's $onUpdate.
   touchedColumns.delete('updatedAt');
@@ -373,11 +419,40 @@ export const updateConfig = async (
   ) as Partial<typeof mergedValue>;
   if (!Object.values(updateData).some((value) => value !== undefined)) return;
 
-  return ctx.db
-    .update(agents)
-    .set(updateData)
-    .where(and(eq(agents.id, agentId), ctx.ownership()));
+  const where = and(eq(agents.id, agentId), ctx.ownership());
+  if (!pinPrivate) return writeAgent(ctx.db, where, agentId, updateData);
+
+  return ctx.db.transaction(async (tx) => {
+    const [locked] = await tx
+      .select({ visibility: agents.visibility })
+      .from(agents)
+      .where(where)
+      .for('update');
+    if (!locked) return;
+    if (locked.visibility !== 'private') throw agentPublishedConcurrentlyError();
+    return writeAgent(tx as unknown as LobeChatDatabase, where, agentId, updateData);
+  });
 };
+
+/**
+ * A fixed-target config write and a publication raced: the other side changed
+ * the row this side validated, so neither may land unchecked. The caller
+ * retries against the current row.
+ */
+export const agentPublishedConcurrentlyError = () =>
+  new TRPCError({
+    cause: { data: { code: 'AgentVisibilityChangedConcurrently' } },
+    code: 'CONFLICT',
+    message: 'The agent was published or edited concurrently. Reload and try again.',
+  });
+
+/**
+ * Pin a publication write to the `agencyConfig` it validated with
+ * `assertFixedExecutionTarget`, so a concurrent config write cannot slip an
+ * unchecked target in between the check and the visibility flip.
+ */
+export const sameAgencyConfig = (agencyConfig: AgentItem['agencyConfig'] | null): SQL =>
+  agencyConfig == null ? isNull(agents.agencyConfig) : eq(agents.agencyConfig, agencyConfig);
 
 /**
  * Update the sessionGroupId for an agent

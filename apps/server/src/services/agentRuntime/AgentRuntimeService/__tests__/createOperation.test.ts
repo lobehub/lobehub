@@ -214,6 +214,33 @@ describe('AgentRuntimeService', () => {
       expect(savedState).not.toHaveProperty('usage');
     });
 
+    describe('artboard Works declaration', () => {
+      it('persists the independent artboard capability on operation host state', async () => {
+        await service.createOperation({
+          ...mockParams,
+          acceptsArtboardWorks: true,
+          autoStart: false,
+        });
+        const state = mockCoordinator.saveAgentState.mock.calls[0][1];
+        expect(state.host.acceptsArtboardWorks).toBe(true);
+        expect(state.host.acceptsFileWorks).toBeUndefined();
+      });
+
+      it('inherits the artboard capability for a mirrored group member', async () => {
+        await mockCoordinator.saveAgentState('parent-op', { host: { acceptsArtboardWorks: true } });
+        mockCoordinator.saveAgentState.mockClear();
+        await service.createOperation({
+          ...mockParams,
+          appContext: { ...mockParams.appContext, orchestrationRole: 'member' },
+          autoStart: false,
+          parentOperationId: 'parent-op',
+        });
+        expect(mockCoordinator.saveAgentState.mock.calls[0][1].host.acceptsArtboardWorks).toBe(
+          true,
+        );
+      });
+    });
+
     describe('file Works declaration (host.acceptsFileWorks)', () => {
       it('stores the declaration the client made', async () => {
         await service.createOperation({ ...mockParams, acceptsFileWorks: true, autoStart: false });

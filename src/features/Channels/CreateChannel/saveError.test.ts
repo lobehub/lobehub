@@ -19,6 +19,10 @@ describe('channel member save feedback', () => {
     ],
     ['Unsupported Channel runtime', 'environment.unsupportedRuntime'],
     ['Agent not found', 'environment.agentUnavailable'],
+    [
+      'A private Agent cannot join a workspace Channel; make it visible to the workspace first',
+      'environment.privateAgent',
+    ],
   ])('translates the actionable domain error %s', (message, key) => {
     expect(getChannelSaveErrorKey(new Error(message))).toBe(key);
   });

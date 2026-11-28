@@ -3,10 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createReplicaState } from '@/libs/replica';
 import { globalHelpers } from '@/store/global/helpers';
-import type { AssistantListResponse } from '@/types/discover';
+import { type AssistantListResponse, AssistantSorts } from '@/types/discover';
 
 import { assistantSelectors } from '../../selectors';
 import { useDiscoverStore as useStore } from '../../store';
+import { normalizeAssistantListParams } from './action';
 import {
   assistantCategoriesQueryKey,
   assistantDetailQueryKey,
@@ -109,6 +110,17 @@ describe('AssistantSlice (replica)', () => {
         pageSize: 21,
         q: 'coding',
       });
+    });
+
+    it('stores the list under the key readers derive from normalizeAssistantListParams', () => {
+      // Readers that leave the sync to another component (the mention menu)
+      // derive the key themselves; it must match the one the sync writes.
+      const params = { page: 1, pageSize: 10, sort: AssistantSorts.Recommended };
+      const { result } = renderHook(() => useStore.getState().useFetchAssistantList(params));
+
+      expect(result.current.queryKey).toBe(
+        assistantListQueryKey(normalizeAssistantListParams(params)),
+      );
     });
 
     it('keys each page and filter set as its own replica entry', () => {

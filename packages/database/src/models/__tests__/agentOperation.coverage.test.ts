@@ -70,6 +70,31 @@ describe('AgentOperationModel coverage', () => {
     expect(await model.sumChildUsage('op-cov-parent')).toMatchObject({ totalCost: 0 });
   });
 
+  it('stores and sums run token totals past the int4 limit', async () => {
+    // A long run re-sends its context on every step, so its input total can pass 2,147,483,647.
+    const totalTokens = 3_000_000_000;
+    await model.recordStart({ operationId: 'op-cov-big-parent' });
+    await model.recordStart({
+      operationId: 'op-cov-big-child',
+      parentOperationId: 'op-cov-big-parent',
+    });
+    await model.recordCompletion('op-cov-big-child', {
+      completionReason: 'done',
+      status: 'done',
+      totalInputTokens: totalTokens - 1000,
+      totalOutputTokens: 1000,
+      totalTokens,
+    });
+
+    const child = await model.findById('op-cov-big-child');
+    expect(child?.totalTokens).toBe(totalTokens);
+    expect(child?.totalInputTokens).toBe(totalTokens - 1000);
+    expect(await model.sumChildUsage('op-cov-big-parent')).toMatchObject({
+      totalInputTokens: totalTokens - 1000,
+      totalTokens,
+    });
+  });
+
   it('sums a NaN task cost as zero', async () => {
     await serverDB.insert(tasks).values({
       createdByUserId: userId,

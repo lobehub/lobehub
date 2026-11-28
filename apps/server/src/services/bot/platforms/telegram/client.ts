@@ -273,7 +273,11 @@ class TelegramWebhookClient implements PlatformClient {
       };
     }
 
-    const chatId = extractChatId(platformThreadId);
+    // A forum-topic thread id (`telegram:{chatId}:{messageThreadId}`) must
+    // keep its topic on every new message; dropping it posts the reply into
+    // the group's General topic instead of the one the user wrote in. Edits
+    // and reactions address an existing message, so they need only chatId.
+    const { chatId, messageThreadId } = parseTelegramThreadId(platformThreadId);
     return {
       addReaction: (messageId, emoji) =>
         telegram.setMessageReaction(chatId, parseTelegramMessageId(messageId), emoji),
@@ -281,14 +285,20 @@ class TelegramWebhookClient implements PlatformClient {
         const text = messengerContentText(content);
         const attachments = typeof content === 'string' ? undefined : content.attachments;
         if (attachments?.length) {
-          const sent = await sendTelegramAttachments(telegram, chatId, attachments, text);
+          const sent = await sendTelegramAttachments(
+            telegram,
+            chatId,
+            attachments,
+            text,
+            messageThreadId,
+          );
           warnAttachmentFailures('bot-platform:telegram:reply', sent.failures);
           if (sent.delivered > 0) return;
           // All attachments failed → fall through to text-only so the reply
           // still reaches the user.
         }
         if (text.trim()) {
-          await telegram.sendMessage(chatId, text);
+          await telegram.sendMessage(chatId, text, messageThreadId);
         }
       },
       // editMessage keeps the text-only contract. Telegram doesn't support
@@ -309,7 +319,7 @@ class TelegramWebhookClient implements PlatformClient {
         if (nextEmoji) await telegram.setMessageReaction(chatId, id, nextEmoji);
         else await telegram.removeMessageReaction(chatId, id);
       },
-      triggerTyping: () => telegram.sendChatAction(chatId, 'typing'),
+      triggerTyping: () => telegram.sendChatAction(chatId, 'typing', messageThreadId),
     };
   }
 

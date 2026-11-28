@@ -6,9 +6,11 @@ import {
   type ChatInputActionsProps,
   type ChatInputProps as EditorChatInputProps,
 } from '@lobehub/editor/react';
-import { type DropdownItem, Flexbox, toast } from '@lobehub/ui';
+import { Flexbox, toast } from '@lobehub/ui';
+import i18next from 'i18next';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
   getBusinessChatInputSendAreaPrefix,
@@ -16,6 +18,12 @@ import {
 } from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
 import type { ActionKeys, ChatInputFeature } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
+import {
+  needsSendTimeGit,
+  prepareComposerGitSend,
+  snapshotDraftGit,
+} from '@/features/ChatInput/ControlBar/DraftGit';
+import { resolveComposerHandoff } from '@/features/ChatInput/ControlBar/DraftGit/composerHandoff';
 import {
   type SendButtonHandler,
   type SendButtonProps,
@@ -32,7 +40,9 @@ import { fileChatSelectors, useFileStore } from '@/store/file';
 import { buildMessageContextSelections } from '../../ChatInput/utils/contextSelections';
 import WideScreenContainer from '../../WideScreenContainer';
 import { usePendingInterventions } from '../hooks/usePendingInterventions';
+import { useRecoverClientMcpSteps } from '../hooks/useRecoverClientMcpSteps';
 import InterventionBar from '../InterventionBar';
+import { McpElicitationConnectionError } from '../InterventionBar/McpElicitationForm';
 import {
   dataSelectors,
   messageStateSelectors,
@@ -40,9 +50,11 @@ import {
   useConversationStoreApi,
 } from '../store';
 import TodoProgress from '../TodoProgress';
+import IdleCacheNotice from './IdleCacheNotice';
 import InputCompletionErrorAlert from './InputCompletionErrorAlert';
 import LinkedGoalTray from './LinkedGoalTray';
 import OpStatusTray from './OpStatusTray';
+import { isOpStatusVisible } from './OpStatusTray/visibility';
 import QueueTray from './QueueTray';
 import SendErrorAlert from './SendErrorAlert';
 import { sendVoiceMessage } from './sendVoiceMessage';
@@ -50,8 +62,10 @@ import { transcribeVoiceMessage } from './transcribeVoiceMessage';
 import { useConversationChatInputUiState } from './useConversationChatInputUiState';
 import { useRestoreServerQueue } from './useRestoreServerQueue';
 import {
-  getContextWindowMessages,
+  clearSentAttachments,
+  getContextWindow,
   getConversationSendButtonProps,
+  partitionSendableUploads,
   toChatInputMessages,
 } from './utils';
 import {
@@ -161,10 +175,6 @@ export interface ChatInputProps {
    */
   sendButtonProps?: Partial<SendButtonProps>;
   /**
-   * Send menu configuration (for send options like Enter/Cmd+Enter, Add AI/User message)
-   */
-  sendMenu?: { items: DropdownItem[] };
-  /**
    * Whether to show the control bar (Local/Cloud/Auto Approve)
    */
   showControlBar?: boolean;
@@ -199,13 +209,14 @@ const ChatInput = memo<ChatInputProps>(
     mentionItems,
     notices,
     controlBarSlot,
-    sendMenu,
     sendAreaPrefix,
     sendButtonProps: customSendButtonProps,
     showControlBar = true,
     onEditorReady,
     skipScrollMarginWithList,
   }) => {
+    useRecoverClientMcpSteps();
+    const { t } = useTranslation('chat');
     // ConversationStore state
     const storeApi = useConversationStoreApi();
     const dbMessages = useConversationStore(dataSelectors.dbMessages);
@@ -232,9 +243,9 @@ const ChatInput = memo<ChatInputProps>(
       chatConfigByIdSelectors.getHistoryCountById(agentId || '')(s),
     ]);
     const chatInputMessages = useMemo(() => toChatInputMessages(dbMessages), [dbMessages]);
-    const contextWindowMessages = useMemo(
+    const contextWindow = useMemo(
       () =>
-        getContextWindowMessages(dbMessages, {
+        getContextWindow(dbMessages, {
           enableHistoryCount,
           historyCount,
         }),
@@ -269,6 +280,15 @@ const ChatInput = memo<ChatInputProps>(
     const isInputQueueBlocked = useChatStore((s) =>
       operationSelectors.isInputLoadingByContext(context)(s),
     );
+    const isSendDispatchPending = useChatStore((s) =>
+      operationSelectors.isSendDispatchPendingByContext(context)(s),
+    );
+    const isWorktreePending = useChatStore((s) => {
+      const topic = topicId ? topicSelectors.getTopicById(topicId)(s) : undefined;
+      return (
+        topic?.status === 'scheduled' && topic.metadata?.scheduledRun?.kind === 'worktree_start'
+      );
+    });
 
     const pendingInterventions = usePendingInterventions();
     const hasPendingInterventions = pendingInterventions.length > 0;
@@ -280,7 +300,6 @@ const ChatInput = memo<ChatInputProps>(
     // File store - for UI state only (disabled button, etc.)
     const fileList = useFileStore(fileChatSelectors.chatUploadFileList(contextKey));
     const contextList = useFileStore(fileChatSelectors.chatContextSelections(contextKey));
-    const isUploadingFiles = useFileStore(fileChatSelectors.isUploadingFiles(contextKey));
 
     // Queue state
     const hasQueuedMessages = useChatStore(
@@ -291,22 +310,22 @@ const ChatInput = memo<ChatInputProps>(
     // can square the top corners of OpStatusTray when it sits flush below.
     const hasTodos = (selectCurrentTurnTodosFromMessages(dbMessages)?.items.length ?? 0) > 0;
 
-    // Detect whether OpStatusTray will render (mirrors its own `!startTime`
-    // gate) so LinkedGoalTray — which sits flush below it — can square its top corners
-    // and merge with the status strip instead of showing a seam.
-    const hasOpStatus = useChatStore(
-      (s) => operationSelectors.getVisibleAgentRuntimeStartTimeByContext(context)(s) !== undefined,
-    );
+    // Detect whether OpStatusTray will render so LinkedGoalTray — which sits flush
+    // below it — can square its top corners and merge with the status strip instead
+    // of showing a seam, and the send area can drop its duplicate running spinner.
+    const hasOpStatus = useChatStore(isOpStatusVisible(context));
 
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
-    const { placeholderVariant, showSendMenu, showSendWhileGenerating, showStopButton } =
+    const { placeholderVariant, showSendWhileGenerating, showStopButton } =
       useConversationChatInputUiState({ disableFollowUpVariant, disableQueue, isInputEmpty });
     // Input stays enabled during agent execution — messages are queued.
     // When disableQueue is set (e.g. onboarding), block sending while loading.
     // disableSend hard-blocks regardless of content (host surface is read-only).
+    // Uploads in flight do not block: the send is queued until they settle (see
+    // `queueSendWhileUploading`).
     const disabled =
-      isInputEmpty || isUploadingFiles || (!!disableQueue && isInputQueueBlocked) || !!disableSend;
+      isInputEmpty || isWorktreePending || (!!disableQueue && isInputQueueBlocked) || !!disableSend;
 
     // `disabled` above lags the editor: `inputMessage` mirrors content through
     // the editor's debounced onChange, so a fast type→Enter arrives while the
@@ -315,12 +334,11 @@ const ChatInput = memo<ChatInputProps>(
     // at trigger time, so this only mirrors the visual disabled semantics.
     const customDisabled = customSendButtonProps?.disabled;
     const resolveSendBlocked = useCallback(() => {
-      if (disableSend) return true;
+      if (disableSend || isWorktreePending) return true;
 
       const { context: liveContext, editor } = storeApi.getState();
       const liveContextKey = messageMapKey(liveContext);
       const fileStore = useFileStore.getState();
-      if (fileChatSelectors.isUploadingFiles(liveContextKey)(fileStore)) return true;
       if (customDisabled !== undefined) return customDisabled;
 
       if (
@@ -334,8 +352,7 @@ const ChatInput = memo<ChatInputProps>(
       const hasContextSelections =
         fileChatSelectors.chatContextSelections(liveContextKey)(fileStore).length > 0;
       return !hasText && !hasFiles && !hasContextSelections;
-    }, [customDisabled, disableQueue, disableSend, storeApi]);
-    const shouldUsePlainSendButton = !showSendMenu && !!sendMenu;
+    }, [customDisabled, disableQueue, disableSend, isWorktreePending, storeApi]);
     const businessAlerts = useBusinessChatInputAlerts();
     const businessSendAreaPrefix = getBusinessChatInputSendAreaPrefix(sendAreaPrefix);
 
@@ -344,15 +361,29 @@ const ChatInput = memo<ChatInputProps>(
       async ({ clearContent, getMarkdownContent, getEditorData }) => {
         // Host surface is read-only (e.g. page locked) — block Enter too, not
         // just the grayed-out button.
-        if (disableSend) return;
+        if (disableSend || isWorktreePending) return;
 
         // Get instant values from stores at trigger time
         const fileStore = useFileStore.getState();
-        const currentFileList = fileChatSelectors.chatUploadFileList(contextKey)(fileStore);
+        const uploadList = fileChatSelectors.chatUploadFileList(contextKey)(fileStore);
         const currentIsUploading = fileChatSelectors.isUploadingFiles(contextKey)(fileStore);
         const currentContextList = fileChatSelectors.chatContextSelections(contextKey)(fileStore);
 
+        // The composer queues a send until its uploads settle; reaching here with one
+        // still in flight means the send came from elsewhere, which cannot wait.
         if (currentIsUploading) return;
+
+        // A failed or cancelled upload has no file to attach. It is left out of the
+        // message (its [Image #N] is pruned with it, so the numbers still match the
+        // images sent) and stays in the composer to retry or remove.
+        const { failed: failedUploads, sendable: currentFileList } =
+          partitionSendableUploads(uploadList);
+        // Said only once the send is settled (sent without them, or nothing left to
+        // send), never ahead of a return that sends nothing for another reason.
+        const notifyFailedUploads = () => {
+          if (failedUploads.length === 0) return;
+          toast.warning(t('input.uploadFailedNotSent', { count: failedUploads.length }));
+        };
 
         // Onboarding-style surfaces opt out of message queuing — pressing Enter
         // while the agent is streaming should be a no-op rather than enqueue.
@@ -360,8 +391,11 @@ const ChatInput = memo<ChatInputProps>(
 
         // Get content before clearing
         const message = getMarkdownContent();
-        if (!message.trim() && currentFileList.length === 0 && currentContextList.length === 0)
+        if (!message.trim() && currentFileList.length === 0 && currentContextList.length === 0) {
+          // Only failed uploads were attached: the queued send ends with nothing sent.
+          notifyFailedUploads();
           return;
+        }
 
         // A rejected preflight has no persisted message to recover from. Keep
         // the composer and attachments intact until the target is usable.
@@ -378,13 +412,14 @@ const ChatInput = memo<ChatInputProps>(
           return;
         }
 
+        notifyFailedUploads();
+
         // Capture editor JSON state before clearing for rich text rendering
         const editorData = getEditorData();
 
         const clearComposer = () => {
           clearContent();
-          fileStore.clearChatUploadFileList(contextKey);
-          fileStore.clearChatContextSelections(contextKey);
+          clearSentAttachments(fileStore, contextKey, currentFileList);
         };
 
         // A deferred send was armed from the composer (see `scheduledSendAt`):
@@ -396,13 +431,31 @@ const ChatInput = memo<ChatInputProps>(
         // the request failed) leaves no message row to recover the text from, so
         // an up-front clear would simply lose it.
         if (storeApi.getState().scheduledSendAt) {
+          // The scheduled run is created server-side later and cannot switch
+          // the picked branch or fork a worktree: refuse rather than drop them.
+          if (needsSendTimeGit(snapshotDraftGit(sendContext, editorData))) {
+            toast.error(i18next.t('workingDirectory.scheduleGitUnsupported', { ns: 'device' }));
+            return;
+          }
           const scheduled = await storeApi.getState().commitScheduledSend(message, currentFileList);
           if (scheduled) clearComposer();
           return;
         }
 
-        // Clear content immediately for responsive UX
-        clearComposer();
+        // A branch switch may need confirmation before sending. A worktree
+        // send carries its captured device and branch into persistence.
+        const gitPrep = await prepareComposerGitSend(sendContext, { editorData });
+        if (!gitPrep.ok) return;
+
+        // Clear content immediately for responsive UX — unless a git step ran
+        // and the composer changed hands meanwhile (see `resolveComposerHandoff`).
+        const handoff = resolveComposerHandoff({
+          acted: !!gitPrep.acted || !!gitPrep.firstSendWorktree,
+          editorUnchanged: getMarkdownContent() === message,
+          stillHere: messageMapKey(storeApi.getState().context) === messageMapKey(sendContext),
+        });
+        if (handoff.clearEditor) clearContent();
+        clearSentAttachments(fileStore, contextKey, currentFileList);
 
         const { contextSelections, pageSelections } =
           buildMessageContextSelections(currentContextList);
@@ -413,37 +466,65 @@ const ChatInput = memo<ChatInputProps>(
           editorData,
           files: currentFileList,
           message,
+          ...(gitPrep.firstSendWorktree ? { firstSendWorktree: gitPrep.firstSendWorktree } : {}),
+          newTopicWorkingDirectory: gitPrep.newTopicWorkingDirectory,
+          ...(handoff.sendToOrigin ? { conversationContext: sendContext } : {}),
+          onMessagePersisted: gitPrep.onMessagePersisted,
           onPreflightFailure: () => {
             const store = useFileStore.getState();
             // The composer was cleared up front; a send rejected before any
             // message owned the content must hand every part of it back —
             // uploads and context selections, not just the editor text the
             // lifecycle restores on its own.
-            store.restoreChatUploadFileList(contextKey, currentFileList);
+            // Back in their original places, around any failed upload that stayed.
+            store.restoreChatUploadFileList(
+              contextKey,
+              currentFileList,
+              uploadList.map((file) => file.id),
+            );
             store.restoreChatContextSelections(contextKey, currentContextList);
           },
           pageSelections,
         });
       },
-      [contextKey, sendMessage, storeApi, disableQueue, disableSend, isInputQueueBlocked],
+      [
+        contextKey,
+        sendMessage,
+        storeApi,
+        disableQueue,
+        disableSend,
+        isInputQueueBlocked,
+        isWorktreePending,
+        t,
+      ],
     );
 
-    const sendButtonProps: SendButtonProps = {
-      ...getConversationSendButtonProps(
-        { disabled, generating: showStopButton, onStop: stopGenerating, showSendWhileGenerating },
-        customSendButtonProps,
-        isUploadingFiles,
-      ),
-      ...(shouldUsePlainSendButton
-        ? { shape: customSendButtonProps?.shape ?? 'round' }
-        : undefined),
-    };
+    const sendButtonProps: SendButtonProps = getConversationSendButtonProps(
+      {
+        disabled,
+        // While the message is still being created there is no run to stop yet:
+        // Send shows as loading, and Stop takes over once the run starts.
+        generating: showStopButton && !isSendDispatchPending,
+        // Custom `children` replace the layout that mounts OpStatusTray.
+        hideRunningIndicator: !children && hasOpStatus,
+        loading: isSendDispatchPending,
+        onStop: stopGenerating,
+        showSendWhileGenerating: showSendWhileGenerating && !isSendDispatchPending,
+      },
+      customSendButtonProps,
+    );
 
     const handleVoiceMessageSend = useCallback(
       (recording: VoiceMessageRecording) => {
+        if (isWorktreePending) return false;
         if (operationSelectors.isInputVisiblyLoadingByContext(context)(useChatStore.getState())) {
           return false;
         }
+
+        // Read the branch pick and worktree switch now: the send runs after
+        // upload and transcription, by when the composer may show another
+        // conversation.
+        const gitSnapshot = snapshotDraftGit(context) ?? null;
 
         return Boolean(
           useChatStore.getState().sendVoiceMessage({
@@ -454,6 +535,9 @@ const ChatInput = memo<ChatInputProps>(
               sendVoiceMessage(sendMessage, file, {
                 context: targetContext,
                 optimisticUserMessageId: messageId,
+                // The same send-time git step as a typed first message.
+                prepare: () =>
+                  prepareComposerGitSend(targetContext ?? context, { snapshot: gitSnapshot }),
                 signal,
                 ...(isVoiceMessageTranscribed(targetContext)
                   ? {
@@ -465,7 +549,7 @@ const ChatInput = memo<ChatInputProps>(
           }),
         );
       },
-      [context, sendMessage],
+      [context, isWorktreePending, sendMessage],
     );
 
     const defaultContent = (
@@ -476,10 +560,16 @@ const ChatInput = memo<ChatInputProps>(
         {/* Keep the chat input mounted while an intervention panel is showing —
             unmounting would wipe the Lexical editor's in-memory document. */}
         <div style={{ display: hasPendingInterventions ? 'none' : 'contents' }}>
+          <McpElicitationConnectionError />
           {sendMessageErrorMsg && (
             <SendErrorAlert errorMessage={sendMessageErrorMsg} onClose={clearSendMessageError} />
           )}
-          {businessAlerts}
+          {/* A refused send already says what to do next; a second notice with its
+              own buttons beside it would compete for the same decision. */}
+          {!sendMessageErrorMsg && businessAlerts}
+          {/* About the next reply's cost, so it sits closest to the input. A send-area
+              cost estimate should step aside while it shows: both would price the same send. */}
+          {!sendMessageErrorMsg && <IdleCacheNotice />}
           <Flexbox
             paddingInline={12}
             ref={overlayRef}
@@ -524,11 +614,12 @@ const ChatInput = memo<ChatInputProps>(
 
     return (
       <ChatInputProvider
+        queueSendWhileUploading
         agentId={agentId}
         allowExpand={allowExpand}
         canRecordVoiceMessage={canRecordVoiceMessage}
         contextSelectionKey={contextKey}
-        contextWindowMessages={contextWindowMessages}
+        contextWindow={contextWindow}
         draftKey={contextKey}
         feature={feature}
         getMessages={getMessages}
@@ -537,7 +628,6 @@ const ChatInput = memo<ChatInputProps>(
         resolveSendBlocked={resolveSendBlocked}
         rightActions={rightActions}
         sendButtonProps={sendButtonProps}
-        sendMenu={showSendMenu ? sendMenu : undefined}
         slashPlacement="top"
         topicId={topicId}
         chatInputEditorRef={(instance) => {

@@ -45,6 +45,8 @@ Related: [LOBE-2417](https://linear.app/lobehub/issue/LOBE-2417/建立核心产�
 @home         # Home 模块
 @community    # 社区模块
 @routes       # 核心路由
+@perf         # 渲染预算（React Profiler），见下方「渲染预算」
+@perf-local   # 仅本地的长列表渲染预算：默认套件和 CI 都不跑，`bun run test:perf:local` 单独串行跑，预算在 src/performance/budgets.ts
 ```
 
 ### 渲染预算（`@perf`）
@@ -61,6 +63,7 @@ BASE_URL=http://localhost:3006 DATABASE_URL=... bun run test:perf
 
 - 区域：`src/components/RenderProfiler` 包住侧栏（`sidebar`）、会话区（`conversation`，含消息区）和消息区（`messages`）；页面通过 `window.__LOBE_RENDER_PROFILE__` 暴露 `begin` / `end` / `status`，profiling 构建在启动时自动开始 `boot` 场景。
 - 预算：`src/performance/chatRenderBudgets.ts`，按 p50 判定，本地与 CI（`CI` 环境变量）分别设置。调整预算时用多次运行的回执实测值，不要凭感觉改。
+- 流式预算：`streaming-render-budget.feature` 覆盖大段文本、密集工具调用、富文本回复和后台对话流式输出，回复内容与节奏在 `src/performance/streamingWorkloads.ts`（通过 `llmMockManager.addResponder` 注入），预算在 `src/performance/streamingRenderBudgets.ts`，另外按 p50 卡强制 GC 后的堆内存增长（CDP `JSHeapUsedSize`），回执为 `reports/render-budget/stream-<scenario>.json`。改动回复内容或节奏会改变渲染次数，必须同时重测预算。
 
 ### 执行策略
 

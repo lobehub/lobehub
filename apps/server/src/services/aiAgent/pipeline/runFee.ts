@@ -1,3 +1,4 @@
+import type { AgentShareVisitorIds } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 
 import {
@@ -56,15 +57,30 @@ export interface RunFeeClaim {
   holderId?: string;
 }
 
-/** Holds the run's fee under a provisional id. */
+/**
+ * Holds the run's fee under a provisional id. A shared Agent's visitor run names its share, so
+ * the fee is paid from what funds that share's visitor runs.
+ */
 export const claimRunFee = async (
   claim: RunFeeClaim,
-  { hold, userId }: { hold: boolean; userId: string },
+  {
+    agentShare,
+    hold,
+    model,
+    provider,
+    userId,
+  }: {
+    agentShare?: AgentShareVisitorIds;
+    hold: boolean;
+    model?: string;
+    provider?: string;
+    userId: string;
+  },
 ): Promise<void> => {
   if (!hold) return;
 
   const holderId = `pending_${nanoid()}`;
-  await holdAgentRunFee({ holderId, userId });
+  await holdAgentRunFee({ ...(agentShare && { agentShare }), holderId, model, provider, userId });
   claim.holderId = holderId;
 };
 

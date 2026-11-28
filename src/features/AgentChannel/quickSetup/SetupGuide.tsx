@@ -7,6 +7,8 @@ import { ExternalLinkIcon } from 'lucide-react';
 import { Fragment, memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { connectStepIndex, type SetupGuide as SetupGuideModel } from './guides';
 
 const styles = stylex.create({
@@ -18,7 +20,7 @@ const styles = stylex.create({
   },
   head: {
     alignItems: 'flex-start',
-    columnGap: 12,
+    columnGap: densityTokens['--lobe-density-content-gap'],
     display: 'flex',
     justifyContent: 'space-between',
   },
@@ -26,7 +28,7 @@ const styles = stylex.create({
     display: 'flex',
     flexDirection: 'column',
     paddingBlock: 14,
-    rowGap: 12,
+    rowGap: densityTokens['--lobe-density-content-gap'],
   },
   // Lines up with the step's text, past its number.
   fields: {

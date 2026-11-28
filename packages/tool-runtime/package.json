@@ -8,6 +8,7 @@
   "main": "./src/index.ts",
   "dependencies": {
     "@lobechat/prompts": "workspace:*",
+    "@lobechat/utils": "workspace:*",
     "path-browserify-esm": "*"
   },
   "devDependencies": {

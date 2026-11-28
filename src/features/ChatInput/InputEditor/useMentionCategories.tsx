@@ -1,19 +1,24 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import isEqual from 'fast-deep-equal';
 import { Bot, Lock, MessageSquareText, Users, Wrench } from 'lucide-react';
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import type { SidebarAgentItem } from '@/database/repositories/home';
 import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useDiscoverStore } from '@/store/discover';
 import { assistantSelectors, skillSelectors } from '@/store/discover/selectors';
+import { normalizeAssistantListParams } from '@/store/discover/slices/assistant/action';
+import { assistantListQueryKey } from '@/store/discover/slices/assistant/projection';
+import { normalizeSkillListParams } from '@/store/discover/slices/skill/action';
+import { skillListQueryKey } from '@/store/discover/slices/skill/projection';
 import { useGlobalStore } from '@/store/global';
-import { systemStatusSelectors } from '@/store/global/selectors';
+import { globalGeneralSelectors, systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useToolStore } from '@/store/tool';
@@ -33,7 +38,6 @@ import MentionItemIcon from './MentionItemIcon';
 import type { MentionCategory } from './MentionMenu/types';
 import { AGENT_CATEGORY_IDS, mergeIntoCategory, SKILL_PRECEDING_IDS } from './mentionMenuSections';
 
-const MAX_AGENT_ITEMS = 20;
 const MAX_TOPIC_LABEL = 50;
 type MenuOptionWithMetadata = { key: string; metadata?: Record<string, unknown> };
 
@@ -56,6 +60,65 @@ export interface MentionSource {
   market: MarketMentionScope;
 }
 
+const MARKET_AGENT_QUERY = {
+  page: 1,
+  pageSize: MARKET_MENTION_FETCH_SIZE,
+  sort: AssistantSorts.Recommended,
+};
+const MARKET_SKILL_QUERY = {
+  page: 1,
+  pageSize: MARKET_MENTION_FETCH_SIZE,
+  sort: SkillSorts.InstallCount,
+};
+
+/** Which market lists the mention menu offers in this composer. */
+const useMarketMentionScope = () => {
+  const isGroupChat = useChatInputStore((s) => !!s.mentionItems);
+  // Market entries install on send, which creates content in the active scope.
+  const { allowed: canInstall } = usePermission('create_content');
+  return { agentsEnabled: canInstall && !isGroupChat, skillsEnabled: canInstall };
+};
+
+/**
+ * Starts the syncs behind the mention menu's sources without rendering
+ * anything. Render it next to the editor that calls `useMentionCategories`.
+ *
+ * The syncs live in this leaf on purpose: every sync hook re-renders its caller
+ * on each fetch-lifecycle flip (hydrated, validating, settled), and the editor
+ * is the most expensive component of the composer. `useMentionCategories`
+ * reads the synced rows from the stores, so only real data changes reach it.
+ *
+ * The syncs stay off until `enabled`: the editor turns it on when the mention
+ * menu first opens, so a conversation that never uses `@` fetches none of
+ * these lists. That first menu shows no Market entries yet; typing re-queries
+ * the menu once the rows have arrived.
+ */
+export const useMentionSourceSync = (enabled: boolean) => {
+  const { agentsEnabled, skillsEnabled } = useMarketMentionScope();
+  // The market lists are keyed by UI language, read when the sync runs. The
+  // editor re-renders on a language switch through `useTranslation`; this
+  // leaf must subscribe itself or keep syncing the old language's lists.
+  useGlobalStore(globalGeneralSelectors.currentLanguage);
+
+  // The installed-skill list is otherwise only fetched by skill settings pages;
+  // without it here, a Market skill installed from this menu (or anywhere
+  // else) would keep being offered as not installed after a reload.
+  const useFetchAgentSkills = useToolStore((s) => s.useFetchAgentSkills);
+  useFetchAgentSkills(enabled);
+
+  const useAssistantList = useDiscoverStore((s) => s.useFetchAssistantList);
+  const useSkillList = useDiscoverStore((s) => s.useFetchSkillList);
+  useAssistantList(MARKET_AGENT_QUERY, { enabled: enabled && agentsEnabled });
+  useSkillList(MARKET_SKILL_QUERY, { enabled: enabled && skillsEnabled });
+};
+
+export const MentionSourceSync = memo<{ enabled: boolean }>(({ enabled }) => {
+  useMentionSourceSync(enabled);
+  return null;
+});
+
+MentionSourceSync.displayName = 'MentionSourceSync';
+
 export const useMentionCategories = (): MentionSource => {
   const { t } = useTranslation('chat');
   const currentAgentId = useAgentId();
@@ -77,26 +140,16 @@ export const useMentionCategories = (): MentionSource => {
   const externalMentionItems = useChatInputStore((s) => s.mentionItems);
   const isGroupChat = !!externalMentionItems;
 
-  // The installed-skill list is otherwise only fetched by skill settings pages;
-  // without it here, a Market skill installed from this menu (or anywhere
-  // else) would keep being offered as not installed after a reload.
-  const useFetchAgentSkills = useToolStore((s) => s.useFetchAgentSkills);
-  useFetchAgentSkills(true);
   const enabledSkills = useInstalledSkillsAndTools();
 
-  // Market entries install on send, which creates content in the active scope.
-  const { allowed: canInstall } = usePermission('create_content');
-  const useAssistantList = useDiscoverStore((s) => s.useFetchAssistantList);
-  const useSkillList = useDiscoverStore((s) => s.useFetchSkillList);
-  const marketAgentsEnabled = canInstall && !isGroupChat;
-  const { queryKey: marketAgentKey } = useAssistantList(
-    { page: 1, pageSize: MARKET_MENTION_FETCH_SIZE, sort: AssistantSorts.Recommended },
-    { enabled: marketAgentsEnabled },
-  );
-  const { queryKey: marketSkillKey } = useSkillList(
-    { page: 1, pageSize: MARKET_MENTION_FETCH_SIZE, sort: SkillSorts.InstallCount },
-    { enabled: canInstall },
-  );
+  // `MentionSourceSync` keeps these lists synced; read only the stored rows.
+  const { agentsEnabled: marketAgentsEnabled, skillsEnabled: canInstall } = useMarketMentionScope();
+  const marketAgentKey = marketAgentsEnabled
+    ? assistantListQueryKey(normalizeAssistantListParams(MARKET_AGENT_QUERY))
+    : undefined;
+  const marketSkillKey = canInstall
+    ? skillListQueryKey(normalizeSkillListParams(MARKET_SKILL_QUERY))
+    : undefined;
   const marketAgents = useDiscoverStore(assistantSelectors.assistantList(marketAgentKey))?.items;
   const marketSkills = useDiscoverStore(skillSelectors.skillList(marketSkillKey))?.items;
 
@@ -212,13 +265,10 @@ export const useMentionCategories = (): MentionSource => {
         installedAgentSources.add(currentAgent.forkedFromIdentifier);
       }
 
-      // Quota stays at MAX_AGENT_ITEMS total. When the user has private agents
-      // we reserve up to half for them so they don't get drowned out by a long
-      // workspace list.
-      const privateBudget = isCurrentContextPrivate ? Math.min(privateCandidates.length, 10) : 0;
-      const workspaceBudget = MAX_AGENT_ITEMS - privateBudget;
-      const privateItems = privateCandidates.slice(0, privateBudget).map(toItem);
-      const workspaceItems = workspaceCandidates.slice(0, workspaceBudget).map(toItem);
+      // Every candidate stays searchable; the menu caps what it renders
+      // (`limitMentionGroups`), private sections first.
+      const privateItems = isCurrentContextPrivate ? privateCandidates.map(toItem) : [];
+      const workspaceItems = workspaceCandidates.map(toItem);
 
       if (privateItems.length > 0) {
         categories.push({

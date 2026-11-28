@@ -1,3 +1,4 @@
+import { mcpTransportCallId } from '@lobechat/mcp-elicitation/transport';
 import type { ChatToolPayload } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -356,5 +357,35 @@ describe('dispatchClientTool', () => {
     });
 
     expect(sendToolExecute.mock.calls[0][1]).toMatchObject({ executionTimeoutMs: 120_000 });
+  });
+  it('isolates equal provider tool IDs in different MCP operations', async () => {
+    mockBlpop.mockImplementation(async (...keys: unknown[]) => [
+      keys[0],
+      JSON.stringify({ toolCallId: keys[0], content: keys[0], success: true }),
+    ]);
+    const sendToolExecute = vi.fn().mockResolvedValue(undefined);
+    const results = await Promise.all(
+      ['op-alice', 'op-bob'].map((operationId) =>
+        dispatchClientTool(makePayload({ type: 'mcp', id: 'reused' }), {
+          operationId,
+          userId: 'user',
+          assistantMessageId: 'assistant',
+          streamManager: makeStreamManager(sendToolExecute),
+        }),
+      ),
+    );
+    const ids = sendToolExecute.mock.calls.map((call) => call[1].toolCallId);
+    expect(new Set(ids).size).toBe(2);
+    expect(ids).toEqual(
+      ['op-alice', 'op-bob'].map((operationId) =>
+        mcpTransportCallId({
+          operationId,
+          toolCallId: 'reused',
+          userId: 'user',
+          assistantMessageId: 'assistant',
+        }),
+      ),
+    );
+    expect(results.map((result) => result.content)).toEqual(ids.map((id) => 'tool_result:' + id));
   });
 });

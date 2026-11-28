@@ -14,6 +14,7 @@ import type {
   AgentInterventionStatus,
   AgentInterventionSurface,
   AgentInterventionSystemActionEligibility,
+  AgentMarketplaceInterventionDetail,
 } from '@lobechat/types';
 
 import type {
@@ -184,3 +185,23 @@ export type AgentInterventionBatchMutationResult =
  * separate system locator: callers must authorize view and resolve against the
  * resource before constructing this owner/workspace-scoped model.
  */
+
+/** The existing approval/question surface does not deliver MCP protocol prompts. */
+export type StandardIntervention<T> = T extends AgentInterventionItem
+  ? Omit<T, 'sanitizedRequest' | 'source'> & {
+      sanitizedRequest: Omit<T['sanitizedRequest'], 'customDetail'> & {
+        customDetail?: AgentMarketplaceInterventionDetail;
+      };
+      source: Exclude<T['source'], 'mcp'>;
+    }
+  : T extends { source: AgentInterventionSource }
+    ? Omit<T, 'source'> & { source: Exclude<T['source'], 'mcp'> }
+    : T extends (infer Item)[]
+      ? StandardIntervention<Item>[]
+      : T extends
+            | AgentInterventionBatchMutationResult
+            | AgentInterventionBatchState
+            | AgentInterventionBatchSupersessionResult
+            | NonNullable<AgentInterventionBatchSupersessionResult['superseded']>
+        ? { [Field in keyof T]: StandardIntervention<T[Field]> }
+        : T;

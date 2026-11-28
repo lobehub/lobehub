@@ -6,7 +6,8 @@ import { agentInboxReport } from './handlers/agentInboxReport';
 import { botCallback } from './handlers/botCallback';
 import { botReplay } from './handlers/botReplay';
 import { botWakeFlush } from './handlers/botWakeFlush';
-import { channelAdvance, channelCallback } from './handlers/channel';
+import { channelAdvance, channelCallback, channelWatchReport } from './handlers/channel';
+import { deviceToolCompletion } from './handlers/deviceToolCompletion';
 import {
   documentAccess,
   documentProjection,
@@ -20,16 +21,24 @@ import { gatewayCron } from './handlers/gatewayCron';
 import { gatewayDesiredConnections } from './handlers/gatewayDesiredConnections';
 import { gatewayStart } from './handlers/gatewayStart';
 import { groupMemberCallback } from './handlers/groupMemberCallback';
+import { inboundWebhookReport } from './handlers/inboundWebhookReport';
 import { llmRelayChunks, llmRelayPayload } from './handlers/llmRelay';
+import { mcpClientExpire } from './handlers/mcpClientExpire';
+import { mcpClientTool } from './handlers/mcpClientTool';
+import { mcpElicitationExpire } from './handlers/mcpElicitationExpire';
+import { mcpElicitationResume } from './handlers/mcpElicitationResume';
 import { messengerInstall } from './handlers/messengerInstall';
 import { messengerOAuthCallback } from './handlers/messengerOAuthCallback';
 import { messengerWebhook } from './handlers/messengerWebhook';
 import { platformWebhook } from './handlers/platformWebhook';
 import { reapOperations } from './handlers/reapOperations';
 import { runStep, runStepHealth } from './handlers/runStep';
+import { shellExpire } from './handlers/shellExpire';
 import { subAgentCallback } from './handlers/subAgentCallback';
 import { toolResult } from './handlers/toolResult';
 import { bearerSecretAuth } from './middlewares/bearerSecretAuth';
+import { deviceGatewayServiceAuth } from './middlewares/deviceGatewayServiceAuth';
+import { mcpQueueAuth } from './middlewares/mcpQueueAuth';
 import { qstashAuth } from './middlewares/qstashAuth';
 import { qstashOrApiKeyAuth } from './middlewares/qstashOrApiKeyAuth';
 import { serviceTokenAuth } from './middlewares/serviceTokenAuth';
@@ -49,17 +58,31 @@ app.post('/', qstashOrApiKeyAuth(), execAgent);
 
 // POST /api/agent/run — execute a single step (QStash signature)
 app.post('/run', qstashAuth(), runStep);
+app.post('/mcp-elicitation-resume', mcpQueueAuth(), mcpElicitationResume);
+app.post('/mcp-elicitation-expire', mcpQueueAuth(), mcpElicitationExpire);
 app.get('/run', runStepHealth);
 
 app.post('/channel/advance', qstashAuth(), channelAdvance);
+app.post('/channel/watch-report', qstashAuth(), channelWatchReport);
 app.post('/webhooks/channel-callback', qstashAuth(), channelCallback);
 
 // POST /api/agent/webhooks/inbox-report — a mail-woken run finished: post its answer to the
 // owner's direct Channel (QStash)
 app.post('/webhooks/inbox-report', qstashAuth(), agentInboxReport);
 
+// POST /api/agent/webhooks/inbound-webhook-report — a webhook-woken run finished: post its answer
+// to the Channel or Thread the webhook delivers to (QStash)
+app.post('/webhooks/inbound-webhook-report', qstashAuth(), inboundWebhookReport);
+
 // POST /api/agent/tool-result — gateway-side tool result LPUSH'd to Redis
 app.post('/tool-result', serviceTokenAuth(), toolResult);
+
+// POST /api/agent/device-tool-completion — device gateway relays the final
+// result of a device command that a parked operation is waiting on
+app.post('/device-tool-completion', deviceGatewayServiceAuth(), deviceToolCompletion);
+
+// POST /api/agent/shell-expire — deadline for a parked shell command (QStash)
+app.post('/shell-expire', qstashAuth(), shellExpire);
 
 // LLM relay: the user's device runs one LLM attempt for a device-only model
 // provider. Auth is the per-call lease token carried by `llm_execute`.
@@ -155,3 +178,7 @@ app.get('/messenger/:platform/oauth/callback', messengerOAuthCallback);
 app.post('/messenger/webhooks/:platform', messengerWebhook);
 
 export default app;
+
+app.post('/mcp-client-tool', mcpQueueAuth(), mcpClientTool);
+
+app.post('/mcp-client-expire', mcpQueueAuth(), mcpClientExpire);

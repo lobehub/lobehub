@@ -87,7 +87,7 @@ describe('reattachUntrackedHeteroRun', () => {
   it('reconnects this tab to the untracked run', () => {
     const { get, reconnectToGatewayOperation } = makeGet({ heteroType: 'claude-code' });
 
-    reattachUntrackedHeteroRun(get, context);
+    reattachUntrackedHeteroRun(get, { ...context, workspaceSlug: 'team' });
 
     expect(reconnectToGatewayOperation).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -96,6 +96,7 @@ describe('reattachUntrackedHeteroRun', () => {
         heteroType: 'claude-code',
         operationId: 'op-claude-code',
         topicId: 'tpc-1',
+        workspaceSlug: 'team',
       }),
     );
   });

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   finalizeHeteroDispatchError: vi.fn(),
   isRunningOnTopic: vi.fn(),
   readDeviceSystemInfo: vi.fn(),
+  resolveDeviceAgentRunCredential: vi.fn(),
   resolveDeviceDispatchAuthorizationFailure: vi.fn(),
   selectCodexDeviceDispatch: vi.fn(),
   waitForManagedDeviceOnline: vi.fn(),
@@ -21,6 +22,10 @@ vi.mock('@/server/utils/scheduleAfterResponse', () => ({
   afterUnscoped: (work: () => Promise<unknown> | unknown) => {
     mocks.afterWork.push(work);
   },
+}));
+
+vi.mock('@/business/server/deviceAgentRunCredential', () => ({
+  resolveDeviceAgentRunCredential: mocks.resolveDeviceAgentRunCredential,
 }));
 
 vi.mock('@/server/services/deviceGateway/managedDeviceWake', () => ({
@@ -97,7 +102,10 @@ const createDeps = () => {
   return { deps, topicModel };
 };
 
-const dispatch = (deps: HeteroDispatchDeps) =>
+const dispatch = (
+  deps: HeteroDispatchDeps,
+  heteroParams: Partial<PreparedHeteroRun['heteroParams']> = {},
+) =>
   dispatchToWakingCliDevice(deps, run, {
     agentConfig: { agencyConfig: {}, id: 'agent-1' } as unknown as ExecRunContext['agentConfig'],
     appContext: undefined,
@@ -105,7 +113,7 @@ const dispatch = (deps: HeteroDispatchDeps) =>
     heteroPlan: { deviceId: 'managed-a', kind: 'device-wakeable', target: 'device' },
     heteroType: 'claude-code',
     heterogeneousProvider: { type: 'claude-code' },
-    prepared: { heteroParams: {} } as unknown as PreparedHeteroRun,
+    prepared: { heteroParams } as unknown as PreparedHeteroRun,
   });
 
 const runScheduledWork = async () => {
@@ -119,6 +127,7 @@ beforeEach(() => {
   mocks.dispatchAgentRun.mockResolvedValue({ success: true });
   mocks.finalizeHeteroDispatchError.mockResolvedValue(true);
   mocks.isRunningOnTopic.mockResolvedValue(true);
+  mocks.resolveDeviceAgentRunCredential.mockResolvedValue(undefined);
   mocks.resolveDeviceDispatchAuthorizationFailure.mockResolvedValue(undefined);
   mocks.selectCodexDeviceDispatch.mockResolvedValue({ kind: 'exec' });
   mocks.waitForManagedDeviceOnline.mockResolvedValue(true);
@@ -204,6 +213,18 @@ describe('dispatchToWakingCliDevice', () => {
     expect(mocks.finalizeHeteroDispatchError).not.toHaveBeenCalled();
   });
 
+  it('never sends the resolved GitHub credential to the device', async () => {
+    const { deps } = createDeps();
+
+    await dispatch(deps, { githubToken: 'gh-org-token', jwt: 'operation-jwt' });
+    await runScheduledWork();
+
+    expect(mocks.dispatchAgentRun).toHaveBeenCalledTimes(1);
+    const params = mocks.dispatchAgentRun.mock.calls[0][0];
+    expect(params).toMatchObject({ jwt: 'operation-jwt' });
+    expect(params).not.toHaveProperty('githubToken');
+  });
+
   it('settles the run when the background dispatch throws', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     mocks.selectCodexDeviceDispatch.mockRejectedValue(new Error('db down'));
@@ -217,5 +238,47 @@ describe('dispatchToWakingCliDevice', () => {
       expect.objectContaining({ detail: 'db down', operationId: 'op-1' }),
     );
     error.mockRestore();
+  });
+});
+
+describe('run credential', () => {
+  const runCredential = {
+    provider: 'claude-code' as const,
+    secret: { expiresAt: '2027-01-01', token: 'tok', type: 'claude-oauth-token' as const },
+  };
+
+  it('sends the credential the deployment supplies with the run request', async () => {
+    mocks.resolveDeviceAgentRunCredential.mockResolvedValue(runCredential);
+    const { deps } = createDeps();
+
+    await dispatch(deps, { agentType: 'claude-code' });
+    await runScheduledWork();
+
+    expect(mocks.resolveDeviceAgentRunCredential).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      agentType: 'claude-code',
+      deviceId: 'managed-a',
+      userId: 'user-1',
+    });
+    expect(mocks.dispatchAgentRun).toHaveBeenCalledWith(expect.objectContaining({ runCredential }));
+  });
+
+  it('sends no credential field when the deployment supplies none', async () => {
+    const { deps } = createDeps();
+
+    await dispatch(deps, { agentType: 'claude-code' });
+    await runScheduledWork();
+
+    expect(mocks.dispatchAgentRun.mock.calls[0][0]).not.toHaveProperty('runCredential');
+  });
+
+  it('does not fetch a credential for a run the device is not authorized for', async () => {
+    mocks.resolveDeviceDispatchAuthorizationFailure.mockResolvedValue({ reason: 'not-found' });
+    const { deps } = createDeps();
+
+    await dispatch(deps, { agentType: 'claude-code' });
+    await runScheduledWork();
+
+    expect(mocks.resolveDeviceAgentRunCredential).not.toHaveBeenCalled();
   });
 });

@@ -60,4 +60,75 @@ describe('pickModelConfigFormValues', () => {
 
     expect(UpdateAiModelSchema.safeParse(payload).success).toBe(true);
   });
+
+  it('submits the TTS default voice and drops an empty one', () => {
+    const ttsValues = {
+      ...formValues,
+      settings: { ttsVoice: 'Kore' },
+      type: 'tts',
+    };
+
+    const payload = pickModelConfigFormValues(ttsValues);
+    expect(payload.settings?.ttsVoice).toBe('Kore');
+    expect(UpdateAiModelSchema.safeParse(payload).success).toBe(true);
+
+    expect(
+      pickModelConfigFormValues({ ...ttsValues, settings: { ttsVoice: '  ' } }).settings?.ttsVoice,
+    ).toBeUndefined();
+    expect(
+      pickModelConfigFormValues({ ...ttsValues, settings: { ttsVoice: ' my voice ' } }).settings
+        ?.ttsVoice,
+    ).toBe('my voice');
+  });
+
+  it('drops the TTS default voice once the model is no longer a TTS model', () => {
+    expect(
+      pickModelConfigFormValues({ ...formValues, settings: { ttsVoice: 'Kore' }, type: 'chat' })
+        .settings?.ttsVoice,
+    ).toBeUndefined();
+  });
+
+  describe('settings.reasoningEffort', () => {
+    const spec = {
+      default: 'medium' as const,
+      levels: ['low' as const, 'medium' as const, 'high' as const],
+    };
+
+    it('saves the spec of a custom model', () => {
+      const values = { ...formValues, settings: { reasoningEffort: spec } };
+      expect(pickModelConfigFormValues(values, { cardReasoningEffort: spec }).settings).toEqual({
+        reasoningEffort: spec,
+      });
+    });
+
+    it('does not pin an unchanged card spec onto a builtin model row', () => {
+      const values = { ...formValues, settings: { reasoningEffort: spec }, source: 'builtin' };
+      expect(
+        pickModelConfigFormValues(values, { cardReasoningEffort: spec }).settings?.reasoningEffort,
+      ).toBeUndefined();
+    });
+
+    it('keeps an earlier saved override when the builtin model is saved again', () => {
+      // Regression: comparing against the merged value the form opened with made a
+      // saved override look unchanged, so editing only the display name wiped it
+      const override = { ...spec, default: 'low' as const };
+      const values = {
+        ...formValues,
+        displayName: 'Renamed',
+        settings: { reasoningEffort: override },
+        source: 'builtin',
+      };
+      expect(
+        pickModelConfigFormValues(values, { cardReasoningEffort: spec }).settings?.reasoningEffort,
+      ).toEqual(override);
+    });
+
+    it('saves a builtin model spec the user changed', () => {
+      const changed = { ...spec, default: 'high' as const };
+      const values = { ...formValues, settings: { reasoningEffort: changed }, source: 'builtin' };
+      expect(
+        pickModelConfigFormValues(values, { cardReasoningEffort: spec }).settings?.reasoningEffort,
+      ).toEqual(changed);
+    });
+  });
 });

@@ -1,10 +1,16 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 
+import { onAgentCreated } from '@/business/server/channel/onAgentCreated';
+import { PROJECT_DEFAULT_CHANNEL_TITLE } from '@/database/repositories/channel/displayTitle';
+
 import { ChannelService } from './ChannelService';
 import { isChannelEnabled } from './featureGate';
 
-/** Title of the Channel a new workspace or project starts with; members can rename it. */
-export const DEFAULT_CHANNEL_TITLE = 'General';
+/**
+ * Title of the Channel a new workspace or project starts with; members can rename it. Deleting
+ * the project gives a Channel still titled this the project's name.
+ */
+export const DEFAULT_CHANNEL_TITLE = PROJECT_DEFAULT_CHANNEL_TITLE;
 
 export interface DefaultChannelParams {
   /** The scope's main Agent: a workspace's LobeAI, or a project's main agent. */
@@ -49,28 +55,26 @@ export interface AgentDirectChannelParams {
   /** The Agent its creator just made. */
   agentId: string;
   db: LobeChatDatabase;
-  /** The creator's own desktop, where an Agent that runs locally answers; checked before use. */
-  localDeviceId?: string;
   userId: string;
   workspaceId?: string;
 }
 
 /**
  * Opens the direct conversation between a person and the Agent they just created, named after the
- * Agent and on the device and directory a new Channel would give it; see
- * `ChannelService.createDirect`.
+ * Agent and bound to no device; see `ChannelService.createDirect`. Then hands the Agent to the
+ * `onAgentCreated` slot, which may seed its documents. Both run only while Channels are on for the
+ * creator, and each failure is reported on its own.
  */
-export const createAgentDirectChannel = async ({
-  db,
-  localDeviceId,
-  ...context
-}: AgentDirectChannelParams) =>
-  openForCreator('the direct channel of a new agent', context, async () => {
-    if (!(await isChannelEnabled(context.userId))) return;
-    await new ChannelService(db, context.userId, context.workspaceId).createDirect(
-      context.agentId,
-      {
-        localDeviceId,
-      },
-    );
+export const createAgentDirectChannel = async ({ db, ...context }: AgentDirectChannelParams) => {
+  let enabled = false;
+  await openForCreator('the direct channel of a new agent', context, async () => {
+    enabled = await isChannelEnabled(context.userId);
+    if (!enabled) return;
+    await new ChannelService(db, context.userId, context.workspaceId).createDirect(context.agentId);
   });
+  if (!enabled) return;
+
+  await openForCreator('the setup of a new channel agent', context, () =>
+    onAgentCreated({ db, ...context }),
+  );
+};

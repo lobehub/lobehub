@@ -22,6 +22,21 @@ describe('formatBotPlatformContext', () => {
     expect(result).toMatchSnapshot();
   });
 
+  it('group that delivers only addressed messages: says so instead of hunting for history', () => {
+    const result = formatBotPlatformContext({
+      canReadHistory: false,
+      platformName: 'WeCom',
+      seesOnlyAddressedMessages: true,
+      supportsMarkdown: true,
+    });
+
+    expect(result).toContain('In this group you only receive messages that @-mention you');
+    expect(result).toContain('cannot be fetched by any tool or command — do not try');
+    // The DM guidance ("do NOT claim you can't read history") would contradict it here.
+    expect(result).not.toContain('do NOT claim you "can\'t read history"');
+    expect(result).not.toContain('readMessages` IMMEDIATELY');
+  });
+
   it('renders the current conversation identifiers for the message tool', () => {
     const result = formatBotPlatformContext({
       currentChannel: { id: 'oc_84983ff6516d731e', platformId: 'lark' },

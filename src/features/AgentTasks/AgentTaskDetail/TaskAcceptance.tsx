@@ -20,6 +20,7 @@ import {
   ChevronsUpDown,
   ExternalLink,
   RotateCcw,
+  ShieldCheck,
   Trash,
 } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -50,16 +51,17 @@ import { useGlobalStore } from '@/store/global';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 import { useVerifyStore } from '@/store/verify';
+import { densityVars } from '@/styles/densityVars';
 
-import GoalRoundTimeline from './GoalRoundTimeline';
 import { resolveTaskAcceptanceRequirement } from './resolveTaskAcceptanceProjection';
-import { TaskAcceptanceHeader } from './TaskAcceptanceHeader';
+import TaskAcceptanceRounds from './TaskAcceptanceRounds';
+import TaskSectionHeader from './TaskSectionHeader';
 import TaskVerifyConfig from './TaskVerifyConfig';
 
 const styles = createStaticStyles(({ css }) => ({
   error: css`
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorErrorBg};
   `,
@@ -71,7 +73,7 @@ const styles = createStaticStyles(({ css }) => ({
   groupHeader: css`
     cursor: pointer;
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
   `,
 }));
 
@@ -287,13 +289,15 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
   }
 
   const header = (
-    <TaskAcceptanceHeader
-      count={checks.length}
+    <TaskSectionHeader
+      count={checks.length || undefined}
       // The section shows the rounds and the checklist; the report is the full
       // record behind them — reachable from the block it belongs to, instead
       // of only from the status row at the top of the page.
       extra={reportButton}
+      icon={ShieldCheck}
       isOpen={sectionExpanded}
+      title={t('taskDetail.acceptance.title')}
       onToggle={() => setSectionExpanded((expanded) => !expanded)}
     />
   );
@@ -318,33 +322,31 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
           {bundleError ? <AcceptanceError onRetry={() => void mutateBundle()} /> : null}
           {bundle && (
             <>
-              <GoalRoundTimeline rounds={bundle.rounds} />
               {requirement && (
-                <Flexbox gap={6}>
-                  <Text fontSize={12} type={'secondary'}>
+                // The contract, not the result. A goal-dispatched task carries a
+                // generated paragraph here; one line keeps the rounds — what the
+                // reader came for — in view, and a click opens the rest.
+                <Flexbox horizontal align={'baseline'} gap={8} style={{ minWidth: 0 }}>
+                  <Text fontSize={12} style={{ flex: 'none' }} type={'secondary'} weight={500}>
                     {t('taskDetail.acceptance.goal')}
                   </Text>
-                  {/* The contract, not the result. A goal-dispatched task carries
-                      a generated paragraph here, and printing it in full pushed
-                      the checks — the thing the reader came for — below the
-                      fold. Two lines, and the rest on demand. */}
                   <Text
-                    ellipsis={requirementExpanded ? undefined : { rows: 2 }}
-                    style={{ cursor: 'pointer' }}
+                    ellipsis={requirementExpanded ? undefined : { rows: 1 }}
+                    fontSize={12}
+                    style={{ cursor: 'pointer', flex: 1, minWidth: 0 }}
                     title={requirement}
+                    type={'secondary'}
                     onClick={() => setRequirementExpanded((open) => !open)}
                   >
                     {requirement}
                   </Text>
                 </Flexbox>
               )}
-              <Flexbox gap={8}>
-                <Flexbox horizontal align={'center'} gap={8}>
-                  <Text fontSize={12} type={'secondary'}>
-                    {t('taskDetail.acceptance.checklist')}
-                  </Text>
-                  <Flexbox flex={1} />
-                  {grouped && groupKeys.length > 0 && (
+              <TaskAcceptanceRounds
+                bundle={bundle}
+                latestExtra={
+                  grouped &&
+                  groupKeys.length > 0 && (
                     <ActionIcon
                       icon={allGroupsCollapsed ? ChevronsUpDown : ChevronsDownUp}
                       size={'small'}
@@ -357,8 +359,9 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
                         setCollapsedGroups(allGroupsCollapsed ? new Set() : new Set(groupKeys))
                       }
                     />
-                  )}
-                </Flexbox>
+                  )
+                }
+              >
                 <CriterionList>
                   {grouped
                     ? groups.map((group) => {
@@ -414,7 +417,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
                         />
                       ))}
                 </CriterionList>
-              </Flexbox>
+              </TaskAcceptanceRounds>
             </>
           )}
         </Flexbox>

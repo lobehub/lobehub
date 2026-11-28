@@ -3,6 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentService } from '@/services/agent';
+import { aiAgentService } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
 import { deviceService } from '@/services/device';
 import { projectWorkingDirectoryService } from '@/services/projectWorkingDirectory';
@@ -88,6 +89,52 @@ afterEach(() => {
 });
 
 describe('sendMessage in a project directory', () => {
+  it('submits a self-mention first send with its worktree and staged project directory', async () => {
+    deviceAgent();
+    const agentId = TEST_IDS.SESSION_ID;
+    const worktree = {
+      deviceId: DEVICE_ID,
+      path: PROJECT_PATH,
+      repoType: 'git' as const,
+      sourcePath: PROJECT_PATH,
+    };
+    const submit = vi
+      .spyOn(aiAgentService, 'submitWorktreeTurn')
+      .mockRejectedValue(new Error('offline'));
+    useChatStore.setState({
+      activeAgentId: agentId,
+      activeTopicId: undefined,
+      isGatewayModeEnabled: () => true,
+      pendingNewTopicDirectory: { agentId, projectWorkingDirectoryId: 'dir-85' },
+    });
+
+    await act(async () => {
+      await useChatStore.getState().sendMessage({
+        context: { agentId, threadId: null, topicId: null },
+        editorData: {
+          root: {
+            children: [
+              {
+                children: [
+                  { label: 'Agent', metadata: { id: agentId, type: 'agent' }, type: 'mention' },
+                  { text: ' work in isolation', type: 'text' },
+                ],
+                type: 'paragraph',
+              },
+            ],
+          },
+        },
+        firstSendWorktree: worktree,
+        message: '@Agent work in isolation',
+      });
+    });
+
+    expect(submit).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId, projectWorkingDirectoryId: 'dir-85', worktree }),
+      null,
+    );
+  });
+
   // Regression: the new topic's optimistic metadata took the agent's own
   // per-device directory, and the send-time git snapshot wrote that config back
   // over the server's project binding — the composer then showed another repo's

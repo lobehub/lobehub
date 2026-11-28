@@ -20,7 +20,6 @@ import * as stylex from '@stylexjs/stylex';
 import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank/aiModel';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,6 +34,7 @@ import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selec
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 import type { LobeAgentChatConfig, LobeAgentConfig } from '@/types/agent';
 
 import { useAgentId } from '../../hooks/useAgentId';
@@ -42,6 +42,7 @@ import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAcce
 import { useEffectiveAgentMode } from '../../hooks/useEffectiveAgentMode';
 import { useToggleAgentMode } from '../../hooks/useToggleAgentMode';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
+import { useGatewayMode } from './useGatewayMode';
 import { useParamsModelConfig } from './useParamsModelConfig';
 
 interface ControlsProps {
@@ -75,7 +76,7 @@ const styles = stylex.create({
     cursor: 'pointer',
     width: 'calc(100% + 16px)',
     marginInline: '-8px',
-    paddingBlock: '12px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
     paddingInline: '8px',
     borderStyle: 'none',
     borderRadius: '10px',
@@ -117,7 +118,7 @@ const styles = stylex.create({
     flexDirection: 'column',
     minHeight: '0',
     paddingBlockEnd: '4px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   commonSection: { display: 'flex', flexDirection: 'column', paddingBlock: '0' },
   divider: { height: '1px', backgroundColor: cssVar.colorSplit, backgroundImage: 'none' },
@@ -126,15 +127,15 @@ const styles = stylex.create({
   formSidebar: { display: 'flex', flex: '1', width: '100%', height: '100%', minHeight: '0' },
   header: {
     display: 'flex',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBlock: '16px',
-    paddingInline: '12px',
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorSplit,
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     fontWeight: 600,
     lineHeight: 1.4,
     color: cssVar.colorText,
@@ -164,7 +165,7 @@ const styles = stylex.create({
   },
   labelMain: { flexWrap: 'wrap', minWidth: '0' },
   labelMuted: { color: cssVar.colorTextTertiary },
-  modelConfigSection: { paddingBlock: '12px' },
+  modelConfigSection: { paddingBlock: densityTokens['--lobe-density-content-gap'] },
   panel: {
     overflow: 'hidden',
     display: 'flex',
@@ -190,7 +191,7 @@ const styles = stylex.create({
     boxShadow: 'none',
   },
   rowControl: { width: '100%' },
-  rowRoot: { paddingBlock: '12px' },
+  rowRoot: { paddingBlock: densityTokens['--lobe-density-content-gap'] },
   // Rows inside the advanced list are divided from the previous row; the first has no rule.
   rowSeparated: {
     borderBlockStartWidth: '1px',
@@ -266,8 +267,6 @@ const PARAM_CONFIG = {
 >;
 
 const PARAM_ORDER: ParamKey[] = ['temperature', 'top_p', 'frequency_penalty', 'presence_penalty'];
-
-const REASONING_PARAMS_SET = new Set<string>(MODEL_REASONING_EXTEND_PARAMS);
 
 const ADVANCED_OPEN_STORAGE_KEY = 'lobehub-chat-input-params-advanced-open';
 const MODEL_CONFIG_OPEN_STORAGE_KEY = 'lobehub-chat-input-params-model-config-open';
@@ -413,6 +412,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
   const { t } = useTranslation(['setting', 'components', 'chat']);
   const agentId = useAgentId();
   const toggleAgentMode = useToggleAgentMode();
+  const gatewayMode = useGatewayMode();
   const { canUseResource } = useChatInputResourceAccess();
   const { canSelectAgentMode, currentMode, isAgentModeUnavailable } =
     useEffectiveAgentMode(agentId);
@@ -427,19 +427,15 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
     isEqual,
   );
   const { disabledParams, model, provider } = useParamsModelConfig(agentId);
-  const modelExtendParamsList = useAiInfraStore(
-    aiModelSelectors.modelExtendParams(model, provider),
-    isEqual,
-  );
   // Reasoning fields are user-level model-instance settings now (edited via
   // the ChatInput Effort control); only non-reasoning params warrant this section
-  const hasModelConfig = (modelExtendParamsList ?? []).some(
-    (param) => !REASONING_PARAMS_SET.has(param),
+  const hasModelConfig = useAiInfraStore(
+    aiModelSelectors.isModelHasNonReasoningExtendParams(model, provider),
   );
   // Same reason: hide the legacy Advanced raw `params.reasoning_effort` for
   // those models — the send path strips it in favor of the instance config
-  const hasReasoningExtendParams = (modelExtendParamsList ?? []).some((param) =>
-    REASONING_PARAMS_SET.has(param),
+  const hasReasoningExtendParams = useAiInfraStore(
+    aiModelSelectors.isModelHasReasoningControls(model, provider),
   );
   const enableAgentMode = useAgentStore(agentByIdSelectors.getAgentEnableModeById(agentId));
   const form = useForm();
@@ -535,7 +531,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
     : undefined;
   const rawSubAgentChatConfig = config.agencyConfig?.subagent?.chatConfig;
   const subAgentHasReasoningParams = useAiInfraStore(
-    aiModelSelectors.isModelHasReasoningExtendParams(
+    aiModelSelectors.isModelHasReasoningControls(
       subAgentModelValue?.model || '',
       subAgentModelValue?.provider || '',
     ),
@@ -755,6 +751,21 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                     })
               }
             />
+            {gatewayMode.available && (
+              <ControlRow
+                title={t('gatewayMode.cardTitle', { ns: 'chat' })}
+                tooltip={t('gatewayMode.desc', { ns: 'chat' })}
+                action={
+                  <Switch
+                    aria-label={t('gatewayMode.cardTitle', { ns: 'chat' })}
+                    checked={gatewayMode.enabled}
+                    loading={gatewayMode.loading}
+                    size={'small'}
+                    onChange={gatewayMode.onChange}
+                  />
+                }
+              />
+            )}
             <ControlRow
               tag="compression"
               title={t('settingModel.params.panel.contextCompression')}

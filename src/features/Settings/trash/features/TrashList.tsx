@@ -9,7 +9,6 @@ import type {
   TrashVisibility,
 } from '@lobechat/types';
 import {
-  Avatar,
   Button,
   Center,
   confirmModal,
@@ -33,6 +32,8 @@ import { Trash2Icon } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { loadTrashPurgeNotice } from '@/business/client/loadTrashPurgeNotice';
+import Avatar from '@/components/Avatar';
 import LiteTable, { type LiteTableColumn } from '@/components/LiteTable';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';
@@ -43,6 +44,8 @@ import { trashSelectors, useTrashStore } from '@/store/trash';
 import { TrashEmptyScopeChangedError } from '@/store/trash/action';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 import DeletedByCell, { DELETED_BY_TEXT_INSET } from './DeletedByCell';
 import { ProjectFilter } from './ProjectFilter';
@@ -69,13 +72,17 @@ const CARD_LAYOUT_QUERY = `@container (max-width: ${TRASH_LIST_BREAKPOINT}px)`;
  * Type chips on the small control height: with the track's 3px padding and
  * 1px border the whole Segmented is `controlHeight.middle` tall, level with
  * the side switch, the project picker and the empty button beside it.
+ * Loose only: in compact the global small-Segmented rule (20px chips, 28px
+ * track) already lines up with the 28px picker and button.
  */
 const segmentedStyles = { item: { height: controlHeight.small } };
 
 const styles = stylex.create({
   container: {
     overflow: 'hidden',
-    paddingBlock: '16px',
+    // No top padding: the retention note above already owns the gap, so the card
+    // inset only pushed the filters down off the table's own row baseline.
+    paddingBlockEnd: densityTokens['--lobe-density-card-padding'],
     borderRadius: cssVar.borderRadius,
     backgroundColor: cssVar.colorBgContainer,
     backgroundImage: 'none',
@@ -83,10 +90,12 @@ const styles = stylex.create({
   header: {
     display: 'flex',
     flexWrap: 'wrap',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBlockEnd: '16px',
+    // Exactly one table row tall: the filters and the column heads below them then
+    // sit on the same baseline instead of the filters owning padding the heads do not.
+    minHeight: densityTokens['--lobe-density-row-height'],
     paddingInline: '24px',
   },
   muted: {
@@ -136,6 +145,7 @@ const TrashList = ({ isWorkspace = false }: TrashListProps) => {
   const { t } = useTranslation('setting');
   const { t: tc } = useTranslation('common');
   const mobile = useIsMobile();
+  const compact = useInterfaceDensity() === 'compact';
   const containerRef = useRef<HTMLDivElement>(null);
   const containerSize = useSize(containerRef);
   const cardLayout = !!containerSize && containerSize.width <= TRASH_LIST_BREAKPOINT;
@@ -269,10 +279,24 @@ const TrashList = ({ isWorkspace = false }: TrashListProps) => {
     toast.success(t('trash.restore.success'));
   };
 
-  const handlePurge = (item: TrashItem) => {
+  const handlePurge = async (item: TrashItem) => {
+    let notice: Awaited<ReturnType<typeof loadTrashPurgeNotice>>;
+    try {
+      notice = await loadTrashPurgeNotice({ isWorkspace, target: { items: [item] } });
+    } catch {
+      reportFailure();
+      return;
+    }
     confirmModal({
       cancelText: tc('cancel'),
-      content: t('trash.purgeConfirm.content', { title: item.title || t('trash.untitled') }),
+      content: (
+        <Flexbox gap={8}>
+          <span>
+            {t('trash.purgeConfirm.content', { title: item.title || t('trash.untitled') })}
+          </span>
+          {notice}
+        </Flexbox>
+      ),
       okButtonProps: { danger: true },
       okText: t('trash.actions.purge'),
       onOk: async () => {
@@ -293,11 +317,18 @@ const TrashList = ({ isWorkspace = false }: TrashListProps) => {
     });
   };
 
-  const handleEmpty = () => {
+  const handleEmpty = async () => {
     // Fixed for the whole sweep: switching the view while it runs never widens it.
     const view: TrashViewFilter = { ...filter };
     const count = filterCount ?? 0;
     const filtered = view.projectId !== undefined || !!view.resourceType;
+    let notice: Awaited<ReturnType<typeof loadTrashPurgeNotice>>;
+    try {
+      notice = await loadTrashPurgeNotice({ isWorkspace, target: { view } });
+    } catch {
+      reportFailure();
+      return;
+    }
     confirmModal({
       cancelText: tc('cancel'),
       content: (
@@ -311,6 +342,7 @@ const TrashList = ({ isWorkspace = false }: TrashListProps) => {
               })}
             </Text>
           )}
+          {notice}
         </Flexbox>
       ),
       okButtonProps: { danger: true },
@@ -461,7 +493,7 @@ const TrashList = ({ isWorkspace = false }: TrashListProps) => {
               disabled={busy}
               size={'small'}
               type={'text'}
-              onClick={() => handlePurge(item)}
+              onClick={() => void handlePurge(item)}
             >
               {t('trash.actions.purge')}
             </Button>
@@ -495,7 +527,7 @@ const TrashList = ({ isWorkspace = false }: TrashListProps) => {
           {visibility && (
             <Segmented
               size={'small'}
-              styles={segmentedStyles}
+              styles={compact ? undefined : segmentedStyles}
               value={visibility}
               options={[
                 { label: t('trash.side.public'), value: 'public' },
@@ -511,7 +543,7 @@ const TrashList = ({ isWorkspace = false }: TrashListProps) => {
             options={typeOptions}
             size={'small'}
             style={{ flexWrap: 'wrap', maxWidth: '100%' }}
-            styles={segmentedStyles}
+            styles={compact ? undefined : segmentedStyles}
             value={activeType ?? 'all'}
             onChange={(value) =>
               changeFilter({
@@ -542,7 +574,7 @@ const TrashList = ({ isWorkspace = false }: TrashListProps) => {
             disabled={!canEmpty}
             icon={Trash2Icon}
             size={mobile ? 'small' : undefined}
-            onClick={handleEmpty}
+            onClick={() => void handleEmpty()}
           >
             {emptyLabel(filter, filterCount)}
           </Button>

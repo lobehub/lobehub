@@ -41,6 +41,7 @@ const {
   findWakeableManagedDevices,
   isDeviceUnreachableResult,
   requestManagedDeviceWake,
+  startManagedDeviceForActivation,
   waitForManagedDeviceOnline,
   wakeManagedDevice,
 } = await import('./managedDeviceWake');
@@ -312,6 +313,40 @@ describe('awaitManagedDeviceForToolCall', () => {
     mocks.findPersonalByDeviceId.mockResolvedValueOnce(connectedRow('device-x'));
 
     await expect(awaitManagedDeviceForToolCall(caller, 'device-x')).resolves.toBeUndefined();
+    expect(mocks.wake).not.toHaveBeenCalled();
+  });
+});
+
+describe('startManagedDeviceForActivation', () => {
+  it('starts a sleeping managed device without waiting for it to connect', async () => {
+    mocks.findPersonalByDeviceId.mockResolvedValue(managedRow('managed-a'));
+
+    await expect(startManagedDeviceForActivation(caller, 'managed-a')).resolves.toBe('starting');
+    expect(mocks.wake).toHaveBeenCalledWith({ userId: 'user-1' }, 'managed-a');
+    // One presence read before the wake; no polling for it to come online.
+    expect(mocks.queryDeviceList).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers online without waking a managed device that is connected', async () => {
+    mocks.findPersonalByDeviceId.mockResolvedValue(managedRow('managed-a'));
+    mocks.queryDeviceList.mockResolvedValue([live('managed-a')]);
+
+    await expect(startManagedDeviceForActivation(caller, 'managed-a')).resolves.toBe('online');
+    expect(mocks.wake).not.toHaveBeenCalled();
+  });
+
+  it('reports nothing when the provider refuses the wake', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mocks.findPersonalByDeviceId.mockResolvedValue(managedRow('managed-a'));
+    mocks.wake.mockRejectedValue(new Error('device is being deleted'));
+
+    await expect(startManagedDeviceForActivation(caller, 'managed-a')).resolves.toBeUndefined();
+  });
+
+  it('leaves ordinary devices alone', async () => {
+    mocks.findPersonalByDeviceId.mockResolvedValue(connectedRow('desktop-a'));
+
+    await expect(startManagedDeviceForActivation(caller, 'desktop-a')).resolves.toBeUndefined();
     expect(mocks.wake).not.toHaveBeenCalled();
   });
 });

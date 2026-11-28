@@ -1,30 +1,30 @@
 'use client';
 
-import { getLobehubSkillProviderById } from '@lobechat/const';
-import { agentDisplayName } from '@lobechat/types';
+import { getLobehubSkillProviderById, hasCallableMcpEndpoint } from '@lobechat/const';
+import { agentDisplayName, type ConnectorVisibility } from '@lobechat/types';
 import { Avatar, Button, confirmModal, Markdown, Skeleton, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
-import { Plus, SquareArrowOutUpRight, Trash2, Unplug, Wrench } from 'lucide-react';
+import { SquareArrowOutUpRight, Trash2, Unplug, Wrench } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import { ConnectorDetail, CustomConnectorModal } from '@/features/Connectors';
+import { asLegacyMigrationPlugin } from '@/features/Connectors/legacyMigrationPlugin';
+import { type ConnectorPageId, hasConnectorPage } from '@/features/Integrations/connectorPage';
 import { useSkillConnect } from '@/features/SkillStore/SkillList/LobeHub/useSkillConnect';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useToolStore } from '@/store/tool';
-import {
-  agentSkillsSelectors,
-  builtinToolSelectors,
-  lobehubSkillStoreSelectors,
-} from '@/store/tool/selectors';
+import { agentSkillsSelectors, lobehubSkillStoreSelectors } from '@/store/tool/selectors';
 import { loadBuiltinSkill } from '@/store/tool/slices/builtin/loadBuiltinSkills';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 import { pluginSelectors } from '@/store/tool/slices/plugin/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { getLocalizedBuiltinSkillDetail, getNoPermissionsTitle } from './localization';
 
@@ -32,6 +32,8 @@ const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
 // Lazy so `SkillDetail`'s static import graph stays free of the agent-navigation
 // chain (`useNavigateToAgent` → chat store); only agent connectors need it.
 const AgentConnectorUsage = lazy(() => import('../AgentConnectorUsage'));
+const ConnectorGate = lazy(() => import('@/features/Integrations/ConnectorGate'));
+const ConnectorPageContent = lazy(() => import('@/features/Integrations/ConnectorPageContent'));
 
 export type ToolDetailType =
   | 'agent-connector'
@@ -51,32 +53,46 @@ const styles = stylex.create({
   },
   header: {
     display: 'flex',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingBlockStart: '20px',
-    paddingBlockEnd: '16px',
+    paddingBlockEnd: densityTokens['--lobe-density-card-padding'],
     paddingInline: '24px',
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorBorderSecondary,
   },
-  name: { fontSize: '16px', fontWeight: 600, color: cssVar.colorText },
-  noPermissions: { padding: '24px', fontSize: '14px', color: cssVar.colorTextTertiary },
+  name: {
+    fontSize: densityTokens['--lobe-density-page-title-font-size'],
+    fontWeight: 600,
+    color: cssVar.colorText,
+  },
+  noPermissions: {
+    padding: '24px',
+    fontSize: densityTokens['--lobe-density-font-size'],
+    color: cssVar.colorTextTertiary,
+  },
   noPermissionsHeader: {
     display: 'flex',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBlockEnd: '8px',
   },
-  noPermissionsTitle: { fontSize: '16px', fontWeight: 600, color: cssVar.colorText },
+  noPermissionsTitle: {
+    fontSize: densityTokens['--lobe-density-page-title-font-size'],
+    fontWeight: 600,
+    color: cssVar.colorText,
+  },
 });
 
 interface SkillDetailProps {
   identifier: string;
   onDelete?: () => void;
   type: ToolDetailType;
+  /** The workspace connector tab the row was opened from. */
+  visibility?: ConnectorVisibility;
 }
 
 /**
@@ -166,7 +182,7 @@ LobehubConnectorAction.displayName = 'LobehubConnectorAction';
  * - 'builtin-skill': renders BuiltinSkill description panel (Artifacts, Task, etc.)
  * - 'builtin'/'plugin'/'mcp-connector': syncs connector entry, renders permission editor
  */
-const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
+const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete, visibility }) => {
   const { t } = useTranslation('plugin');
   const { t: ts } = useTranslation('setting');
 
@@ -181,10 +197,8 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   const syncPluginTools = useToolStore((s) => s.syncPluginTools);
   const syncToolsFromClient = useToolStore((s) => s.syncToolsFromClient);
   const fetchConnectors = useToolStore((s) => s.fetchConnectors);
-  const installBuiltinTool = useToolStore((s) => s.installBuiltinTool);
-  const uninstallBuiltinTool = useToolStore((s) => s.uninstallBuiltinTool);
   const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
-  const connector = useToolStore(connectorSelectors.connectorByIdentifier(identifier));
+  const connector = useToolStore(connectorSelectors.connectorByIdentifier(identifier, visibility));
   // For agent connectors the `identifier` slot carries the connector id; resolve
   // the row from the agent-bound pool to show its owning-agent usage block.
   const agentBoundConnector = useToolStore((s) =>
@@ -192,6 +206,11 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
       ? (s.agentBoundConnectors ?? []).find((c) => c.id === identifier)
       : undefined,
   );
+  // The list loads the agents' connectors, but a detail opened by link (or after a reload)
+  // mounts while the list is hidden, where the list's effects never run.
+  const isAgentBoundInit = useToolStore((s) => s.isAgentBoundInit);
+  const useFetchAgentBoundConnectors = useToolStore((s) => s.useFetchAgentBoundConnectors);
+  const agentBoundSync = useFetchAgentBoundConnectors(type === 'agent-connector');
 
   // Creator attribution for the row-level manage gate: agent skills carry it
   // on the skill row; connector-backed types on the connector row.
@@ -231,9 +250,14 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   // connector. Such a row has no `user_connectors` entry, so the panel falls
   // into the "no configurable permissions" empty state. We offer to upgrade it
   // in place via the connector migration flow instead of leaving a dead end.
-  const legacyPlugin = useToolStore(pluginSelectors.getCustomPluginById(identifier), isEqual);
-  const canMigrateLegacy =
-    (type === 'mcp-connector' || type === 'plugin') && Boolean(legacyPlugin?.customParams?.mcp);
+  const legacyPluginRow = useToolStore(pluginSelectors.getInstalledPluginById(identifier), isEqual);
+  const legacyPlugin = asLegacyMigrationPlugin(legacyPluginRow);
+  const canMigrateLegacy = (type === 'mcp-connector' || type === 'plugin') && Boolean(legacyPlugin);
+  // `syncPluginTools` can leave an endpointless marketplace connector that only
+  // projects the legacy row's tools. It is not a migrated connector yet, so the
+  // detail must still offer the upgrade instead of Refresh/Uninstall.
+  const isLegacyEndpointlessProjection =
+    canMigrateLegacy && !!connector && !hasCallableMcpEndpoint(connector);
 
   // For lobehub-connector: get the server's tool list from the store
   const lobehubServer = useToolStore(lobehubSkillStoreSelectors.getServerByIdentifier(identifier));
@@ -249,12 +273,14 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
     (s) => s.builtinSkills?.find((sk) => sk.identifier === identifier),
     isEqual,
   );
-  const isBuiltinInstalled = useToolStore(builtinToolSelectors.isBuiltinToolInstalled(identifier));
   const { data: builtinSkillContent } = useSWR(
     builtinSkill ? ['builtin-skill-content', identifier] : null,
     async () => (await loadBuiltinSkill(identifier))?.content,
     { revalidateOnFocus: false },
   );
+
+  const connectorPageId: ConnectorPageId | undefined =
+    type === 'lobehub-connector' && hasConnectorPage(identifier) ? identifier : undefined;
 
   const isConnectorType =
     type === 'builtin' ||
@@ -329,22 +355,6 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
     type,
   ]);
 
-  const handleUninstallBuiltin = () => {
-    confirmModal({
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        try {
-          await uninstallBuiltinTool(identifier);
-        } catch (error) {
-          notifyUninstallError(error);
-        }
-      },
-      content: t('store.actions.confirmUninstall'),
-      okText: t('store.actions.uninstall'),
-      title: t('store.actions.uninstall'),
-    });
-  };
-
   const handleDeleteAgentSkill = () => {
     confirmModal({
       okButtonProps: { danger: true },
@@ -412,28 +422,35 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   if (type === 'agent-connector') {
     const usageAgentId = agentBoundConnector?.agentId;
     return (
-      <ConnectorDetail
-        connectorId={identifier}
-        agentTitle={agentDisplayName({
-          name: agentBoundConnector?.agentName,
-          title: agentBoundConnector?.agentTitle,
-        })}
-        middleSlot={
-          usageAgentId ? (
-            <Suspense fallback={null}>
-              <AgentConnectorUsage
-                agentAvatar={agentBoundConnector?.agentAvatar}
-                agentId={usageAgentId}
-                agentTitle={agentDisplayName({
-                  name: agentBoundConnector?.agentName,
-                  title: agentBoundConnector?.agentTitle,
-                })}
-              />
-            </Suspense>
-          ) : undefined
-        }
-        onDelete={onDelete}
-      />
+      <AsyncBoundary
+        data={isAgentBoundInit || undefined}
+        error={agentBoundSync.error}
+        isLoading={agentBoundSync.isValidating}
+        onRetry={agentBoundSync.revalidate}
+      >
+        <ConnectorDetail
+          connectorId={identifier}
+          agentTitle={agentDisplayName({
+            name: agentBoundConnector?.agentName,
+            title: agentBoundConnector?.agentTitle,
+          })}
+          middleSlot={
+            usageAgentId ? (
+              <Suspense fallback={null}>
+                <AgentConnectorUsage
+                  agentAvatar={agentBoundConnector?.agentAvatar}
+                  agentId={usageAgentId}
+                  agentTitle={agentDisplayName({
+                    name: agentBoundConnector?.agentName,
+                    title: agentBoundConnector?.agentTitle,
+                  })}
+                />
+              </Suspense>
+            ) : undefined
+          }
+          onDelete={onDelete}
+        />
+      </AsyncBoundary>
     );
   }
 
@@ -449,29 +466,6 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
                 <div {...stylex.props(styles.description)}>{builtinSkillDescription}</div>
               )}
             </div>
-          </div>
-          <div style={{ display: 'flex', flexShrink: 0, gap: 8 }}>
-            {isBuiltinInstalled ? (
-              <ManageTooltip title={manageTooltip}>
-                <Button
-                  danger
-                  disabled={!canEdit || !canManage}
-                  size="small"
-                  onClick={handleUninstallBuiltin}
-                >
-                  {t('store.actions.uninstall')}
-                </Button>
-              </ManageTooltip>
-            ) : (
-              <Button
-                disabled={!canCreate}
-                icon={<Plus size={14} />}
-                size="small"
-                onClick={() => installBuiltinTool(identifier)}
-              >
-                {t('store.actions.install')}
-              </Button>
-            )}
           </div>
         </div>
         {builtinSkillContent && (
@@ -492,7 +486,7 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
     );
   }
 
-  if (noManifest || !connector) {
+  if (noManifest || !connector || isLegacyEndpointlessProjection) {
     return (
       <div {...stylex.props(styles.noPermissions)}>
         <div {...stylex.props(styles.noPermissionsHeader)}>
@@ -519,18 +513,21 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
         {canMigrateLegacy
           ? ts('tools.legacyConnector.upgradeDesc')
           : ts('tools.noConfigurablePermissions')}
+        {connectorPageId && (
+          <div style={{ marginBlockStart: 24 }}>
+            <Suspense fallback={null}>
+              <ConnectorPageContent identifier={connectorPageId} />
+            </Suspense>
+          </div>
+        )}
         {canMigrateLegacy && legacyPlugin && (
           <CustomConnectorModal
             legacyPlugin={legacyPlugin}
             open={migrateOpen}
             onClose={() => setMigrateOpen(false)}
-            onEditSuccess={async () => {
+            onEditSuccess={() => {
               setMigrateOpen(false);
               setNoManifest(false);
-              // The migration created a `user_connectors` row keyed by the same
-              // identifier; refresh so this panel resolves it and swaps to the
-              // permission editor.
-              await fetchConnectors();
             }}
           />
         )}
@@ -542,6 +539,13 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
     <ConnectorDetail
       connectorId={connector.id}
       lifecycleActions={renderLobehubConnectorAction(() => setNoManifest(true))}
+      middleSlot={
+        connectorPageId ? (
+          <Suspense fallback={null}>
+            <ConnectorPageContent identifier={connectorPageId} />
+          </Suspense>
+        ) : undefined
+      }
       onDelete={onDelete}
     />
   );
@@ -549,4 +553,25 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
 
 SkillDetail.displayName = 'SkillDetail';
 
-export default SkillDetail;
+/** These pages also manage an integration, so they have content before an account connects. */
+const SkillDetailEntry = memo<SkillDetailProps>((props) =>
+  props.type === 'lobehub-connector' && hasConnectorPage(props.identifier) ? (
+    <Suspense
+      fallback={
+        <div style={{ padding: 24 }}>
+          <Skeleton.Text rows={6} />
+        </div>
+      }
+    >
+      <ConnectorGate identifier={props.identifier}>
+        <SkillDetail {...props} />
+      </ConnectorGate>
+    </Suspense>
+  ) : (
+    <SkillDetail {...props} />
+  ),
+);
+
+SkillDetailEntry.displayName = 'SkillDetailEntry';
+
+export default SkillDetailEntry;

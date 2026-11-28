@@ -63,6 +63,8 @@ interface ProjectStore extends ProjectStoreState {
     id?: string;
     identifier?: string;
     name: string;
+    /** More repositories the project's environment checks out beside `repository`. */
+    additionalRepositories?: { defaultBranch?: string; url: string }[];
     /** GitHub repository to attach as the project's environment, in the same write. */
     repository?: { defaultBranch?: string; name: string; url: string };
     slug?: string;
@@ -229,6 +231,8 @@ export const useProjectStore = createWithEqualityFn<ProjectStore>()(
         await projectService.delete(id);
         projectEntity.remove(id);
         void refreshList();
+        // Its Channels stay, now standalone and named after it: show them in the home sidebar.
+        refreshChannelListIfEnabled();
       },
       refreshProjectList: async () => {
         await refreshList();

@@ -1,4 +1,10 @@
-import type { DeviceMetricSample } from '@lobechat/types';
+import type { McpElicitationCall } from '@lobechat/mcp-elicitation/types';
+import type {
+  AgentRunCredential,
+  CodexCollaborationMode,
+  DeviceMetricSample,
+  HeteroPermissionMode,
+} from '@lobechat/types';
 
 // ─── Device Info ───
 
@@ -44,6 +50,20 @@ export interface DeviceSystemInfo {
    * `codex-app-server-v1` runs `lh hetero exec --codex-app-server` with native turn provenance.
    */
   supportedAgentRuntimes?: string[];
+  /**
+   * MCP features this client's tunneled MCP calls support; absent on older
+   * clients. `'apps'`: it runs a call with the options of
+   * {@link GatewayMcpCallOptions} and answers the `readMcpUiResource` RPC, so
+   * the server may keep the MCP Apps view a result names and relay the view's
+   * own calls and reads. A client without it gets plain results only.
+   */
+  supportedMcpFeatures?: GatewayMcpFeature[];
+  /**
+   * Tunneled tool-call kinds this client runs beyond plain `'tool'` calls
+   * (e.g. `'mcp'`); absent on older clients. The desktop app runs MCP calls
+   * without reporting it — the server routes those to it by channel.
+   */
+  supportedToolCallTypes?: GatewayToolCallType[];
   /** Opt-in tool identifiers supported by this client; absent on older clients. */
   supportedTools?: string[];
   userDataPath: string;
@@ -104,7 +124,35 @@ export interface DeviceMetricsMessage {
   type: 'device_metrics';
 }
 
+/**
+ * The late, final result of a tool call whose reply said the device would keep
+ * watching it (`state.completionWatch: true`). Keyed by the call's operation
+ * and tool call ids; the gateway forwards it only for a call the server
+ * registered for completion, and answers with a {@link ToolCallCompletionAckMessage}.
+ */
+export interface ToolCallCompletionMessage {
+  operationId: string;
+  result: ToolCallResponseMessage['result'];
+  toolCallId: string;
+  type: 'tool_call_completion';
+}
+
 // Server → Client
+/**
+ * - `delivered`: the server took the result; stop.
+ * - `rejected`: nobody wants it any more (expired, unknown, refused); stop.
+ * - `retry`: the server could not take it yet; send the same message again later.
+ */
+export type ToolCallCompletionAckStatus = 'delivered' | 'rejected' | 'retry';
+
+export interface ToolCallCompletionAckMessage {
+  operationId: string;
+  reason?: string;
+  status: ToolCallCompletionAckStatus;
+  toolCallId: string;
+  type: 'tool_call_completion_ack';
+}
+
 export interface DeviceMetricsAckMessage {
   accepted: number;
   batchId: string;
@@ -128,6 +176,25 @@ export interface AuthExpiredMessage {
   type: 'auth_expired';
 }
 
+/** An MCP feature a device client reports in `supportedMcpFeatures`. */
+export type GatewayMcpFeature = 'apps';
+
+/**
+ * How a tunneled MCP call runs, as `MCPService.callTool` runs one in the
+ * server: whether MCP Apps are on for the user, and whether an MCP App view
+ * (or a thread entrypoint) made it. Sent only to a client that reports `'apps'`
+ * in `supportedMcpFeatures`; an older one ignores the field and runs the call
+ * as a plain model call.
+ */
+export interface GatewayMcpCallOptions {
+  /** An MCP App view's `tools/call`: only tools visible to the app run, media stays inline. */
+  fromApp?: boolean;
+  /** A thread entrypoint's call: only a tool that declares one runs, with `{}`. */
+  fromEntrypoint?: boolean;
+  /** The user's `mcp_apps` flag: the session announces MCP Apps, a result names its view. */
+  mcpApps?: boolean;
+}
+
 /**
  * Stdio MCP connection params forwarded to the device for a tunneled MCP tool
  * call. The cloud server can't spawn the user's local MCP binary, so the
@@ -136,7 +203,10 @@ export interface AuthExpiredMessage {
 export interface GatewayMcpStdioParams {
   args: string[];
   command: string;
+  elicitation?: McpElicitationCall;
   env?: Record<string, string>;
+  /** How the call runs; see {@link GatewayMcpCallOptions}. */
+  mcpCall?: GatewayMcpCallOptions;
   name: string;
   type: 'stdio';
 }
@@ -149,7 +219,10 @@ export interface GatewayMcpStdioParams {
  */
 export interface GatewayMcpHttpParams {
   auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
+  elicitation?: McpElicitationCall;
   headers?: Record<string, string>;
+  /** How the call runs; see {@link GatewayMcpCallOptions}. */
+  mcpCall?: GatewayMcpCallOptions;
   name: string;
   type: 'http';
   url: string;
@@ -169,7 +242,40 @@ export type GatewayMcpParams = GatewayMcpStdioParams | GatewayMcpHttpParams;
  */
 export type GatewayToolCallType = 'tool' | 'mcp';
 
+/**
+ * Server → gateway registration for a call's late result (see
+ * {@link ToolCallCompletionMessage}). The gateway posts the device's completion
+ * to `callbackUrl` with its service token, so only the server may set it.
+ */
+export interface GatewayToolCallCompletion {
+  callbackUrl: string;
+  toolCallId: string;
+  /** How long the gateway keeps the registration; later completions are rejected. */
+  ttlMs: number;
+}
+
+/**
+ * Gateway → server body posted to {@link GatewayToolCallCompletion.callbackUrl}.
+ * `userId` / `workspaceId` are the principal the call was dispatched under.
+ */
+export interface GatewayToolCallCompletionCallback {
+  deviceId: string;
+  operationId: string;
+  result: ToolCallResponseMessage['result'];
+  toolCallId: string;
+  userId?: string;
+  workspaceId?: string;
+}
+
 export interface ToolCallRequestMessage {
+  /**
+   * Present when the server can take this call's final result later, as a
+   * {@link ToolCallCompletionMessage}: a `runCommand` that outlives its wait
+   * window then parks the run instead of having the model poll. The device
+   * opts in per call by answering with `state.completionWatch: true`; a device
+   * that ignores the field keeps the old reply-only behaviour.
+   */
+  completion?: { toolCallId: string };
   /** Operation that triggered the call, propagated by the gateway for tracing. */
   operationId?: string;
   requestId: string;
@@ -278,6 +384,11 @@ export interface AgentRunRequestMessage {
    * set it; an older device ignores it.
    */
   claudeCodeEntrypoint?: string;
+  /**
+   * Codex Plan switch, forwarded into the same
+   * envelope. Sent only to a device advertising `codex-collaboration-mode-v1`.
+   */
+  collaborationMode?: CodexCollaborationMode;
   cwd?: string;
   /**
    * Image attachments from the user message, as URLs the device can fetch
@@ -294,15 +405,28 @@ export interface AgentRunRequestMessage {
   ingestWorkspaceId?: string;
   jwt: string;
   operationId: string;
-  prompt: string;
   /**
    * Full system context used only when native resume fails and the device CLI
    * retries with a fresh session. Optional for compatibility with older
    * servers and devices. The gateway relay must preserve this optional field;
    * older deployments safely degrade to a fresh retry without recovery history.
    */
+  /**
+   * Claude Code permission mode, forwarded into
+   * the `lh hetero exec` input envelope. Absent: every action is allowed.
+   */
+  permissionMode?: HeteroPermissionMode;
+  prompt: string;
   resumeFallbackSystemContext?: string;
   resumeSessionId?: string;
+  /**
+   * Credential the server hands this run instead of installing it on the
+   * device (Claude Code only). The device spawns the run with it, never writes
+   * it to disk, and it outranks an installed credential and account routing.
+   * A secret: never log, persist or echo this field or a message holding it.
+   * Optional — omitted for runs on the device's own login and older servers.
+   */
+  runCredential?: AgentRunCredential;
   /**
    * Static context injected before the user prompt (workspace conventions,
    * selected context). The desktop sends it to `lh hetero exec` as the first
@@ -508,6 +632,7 @@ export type ClientMessage =
   | MessageApiResponseMessage
   | RpcResponseMessage
   | SystemInfoResponseMessage
+  | ToolCallCompletionMessage
   | ToolCallResponseMessage
   | TunnelClientFrame;
 export type ServerMessage =
@@ -520,6 +645,7 @@ export type ServerMessage =
   | MessageApiRequestMessage
   | RpcRequestMessage
   | SystemInfoRequestMessage
+  | ToolCallCompletionAckMessage
   | ToolCallRequestMessage
   | TunnelServerFrame;
 

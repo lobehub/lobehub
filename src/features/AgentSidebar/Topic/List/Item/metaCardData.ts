@@ -80,9 +80,10 @@ export const getCiVisual = (status?: DeviceGitPullRequestCiStatus): CiVisual => 
 };
 
 /**
- * Read the git / worktree / linked-PR context off a topic's persisted
+ * Read the git / worktree context off a topic's persisted
  * `workingDirectoryConfig`. Returns `undefined` when the topic carries no git
- * context, so the caller can skip the hover card entirely (no probe).
+ * context, so the caller can skip the hover card entirely (no probe). A topic's
+ * PRs come from its Work rows, not from this snapshot.
  */
 export const getTopicMetaCard = (metadata: ChatTopicMetadata | undefined) => {
   const config = metadata?.workingDirectoryConfig;
@@ -96,7 +97,6 @@ export const getTopicMetaCard = (metadata: ChatTopicMetadata | undefined) => {
   return {
     branch: git.branch,
     detached: git.detached,
-    pullRequest: git.github?.pullRequest ?? undefined,
     repoName: sourcePath ? getWorkingDirectoryName(sourcePath) : undefined,
     repoType: getConfigRepoType(config),
     worktreeName: isWorktree && effectivePath ? getWorkingDirectoryName(effectivePath) : undefined,

@@ -1,8 +1,8 @@
 // @vitest-environment node
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { users, workspaces, workspaceUserSettings } from '../../schemas';
+import { users, workspaceMembers, workspaces, workspaceUserSettings } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { WorkspaceUserSettingsModel } from '../workspaceUserSettings';
 
@@ -13,6 +13,7 @@ const userA = 'ws-us-user-a';
 const userB = 'ws-us-user-b';
 
 const cleanup = async () => {
+  await serverDB.delete(workspaceMembers);
   await serverDB.delete(workspaceUserSettings);
   await serverDB.delete(workspaces);
   await serverDB.delete(users);
@@ -237,5 +238,111 @@ describe('WorkspaceUserSettingsModel', () => {
 
     await serverDB.delete(users);
     expect(await model.get()).toBeUndefined();
+  });
+
+  describe('initializeSidebar', () => {
+    it('adds the recommended Agents to a new member’s sidebar, unpinned', async () => {
+      const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+
+      const result = await model.initializeSidebar({ listIds: ['rec-1', 'rec-2'] });
+
+      expect(result).toEqual({
+        sidebarAgentVisibilityOverrides: { 'rec-1': true, 'rec-2': true },
+        sidebarInitialized: true,
+      });
+      expect(await model.getPreference()).toEqual(result);
+    });
+
+    it('never overrides a sidebar choice the member already made', async () => {
+      const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+      await model.updatePreference({ sidebarAgentVisibilityOverrides: { 'rec-1': false } });
+
+      await model.initializeSidebar({ listIds: ['rec-1', 'rec-2'] });
+
+      expect((await model.getPreference()).sidebarAgentVisibilityOverrides).toEqual({
+        'rec-1': false,
+        'rec-2': true,
+      });
+    });
+
+    it('appends team pins after an existing member’s own pins, once', async () => {
+      const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+      await model.updatePreference({
+        sidebarHiddenGroupIds: ['g'],
+        sidebarPinnedItemIds: ['mine', 'team-2'],
+      });
+
+      await model.initializeSidebar({ pinIds: ['team-1', 'team-2'] });
+      // A later call — for example after admins change the list — is a no-op.
+      await model.initializeSidebar({ listIds: ['rec-3'], pinIds: ['team-3'] });
+
+      expect(await model.getPreference()).toEqual({
+        sidebarHiddenGroupIds: ['g'],
+        sidebarInitialized: true,
+        sidebarPinnedItemIds: ['mine', 'team-2', 'team-1'],
+      });
+    });
+
+    it('leaves the member not set up while there is nothing to add', async () => {
+      const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+
+      expect(await model.initializeSidebar({})).toEqual({});
+      expect(await model.get()).toBeUndefined();
+    });
+
+    it('never loses the first setup to a preference write that read before it', async () => {
+      const setup = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+      const write = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+      // The setup commits right after the write has read the (still empty)
+      // preference — the interleaving two concurrent first writes can take.
+      // A write that reads under the row lock never gives the setup that
+      // chance; the setup then simply runs after it.
+      const read = write.getPreference;
+      let setupRan = false;
+      vi.spyOn(write, 'getPreference').mockImplementation(async () => {
+        const stale = await read();
+        await setup.initializeSidebar({ listIds: ['rec-1'] });
+        setupRan = true;
+        return stale;
+      });
+
+      await write.updatePreference({ sidebarPinnedItemIds: ['mine'] });
+      if (!setupRan) await setup.initializeSidebar({ listIds: ['rec-1'] });
+
+      expect(await setup.getPreference()).toEqual({
+        sidebarAgentVisibilityOverrides: { 'rec-1': true },
+        sidebarInitialized: true,
+        sidebarPinnedItemIds: ['mine'],
+      });
+    });
+
+    it('marks the member as set up when nothing can ever be added', async () => {
+      const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+
+      expect(await model.initializeSidebar({ final: true, pinIds: [] })).toEqual({
+        sidebarInitialized: true,
+      });
+      expect(await model.getPreference()).toEqual({ sidebarInitialized: true });
+    });
+  });
+
+  describe('getJoinedAt', () => {
+    it('reads the member’s join date, and nothing for a non-member or a removed member', async () => {
+      const joinedAt = new Date('2026-01-02T03:04:05Z');
+      await serverDB.insert(workspaceMembers).values([
+        { joinedAt, userId: userA, workspaceId },
+        { deletedAt: new Date(), userId: userB, workspaceId },
+      ]);
+
+      expect(
+        await new WorkspaceUserSettingsModel(serverDB, userA, workspaceId).getJoinedAt(),
+      ).toEqual(joinedAt);
+      expect(
+        await new WorkspaceUserSettingsModel(serverDB, userB, workspaceId).getJoinedAt(),
+      ).toBeUndefined();
+      expect(
+        await new WorkspaceUserSettingsModel(serverDB, userA, 'ws-other').getJoinedAt(),
+      ).toBeUndefined();
+    });
   });
 });

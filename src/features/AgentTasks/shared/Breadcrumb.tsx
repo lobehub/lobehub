@@ -11,8 +11,21 @@ import { useTaskStore } from '@/store/task';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { styles } from './style';
+import type { TaskCollection } from './taskCollection';
 import { taskDetailPath } from './taskDetailPath';
+import {
+  useTaskListCrumbTarget,
+  useTaskListOriginState,
+  useTaskListRootCrumb,
+} from './taskListOrigin';
 import { useAgentDisplayMeta } from './useAgentDisplayMeta';
+
+/** The root crumb is named after the list tab it leads back to, as the tab strip names it. */
+const ROOT_CRUMB_LABEL_KEYS = {
+  mine: 'taskList.mine.title',
+  scheduled: 'tab.scheduled',
+  tasks: 'taskList.all',
+} as const satisfies Record<TaskCollection, string>;
 
 interface BreadcrumbProps {
   taskId?: string;
@@ -22,6 +35,11 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
   const { t } = useTranslation('chat');
   const { aid } = useParams<{ aid?: string }>();
   const agentMeta = useAgentDisplayMeta(aid);
+  // Crumbs lead back to the list the detail was opened from, filters included,
+  // when that list is the crumb's own list; otherwise to the bare list.
+  const rootCrumb = useTaskListRootCrumb();
+  const agentTasksTarget = useTaskListCrumbTarget(aid ? `/agent/${aid}/tasks` : '/tasks');
+  const taskListOriginState = useTaskListOriginState();
   const taskTitle = useTaskStore((s) =>
     taskId ? s.taskDetailMap[s.taskRefIndex?.[taskId] ?? taskId]?.name : undefined,
   );
@@ -54,9 +72,9 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
     }),
   );
 
-  const allTasksLabel = (
+  const rootLabel = (
     <Text color={'inherit'} style={{ whiteSpace: 'nowrap' }} weight={500}>
-      {t('taskList.all')}
+      {t(ROOT_CRUMB_LABEL_KEYS[rootCrumb.collection])}
     </Text>
   );
 
@@ -84,14 +102,21 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
     agentCrumb && taskId
       ? {
           ...agentCrumb,
-          title: <WorkspaceLink to={`/agent/${aid}/tasks`}>{agentCrumb.title}</WorkspaceLink>,
+          title: (
+            <WorkspaceLink escape={agentTasksTarget.escape} to={agentTasksTarget.to}>
+              {agentCrumb.title}
+            </WorkspaceLink>
+          ),
         }
       : agentCrumb;
 
   const ancestorCrumbs = ancestors.map(({ id, identifier, agentId, name }) => ({
     key: id,
     title: (
-      <WorkspaceLink to={taskDetailPath(identifier, agentId ?? undefined, name)}>
+      <WorkspaceLink
+        state={taskListOriginState}
+        to={taskDetailPath(identifier, agentId ?? undefined, name)}
+      >
         <Text color={'inherit'} weight={500}>
           {identifier}
         </Text>
@@ -149,9 +174,11 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
               {
                 title:
                   taskId || agentCrumbNode ? (
-                    <WorkspaceLink to={'/tasks'}>{allTasksLabel}</WorkspaceLink>
+                    <WorkspaceLink escape={rootCrumb.escape} to={rootCrumb.to}>
+                      {rootLabel}
+                    </WorkspaceLink>
                   ) : (
-                    allTasksLabel
+                    rootLabel
                   ),
               },
             ]),

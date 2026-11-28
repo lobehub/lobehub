@@ -2,6 +2,7 @@ import qs from 'query-string';
 import urlJoin from 'url-join';
 
 import type { CrawlImpl, CrawlSuccessResult } from '../type';
+import { assertNotChallengePage } from '../utils/challengePage';
 import { PageNotFoundError, toFetchError } from '../utils/errorType';
 import { htmlToMarkdown } from '../utils/htmlToMarkdown';
 import { createHTTPStatusError } from '../utils/response';
@@ -74,13 +75,9 @@ export const browserless: CrawlImpl = async (url, { filterOptions }) => {
   const html = await res.text();
   const result = htmlToMarkdown(html, { filterOptions, url });
 
-  if (
-    !!result.content &&
-    result.content.length > 100 &&
-    result.title &&
-    // "Just a moment..." indicates being blocked by CloudFlare
-    result.title.trim() !== 'Just a moment...'
-  ) {
+  assertNotChallengePage(result);
+
+  if (!!result.content && result.content.length > 100 && result.title) {
     return {
       content: result.content,
       contentType: 'text',

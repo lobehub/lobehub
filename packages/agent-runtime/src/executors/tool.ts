@@ -15,12 +15,22 @@ import type {
   InstructionExecutor,
 } from '../types';
 import {
+  countTrailingTodoCalls,
   extractActivatedSkillsFromMessages,
   extractTodosFromMessages,
+  isTodoMutationCall,
+  normalizeTodosState,
   redactResultForEvents,
 } from '../utils';
+import {
+  applyAgentFileDiscovery,
+  createAgentFileBatchSeen,
+  hasSkillsTool,
+} from '../utils/discoveredAgentFiles';
 import { selectEffectiveToolManifestMap, selectToolSourceMap } from '../utils/operationToolSet';
 import { settleAbortedToolRows } from './abortedToolRows';
+import { persistActivatedTools } from './persistActivatedTools';
+import { resetUnresolvedToolFeedback } from './resolveTools';
 import {
   createToolMessage,
   isBlockedBeforeExecution,
@@ -107,7 +117,8 @@ const readSerializeKey = (tool: ChatToolPayload, argName: string): string | unde
  * entry, so they are read from the same effective map the run context exposes
  * to executors.
  *
- * - every call to an API marked `ordered` shares one lane;
+ * - every call to an API marked `ordered` shares one lane, and so does every
+ *   todo mutation (each must read the list the previous one produced);
  * - calls to one tool that name the same resource through `serializeBy` (the
  *   same file path) share a lane, across that tool's APIs;
  * - everything else gets a lane of its own.
@@ -126,7 +137,7 @@ const planBatchLanes = (
       Array<{ name?: string; ordered?: boolean; serializeBy?: string }> | undefined;
     const api = apis?.find((item) => item.name === tool.apiName);
 
-    if (api?.ordered === true) {
+    if (api?.ordered === true || isTodoMutationCall(tool.identifier, tool.apiName)) {
       ordered.push(tool);
       continue;
     }
@@ -190,6 +201,7 @@ const createRunContext = ({
     // a best-effort mirror that only exists once `createPlan` has run, so the
     // tool-execution side must not treat it as the source of truth.
     currentTodos: extractTodosFromMessages(state.messages)?.items,
+    todoCallStreak: countTrailingTodoCalls(state.messages, new Set([tool.id])),
     effectiveManifestMap: buildEffectiveManifestMap(state),
     groupId: host.operation.groupId ?? state.origin?.groupId,
     messageId: state.origin?.sourceMessageId,
@@ -350,14 +362,7 @@ const pauseForTools = async ({
   instruction?: AgentInstruction;
   reason: string;
   state: AgentState;
-  /**
-   * `tool_call_id → tool message id`, for pending tools whose row the server has
-   * already created (today: deferred async tools such as `callSubAgent`). Tells
-   * the client to pull those rows in — without it the parked parent's placeholder
-   * never reaches the store, and anything addressed at it silently no-ops.
-   * Same optional field the human-approval pause chunk carries; legacy consumers
-   * ignore it.
-   */
+  /** Exact rows for this parked invocation, also persisted for scoped completion. */
   toolMessageIds?: Record<string, string>;
   toolsCalling: ChatToolPayload[];
 }) => {
@@ -379,6 +384,7 @@ const pauseForTools = async ({
     reason,
   };
   newState.pendingToolsCalling = toolsCalling;
+  newState.pendingToolMessageIds = toolMessageIds;
 
   // Same rule as the human-approval pause: an approve resume seeds an assistant
   // placeholder for its first `call_llm`, but an approved async tool (a group
@@ -409,49 +415,10 @@ const pauseForTools = async ({
   };
 };
 
-const persistActivatedTools = ({
-  effectiveManifestMap,
-  newState,
-  results,
-  stepCount,
-}: {
-  effectiveManifestMap: Record<string, any>;
-  newState: AgentState;
-  results: ToolResultEntry[];
-  stepCount: number;
-}) => {
-  const existingIds = new Set((newState.activatedStepTools ?? []).map((tool) => tool.id));
-
-  for (const result of results) {
-    const discoveredTools = result.data.state?.activatedTools as
-      Array<{ identifier: string }> | undefined;
-    if (!discoveredTools?.length) continue;
-
-    // The set is updated inside the filter, not after mapping the batch: two
-    // results in the same step (or one result listing the same tool twice)
-    // would otherwise both pass and be appended twice.
-    const newActivations = discoveredTools
-      .filter((tool) => {
-        if (existingIds.has(tool.identifier)) return false;
-        existingIds.add(tool.identifier);
-        return true;
-      })
-      .map((tool) => ({
-        activatedAtStep: stepCount,
-        id: tool.identifier,
-        manifest: effectiveManifestMap[tool.identifier],
-        source: 'discovery' as const,
-      }));
-
-    if (newActivations.length > 0) {
-      newState.activatedStepTools = [...(newState.activatedStepTools ?? []), ...newActivations];
-    }
-  }
-};
-
 export const callTool =
   (host: AgentRuntimeHost): InstructionExecutor =>
-  async (instruction, state, runtimeContext) => {
+  async (instruction, entryState, runtimeContext) => {
+    const state = resetUnresolvedToolFeedback(entryState);
     const { payload } = instruction as Extract<AgentInstruction, { type: 'call_tool' }>;
     const tools = requireToolTransport(host);
     const tool = payload.toolCalling;
@@ -542,7 +509,11 @@ export const callTool =
         });
       }
 
-      const executionResult = execution.result;
+      const executionResult = applyAgentFileDiscovery(execution.result, {
+        blocked: execution.resultBlocked,
+        seen: createAgentFileBatchSeen(),
+        skillsToolAvailable: hasSkillsTool(runContext.effectiveManifestMap),
+      });
       const executionTime = executionResult.executionTime ?? 0;
       const isSuccess = executionResult.success;
 
@@ -673,7 +644,6 @@ export const callTool =
         results: [
           {
             data: executionResult,
-            executionTime,
             isSuccess,
             toolCall: tool,
             toolCallId: tool.id,
@@ -754,7 +724,8 @@ export const callTool =
 
 export const callToolsBatch =
   (host: AgentRuntimeHost): InstructionExecutor =>
-  async (instruction, state, runtimeContext) => {
+  async (instruction, entryState, runtimeContext) => {
+    const state = resetUnresolvedToolFeedback(entryState);
     const { payload } = instruction as Extract<AgentInstruction, { type: 'call_tools_batch' }>;
     const parentMessageId = payload.parentMessageId as string;
     const toolsCalling = payload.toolsCalling as ChatToolPayload[];
@@ -838,6 +809,7 @@ export const callToolsBatch =
     }
 
     const toolResults: ToolResultEntry[] = [];
+    const agentFileSeen = createAgentFileBatchSeen();
     /**
      * Calls this batch could not settle because the operation was aborted
      * mid-flight. Tracked separately from `deferredTools` (which are alive and
@@ -848,6 +820,28 @@ export const callToolsBatch =
     // `tool_call_id → placeholder message id` for the deferred tools in this batch.
     const deferredToolMessageIds: Record<string, string> = {};
     const toolsToExecute = serverTools.length > 0 ? serverTools : toolsCalling;
+    // `state.messages` is the snapshot from before the batch, so a todo call
+    // rebuilt from it alone would miss its siblings' writes: `clearTodos` then
+    // `createTodos` resurrected the cleared items, and `createTodos` then
+    // `updateTodos(index: 0)` edited a stale item. Todo calls share the ordered
+    // lane, so each reads the list (and streak) the previous one left behind —
+    // through both `currentTodos` (server) and `stepContext.todos`, which the
+    // client transport hands to the lobe-agent client executor.
+    let batchTodos: ReturnType<typeof normalizeTodosState>;
+    // Streak per todo call in emission order: todo siblings before it extend
+    // the history streak, any other call before it resets it.
+    const todoStreaks = new Map<string, number>();
+    let todoStreak = countTrailingTodoCalls(
+      state.messages,
+      new Set(toolsCalling.map((tool) => tool.id)),
+    );
+    for (const tool of toolsCalling) {
+      if (!isTodoMutationCall(tool.identifier, tool.apiName)) {
+        todoStreak = 0;
+        continue;
+      }
+      todoStreaks.set(tool.id, todoStreak++);
+    }
 
     const runOne = async (tool: ChatToolPayload) => {
       const existingMessageId = Object.hasOwn(existingToolMessageIds, tool.id)
@@ -863,6 +857,14 @@ export const callToolsBatch =
         tool,
         toolMessageId: existingMessageId,
       });
+      const isTodoCall = isTodoMutationCall(tool.identifier, tool.apiName);
+      if (isTodoCall) {
+        if (batchTodos) {
+          runContext.currentTodos = batchTodos.items;
+          runContext.stepContext = { ...runContext.stepContext, todos: batchTodos };
+        }
+        runContext.todoCallStreak = todoStreaks.get(tool.id);
+      }
 
       await host.transports.stream.publishEvent({
         data: { parentMessageId, toolCalling: tool },
@@ -899,9 +901,17 @@ export const callToolsBatch =
           return;
         }
 
-        const executionResult = execution.result;
+        const executionResult = applyAgentFileDiscovery(execution.result, {
+          blocked: execution.resultBlocked,
+          seen: agentFileSeen,
+          skillsToolAvailable: hasSkillsTool(runContext.effectiveManifestMap),
+        });
         const executionTime = executionResult.executionTime ?? 0;
         const isSuccess = executionResult.success;
+        if (isTodoCall) {
+          const todos = normalizeTodosState(executionResult.state?.todos, nowIso());
+          if (todos) batchTodos = todos;
+        }
 
         await host.transports.stream.publishEvent({
           data: {

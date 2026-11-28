@@ -17,6 +17,22 @@ export class HumanApprovalAlreadyResolvedError extends Error {
   }
 }
 
+type InterventionStatus = NonNullable<MessagePluginItem['intervention']>['status'];
+
+/** One row of `listToolCallIndexByTopic`. */
+export interface ToolCallIndexItem extends Pick<
+  MessagePluginItem,
+  'apiName' | 'arguments' | 'id' | 'identifier' | 'intervention' | 'toolCallId'
+> {
+  /** Only the operation and tool-state sequence keys of the tool message metadata. */
+  metadata: Pick<
+    MessageMetadata,
+    'heterogeneousToolStateOperationId' | 'heterogeneousToolStateSeq' | 'operationId'
+  >;
+  /** Only the requested intervention key of the plugin state. */
+  state?: Record<string, unknown>;
+}
+
 export class MessagePluginStore extends MessageScope {
   private readonly lookups: MessageLookupQueries;
 
@@ -162,6 +178,72 @@ export class MessagePluginStore extends MessageScope {
       type: row.type ?? 'default',
       userId: row.userId,
     }));
+  };
+
+  /**
+   * A topic's tool-call index in the same first-seen order as
+   * `listMessagePluginsByTopic`, without the payloads the index never reads.
+   *
+   * The heterogeneous persistence handler rebuilds its toolCallId → message id
+   * map and pending-intervention state from this on every event batch, so it
+   * runs once per batch over the whole topic. Full plugin rows there returned
+   * every tool's arguments and state each time (≈3.6 MB per call on busy
+   * topics). This projection keeps only:
+   * - `state`: just `interventionStateKey`, absent when the row has none;
+   * - `arguments`: only on rows carrying that key, the only rows rebuilt into
+   *   intervention requests;
+   * - `metadata`: just the operation and tool-state sequence keys.
+   */
+  listToolCallIndexByTopic = async (
+    topicId: string,
+    { interventionStateKey }: { interventionStateKey: string },
+  ): Promise<ToolCallIndexItem[]> => {
+    // `jsonb_exists` instead of `state -> key IS NOT NULL`: see the serverless
+    // engine note in `spine.ts`.
+    const hasInterventionState = sql`COALESCE(jsonb_exists(${messagePlugins.state}, ${interventionStateKey}::text), false)`;
+
+    const rows = await this.db
+      .select({
+        apiName: messagePlugins.apiName,
+        arguments: sql<
+          string | null
+        >`CASE WHEN ${hasInterventionState} THEN ${messagePlugins.arguments} END`,
+        id: messagePlugins.id,
+        identifier: messagePlugins.identifier,
+        intervention: messagePlugins.intervention,
+        interventionState: sql<unknown>`${messagePlugins.state} -> ${interventionStateKey}::text`,
+        operationId: sql<unknown>`${messages.metadata} -> 'operationId'`,
+        toolCallId: messagePlugins.toolCallId,
+        toolStateOperationId: sql<unknown>`${messages.metadata} -> 'heterogeneousToolStateOperationId'`,
+        toolStateSeq: sql<unknown>`${messages.metadata} -> 'heterogeneousToolStateSeq'`,
+      })
+      .from(messagePlugins)
+      .innerJoin(messages, eq(messagePlugins.id, messages.id))
+      .where(and(eq(messages.topicId, topicId), this.ownership(), this.pluginsOwnership()))
+      .orderBy(asc(messages.createdAt), asc(messages.id));
+
+    return rows.map((row) => {
+      const metadata: ToolCallIndexItem['metadata'] = {};
+      if (typeof row.operationId === 'string') metadata.operationId = row.operationId;
+      if (typeof row.toolStateOperationId === 'string')
+        metadata.heterogeneousToolStateOperationId = row.toolStateOperationId;
+      if (typeof row.toolStateSeq === 'number')
+        metadata.heterogeneousToolStateSeq = row.toolStateSeq;
+
+      return {
+        apiName: row.apiName ?? undefined,
+        arguments: row.arguments ?? undefined,
+        id: row.id,
+        identifier: row.identifier ?? undefined,
+        intervention: row.intervention ?? undefined,
+        metadata,
+        state:
+          row.interventionState === null || row.interventionState === undefined
+            ? undefined
+            : { [interventionStateKey]: row.interventionState },
+        toolCallId: row.toolCallId ?? undefined,
+      };
+    });
   };
 
   /**
@@ -445,6 +527,59 @@ export class MessagePluginStore extends MessageScope {
       type: row.type ?? 'default',
       userId: row.userId,
     }));
+  };
+
+  /**
+   * Cheap change probe for a topic that is waiting on approval cards: each
+   * card's intervention status plus a revision that moves whenever the topic
+   * gains, loses or edits a message, or a card's arguments change (plugin rows
+   * do not bump the parent message's `updatedAt`). Lets a waiting client skip
+   * re-reading the whole transcript page while nothing changed.
+   */
+  getInterventionSnapshot = async (params: {
+    ids: string[];
+    topicId: string;
+  }): Promise<{
+    revision: string;
+    statuses: Record<string, InterventionStatus | null>;
+  }> => {
+    const [cards, [topicRow]] = await Promise.all([
+      params.ids.length === 0
+        ? Promise.resolve([])
+        : this.db
+            .select({
+              argsHash: sql<string>`md5(coalesce(${messagePlugins.arguments}, ''))`,
+              id: messagePlugins.id,
+              status: sql<InterventionStatus | null>`${messagePlugins.intervention}->>'status'`,
+            })
+            .from(messagePlugins)
+            .innerJoin(messages, eq(messagePlugins.id, messages.id))
+            .where(
+              and(
+                inArray(messagePlugins.id, params.ids),
+                eq(messages.topicId, params.topicId),
+                this.ownership(),
+                this.pluginsOwnership(),
+                notShareVisitorMessage(),
+              ),
+            ),
+      this.db
+        .select({
+          count: sql<number>`count(*)::int`,
+          updatedAt: sql<string | null>`max(${messages.updatedAt})::text`,
+        })
+        .from(messages)
+        .where(and(eq(messages.topicId, params.topicId), this.ownership())),
+    ]);
+
+    const byId = new Map(cards.map((card) => [card.id, card]));
+    const statuses = Object.fromEntries(params.ids.map((id) => [id, byId.get(id)?.status ?? null]));
+    const argsHashes = params.ids.map((id) => byId.get(id)?.argsHash ?? '-').join(',');
+
+    return {
+      revision: `${topicRow?.count ?? 0}|${topicRow?.updatedAt ?? ''}|${argsHashes}`,
+      statuses,
+    };
   };
 
   /**

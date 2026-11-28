@@ -1,11 +1,4 @@
 // @vitest-environment node
-// Vitest 5 races the first dynamic import inside `translation()` against
-// `vi.mock` registration (vitest#7040). Resolving the mocked default modules
-// here — at module scope, after `vi.mock` hoisting and before any test runs —
-// makes the loader hit the mock instead of the real locale file.
-import '@/locales/default/models';
-import '@/locales/default/providers';
-
 import { cookies } from 'next/headers';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,7 +7,42 @@ import { normalizeLocale } from '@/locales/resources';
 
 import { getLocale, translation } from './serverTranslation';
 
-// Mock external dependencies
+// Locale files by namespace. The loader is faked instead of mocking `@/locales/default/*`:
+// those modules are reached by a templated dynamic import, which `vi.mock` does not reliably
+// intercept, so a test could read the real English file instead (vitest#7040).
+const { defaults, locales } = vi.hoisted(() => ({
+  defaults: {
+    chat: { welcome: 'Welcome to the chat' },
+    // Flat keys: `nested.key` is one key, not a nested path.
+    common: {
+      'key1': 'Value 1',
+      'key2': 'Value 2 with {{param}}',
+      'multiParam': 'Hello {{name}}, you have {{count}} messages',
+      'nested.key': 'Nested value',
+      'simpleText': 'Just a simple text',
+      'very.deeply.nested.key': 'Found the nested value',
+      'withParam': 'Text with {{param}}',
+    },
+    models: { 'gpt-4.description': 'GPT-4 description' },
+    providers: { 'openai.description': 'OpenAI provider description' },
+  } as Record<string, Record<string, string>>,
+  locales: {
+    'fr-FR': { common: { key1: 'Valeur 1' } },
+  } as Record<string, Record<string, Record<string, string>>>,
+}));
+
+// Same contract as the real loader: the default locale reads the default module, another locale
+// its JSON, and a missing JSON reports the fallback and reads the default module instead.
+vi.mock('@/utils/i18n/loadI18nNamespaceModule', () => ({
+  loadI18nNamespaceModuleWithFallback: vi.fn(async ({ defaultLang, lng, ns, onFallback }) => {
+    if (lng === defaultLang) return { default: defaults[ns] };
+    const module = locales[lng]?.[ns];
+    if (module) return { default: module };
+    onFallback?.({ error: new Error(`No ${lng}/${ns}`), lng, ns });
+    return { default: defaults[ns] };
+  }),
+}));
+
 vi.mock('next/headers', () => ({
   cookies: vi.fn(),
 }));
@@ -30,37 +58,6 @@ vi.mock('@/locales/resources', () => ({
 
 vi.mock('@/utils/env', () => ({
   isDev: false,
-}));
-
-// Mock default locale modules with flat key structure (i18n keys are flat, not nested objects)
-// Keys like 'nested.key' are direct string keys, not nested property paths
-vi.mock('@/locales/default/common', () => ({
-  'key1': 'Value 1',
-  'key2': 'Value 2 with {{param}}',
-  'nested.key': 'Nested value',
-  'multiParam': 'Hello {{name}}, you have {{count}} messages',
-  'simpleText': 'Just a simple text',
-  'withParam': 'Text with {{param}}',
-  'very.deeply.nested.key': 'Found the nested value',
-  // Add exports for testing missing keys (will be undefined, triggering fallback)
-  'nonexistent': undefined,
-  'totally.missing.key': undefined,
-}));
-
-vi.mock('@/locales/default/chat', () => ({
-  welcome: 'Welcome to the chat',
-}));
-
-vi.mock('@/locales/default/models', () => ({
-  default: {
-    'gpt-4.description': 'GPT-4 description',
-  },
-}));
-
-vi.mock('@/locales/default/providers', () => ({
-  default: {
-    'openai.description': 'OpenAI provider description',
-  },
 }));
 
 describe('getLocale', () => {
@@ -108,6 +105,7 @@ describe('translation', () => {
   it('should fallback to the default locale when a locale file is missing a key', async () => {
     const { t } = await translation('common', 'fr-FR');
 
+    expect(t('key1')).toBe('Valeur 1');
     expect(t('key2', { param: 'fallback' })).toBe('Value 2 with fallback');
   });
 
@@ -151,24 +149,18 @@ describe('translation', () => {
   });
 
   it('should fallback to default module when locale JSON is missing (models)', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-    // Vitest 5 races the concurrent first imports inside `translation` against mock
-    // registration (vitest#7040), so warm the default module through the loader first.
-    await translation('models', 'en-US');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const { t } = await translation('models', 'zz-ZZ');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('zz-ZZ/models'));
     expect(t('gpt-4.description')).toBe('GPT-4 description');
   });
 
   it('should fallback to default module when locale JSON is missing (providers)', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-    // Vitest 5 races the concurrent first imports inside `translation` against mock
-    // registration (vitest#7040), so warm the default module through the loader first.
-    await translation('providers', 'en-US');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const { t } = await translation('providers', 'zz-ZZ');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('zz-ZZ/providers'));
     expect(t('openai.description')).toBe('OpenAI provider description');
   });
 });

@@ -3,9 +3,9 @@ import { MaximizeIcon, MinimizeIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 
 import SkeletonBar from '@/components/Skeleton/Bar';
-import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { type QueryTagsResult } from '@/database/models/userMemory';
 import dynamic from '@/libs/next/dynamic';
+import { useHeaderActionSize } from '@/styles/density';
 
 const TagCloudCanvas = dynamic(() => import('./TagCloudCanvas'), {
   loading: () => <SkeletonBar height={400} radius={12} />,
@@ -56,6 +56,7 @@ interface RoleTagCloudProps {
 const RoleTagCloud = memo<RoleTagCloudProps>(({ tags }) => {
   const [fullscreen, setFullscreen] = useState(false);
   const [fullscreenAnimation, setFullscreenAnimation] = useState(false);
+  const headerActionSize = useHeaderActionSize();
 
   useEffect(() => {
     setFullscreenAnimation(true);
@@ -77,7 +78,7 @@ const RoleTagCloud = memo<RoleTagCloudProps>(({ tags }) => {
       <ActionIcon
         className={cx('fullscreen-icon', styles.icon)}
         icon={fullscreen ? MinimizeIcon : MaximizeIcon}
-        size={DESKTOP_HEADER_ICON_SIZE}
+        size={headerActionSize}
         onClick={() => {
           setFullscreen(!fullscreen);
         }}

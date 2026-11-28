@@ -101,4 +101,21 @@ describe('workRouter — per-procedure write permission gates', () => {
     await expect(createCaller().listByConversation({})).resolves.toEqual([]);
     expect(mockListByConversation).toHaveBeenCalledTimes(1);
   });
+
+  it('the topic PR link and dismiss endpoints gate on topic:update', async () => {
+    await expect(
+      createCaller().linkTopicPullRequest({
+        source: 'manual',
+        topicId: 't1',
+        url: 'https://github.com/a/b/pull/1',
+      }),
+    ).rejects.toThrow('GATE:topic:update');
+    await expect(
+      createCaller().setTopicPullRequestDismissed({
+        dismissed: true,
+        identifier: 'a/b#1',
+        topicId: 't1',
+      }),
+    ).rejects.toThrow('GATE:topic:update');
+  });
 });

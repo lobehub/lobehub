@@ -10,9 +10,11 @@ import ChatInputNotice from '@/features/ChatInput/ChatInputNotice';
 import ComposerExpandButton from '@/features/ChatInput/components/ComposerExpandButton';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import dynamic from '@/libs/next/dynamic';
+import { densityTokens } from '@/styles/density.stylex';
 
 import ActionBar from '../ActionBar';
 import InputEditor from '../InputEditor';
+import { McpAppContextChips } from '../McpAppContextChips';
 import SendArea from '../SendArea';
 
 const FilePreview = dynamic(() => import('./FilePreview'), { ssr: false });
@@ -24,7 +26,7 @@ const styles = stylex.create({
     inset: 0,
     width: '100%',
     height: '100%',
-    padding: '12px',
+    padding: densityTokens['--lobe-density-content-gap'],
     backgroundColor: cssVar.colorBgLayout,
     backgroundImage: 'none',
   },
@@ -86,6 +88,7 @@ const DesktopChatInput = memo(() => {
           }
         >
           {expand && fileNode}
+          <McpAppContextChips />
           <InputEditor defaultRows={1} />
         </ChatInput>
       </Flexbox>

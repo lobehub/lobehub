@@ -1,7 +1,7 @@
 import { ActionIcon, createStaticStyles, cx, Flexbox } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
-import { Fragment, memo, type ReactNode, useEffect, useMemo, useState } from 'react';
+import { Fragment, memo, type ReactNode, useLayoutEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -13,6 +13,7 @@ import { BriefCardSkeleton } from '@/features/DailyBrief/BriefCardSkeleton';
 import GroupBlock from '@/features/Home/components/GroupBlock';
 import { homeType } from '@/features/Home/components/homeType';
 import RailCard from '@/features/Home/components/RailCard';
+import { useHomeSpacing } from '@/features/Home/homeDensity';
 import Recommendations, { useRecommendationsVisible } from '@/features/Recommendations';
 // Direct module import, not the feature barrel: home must not pull the whole
 // acceptance workspace into its chunk for one hook.
@@ -23,8 +24,8 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useGoalStore } from '@/store/goal';
 import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
+import { useDensityTokens } from '@/styles/density';
 
 import GoalsRailCard from './GoalsRailCard';
 import { filterHiddenWidgetSections } from './hiddenWidgets';
@@ -35,6 +36,7 @@ import MarkAllReadButton from './MarkAllReadButton';
 import NeedsYouRailCard from './NeedsYouRailCard';
 import { resolveShownNewsOffset, shouldShowNewsItemTime } from './newsDayOffset';
 import NewsList from './NewsList';
+import { type RailContentState, resolveRailContentState } from './railContentState';
 import { ownsRailSections } from './railSectionPlacement';
 import RunningTasksCard from './RunningTasksCard';
 import { filterMyInboxTopics } from './scopeTogglePlacement';
@@ -49,15 +51,20 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 /**
- * Mounted only while the rail has settled with nothing to show, so the page
- * hears "empty" once the feeds have answered and "not empty" as soon as any
- * card returns — including when the rail unmounts.
+ * Tells the page what the rail is showing. A layout effect, so a rail that
+ * paints cards on the first frame (persisted goals) corrects a remembered
+ * "empty" layout before the browser paints it.
  */
-const RailEmptyReporter = ({ onChange }: { onChange: (empty: boolean) => void }) => {
-  useEffect(() => {
-    onChange(true);
-    return () => onChange(false);
-  }, [onChange]);
+const RailStateReporter = ({
+  onChange,
+  state,
+}: {
+  onChange: (state: RailContentState) => void;
+  state: RailContentState;
+}) => {
+  useLayoutEffect(() => {
+    onChange(state);
+  }, [onChange, state]);
 
   return null;
 };
@@ -116,11 +123,11 @@ interface HomeInboxProps {
    */
   inlineRail?: boolean;
   /**
-   * Rail only: told `true` once the rail's feeds have loaded and it has no card
-   * to show, and `false` when a card appears, so the page can hand its space to
-   * the main column without guessing from a loading rail.
+   * Rail only: told whether the rail is still loading, settled empty, or shows a
+   * card, so the page can hand its space to the main column without guessing
+   * from a loading rail.
    */
-  onRailEmptyChange?: (empty: boolean) => void;
+  onRailStateChange?: (state: RailContentState) => void;
   variant?: 'default' | 'main' | 'rail';
 }
 
@@ -130,13 +137,15 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     hideRunning,
     hideUnread,
     inlineRail,
-    onRailEmptyChange,
+    onRailStateChange,
     variant = 'default',
   } = props;
   const isRail = variant === 'rail';
   const isMain = variant === 'main';
   const showRailSections = ownsRailSections({ inlineRail, variant });
   const { t } = useTranslation('home');
+  const { contentGap } = useDensityTokens();
+  const { blockGap } = useHomeSpacing();
   const { t: tCommon } = useTranslation('common');
   const isLogin = useUserStore(authSelectors.isLogin);
   const myId = useUserStore(userProfileSelectors.userId);
@@ -185,10 +194,8 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   const shownNewsOffset = newsData ? resolveShownNewsOffset(newsData.day) : 0;
 
   // Goals are the one home feed that is not about today: they run for days, so
-  // the dashboard is where you check on them. Behind the same lab toggle as the
-  // goal pages themselves — without it a row would navigate to a redirect.
-  const goalsEnabled = useUserStore(labPreferSelectors.enableGoals);
-  const showGoals = isLogin === true && goalsEnabled && showRailSections;
+  // the dashboard is where you check on them.
+  const showGoals = isLogin === true && showRailSections;
   const useFetchHomeGoals = useGoalStore((s) => s.useFetchHomeGoals);
   const goalsSWR = useFetchHomeGoals(showGoals, cacheScope);
   // Read the replica view, not the hook: the persisted roll-up paints the rail
@@ -265,7 +272,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   // "Needs you" section that may turn out empty). Recommendations keep their own.
   if (blockState === 'skeleton') {
     return (
-      <Flexbox gap={12}>
+      <Flexbox gap={contentGap}>
         <BriefCardSkeleton />
         <BriefCardSkeleton />
         <Recommendations variant={variant} />
@@ -320,7 +327,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
             label: t('inbox.needsYou.title'),
             loading: briefsRefreshing,
             node: (
-              <Flexbox gap={12}>
+              <Flexbox gap={contentGap}>
                 {needsYou.map((brief) => (
                   <InboxBriefCard brief={brief} key={brief.id} />
                 ))}
@@ -375,7 +382,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
         label: t('inbox.needsYou.title'),
         loading: briefsRefreshing,
         node: (
-          <Flexbox gap={12}>
+          <Flexbox gap={contentGap}>
             {needsYou.map((brief) => (
               <InboxBriefCard brief={brief} key={brief.id} />
             ))}
@@ -485,34 +492,45 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
 
   const visibleSections = filterHiddenWidgetSections(sections, hiddenWidgets);
 
+  // Still waiting on a feed that may yet fill the rail: keep its place with the
+  // loading skeleton rather than collapse it and slide the page back when the
+  // cards land.
+  const railFeedsSettled =
+    (!showGoals || goals !== undefined || Boolean(goalsSWR.error)) &&
+    (!showRailSections || Boolean(dayNews) || Boolean(newsSync.error));
+  const railState = resolveRailContentState({
+    feedsSettled: railFeedsSettled,
+    hasCards: visibleSections.length > 0 || recommendationsVisible || Boolean(usageCard),
+  });
+  // Rendered by every rail return path below, so the page always hears it.
+  const railReporter =
+    isRail && onRailStateChange ? (
+      <RailStateReporter state={railState} onChange={onRailStateChange} />
+    ) : null;
+
   if (visibleSections.length === 0) {
     if (isMain) return null;
 
     if (isRail) {
       if (recommendationsVisible || usageCard)
         return (
-          <Flexbox gap={12}>
+          <Flexbox gap={contentGap}>
             {recommendationsVisible && <Recommendations variant={'rail'} />}
             {usageCard}
+            {railReporter}
           </Flexbox>
         );
 
-      // Still waiting on a feed that may yet fill the rail: keep its place
-      // with the loading skeleton rather than collapse it and slide the page
-      // back when the cards land.
-      const railFeedsSettled =
-        (!showGoals || goals !== undefined || Boolean(goalsSWR.error)) &&
-        (!showRailSections || Boolean(dayNews) || Boolean(newsSync.error));
-
-      if (!railFeedsSettled)
+      if (railState === 'pending')
         return (
-          <Flexbox gap={12}>
+          <Flexbox gap={contentGap}>
             <BriefCardSkeleton />
             <BriefCardSkeleton />
+            {railReporter}
           </Flexbox>
         );
 
-      return onRailEmptyChange ? <RailEmptyReporter onChange={onRailEmptyChange} /> : null;
+      return railReporter;
     }
 
     // With no titled block above it, the bare recommendations list doesn't need
@@ -531,7 +549,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   }
 
   return (
-    <Flexbox gap={isRail ? 12 : 32}>
+    <Flexbox gap={isRail ? contentGap : blockGap}>
       {visibleSections.map(
         ({
           action,
@@ -600,6 +618,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
 
       {!isMain && <Recommendations variant={variant} />}
       {usageCard}
+      {railReporter}
     </Flexbox>
   );
 });

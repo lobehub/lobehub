@@ -5,6 +5,7 @@ import type {
   ToolTransport,
   ToolWorkRegistration,
 } from '@lobechat/agent-runtime';
+import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import type { ChatToolPayload, CreateMessageParams } from '@lobechat/types';
 
 import { didToolMutateWorkView, workService } from '@/services/work';
@@ -44,10 +45,9 @@ export class ClientToolTransport implements ToolTransport {
 
     const opContext = rootOperation.context;
     const messages = store.dbMessagesMap[this.messageKey] ?? [];
+    const existingToolMessageId = context.toolMessageId ?? context.parentMessageId;
     const existingToolMessage = context.reuseExistingMessage
-      ? messages.find(
-          (message) => message.id === (context.toolMessageId ?? context.parentMessageId),
-        )
+      ? messages.find((message) => message.id === existingToolMessageId)
       : undefined;
     const assistantMessage =
       messages.find(
@@ -96,7 +96,7 @@ export class ClientToolTransport implements ToolTransport {
 
     try {
       const toolMessageId = context.reuseExistingMessage
-        ? (context.toolMessageId ?? context.parentMessageId)
+        ? existingToolMessageId
         : await this.createToolMessage({
             assistantGroupId: assistantMessage?.groupId ?? undefined,
             call,
@@ -127,7 +127,12 @@ export class ClientToolTransport implements ToolTransport {
         rawResult = await store.internal_invokeDifferentTypePlugin(
           toolMessageId,
           call,
-          context.stepContext,
+          call.identifier === LobeActivatorIdentifier
+            ? {
+                ...context.stepContext,
+                discoverableToolIds: Object.keys(context.effectiveManifestMap),
+              }
+            : context.stepContext,
         );
       } finally {
         // Drain the Work-registration intent stashed during tool execution in a

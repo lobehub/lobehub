@@ -6,27 +6,10 @@ import { useTranslation } from 'react-i18next';
 import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 
 import { usePublishDynamicRouteMeta } from './usePublishDynamicRouteMeta';
+import { useRouteTopicTitle } from './useRouteTopicTitle';
 import { matchesRouteWorkspace, useRouteWorkspaceId } from './workspaceScope';
-
-const useTopicTitle = (
-  agentId: string | undefined,
-  topicId: string | undefined,
-  routeWorkspaceId: string | null | undefined,
-): string | undefined =>
-  useChatStore((state) => {
-    if (!agentId || !topicId || routeWorkspaceId === undefined) return undefined;
-
-    // Archived (completed) topics are excluded from the list fetch — fall back
-    // to the by-id detail cache filled by `useFetchTopicDetail`.
-    const topic =
-      state.topicDataMap[topicMapKey({ agentId })]?.items?.find((item) => item.id === topicId) ??
-      state.topicDetailMap[topicId];
-    return topic?.title || undefined;
-  });
 
 // Known from the route alone, so a background tab whose agent is not loaded still
 // swaps a cached legacy default image for the generated character.
@@ -43,16 +26,24 @@ const AgentDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
 
     return agentSelectors.getAgentMetaById(agentId)(state);
   });
-  const topicTitle = useTopicTitle(params.aid, params.topicId ?? params.topic, routeWorkspaceId);
+  const topicId = params.topicId ?? params.topic;
+  const topicTitle = useRouteTopicTitle(topicId, routeWorkspaceId);
   const hasMeta = Object.keys(meta).length > 0;
   const agentTitle = hasMeta ? agentDisplayName(meta) : undefined;
+  // While a named topic's row is missing (its list bucket replaced on
+  // revalidation or a cache-scope switch), publish no title: the desktop tab
+  // cache keeps any non-empty title, so the bare agent name would overwrite
+  // the topic title for good.
+  const topicPending = !!topicId && topicTitle === undefined;
 
   usePublishDynamicRouteMeta(
     {
       avatar: hasMeta ? (meta.avatar ?? null) : undefined,
       ...agentAvatarIdentity(params.aid),
       backgroundColor: meta.backgroundColor,
-      title: [topicTitle, agentTitle].filter(Boolean).join(' · ') || undefined,
+      title: topicPending
+        ? undefined
+        : [topicTitle, agentTitle].filter(Boolean).join(' · ') || undefined,
     },
     onResolve,
   );
@@ -109,6 +100,14 @@ export const ChannelDynamicMeta = createAgentSectionDynamicMeta('navigation.chan
 export const StatisticsDynamicMeta = createAgentSectionDynamicMeta('navigation.stats');
 export const ShareDynamicMeta = createAgentSectionDynamicMeta('navigation.agentShare');
 export const SelfLearningDynamicMeta = createAgentSectionDynamicMeta('navigation.selfLearning');
+export const OpeningDynamicMeta = createAgentSectionDynamicMeta('navigation.opening');
+export const GraphDynamicMeta = createAgentSectionDynamicMeta('navigation.graph');
 export const PermissionDynamicMeta = createAgentSectionDynamicMeta('navigation.permission');
+export const DocumentsDynamicMeta = createAgentSectionDynamicMeta('navigation.document');
+export const GoalsDynamicMeta = createAgentSectionDynamicMeta('navigation.goals');
+export const TasksDynamicMeta = createAgentSectionDynamicMeta('navigation.tasks');
+export const MailDynamicMeta = createAgentSectionDynamicMeta('navigation.mail');
+export const AutomationsDynamicMeta = createAgentSectionDynamicMeta('navigation.automations');
+export const WebhookDynamicMeta = createAgentSectionDynamicMeta('navigation.webhook');
 
 export default AgentDynamicMeta;

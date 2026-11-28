@@ -1,4 +1,6 @@
 import { type AgentState, normalizeAgentState } from '@lobechat/agent-runtime';
+import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
+import { CredsIdentifier, CredsManifest } from '@lobechat/builtin-tool-creds';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { describe, expect, it } from 'vitest';
 
@@ -30,8 +32,46 @@ const searchTool = {
 } as unknown as NonNullable<AgentState['tools']>[number];
 
 describe('resolveServerCallLlmTooling', () => {
+  it('offers credential discovery before activation and the credential workflow afterwards', () => {
+    const ctx = { operationId: 'op-1', stepIndex: 0 };
+    const state = buildState({
+      operationToolSet: {
+        enabledToolIds: [LobeActivatorManifest.identifier],
+        manifestMap: {
+          [LobeActivatorManifest.identifier]: LobeActivatorManifest,
+          [CredsIdentifier]: CredsManifest,
+        },
+        sourceMap: {},
+        tools: [],
+      },
+    });
+    const before = resolveServerCallLlmTooling(ctx, state);
+    const discovery = before.toolDiscoveryConfig?.availableTools.find(
+      (tool) => tool.identifier === CredsIdentifier,
+    );
+    expect(discovery?.description).toContain('API keys');
+    expect(before.resolved.promptManifestMap).not.toHaveProperty(CredsIdentifier);
+
+    const after = resolveServerCallLlmTooling(
+      { ...ctx, stepIndex: 1 },
+      {
+        ...state,
+        activatedStepTools: [
+          { activatedAtStep: 0, id: CredsIdentifier, manifest: CredsManifest, source: 'discovery' },
+        ],
+      },
+    );
+    for (const { name } of CredsManifest.api) {
+      expect(
+        before.resolved.promptManifestMap[LobeActivatorManifest.identifier].systemRole,
+      ).not.toContain(name);
+      expect(discovery?.description).not.toContain(name);
+      expect(after.resolved.promptManifestMap[CredsIdentifier].systemRole).toContain(name);
+    }
+  });
+
   it.each([false, true])(
-    'limits active-device tools to the operation pool (allowed=%s)',
+    'limits tools after mid-run device selection to the operation pool (allowed=%s)',
     (allowed) => {
       const callerTool = {
         type: 'function' as const,
@@ -41,7 +81,9 @@ describe('resolveServerCallLlmTooling', () => {
         { operationId: 'op-1', stepIndex: 0 },
         buildState({
           binding: { device: { id: 'device-1' } },
-          plan: { execution: { deviceId: 'device-1', kind: 'device', target: 'device' } },
+          plan: {
+            execution: { kind: 'device-unrouted', reason: 'no-bound-device', target: 'device' },
+          },
           operationToolSet: {
             enabledToolIds: ['lobe-client-fn'],
             executorMap: {},
@@ -57,6 +99,26 @@ describe('resolveServerCallLlmTooling', () => {
       else expect(result.tools!.length).toBeGreaterThan(1);
     },
   );
+
+  it('defers the local system functions when a device is already routed at start', () => {
+    const result = resolveServerCallLlmTooling(
+      { operationId: 'op-1', stepIndex: 0 },
+      buildState({
+        binding: { device: { id: 'device-1' } },
+        plan: { execution: { deviceId: 'device-1', kind: 'device', target: 'local' } },
+        operationToolSet: {
+          enabledToolIds: ['lobe-activator'],
+          manifestMap: { 'lobe-local-system': LocalSystemManifest },
+          sourceMap: {},
+          tools: [],
+        },
+      }),
+    );
+    expect(result.resolved.enabledToolIds).not.toContain('lobe-local-system');
+    expect(result.toolDiscoveryConfig?.availableTools.map((t) => t.identifier)).toEqual([
+      'lobe-local-system',
+    ]);
+  });
 
   // Regression: `serverCallLlmContextBuilder` needs this to compute
   // `creds_sandbox_reachable` — `sandbox_enabled` alone (whether the
@@ -126,9 +188,122 @@ describe('resolveServerCallLlmTooling', () => {
     ).toEqual([searchTool]);
   });
 
+  it('keeps toolDiscoveryConfig stable across mid-operation tool activations', () => {
+    const ctx = { operationId: 'op-1', stepIndex: 0 };
+    const state = buildState({
+      operationToolSet: {
+        enabledToolIds: [LobeActivatorManifest.identifier],
+        manifestMap: {
+          [LobeActivatorManifest.identifier]: LobeActivatorManifest,
+          [CredsIdentifier]: CredsManifest,
+          'lobe-web-browsing': webBrowsing,
+        },
+        sourceMap: {},
+        tools: [],
+      },
+    });
+
+    const before = resolveServerCallLlmTooling(ctx, state);
+    const after = resolveServerCallLlmTooling(
+      { ...ctx, stepIndex: 1 },
+      {
+        ...state,
+        activatedStepTools: [
+          {
+            activatedAtStep: 0,
+            id: 'lobe-web-browsing',
+            manifest: webBrowsing,
+            source: 'discovery',
+          },
+        ],
+      },
+    );
+
+    expect(after.resolved.enabledToolIds).toContain('lobe-web-browsing');
+    expect(after.toolDiscoveryConfig).toEqual(before.toolDiscoveryConfig);
+
+    const forcedFinish = resolveServerCallLlmTooling(
+      { ...ctx, stepIndex: 2 },
+      {
+        ...state,
+        activatedStepTools: [
+          {
+            activatedAtStep: 0,
+            id: 'lobe-web-browsing',
+            manifest: webBrowsing,
+            source: 'discovery',
+          },
+        ],
+        forceFinish: true,
+      },
+    );
+
+    expect(forcedFinish.toolDiscoveryConfig).toBeUndefined();
+  });
+
   it('leaves the active device id undefined with no binding at all', () => {
     const result = resolveServerCallLlmTooling({ operationId: 'op-1', stepIndex: 0 }, buildState());
 
     expect(result.activeDeviceId).toBeUndefined();
+  });
+
+  it('keeps the shell of a deferred lobe-skills and restores its skill APIs once activated', () => {
+    const api = (name: string) => ({ description: name, name, parameters: {} });
+    const shellManifest = {
+      api: [api('runCommand'), api('exportFile')],
+      identifier: 'lobe-skills',
+      meta: { title: 'Skills' },
+      systemRole: 'shell only',
+      type: 'builtin' as const,
+    };
+    const fullManifest = {
+      ...shellManifest,
+      api: [api('activateSkill'), ...shellManifest.api],
+      systemRole: 'full',
+    };
+    const ctx = { operationId: 'op-1', stepIndex: 0 };
+    const state = buildState({
+      operationToolSet: {
+        deferredManifestMap: { 'lobe-skills': fullManifest },
+        enabledToolIds: [LobeActivatorManifest.identifier, 'lobe-skills'],
+        manifestMap: {
+          [LobeActivatorManifest.identifier]: LobeActivatorManifest,
+          [CredsIdentifier]: CredsManifest,
+          'lobe-skills': shellManifest,
+        },
+        sourceMap: { 'lobe-skills': 'builtin' },
+        tools: [
+          { function: { name: 'lobe-skills____runCommand' }, type: 'function' },
+          { function: { name: 'lobe-skills____exportFile' }, type: 'function' },
+        ] as unknown as NonNullable<AgentState['tools']>,
+      },
+    });
+
+    const before = resolveServerCallLlmTooling(ctx, state);
+    expect(before.tools?.map((tool) => tool.function.name)).toEqual([
+      'lobe-skills____runCommand',
+      'lobe-skills____exportFile',
+    ]);
+    expect(before.resolved.promptManifestMap['lobe-skills']).toEqual(shellManifest);
+    // A deferred tool is promoted by the runtime, never offered for activation.
+    expect(before.toolDiscoveryConfig?.availableTools.map((tool) => tool.identifier)).toEqual([
+      CredsIdentifier,
+    ]);
+
+    const after = resolveServerCallLlmTooling(
+      { ...ctx, stepIndex: 1 },
+      {
+        ...state,
+        activatedStepTools: [
+          { activatedAtStep: 0, id: 'lobe-skills', manifest: fullManifest, source: 'discovery' },
+        ],
+      },
+    );
+    expect(after.resolved.promptManifestMap['lobe-skills']).toEqual(fullManifest);
+    expect(after.tools?.map((tool) => tool.function.name)).toEqual([
+      'lobe-skills____runCommand',
+      'lobe-skills____exportFile',
+      'lobe-skills____activateSkill',
+    ]);
   });
 });

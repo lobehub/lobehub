@@ -7,6 +7,11 @@ const { executions, executeToolCall, interruptTask } = vi.hoisted(() => ({
   interruptTask: vi.fn().mockResolvedValue({ success: true }),
   executions: {
     input: vi.fn(),
+    deliverAnswerToAsker: vi.fn(),
+    fail: vi.fn(),
+    deliverReplyMentions: vi
+      .fn()
+      .mockResolvedValue({ mentions: [], woke: false, workspaceId: null }),
     publish: vi.fn(),
     releaseWriter: vi.fn(),
     retireReservation: vi.fn().mockResolvedValue(false),
@@ -52,6 +57,10 @@ vi.mock('./ChannelRoutingService', () => ({ ChannelRoutingService: vi.fn() }));
 vi.mock('./attachments', () => ({ resolveChannelAttachments: vi.fn() }));
 vi.mock('./notify', () => ({ notifyChannel: vi.fn() }));
 vi.mock('./queue', () => ({ registerLocalChannelAdvance: vi.fn(), wakeChannel: vi.fn() }));
+const { reportChannelReplyFailure } = vi.hoisted(() => ({
+  reportChannelReplyFailure: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('./replyError', () => ({ reportChannelReplyFailure }));
 
 describe('Channel completion physical writer confirmation', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -62,6 +71,7 @@ describe('Channel completion physical writer confirmation', () => {
     leaseOwner: string | null = null,
     status = 'done',
     topicId: string | null = null,
+    deviceId: string | null = 'device',
   ) => {
     const job = {
       channelId: 'channel',
@@ -80,7 +90,7 @@ describe('Channel completion physical writer confirmation', () => {
         ...job,
         job,
         operation,
-        config: { runtime, deviceId: 'device', deviceOwnerId: 'owner' },
+        config: deviceId ? { runtime, deviceId, deviceOwnerId: 'owner' } : { runtime },
       },
     ];
     const query = Object.assign(Promise.resolve(rows), {
@@ -89,8 +99,10 @@ describe('Channel completion physical writer confirmation', () => {
       leftJoin: vi.fn(),
       where: vi.fn(),
       limit: vi.fn(),
+      // The run's cards are read with an ordered query.
+      orderBy: vi.fn(),
     });
-    for (const method of ['from', 'innerJoin', 'leftJoin', 'where', 'limit'] as const)
+    for (const method of ['from', 'innerJoin', 'leftJoin', 'where', 'limit', 'orderBy'] as const)
       query[method].mockReturnValue(query);
     return new ChannelCoordinator({ select: () => query } as never);
   };
@@ -103,6 +115,18 @@ describe('Channel completion physical writer confirmation', () => {
       expect(executions.releaseWriter).not.toHaveBeenCalled();
       expect(executeToolCall).toHaveBeenCalled();
       expect(executions.publish).toHaveBeenCalledTimes(revoked ? 0 : 1);
+    },
+  );
+
+  it.each(['abandoned', 'error', 'interrupted'])(
+    'fails a run that ended %s and explains it in the reply slot',
+    async (status) => {
+      executeToolCall.mockResolvedValue({ success: true, state: { exited: false } });
+      await coordinator(false, 'codex', null, status).complete('channel', 'job', 'op');
+
+      expect(executions.fail).toHaveBeenCalledWith('channel', 'job', expect.any(Object));
+      expect(reportChannelReplyFailure).toHaveBeenCalledWith(expect.anything(), 'channel', 'job');
+      expect(executions.publish).not.toHaveBeenCalled();
     },
   );
 
@@ -134,6 +158,35 @@ describe('Channel completion physical writer confirmation', () => {
     await Promise.resolve();
     expect(generateTopicTitle).not.toHaveBeenCalled();
     expect(updateTopic).not.toHaveBeenCalled();
+  });
+
+  // With no device picked in the Channel the run went through the ordinary pipeline, so its
+  // writer used to stay held after the reply and every later request waited as member_busy.
+  it('releases an external writer with no Channel device once the ordinary run stops', async () => {
+    await coordinator(false, 'codex', null, 'done', null, null).complete('channel', 'job', 'op');
+    expect(interruptTask).toHaveBeenCalledWith({ operationId: 'op', topicId: undefined });
+    expect(executeToolCall).not.toHaveBeenCalled();
+    expect(executions.releaseWriter).toHaveBeenCalledWith('channel', 'job');
+  });
+
+  it('keeps an unbound external writer while its run can neither stop nor has ended', async () => {
+    interruptTask.mockResolvedValueOnce({ success: false });
+    await coordinator(true, 'codex', null, 'running', null, null).complete('channel', 'job', 'op');
+    expect(executions.releaseWriter).not.toHaveBeenCalled();
+  });
+
+  // An unbound coding Agent may still have run on a device through its own settings; a failed
+  // operation does not prove its CLI exited, so the writer waits for confirmed cancellation.
+  it('keeps an unbound external writer while its device cancellation is unconfirmed', async () => {
+    interruptTask.mockResolvedValueOnce({ deviceCancellationConfirmed: false, success: false });
+    await coordinator(true, 'codex', null, 'error', null, null).complete('channel', 'job', 'op');
+    expect(executions.releaseWriter).not.toHaveBeenCalled();
+  });
+
+  it('releases an ended unbound external writer that left no device process behind', async () => {
+    interruptTask.mockResolvedValueOnce({ success: false });
+    await coordinator(true, 'codex', null, 'error', null, null).complete('channel', 'job', 'op');
+    expect(executions.releaseWriter).toHaveBeenCalledWith('channel', 'job');
   });
 
   it('releases a completed writer only after the device confirms termination', async () => {

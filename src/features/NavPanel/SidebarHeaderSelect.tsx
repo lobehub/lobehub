@@ -7,7 +7,8 @@ import type { ReactNode } from 'react';
 import { memo } from 'react';
 
 import Avatar from '@/components/Avatar';
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+
+import { useNavItemMetrics } from './density';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   trigger: css`
@@ -59,31 +60,41 @@ interface SidebarHeaderSelectTriggerProps extends Omit<BlockProps, 'children' | 
 }
 
 export const SidebarHeaderSelectTrigger = memo<SidebarHeaderSelectTriggerProps>(
-  ({ avatar, avatarNode, background, className, name, style, title, ...rest }) => (
-    <Block
-      clickable
-      horizontal
-      align={'center'}
-      className={className}
-      gap={8}
-      padding={2}
-      style={{ minWidth: 32, overflow: 'hidden', ...style }}
-      variant={'borderless'}
-      {...rest}
-    >
-      {avatarNode ?? (
-        <Avatar avatar={avatar} background={background} name={name} shape={'square'} size={28} />
-      )}
-      <Text ellipsis weight={500}>
-        {title}
-      </Text>
-      <ActionIcon
-        icon={ChevronsUpDownIcon}
-        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-        style={{ width: 24 }}
-      />
-    </Block>
-  ),
+  ({ avatar, avatarNode, background, className, name, style, title, ...rest }) => {
+    const metrics = useNavItemMetrics();
+
+    return (
+      <Block
+        clickable
+        horizontal
+        align={'center'}
+        className={className}
+        gap={8}
+        padding={2}
+        style={{ minWidth: 32, overflow: 'hidden', ...style }}
+        variant={'borderless'}
+        {...rest}
+      >
+        {avatarNode ?? (
+          <Avatar
+            avatar={avatar}
+            background={background}
+            name={name}
+            shape={'square'}
+            size={metrics.headerAvatarSize}
+          />
+        )}
+        <Text ellipsis fontSize={metrics.headerLabelFontSize} weight={metrics.headerLabelWeight}>
+          {title}
+        </Text>
+        <ActionIcon
+          icon={ChevronsUpDownIcon}
+          size={metrics.headerChevronSize}
+          style={{ width: metrics.headerChevronSize.blockSize }}
+        />
+      </Block>
+    );
+  },
 );
 
 SidebarHeaderSelectPopover.displayName = 'SidebarHeaderSelectPopover';

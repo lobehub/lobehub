@@ -1,4 +1,5 @@
 packages:
+  - '../../packages/mcp-elicitation'
   - '../cli'
   - '../../packages/agent-gateway-client'
   - '../../packages/agent-tracing'
@@ -19,6 +20,7 @@ packages:
   - '../../packages/device-control'
   - '../../packages/device-sandbox'
   - '../../packages/device-gateway-client'
+  - '../../packages/device-mcp'
   - '../../packages/device-identity'
   - '../../packages/local-file-shell'
   - '../../packages/tool-runtime'

@@ -17,6 +17,7 @@ import {
 } from '@/server/services/bot/platforms';
 import { GatewayService } from '@/server/services/gateway';
 import { BotConnectQueue } from '@/server/services/gateway/botConnectQueue';
+import { isBotAsleep } from '@/server/services/gateway/botSleep';
 import {
   BOT_RUNTIME_STATUSES,
   updateBotRuntimeStatus,
@@ -118,6 +119,16 @@ async function processConnectQueue(remainingMs: number): Promise<number> {
         await queue.remove(item.platform, item.applicationId);
         continue;
       }
+      // Replies for these ride the connection, which this cron invocation would take with it.
+      if (definition.repliesOverConnection) {
+        log(
+          'Skipping queued platform that replies over its connection platform=%s appId=%s',
+          item.platform,
+          item.applicationId,
+        );
+        await queue.remove(item.platform, item.applicationId);
+        continue;
+      }
 
       const provider = await AgentBotProviderModel.findEnabledByPlatformAndAppId(
         serverDB,
@@ -208,6 +219,9 @@ export async function gatewayCron(c: Context): Promise<Response> {
   const stats: Array<{ platform: string; started: number; total: number }> = [];
 
   for (const platform of platforms) {
+    // Replies for these ride the connection, which this cron invocation would take with it.
+    if (platform.repliesOverConnection) continue;
+
     const providers = await AgentBotProviderModel.findEnabledByPlatform(
       serverDB,
       platform.id,
@@ -231,6 +245,9 @@ export async function gatewayCron(c: Context): Promise<Response> {
       }
 
       if (!(await ensureBotFeatureAccess(platform.id, provider, 'runtime'))) continue;
+      // Kept down while asleep for being idle. Queued connects below are
+      // owner-initiated and restarted the idle clock, so they are not asked.
+      if (await isBotAsleep(platform.id, provider)) continue;
 
       platformTotal++;
       total++;

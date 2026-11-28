@@ -213,6 +213,74 @@ describe('estimateChatCost', () => {
       expect(estimate?.estimatedOutputTokens).toBe(12_000);
     });
 
+    describe('promptCache', () => {
+      const anthropicPricing: Pricing = {
+        units: [
+          { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textInput_cacheRead', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
+          {
+            lookup: { prices: { '1h': 6, '5m': 3.75 }, pricingParams: ['ttl'] },
+            name: 'textInput_cacheWrite',
+            strategy: 'lookup',
+            unit: 'millionTokens',
+          },
+        ],
+      };
+      const noOutput = { outputTextTokens: 0, textTokens: 1_000_000 };
+
+      it('prices a warm prefix at the cache-read price and writes the new tail', () => {
+        const estimate = estimateChatCostFromTokens(anthropicPricing, {
+          ...noOutput,
+          promptCache: { readTokens: 900_000, writesUncached: true },
+        });
+
+        // 0.9M × $0.3 + 0.1M × $3.75 (5m write by default)
+        expect(estimate?.estimatedCost).toBeCloseTo(0.27 + 0.375, 6);
+      });
+
+      it('prices a cold cache as a full cache write at the requested TTL', () => {
+        const estimate = estimateChatCostFromTokens(
+          anthropicPricing,
+          { ...noOutput, promptCache: { readTokens: 0, writesUncached: true } },
+          { lookupParams: { ttl: '1h' } },
+        );
+
+        expect(estimate?.estimatedCost).toBeCloseTo(6, 6);
+      });
+
+      it('bills the uncached tail as plain input for implicit caching', () => {
+        const estimate = estimateChatCostFromTokens(anthropicPricing, {
+          ...noOutput,
+          promptCache: { readTokens: 900_000, writesUncached: false },
+        });
+
+        expect(estimate?.estimatedCost).toBeCloseTo(0.27 + 0.3, 6);
+      });
+
+      it('never prices cached tokens below plain input when the model has no cache-read price', () => {
+        const pricing: Pricing = {
+          units: [{ name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' }],
+        };
+
+        const estimate = estimateChatCostFromTokens(pricing, {
+          ...noOutput,
+          promptCache: { readTokens: 900_000, writesUncached: true },
+        });
+
+        expect(estimate?.estimatedCost).toBeCloseTo(3, 6);
+      });
+
+      it('caps cached tokens at the text input', () => {
+        const estimate = estimateChatCostFromTokens(anthropicPricing, {
+          ...noOutput,
+          promptCache: { readTokens: 5_000_000, writesUncached: true },
+        });
+
+        expect(estimate?.estimatedCost).toBeCloseTo(0.3, 6);
+      });
+    });
+
     it('falls multimodal input back to text pricing when dedicated modality units are missing', () => {
       const pricing: Pricing = {
         units: [{ name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' }],

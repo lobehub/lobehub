@@ -89,9 +89,12 @@ describe('channelActions after a committed write', () => {
       channelActions.addMember('chn_000000000001', { agent: { agentId: 'agt_a' } }),
     ).resolves.toBe('mem_agent');
     expect(channelService.addUser).toHaveBeenCalledExactlyOnceWith('chn_000000000001', 'user_b');
-    expect(channelService.addAgent).toHaveBeenCalledExactlyOnceWith('chn_000000000001', {
-      agentId: 'agt_a',
-    });
+    // The mention confirmation already said whether the Agent joins the project.
+    expect(channelService.addAgent).toHaveBeenCalledExactlyOnceWith(
+      'chn_000000000001',
+      { agentId: 'agt_a' },
+      true,
+    );
   });
 
   // One invite adds people and Agents together; people go first so a failing Agent

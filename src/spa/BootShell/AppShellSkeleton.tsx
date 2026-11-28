@@ -1,7 +1,11 @@
 'use client';
 
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import { cx, Flexbox } from '@lobehub/ui';
+import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- StyleX cannot target the shell from a body :has() condition without a universal selector
+  createStaticStyles,
+  Flexbox,
+} from '@lobehub/ui';
 import { LobeHub } from '@lobehub/ui/brand';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -15,9 +19,6 @@ import {
   getOuterCssVariables,
 } from '@/features/DesktopLayoutContainer/cssVariables';
 import { styles as containerStyles } from '@/features/DesktopLayoutContainer/style';
-import { LIST_COLUMN_BACKGROUND, RAIL_WIDTH } from '@/features/NavRail/const';
-import { readImLayoutHint } from '@/features/NavRail/layoutHint';
-import { wrapStyles as layoutStyles } from '@/features/NavRail/wrapStyle';
 import { electronStylish } from '@/styles/electron';
 import { sx } from '@/styles/sx';
 
@@ -31,6 +32,23 @@ import { useLoadingHint } from './useLoadingHint';
 const CSS_VAR_CLASS = 'lobe-vars';
 
 export const APP_SHELL_FALLBACK_ID = 'app-shell-fallback';
+
+/**
+ * Hides the shell while a dialog is open, so an auth dialog that opens during
+ * loading is visible. The dialog and the shell are siblings under body, so the
+ * condition sits on body. Keep the shell class itself as the subject: StyleX can
+ * only write this as `.x:is(body:has(...) *)`, and Chrome shares one
+ * invalidation set across all :has() rules, so that universal `*` made every
+ * DOM insertion (each message row a list mounts) restyle the whole page
+ * (T-14366).
+ */
+const fallback = createStaticStyles(({ css }) => ({
+  root: css`
+    body:has([role='dialog'][data-open]) & {
+      visibility: hidden;
+    }
+  `,
+}));
 
 const fadeIn = stylex.keyframes({
   from: { opacity: 0 },
@@ -78,10 +96,6 @@ const styles = stylex.create({
     width: '100%',
   },
   root: {
-    // The dialog and boot shell are siblings, not a marker/descendant pair.
-    // A self condition preserves the existing body :has() rule without moving
-    // the shell or introducing a component-scoped stylesheet.
-    visibility: { 'default': null, ':is(body:has([role="dialog"][data-open]) *)': 'hidden' },
     pointerEvents: 'none',
     position: 'fixed',
     zIndex: 99_999,
@@ -116,7 +130,6 @@ interface AppShellSkeletonProps {
 const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
   const { isDark, navPanelBackground, navPanelWidth, showLeftPanel } = readBootShellGeometry();
   const hint = useLoadingHint();
-  const imLayout = readImLayoutHint();
 
   useLayoutEffect(retainSkeleton, []);
 
@@ -129,60 +142,8 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
     </div>
   );
 
-  // `im_layout`: icon rail + one rounded wrap (list column + content).
-  if (imLayout)
-    return (
-      <div aria-hidden id={id} {...sx(styles.root, CSS_VAR_CLASS)}>
-        {isDesktop && (
-          <div
-            {...sx(styles.dragRegion, electronStylish.draggable, { height: TITLE_BAR_HEIGHT })}
-          />
-        )}
-        <Flexbox
-          horizontal
-          height={isDesktop ? `calc(100% - ${TITLE_BAR_HEIGHT}px)` : '100%'}
-          width={'100%'}
-        >
-          <div
-            style={{
-              background: navPanelBackground,
-              flexShrink: 0,
-              height: '100%',
-              width: RAIL_WIDTH,
-            }}
-          />
-          <Flexbox
-            horizontal
-            style={getInnerCssVariables({ isDark })}
-            className={
-              stylex.props(layoutStyles.wrap, isDesktop && layoutStyles.wrapDesktop).className
-            }
-          >
-            {showLeftPanel && (
-              <div
-                style={{
-                  background: LIST_COLUMN_BACKGROUND,
-                  borderInlineEnd: `1px solid ${cssVar.colorBorderSecondary}`,
-                  flexShrink: 0,
-                  height: '100%',
-                  width: navPanelWidth,
-                }}
-              />
-            )}
-            <Flexbox
-              className={cx(containerStyles.innerContainer, containerStyles.innerFlush)}
-              height={'100%'}
-              width={'100%'}
-            >
-              {brand}
-            </Flexbox>
-          </Flexbox>
-        </Flexbox>
-      </div>
-    );
-
   return (
-    <div aria-hidden id={id} {...sx(styles.root, CSS_VAR_CLASS)}>
+    <div aria-hidden id={id} {...sx(styles.root, CSS_VAR_CLASS, fallback.root)}>
       {isDesktop && (
         <div {...sx(styles.dragRegion, electronStylish.draggable, { height: TITLE_BAR_HEIGHT })} />
       )}

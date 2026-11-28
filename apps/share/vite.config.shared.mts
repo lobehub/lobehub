@@ -10,6 +10,7 @@ import { viteMarkdownImport } from '../../plugins/vite/markdownImport';
 import { viteNodeModuleStub } from '../../plugins/vite/nodeModuleStub';
 import { vitePlatformResolve } from '../../plugins/vite/platformResolve';
 import {
+  sharedRendererClientBuild,
   sharedRendererDedupe,
   sharedRendererDefine,
 } from '../../plugins/vite/sharedRendererConfig';
@@ -59,6 +60,20 @@ export const createShareRrConfig = ({
     'shiki/wasm': stub('shikiWasm.ts'),
     ...extraSsrStubs,
   };
+
+  // Artboards are private to signed-in projects, and their canvas frames need the
+  // main SPA's `virtual:canvas-runtime` plugin, which the Share build lacks.
+  const appOnlyStubs: Record<string, string> = {
+    '@/features/Artboard/Gallery/loader': stub('artboardLoader.ts'),
+  };
+
+  const shareAppOnlyStubs = (): Plugin => ({
+    enforce: 'pre',
+    name: 'share-app-only-stubs',
+    resolveId(source) {
+      return appOnlyStubs[source];
+    },
+  });
 
   const shareSsrStubs = (): Plugin => ({
     applyToEnvironment: (environment) => environment.name === 'ssr',
@@ -170,13 +185,14 @@ export const createShareRrConfig = ({
   return defineConfig({
     base: isDev ? '/' : process.env.VITE_CDN_BASE || '/',
     environments: {
-      client: { define },
+      client: { build: sharedRendererClientBuild, define },
       ssr: { define: ssrDefine, optimizeDeps: { exclude: [...stylexTokenModules] } },
     },
     optimizeDeps: { exclude: [...stylexTokenModules] },
     plugins: [
       process.env.SHARE_CHUNK_REPORT ? ssrChunkReport() : undefined,
       process.env.SHARE_TRACE_MODULE ? ssrModuleTrace(process.env.SHARE_TRACE_MODULE) : undefined,
+      shareAppOnlyStubs(),
       shareSsrStubs(),
       shareClientOnlyStub(),
       buildInputsManifest(),

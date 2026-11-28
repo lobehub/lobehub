@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { deleteTestUsers } from '../../core/testCleanup';
 import { ProjectRepository } from '../../repositories/project';
 import { projectMembers, projectSites, users, workspaceMembers, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
@@ -16,7 +17,7 @@ const createProject = () =>
   new ProjectRepository(serverDB, ownerId).create({ identifier: 'SITE', name: 'Fieldnotes' });
 
 beforeEach(async () => {
-  await serverDB.delete(users);
+  await deleteTestUsers(serverDB);
   await serverDB.insert(users).values([
     { email: 'owner@fieldnotes.app', id: ownerId },
     { email: 'alex@studio-north.co', id: guestId },
@@ -24,7 +25,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await serverDB.delete(users);
+  await deleteTestUsers(serverDB);
 });
 
 describe('ProjectSiteModel', () => {

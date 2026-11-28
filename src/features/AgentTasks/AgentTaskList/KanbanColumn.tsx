@@ -15,6 +15,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { TaskKanbanGroupBy, TaskListItem } from '@/store/task/slices/list/initialState';
+import { densityVars } from '@/styles/densityVars';
 
 import { createTaskModal } from '../CreateTaskModal';
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
@@ -124,9 +125,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: 6px;
+    gap: ${densityVars.gap};
 
-    padding-block: 4px 12px;
+    padding-block: 0 12px;
     padding-inline: 8px;
   `,
   column: css`
@@ -154,7 +155,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   emptyText: css`
     padding-block: 24px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
 
     font-size: 13px;
     color: ${cssVar.colorTextQuaternary};
@@ -165,8 +166,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 6px;
     align-items: center;
 
-    padding-block: 10px 8px;
-    padding-inline: 10px 6px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: 12px 8px;
   `,
   headerActions: css`
     display: flex;

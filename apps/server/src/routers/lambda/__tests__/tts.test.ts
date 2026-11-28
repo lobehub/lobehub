@@ -16,6 +16,13 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: vi.fn(async () => ({ textToSpeech: textToSpeechMock })),
 }));
 
+const findByIdAndProviderMock = vi.fn();
+vi.mock('@/database/models/aiModel', () => ({
+  AiModelModel: vi.fn(function () {
+    return { findByIdAndProvider: findByIdAndProviderMock };
+  }),
+}));
+
 const caller = ttsRouter.createCaller({ jwtPayload: { userId: 'u1' }, userId: 'u1' } as any);
 
 const usage = { cost: 0.000_075, inputCharacters: 5 };
@@ -273,5 +280,169 @@ describe('ttsRouter.synthesize', () => {
           'ElevenLabs API Key is incorrect or empty, please check your ElevenLabs API Key and try again (ElevenLabs API error (401): Invalid API key). Set it in Settings → AI Providers → ElevenLabs, or in the server environment.',
       });
     });
+  });
+
+  describe.each([
+    {
+      defaultVoice: 'default',
+      invalid: { speed: 2.5 },
+      invalidMessage: 'params.speed must be between 0.5 and 2',
+      model: 's2.1-pro',
+      name: 'Fish Audio',
+      provider: 'fishaudio',
+    },
+    {
+      defaultVoice: 'zh_female_vv_uranus_bigtts',
+      invalid: { pitch: 13 },
+      invalidMessage: 'params.pitch must be between -12 and 12',
+      model: 'seed-tts-2.0',
+      name: 'Doubao Speech',
+      provider: 'doubaospeech',
+    },
+  ])('provider $provider', ({ defaultVoice, invalid, invalidMessage, model, name, provider }) => {
+    it('routes to its runtime with the card default voice', async () => {
+      textToSpeechMock.mockResolvedValue({
+        audio: new Uint8Array([4, 5]).buffer,
+        format: 'mp3',
+        usage: { inputCharacters: 2 },
+      });
+
+      const res = await caller.synthesize({ input: 'Hi', model, provider });
+
+      expect(initModelRuntimeFromDB).toHaveBeenCalledWith(
+        expect.anything(),
+        'u1',
+        provider,
+        undefined,
+      );
+      expect(textToSpeechMock).toHaveBeenCalledWith(
+        { input: 'Hi', model, params: {}, voice: defaultVoice, voiceIsDefault: true },
+        { metadata: { trigger: 'tts' }, user: 'u1' },
+      );
+      expect(res).toMatchObject({ format: 'mp3', mimeType: 'audio/mpeg' });
+    });
+
+    it('rejects invalid params before calling the runtime', async () => {
+      await expect(
+        caller.synthesize({ input: 'Hi', model, params: invalid, provider }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: expect.stringContaining(invalidMessage),
+      });
+      expect(textToSpeechMock).not.toHaveBeenCalled();
+    });
+
+    it('reports missing credentials with the InvalidProviderAPIKey copy', async () => {
+      vi.mocked(initModelRuntimeFromDB).mockRejectedValueOnce({
+        errorType: 'InvalidProviderAPIKey',
+      });
+
+      const error = await caller.synthesize({ input: 'Hi', model, provider }).catch((e) => e);
+
+      expect(error).toMatchObject({
+        code: 'BAD_GATEWAY',
+        message: `${name} API Key is incorrect or empty, please check your ${name} API Key and try again. Set it in Settings → AI Providers → ${name}, or in the server environment.`,
+      });
+      expect(error.cause).toMatchObject({ data: { errorType: 'InvalidProviderAPIKey', provider } });
+    });
+  });
+});
+
+describe('ttsRouter.synthesize saved default voice', () => {
+  it('uses the default voice saved in the model settings when the request names none', async () => {
+    findByIdAndProviderMock.mockResolvedValueOnce({ settings: { ttsVoice: 'Puck' } });
+
+    await caller.synthesize({ input: '你好', model: 'gemini-3.8-flash-tts', provider: 'google' });
+
+    expect(findByIdAndProviderMock).toHaveBeenCalledWith('gemini-3.8-flash-tts', 'google');
+    expect(textToSpeechMock.mock.calls[0][0]).toMatchObject({
+      voice: 'Puck',
+      voiceIsDefault: false,
+    });
+  });
+
+  it('lets an explicit request voice win without reading the saved one', async () => {
+    await caller.synthesize({
+      input: 'hello',
+      model: 'gemini-3.8-flash-tts',
+      provider: 'google',
+      voice: 'Zephyr',
+    });
+
+    expect(findByIdAndProviderMock).not.toHaveBeenCalled();
+    expect(textToSpeechMock.mock.calls[0][0]).toMatchObject({ voice: 'Zephyr' });
+  });
+
+  it('falls back to the card default when nothing is saved', async () => {
+    findByIdAndProviderMock.mockResolvedValueOnce(undefined);
+
+    await caller.synthesize({ input: 'hello', model: 'gemini-3.8-flash-tts', provider: 'google' });
+
+    expect(textToSpeechMock.mock.calls[0][0]).toMatchObject({
+      voice: 'Kore',
+      voiceIsDefault: true,
+    });
+  });
+
+  it("ignores a saved voice that is not in the model's catalog", async () => {
+    findByIdAndProviderMock.mockResolvedValueOnce({ settings: { ttsVoice: 'RetiredVoice' } });
+
+    await caller.synthesize({ input: 'hello', model: 'gemini-3.8-flash-tts', provider: 'google' });
+
+    expect(textToSpeechMock.mock.calls[0][0]).toMatchObject({ voice: 'Kore' });
+  });
+
+  it('accepts any saved voice for a model without a built-in catalog', async () => {
+    findByIdAndProviderMock.mockResolvedValueOnce({ settings: { ttsVoice: 'my-clone' } });
+
+    await caller.synthesize({ input: 'hello', model: 'my-custom-tts', provider: 'openai' });
+
+    expect(textToSpeechMock.mock.calls[0][0]).toMatchObject({ voice: 'my-clone' });
+  });
+
+  it('still synthesizes with the card default when reading the preference fails', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    findByIdAndProviderMock.mockRejectedValueOnce(new Error('db down'));
+
+    await caller.synthesize({ input: 'hello', model: 'gemini-3.8-flash-tts', provider: 'google' });
+
+    expect(textToSpeechMock.mock.calls[0][0]).toMatchObject({ voice: 'Kore' });
+    consoleError.mockRestore();
+  });
+});
+
+describe('ttsRouter.synthesize provider resolution', () => {
+  it("uses the built-in card's provider when the request names none", async () => {
+    await caller.synthesize({ input: 'hello', model: 'gemini-3.8-flash-tts' });
+
+    expect(initModelRuntimeFromDB).toHaveBeenCalledWith(
+      expect.anything(),
+      'u1',
+      'google',
+      undefined,
+    );
+  });
+
+  it('splits a provider-prefixed model reference', async () => {
+    await caller.synthesize({ input: 'hello', model: 'google/gemini-3.8-flash-tts' });
+
+    expect(initModelRuntimeFromDB).toHaveBeenCalledWith(
+      expect.anything(),
+      'u1',
+      'google',
+      undefined,
+    );
+    expect(textToSpeechMock.mock.calls[0][0]).toMatchObject({ model: 'gemini-3.8-flash-tts' });
+  });
+
+  it('keeps OpenAI as the fallback for an unknown bare model id', async () => {
+    await caller.synthesize({ input: 'hello', model: 'my-custom-tts' });
+
+    expect(initModelRuntimeFromDB).toHaveBeenCalledWith(
+      expect.anything(),
+      'u1',
+      'openai',
+      undefined,
+    );
   });
 });

@@ -36,6 +36,7 @@ import type {
 import { KIND_ICON } from '@/features/AgentGoals/ProcessControl/shared';
 import { useGoalNodeSelect } from '@/features/AgentGoals/ProcessControl/useGoalProcessActions';
 import { goalSelectors, useGoalStore } from '@/store/goal';
+import { densityVars } from '@/styles/densityVars';
 
 import type { LifecycleNote } from './lifecycleEvent';
 import { buildLifecycleDays, type LifecycleGroup, type LifecycleRow } from './lifecycleRows';
@@ -129,7 +130,7 @@ const styles = createStaticStyles(({ css }) => ({
   // The same header for a host that scrolls the whole page instead of owning a
   // padded scroller: nothing to cancel, so it simply reads as a label.
   dayPlain: css`
-    padding-block: 12px 6px;
+    padding-block: ${densityVars.contentGap} 6px;
     font-size: 12px;
     font-weight: 600;
     color: ${cssVar.colorTextTertiary};
@@ -398,9 +399,8 @@ Actor.displayName = 'GoalMetricLifecycleActor';
 
 const noteText = (note: LifecycleNote, t: (key: any, options?: any) => string) => {
   if (!('key' in note)) return note.text;
-  if (note.key === 'mainAgent')
-    return t('goalProcess.lifecycle.note.mainAgent', { text: note.text });
-  return t(`goalProcess.lifecycle.note.${note.key}` as const);
+  const { key, ...params } = note;
+  return t(`goalProcess.lifecycle.note.${key}` as const, params);
 };
 
 const EventItem = memo<{

@@ -102,6 +102,7 @@ const executePreparedCall = async (
         return await finalizeCallLlmTurn({
           assistantMessageId: prepared.assistantMessageId,
           attempts: attemptsMade,
+          contextAccounting: prepared.context.contextAccounting,
           events,
           host,
           model: prepared.model,
@@ -154,6 +155,7 @@ const executePreparedCall = async (
       if (interrupted) {
         await persistInterruptedCallLlmResult({
           assistantMessageId: prepared.assistantMessageId,
+          contextAccounting: prepared.context.contextAccounting,
           host,
           output: execution.output,
         });
@@ -181,6 +183,7 @@ const executePreparedCall = async (
       if (interrupted && lastOutput) {
         await persistInterruptedCallLlmResult({
           assistantMessageId: prepared.assistantMessageId,
+          contextAccounting: prepared.context.contextAccounting,
           host,
           output: lastOutput,
         });

@@ -1,15 +1,33 @@
-import { type LobeToolCustomPlugin } from '@lobechat/types';
+import {
+  type ConnectorVisibility,
+  type LobeToolCustomPlugin,
+  type McpConnectVia,
+} from '@lobechat/types';
+import { connectorConnectVia, connectorDeviceBinding } from '@lobechat/utils/mcpEndpoint';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import type { ConnectorCredentials, OIDCConfig } from '@/database/schemas';
 import { ConnectorSourceType } from '@/database/schemas';
-import DevModal from '@/features/PluginDevModal';
+import DevModal, {
+  type DevModalOAuthFields,
+  type DevModalOAuthPlan,
+} from '@/features/PluginDevModal';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 import { waitForConnectorOAuth } from '@/utils/connectorOAuth';
 import { executeOAuthCreate } from '@/utils/connectorOAuthCreate';
 
-import { executeLegacyMigrationSave } from './legacyPluginMigration';
+import type { LegacyMigrationPlugin } from '../legacyMigrationPlugin';
+import { saveConnectorEdit } from './connectorEdit';
+import { saveOAuthConnectorEdit } from './oauthEdit';
+import {
+  countDroppedAccounts,
+  isOAuthClientChanged,
+  isServerUrlChanged,
+  type OAuthBaseline,
+  requiresOAuth,
+} from './oauthPlan';
 
 interface CustomConnectorModalProps {
   connectorId?: string;
@@ -23,10 +41,15 @@ interface CustomConnectorModalProps {
    * so a transient failure (MCP server unreachable, etc.) leaves the user with
    * their working legacy plugin and a "retry" path on the next save.
    */
-  legacyPlugin?: LobeToolCustomPlugin;
+  legacyPlugin?: LegacyMigrationPlugin;
   onClose: () => void;
   onEditSuccess?: () => void;
   open: boolean;
+  /**
+   * Create mode in a workspace: `private` adds the connector as the caller's
+   * own, which only their private agents load (the Private tab's add).
+   */
+  visibility?: ConnectorVisibility;
 }
 
 /** Drop empty key/value pairs a user may have left behind in an editor. */
@@ -63,12 +86,16 @@ interface StdioConfig {
  * - Pre-fills the form from the existing connector record
  * - Calls updateConnector instead of createConnector on save
  * - Clears credentials when the server URL changes
+ * - Authorizes only when the URL or OAuth client changed, or no account is
+ *   connected yet (see `requiresOAuth`); other edits keep the accounts
  */
 const CustomConnectorModal = memo<CustomConnectorModalProps>(
-  ({ open, onClose, connectorId, legacyPlugin, onEditSuccess }) => {
+  ({ open, onClose, connectorId, legacyPlugin, onEditSuccess, visibility }) => {
+    const { t } = useTranslation('tool');
     const createConnector = useToolStore((s) => s.createConnector);
+    const migrateLegacyPlugin = useToolStore((s) => s.migrateLegacyPlugin);
+    const migrateLegacyPluginToConnector = useToolStore((s) => s.migrateLegacyPluginToConnector);
     const deleteConnector = useToolStore((s) => s.deleteConnector);
-    const updateConnector = useToolStore((s) => s.updateConnector);
     const getConnectorForEdit = useToolStore((s) => s.getConnectorForEdit);
     const startConnectorOAuth = useToolStore((s) => s.startConnectorOAuth);
     const syncConnectorTools = useToolStore((s) => s.syncConnectorTools);
@@ -134,7 +161,8 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
     // Migration mode skips the fetch — the legacy `customParams.mcp` blob is
     // already in the shape DevModal expects, so we hand it through unchanged.
     const editValue = useMemo((): LobeToolCustomPlugin | undefined => {
-      if (isMigrationMode) return legacyPlugin;
+      if (isMigrationMode)
+        return legacyPlugin ? { ...legacyPlugin, type: 'customPlugin' as const } : undefined;
       if (!isEditMode || !connector || editFetchedData === null) return undefined;
 
       const c = connector as typeof connector & {
@@ -187,7 +215,13 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
               token: authType === 'bearer' ? (credentials as { token: string })?.token : undefined,
               type: authType === 'header' ? 'none' : authType,
             },
+            boundDeviceId: connectorDeviceBinding({
+              mcpConnectionType: connector.mcpConnectionType,
+              mcpServerUrl: connector.mcpServerUrl,
+              metadata,
+            })?.deviceId,
             command: mcpStdioConfig?.command,
+            connectVia: connectorConnectVia(metadata),
             env: mcpStdioConfig?.env,
             headers: customHeaders,
             type: (connector.mcpConnectionType ?? 'http') as 'http' | 'stdio',
@@ -199,13 +233,52 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       };
     }, [isEditMode, isMigrationMode, legacyPlugin, connector, editFetchedData]);
 
+    // The stored OAuth setup the form opened with. Undefined while creating,
+    // migrating or loading, where every OAuth save authorizes.
+    const oauthBaseline = useMemo((): OAuthBaseline | undefined => {
+      if (!isEditMode || !connector || editFetchedData === null) return undefined;
+      const { credentials, oidcConfig } = editFetchedData;
+      return {
+        accountCount: connector.links?.length ?? 0,
+        authType: oidcConfig ? 'oauth2' : (credentials?.type ?? 'none'),
+        clientId: oidcConfig?.scheme === 'pre_registration' ? oidcConfig.clientId : undefined,
+        mcpServerUrl: connector.mcpServerUrl,
+      };
+    }, [isEditMode, connector, editFetchedData]);
+
+    const getOAuthPlan = (fields: DevModalOAuthFields): DevModalOAuthPlan => {
+      const authorize = requiresOAuth(oauthBaseline, fields);
+      if (!oauthBaseline) return { authorize };
+
+      const dropped = countDroppedAccounts(oauthBaseline, fields);
+      if (dropped > 0)
+        return {
+          authorize,
+          notice: {
+            // Two keys rather than plural forms: zh has one form, and the many
+            // case says that only one account comes back on save.
+            text:
+              dropped === 1
+                ? t('connector.account.editDropsAccount')
+                : t('connector.account.editDropsAccounts', { count: dropped }),
+            type: 'warning',
+          },
+        };
+      if (!authorize)
+        return {
+          authorize,
+          notice: { text: t('connector.account.editKeepsAccounts'), type: 'info' },
+        };
+      return { authorize };
+    };
+
     const handleSave = async (
       value: LobeToolCustomPlugin,
       ctx?: { oauthPopup?: Window | null },
     ) => {
       // ── Migration mode ────────────────────────────────────────────────────
-      // Promote a legacy `user_installed_plugins.type='customPlugin'` row into
-      // a `user_connectors` row. Server `connector.create` is idempotent on
+      // Promote a legacy `user_installed_plugins` row into a
+      // `user_connectors` row. Server `connector.create` is idempotent on
       // `(user_id, identifier)` — a same-name half-baked connector from the
       // old `syncPluginTools` path becomes an UPDATE here, no collision branch
       // needed.
@@ -218,53 +291,111 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       if (isMigrationMode && legacyPlugin) {
         // `value` is the full form state — DevModal seeded itself from
         // `legacyPlugin` via `editValue`, so anything the user edited (or left
-        // alone) is already inside `value`. Hand it to the orchestrator.
-        const result = await executeLegacyMigrationSave(legacyPlugin, value, {
-          // The migration orchestrator predates the server-reported `isNew`
-          // and still keys its rollback on `hasExistingConnector` below.
-          createConnector: async (payload) => (await createConnector(payload)).id,
-          deleteConnector,
-          // Read fresh so the rollback only deletes a connector this migration
-          // created, never one the idempotent upsert merely updated.
-          hasExistingConnector: (id) =>
-            Boolean(connectorSelectors.connectorByIdentifier(id)(useToolStore.getState())),
-          syncConnectorTools,
-          uninstallCustomPlugin,
-        });
-        if (!result.ok) {
-          throw new Error(
-            result.reason === 'no-mcp'
-              ? 'This custom plugin has no MCP configuration to migrate.'
-              : result.reason === 'no-endpoint'
-                ? 'This custom plugin is missing a URL (for HTTP) or command (for stdio).'
-                : 'This custom plugin uses an unsupported transport.',
+        // alone) is already inside `value`.
+        if (legacyPlugin.type === 'plugin') {
+          const mcp = value.customParams?.mcp;
+          if (!mcp) throw new Error('This MCP plugin has no MCP configuration to migrate.');
+          // A market-hosted cloud MCP has no user-owned endpoint to repair; the
+          // server already knows its hosted endpoint and migrates it directly.
+          if (mcp.type === 'cloud') {
+            await migrateLegacyPluginToConnector(legacyPlugin.identifier);
+            onEditSuccess?.();
+            return;
+          }
+          if (mcp.type !== 'http' && mcp.type !== 'stdio')
+            throw new Error('This MCP plugin uses an unsupported transport.');
+          // A marketplace repair retry still runs the server-side migration:
+          // settings, credentials, marketplace provenance and tool policies
+          // stay server-owned, while the edited connection form is the repair.
+          await migrateLegacyPluginToConnector(
+            legacyPlugin.identifier,
+            {
+              args: mcp.args,
+              auth:
+                mcp.auth?.type === 'none' ||
+                mcp.auth?.type === 'bearer' ||
+                mcp.auth?.type === 'oauth2'
+                  ? {
+                      accessToken: mcp.auth.accessToken,
+                      clientId: mcp.auth.clientId,
+                      clientSecret: mcp.auth.clientSecret,
+                      token: mcp.auth.token,
+                      type: mcp.auth.type,
+                    }
+                  : undefined,
+              boundDeviceId: mcp.boundDeviceId,
+              command: mcp.command,
+              connectVia: mcp.connectVia,
+              env: cleanRecord(mcp.env),
+              headers: cleanRecord(mcp.headers),
+              type: mcp.type,
+              url: mcp.url,
+            },
+            ctx?.oauthPopup,
           );
+          onEditSuccess?.();
+          return;
         }
-        onEditSuccess?.();
-        return;
+
+        if (legacyPlugin.type === 'customPlugin') {
+          const result = await migrateLegacyPlugin(legacyPlugin, value);
+          if (!result.ok) {
+            throw new Error(
+              result.reason === 'no-mcp'
+                ? 'This custom plugin has no MCP configuration to migrate.'
+                : result.reason === 'no-endpoint'
+                  ? 'This custom plugin is missing a URL (for HTTP) or command (for stdio).'
+                  : 'This custom plugin uses an unsupported transport.',
+            );
+          }
+          onEditSuccess?.();
+          return;
+        }
+        throw new Error('This MCP plugin uses an unsupported transport.');
       }
 
       const mcp = (value.customParams?.mcp ?? {}) as {
         args?: string[];
         auth?: { clientId?: string; clientSecret?: string; token?: string; type?: string };
+        boundDeviceId?: string;
         command?: string;
+        connectVia?: McpConnectVia;
         env?: Record<string, string>;
         headers?: Record<string, string>;
         type?: 'http' | 'stdio';
         url?: string;
       };
       const identifier = value.identifier;
+      // Only `device` is stored; stdio always runs on the device anyway
+      const connectViaDevice = mcp.type !== 'stdio' && mcp.connectVia === 'device';
       const isHttp = mcp.type !== 'stdio';
+      // Only kept for a server that runs on the device (the form prunes it otherwise)
+      const boundDeviceId = mcp.boundDeviceId || undefined;
       const authType = mcp.auth?.type;
 
       // ── Edit mode ─────────────────────────────────────────────────────────
       if (isEditMode && connectorId) {
         const newUrl = isHttp ? mcp.url?.trim() : undefined;
         const urlChanged = newUrl !== (connector?.mcpServerUrl ?? undefined);
+        const oauthFields: DevModalOAuthFields = {
+          clientId: mcp.auth?.clientId,
+          clientSecret: mcp.auth?.clientSecret,
+          url: mcp.url,
+        };
 
         const patch: Record<string, any> = {};
 
         if (newUrl !== undefined) patch.mcpServerUrl = newUrl;
+
+        // The transport and a stdio command are edited here too, not only the URL.
+        patch.mcpConnectionType = isHttp ? 'http' : 'stdio';
+        if (!isHttp) {
+          patch.mcpStdioConfig = {
+            args: mcp.args ?? [],
+            command: (mcp.command ?? '').trim(),
+            env: cleanRecord(mcp.env),
+          };
+        }
 
         // Custom headers live in metadata (independent of the auth credential and
         // of the server URL), so always re-sync them from the form. Merge into the
@@ -281,6 +412,10 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
           const nextMetadata: Record<string, unknown> = { ...connector.metadata };
           if (headers) nextMetadata.customHeaders = headers;
           else delete nextMetadata.customHeaders;
+          if (connectViaDevice) nextMetadata.connectVia = 'device';
+          else delete nextMetadata.connectVia;
+          if (boundDeviceId) nextMetadata.boundDeviceId = boundDeviceId;
+          else delete nextMetadata.boundDeviceId;
           patch.metadata = nextMetadata;
         }
 
@@ -295,7 +430,16 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
           patch.credentials = null;
         }
 
-        if (authType === 'oauth2') {
+        // Write the OAuth client only when it (or the server it belongs to)
+        // changed. Re-sending the form's `{ clientId: undefined, scheme: 'dcr' }`
+        // on every save would replace the client the server resolved, and with
+        // it the refresh tokens of every connected account.
+        if (
+          authType === 'oauth2' &&
+          (!oauthBaseline ||
+            isServerUrlChanged(oauthBaseline, oauthFields) ||
+            isOAuthClientChanged(oauthBaseline, oauthFields))
+        ) {
           const clientId = mcp.auth?.clientId?.trim();
           patch.oidcConfig = {
             clientId: clientId || undefined,
@@ -304,17 +448,19 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
           };
         }
 
-        await updateConnector(connectorId, patch);
-
-        if (authType === 'oauth2' && isHttp) {
+        // Same rule DevModal used to decide whether to open the popup.
+        if (isHttp && authType === 'oauth2' && requiresOAuth(oauthBaseline, oauthFields)) {
+          // Synced by its callback; a failed authorization undoes the edit
           const popup = ctx?.oauthPopup;
           try {
-            const authorizationUrl = await startConnectorOAuth(connectorId);
-            await waitForConnectorOAuth(popup, connectorId, authorizationUrl);
+            await saveOAuthConnectorEdit(connectorId, patch, popup, useToolStore.getState);
           } finally {
             popup?.close();
             await fetchConnectors();
           }
+        } else {
+          // Re-lists the tools; an unreadable list undoes the edit
+          await saveConnectorEdit(connectorId, patch, useToolStore.getState);
         }
 
         onEditSuccess?.();
@@ -333,8 +479,16 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
               command: (mcp.command ?? '').trim(),
               env: cleanRecord(mcp.env),
             },
+        // The OAuth create keeps the choices too; the other path rebuilds metadata below
+        ...((connectViaDevice || boundDeviceId) && {
+          metadata: {
+            ...(boundDeviceId && { boundDeviceId }),
+            ...(connectViaDevice && { connectVia: 'device' as const }),
+          },
+        }),
         name: identifier,
         sourceType: ConnectorSourceType.custom,
+        ...(visibility === 'private' && { visibility }),
       };
 
       // OAuth: create with the OIDC config, then drive the authorize popup that
@@ -392,10 +546,15 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       // `fetchConnectors` completes it reports "absent" for a connector the
       // server already has, and the rollback below must never delete a
       // connector the user already had.
+      const metadata = {
+        ...(boundDeviceId && { boundDeviceId }),
+        ...(headers && { customHeaders: headers }),
+        ...(connectViaDevice && { connectVia: 'device' as const }),
+      };
       const { id: newConnectorId, isNew } = await createConnector({
         ...base,
         credentials,
-        metadata: headers ? { customHeaders: headers } : undefined,
+        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       });
       try {
         await syncConnectorTools(newConnectorId);
@@ -423,10 +582,15 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
 
     return (
       <DevModal
+        enableDeviceBinding
         enableOAuth
+        getOAuthPlan={getOAuthPlan}
         mode={isEditMode || isMigrationMode ? 'edit' : 'create'}
         open={open}
         value={editValue}
+        privateConnector={
+          isEditMode ? connector?.visibility === 'private' : visibility === 'private'
+        }
         onDelete={handleDelete}
         onSave={handleSave}
         onOpenChange={(next) => {

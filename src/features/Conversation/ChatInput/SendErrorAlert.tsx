@@ -44,12 +44,14 @@ const SendErrorAlert = memo<SendErrorAlertProps>(({ errorMessage, onClose }) => 
   // As a single sentence the two overflowed the row and stranded a word on the
   // second line.
   const description =
-    business.description ??
-    (isConcurrencyLimit
-      ? t('input.concurrencyLimit.desc')
-      : isRunFeeUnfunded
-        ? t('input.agentRunFeeUnfunded.desc')
-        : undefined);
+    business.description === null
+      ? undefined
+      : (business.description ??
+        (isConcurrencyLimit
+          ? t('input.concurrencyLimit.desc')
+          : isRunFeeUnfunded
+            ? t('input.agentRunFeeUnfunded.desc')
+            : undefined));
 
   // Same bottom gap and edges as the other notices above the composer, so two
   // of them stack at an even rhythm and line up with the input.
@@ -59,6 +61,7 @@ const SendErrorAlert = memo<SendErrorAlertProps>(({ errorMessage, onClose }) => 
         closable
         action={business.action}
         description={description}
+        icon={business.icon}
         title={title}
         type={'secondary'}
         onClose={onClose}

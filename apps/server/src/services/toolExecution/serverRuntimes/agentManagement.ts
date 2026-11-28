@@ -12,12 +12,13 @@ import {
   type UpdatePromptParams,
 } from '@lobechat/builtin-tool-agent-management';
 import { buildBackgroundSubAgentReceipt } from '@lobechat/builtin-tool-lobe-agent';
+import { isOnDemandBuiltinTool } from '@lobechat/builtin-tools';
 import { searchAgentsResultsPrompt } from '@lobechat/prompts';
 import {
-  getPluginMode,
   type HeterogeneousProviderConfig,
   parsePluginEntry,
-  upsertPluginMode,
+  setBuiltinPluginMode,
+  upsertConnectorEnabled,
 } from '@lobechat/types';
 import debug from 'debug';
 
@@ -25,6 +26,11 @@ import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
 import { PluginModel } from '@/database/models/plugin';
 import { AgentService } from '@/server/services/agent';
+import {
+  installMarketplaceMcpConnector,
+  type MarketMcpManifest,
+  type MarketplaceInstallOptions,
+} from '@/server/services/connector/marketplaceInstall';
 import { DiscoverService } from '@/server/services/discover';
 
 import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
@@ -67,6 +73,16 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
     const discoverService = new DiscoverService({
       userInfo: { userId: context.userId, workspaceId: context.workspaceId },
     });
+    const installScope = {
+      serverDB: context.serverDB,
+      userId: context.userId,
+      workspaceId: context.workspaceId,
+    };
+    const installMarketplaceConnector = (
+      identifier: string,
+      manifest: MarketMcpManifest,
+      options?: MarketplaceInstallOptions,
+    ) => installMarketplaceMcpConnector(installScope, identifier, manifest, options);
 
     return {
       callAgent: async (
@@ -312,28 +328,33 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
             return { content: `Agent "${agentId}" not found.`, success: false };
           }
 
-          // Pin only an id the runtime can load: a builtin, a connector, or a
-          // plugin whose manifest lists its APIs (fetched from the marketplace
-          // when not installed yet). Registering a bare row here used to report
-          // success for ids that never produced a tool.
+          // Pin only an id the runtime can load: a builtin, a connector, or an
+          // installed plugin whose manifest lists its APIs. A marketplace MCP
+          // not installed yet is installed as a connector first. Registering a
+          // bare row here used to report success for ids that never produced a tool.
           const { installedNow, resolution } = await resolveOrInstallMarketPlugin(
             identifier,
-            { connectorModel, discoverService, pluginModel },
+            { connectorModel, discoverService, installMarketplaceConnector, pluginModel },
             { agentId, source },
           );
           if (resolution.status !== 'loadable')
             return unresolvablePluginResult(identifier, resolution);
 
-          // upsertPluginMode preserves an already-pinned entry (string or
-          // object) as-is and flips a disabled entry back to pinned in place,
-          // instead of blindly pushing a duplicate bare-string identifier.
-          if (getPluginMode(agent.plugins ?? undefined, identifier) !== 'pinned') {
+          const existing = agent.plugins?.find(
+            (entry) => parsePluginEntry(entry).identifier === identifier,
+          );
+          const needsBuiltinOverride =
+            isOnDemandBuiltinTool(identifier) &&
+            (!existing || typeof existing === 'string' || !existing.builtinOverride);
+          if (!existing || parsePluginEntry(existing).mode === 'disabled' || needsBuiltinOverride) {
             await agentModel.updateConfig(agentId, {
-              plugins: upsertPluginMode(
-                agent.plugins ?? undefined,
-                identifier,
-                'pinned',
-              ) as unknown as string[],
+              plugins: (isOnDemandBuiltinTool(identifier)
+                ? setBuiltinPluginMode(agent.plugins ?? undefined, identifier, 'auto')
+                : upsertConnectorEnabled(
+                    agent.plugins ?? undefined,
+                    identifier,
+                    true,
+                  )) as unknown as string[],
             });
           }
 
@@ -445,7 +466,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
       },
 
       searchMarketTools: (params: SearchMarketToolsParams): Promise<ToolExecutionResult> =>
-        searchMarketTools({ discoverService, pluginModel }, params),
+        searchMarketTools({ connectorModel, discoverService, pluginModel }, params),
 
       updateAgent: async (params: UpdateAgentParams): Promise<ToolExecutionResult> => {
         try {

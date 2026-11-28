@@ -237,7 +237,7 @@ describe('AiAgentService.execAgent - client-minted ids', () => {
     'snapshots the model and reasoning for a precreated %s topic',
     async (kind) => {
       const hintsSpy = vi.spyOn(modelHints, 'resolveModelExtendParamsForUser').mockResolvedValue({
-        modelHasReasoningExtendParams: true,
+        modelHasReasoningControls: true,
         modelExtendParams: ['reasoningEffort'],
       });
 
@@ -265,7 +265,7 @@ describe('AiAgentService.execAgent - client-minted ids', () => {
 
   it('snapshots an explicit model override when scheduling', async () => {
     const hintsSpy = vi.spyOn(modelHints, 'resolveModelExtendParamsForUser').mockResolvedValue({
-      modelHasReasoningExtendParams: true,
+      modelHasReasoningControls: true,
       modelExtendParams: ['reasoningEffort'],
     });
     await service.scheduleAgentRun({
@@ -281,6 +281,20 @@ describe('AiAgentService.execAgent - client-minted ids', () => {
       metadata: { reasoningConfig: { reasoningEffort: 'high' } },
     });
     hintsSpy.mockRestore();
+  });
+
+  it('leaves inline image references out of a new topic fallback title', async () => {
+    await service.execAgent({ agentId: 'agent-1', prompt: '[Image #1] [Image #1] dup test' });
+    expect(mockTopicCreate.mock.calls[0][0]).toMatchObject({ title: 'dup test' });
+  });
+
+  it('leaves inline image references out of a scheduled topic title', async () => {
+    await service.scheduleAgentRun({
+      agentId: 'agent-1',
+      prompt: '[Image #1] dup test',
+      runAt: new Date(Date.now() + 60000).toISOString(),
+    });
+    expect(mockTopicCreate.mock.calls[0][0]).toMatchObject({ title: 'dup test' });
   });
 
   it('does not recreate or snapshot an existing group topic', async () => {

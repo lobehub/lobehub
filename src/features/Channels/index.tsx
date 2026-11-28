@@ -6,6 +6,7 @@ import { useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useParams } from 'react-router';
 
+import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
 import NotFound from '@/components/404';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { EntityLinkHostProvider } from '@/features/EntityLink/host';
@@ -20,12 +21,17 @@ import { ChannelConversation } from './ChannelConversation';
 import { MEMBER_FLOAT_BREAKPOINT, MemberPanel } from './MemberPanel';
 import { MemberStatus } from './MemberStatus';
 import { openTopic } from './openTopic';
-import { CHANNEL_ENTITY_PORTAL_SCOPE, PortalPanel } from './PortalPanel';
+import { PortalPanel } from './PortalPanel';
 import { type ReplyTopic, ReplyTopicPanel } from './ReplyTopicPanel';
 import { styles } from './styles';
-import { ThreadPageActions, ThreadPageTitle } from './ThreadPageTitle';
-import { THREAD_FLOAT_BREAKPOINT, ThreadPanel } from './ThreadPanel';
-import { channelBrowserSessionId, usePortalPanelOpen } from './usePortalPanel';
+import { ThreadPageTitle } from './ThreadPageTitle';
+import { THREAD_FLOAT_BREAKPOINT, ThreadFollowers, ThreadPanel } from './ThreadPanel';
+import {
+  CHANNEL_ENTITY_PORTAL_SCOPE,
+  channelBrowserSessionId,
+  usePortalPanelOpen,
+} from './usePortalPanel';
+import { useThreadMenu } from './useThreadMenu';
 import { useThreadPanel } from './useThreadPanel';
 
 /** One Channel: the main conversation, with a thread beside it, or one thread as the page. */
@@ -33,6 +39,8 @@ function EnabledChannelPage() {
   const { t } = useTranslation('channel');
   const { channelId } = useParams<{ channelId: string }>();
   const panel = useThreadPanel(channelId ?? '');
+  // Member cards on message avatars and the member panel read this directory.
+  useFetchWorkspaceMembers();
   const [membersChannelId, setMembersChannelId] = useState<string | null>(null);
   const memberPanelId = useId();
   const conversationRef = useRef<HTMLDivElement>(null);
@@ -53,6 +61,10 @@ function EnabledChannelPage() {
   const threadId = portalOpen ? null : panel.threadId;
   const threadDraft = portalOpen ? null : panel.draft;
   const pageThreadId = panel.pageThreadId;
+  const threadMenu = useThreadMenu();
+  const pageThread = pageThreadId
+    ? detail?.threads.find((entry) => entry.id === pageThreadId)
+    : undefined;
   // A direct conversation's side panel is its Agent's profile; a workspace group's is the roster.
   const hasMemberPanel =
     !!directAgent || (!!detail?.channel.workspaceId && !detail.channel.agentId);
@@ -61,10 +73,22 @@ function EnabledChannelPage() {
   const visibleTopic = openTopic(topic, channelId, {
     portal: portalOpen,
     members: membersOpen,
-    thread: !!(threadId || threadDraft || pageThreadId),
+    // Only a side thread shares the topic's slot. A thread opened as the page keeps its own
+    // column, so the topic its replies link opens beside it.
+    thread: !!(threadId || threadDraft),
   });
   if (!channelId) return null;
   if (panel.legacyPageUrl) return <Navigate replace to={panel.legacyPageUrl} />;
+
+  // The run topic behind a reply, wherever that reply is read: the feed, a thread beside it,
+  // or the thread page. A side thread gives up its slot to the topic — the Channel is what you
+  // come back to — while the thread page keeps both.
+  const openReplyTopic = (next: ReplyTopic) => {
+    setMembersChannelId(null);
+    clearPortalStack();
+    if (!pageThreadId) panel.close();
+    setTopic({ ...next, channelId });
+  };
 
   return (
     <Flexbox {...stylex.props(styles.layout)}>
@@ -88,9 +112,10 @@ function EnabledChannelPage() {
         right={
           detail && (
             <Flexbox horizontal align="center" gap={8}>
-              {pageThreadId && <ThreadPageActions detail={detail} threadId={pageThreadId} />}
+              {pageThreadId && <ThreadFollowers detail={detail} target={pageThreadId} />}
               <MemberStatus
                 detail={detail}
+                threadMenu={pageThread ? threadMenu(detail.channel, pageThread) : undefined}
                 memberPanel={
                   hasMemberPanel
                     ? {
@@ -125,8 +150,10 @@ function EnabledChannelPage() {
               threadId={pageThreadId}
               inert={
                 (membersOpen && (conversationWidth ?? 1000) < MEMBER_FLOAT_BREAKPOINT) ||
-                (portalOpen && (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT)
+                (portalOpen && (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT) ||
+                (!!visibleTopic && (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT)
               }
+              onOpenTopic={openReplyTopic}
             />
           ) : (
             <ChannelConversation
@@ -145,12 +172,7 @@ function EnabledChannelPage() {
                 // Under a report the thread only looks closed, so bring it back, don't toggle it off.
                 panel.openThread(nextThreadId, portalOpen ? false : toggle);
               }}
-              onOpenTopic={(next) => {
-                panel.close();
-                setMembersChannelId(null);
-                clearPortalStack();
-                setTopic({ ...next, channelId });
-              }}
+              onOpenTopic={openReplyTopic}
               onStartThread={(draft) => {
                 setTopic(null);
                 clearPortalStack();
@@ -191,6 +213,7 @@ function EnabledChannelPage() {
               threadId={threadId}
               onClose={panel.close}
               onOpenPage={panel.openPage}
+              onOpenTopic={openReplyTopic}
               onSendDraft={panel.send}
             />
           )}

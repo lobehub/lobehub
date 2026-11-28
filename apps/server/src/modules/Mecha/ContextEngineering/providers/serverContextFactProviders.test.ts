@@ -1,10 +1,11 @@
-import { defaultUninstalledBuiltinTools } from '@lobechat/builtin-tools';
+import { defaultUninstalledBuiltinTools, onDemandBuiltinToolIds } from '@lobechat/builtin-tools';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createServerContextFactProviders } from './index';
 
 const {
   agentDocumentsConstructor,
+  connectorQueryPublic,
   credsList,
   findById,
   getAgentContextDocuments,
@@ -14,6 +15,7 @@ const {
   pluginQuery,
 } = vi.hoisted(() => ({
   agentDocumentsConstructor: vi.fn(),
+  connectorQueryPublic: vi.fn(async () => [] as unknown[]),
   credsList: vi.fn(),
   findById: vi.fn(),
   getAgentContextDocuments: vi.fn(),
@@ -38,6 +40,11 @@ vi.mock('@/database/models/user', () => ({
     },
     { getInfoForAIGeneration },
   ),
+}));
+vi.mock('@/database/models/connector', () => ({
+  ConnectorModel: class {
+    queryPublic = connectorQueryPublic;
+  },
 }));
 vi.mock('@/database/models/plugin', () => ({
   PluginModel: class {
@@ -78,6 +85,17 @@ vi.mock('@/server/services/market', () => ({
     };
   },
 }));
+
+const { getAllModels, loadModels } = vi.hoisted(() => ({
+  getAllModels: vi.fn(),
+  loadModels: vi.fn(),
+}));
+vi.mock('@/database/models/aiModel', () => ({
+  AiModelModel: class {
+    getAllModels = getAllModels;
+  },
+}));
+vi.mock('@/business/client/model-bank/loadModels', () => ({ loadModels }));
 
 const source = (state: Record<string, unknown> = {}) => ({
   ctx: { serverDB: {}, userId: 'owner-1', workspaceId: 'ws-1' } as never,
@@ -126,7 +144,7 @@ describe('createServerContextFactProviders', () => {
   });
 
   it('reads user info for the user the rules name, defaulting to the run owner', async () => {
-    getInfoForAIGeneration.mockResolvedValue({ responseLanguage: 'ja-JP', userName: 'v' });
+    getInfoForAIGeneration.mockResolvedValue({ preferredReplyLanguage: 'ja-JP', userName: 'v' });
     const providers = createServerContextFactProviders(source());
 
     await expect(providers.getUserInfo!('visitor-1')).resolves.toEqual({
@@ -175,6 +193,33 @@ describe('createServerContextFactProviders', () => {
     ]);
   });
 
+  // Installs now land only in user_connectors: a connector-only custom MCP
+  // must still reach the builder's inventory, once per identifier.
+  it('offers custom connectors beside legacy custom plugin rows', async () => {
+    connectorQueryPublic.mockResolvedValueOnce([
+      { description: 'Repo tools', identifier: 'repo-mcp', name: 'Repo', sourceType: 'custom' },
+      { description: null, identifier: 'my-mcp', name: '', sourceType: 'custom' },
+      { description: 'Docs', identifier: 'market-mcp', name: 'Docs', sourceType: 'marketplace' },
+    ]);
+    pluginQuery.mockResolvedValue([
+      {
+        identifier: 'my-mcp',
+        manifest: { meta: { description: 'Stale', title: 'Old title' } },
+        type: 'customPlugin',
+      },
+      { identifier: 'legacy-mcp', manifest: { meta: { title: 'Legacy' } }, type: 'customPlugin' },
+    ]);
+
+    await expect(
+      createServerContextFactProviders(source({ operationToolSet: { sourceMap: {} } }))
+        .listCustomPlugins!(),
+    ).resolves.toEqual([
+      { description: 'Repo tools', identifier: 'repo-mcp', name: 'Repo', type: 'custom' },
+      { description: undefined, identifier: 'my-mcp', name: 'my-mcp', type: 'custom' },
+      { description: undefined, identifier: 'legacy-mcp', name: 'Legacy', type: 'custom' },
+    ]);
+  });
+
   it('reads the uninstalled builtin list from the scope the run belongs to', async () => {
     getUserSettings.mockResolvedValue({
       tool: {
@@ -213,7 +258,9 @@ describe('createServerContextFactProviders', () => {
         state: {} as never,
       }).listUninstalledBuiltinIds!(),
     ).resolves.toEqual(defaultUninstalledBuiltinTools);
-    expect(defaultUninstalledBuiltinTools.length).toBeGreaterThan(0);
+    expect(
+      defaultUninstalledBuiltinTools.filter((id) => onDemandBuiltinToolIds.includes(id)),
+    ).toEqual([]);
   });
 
   it('returns the app origin and the workspace slug when it resolves', async () => {
@@ -280,6 +327,16 @@ describe('createServerContextFactProviders', () => {
       title: 'Report',
       updatedAt: new Date(updatedAt),
     });
+    const alwaysRow = {
+      content: 'Always follow the style guide.',
+      contentCharCount: 30,
+      documentId: 'doc-2',
+      filename: 'style.md',
+      id: 'agent-doc-2',
+      policyLoad: 'always',
+      title: 'Style',
+      updatedAt: new Date('2026-11-01T00:00:00.000Z'),
+    };
     const turn = {
       cacheTtlMs: 5 * 60 * 1000,
       messages: [
@@ -336,6 +393,9 @@ describe('createServerContextFactProviders', () => {
         ],
       });
       expect(getAgentContextDocuments).toHaveBeenCalledTimes(1);
+      expect(getAgentContextDocuments).toHaveBeenCalledWith('agent-1', {
+        excludeProgressive: false,
+      });
       expect(redisIndexGet).toHaveBeenCalledWith({
         agentId: 'agent-1',
         threadId: undefined,
@@ -346,19 +406,52 @@ describe('createServerContextFactProviders', () => {
     });
 
     it('renders later steps from the pinned snapshot without reading the stored one', async () => {
-      getAgentContextDocuments.mockResolvedValue([reportRow(14_100, '2026-11-14T10:00:20.000Z')]);
+      // The database answers the narrowed read with the always-loaded documents only.
+      getAgentContextDocuments.mockResolvedValue([alwaysRow]);
       const bindAgentDocumentIndex = vi.fn();
       const providers = providersFor(
         { binding: { agentDocumentIndex: stored }, origin: { topicId: 'topic-1' } },
         bindAgentDocumentIndex,
       );
 
-      const [doc] = (await providers.listAgentDocuments!('agent-1'))!;
+      const docs = (await providers.listAgentDocuments!('agent-1'))!;
 
-      expect(doc).toMatchObject({ contentCharCount: 9400 });
+      expect(docs).toEqual([
+        expect.objectContaining({ content: 'Always follow the style guide.', id: 'agent-doc-2' }),
+        expect.objectContaining({ contentCharCount: 9400, id: 'agent-doc-1' }),
+      ]);
+      expect(getAgentContextDocuments).toHaveBeenCalledWith('agent-1', {
+        excludeProgressive: true,
+      });
       expect(redisIndexGet).not.toHaveBeenCalled();
       expect(redisIndexSet).not.toHaveBeenCalled();
       expect(bindAgentDocumentIndex).not.toHaveBeenCalled();
+    });
+
+    it('reads every document again when a compression retires the pinned snapshot', async () => {
+      getAgentContextDocuments.mockResolvedValue([reportRow(14_100, '2026-11-14T10:00:20.000Z')]);
+      const bindAgentDocumentIndex = vi.fn();
+      const providers = createServerContextFactProviders({
+        ctx: { bindAgentDocumentIndex, serverDB: {}, userId: 'owner-1' } as never,
+        documentIndexTurn: {
+          ...turn,
+          messages: [...turn.messages, { id: 'cmp-1', role: 'compressedGroup' }],
+        },
+        state: {
+          binding: { agentDocumentIndex: stored },
+          origin: { topicId: 'topic-1' },
+        } as never,
+      });
+
+      const [doc] = (await providers.listAgentDocuments!('agent-1'))!;
+
+      expect(doc).toMatchObject({ contentCharCount: 14_100 });
+      expect(getAgentContextDocuments).toHaveBeenCalledWith('agent-1', {
+        excludeProgressive: false,
+      });
+      expect(bindAgentDocumentIndex).toHaveBeenCalledWith(
+        expect.objectContaining({ compressionId: 'cmp-1' }),
+      );
     });
 
     it('renders the live documents when the snapshot cannot be resolved', async () => {
@@ -380,6 +473,42 @@ describe('createServerContextFactProviders', () => {
 
       expect(doc).toMatchObject({ contentCharCount: 14_100 });
       expect(redisIndexGet).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listEnabledProviders', () => {
+    const card = {
+      abilities: { functionCall: true, reasoning: true, vision: true },
+      displayName: 'DeepSeek V4.1 Flash',
+      id: 'deepseek-flash',
+      providerId: 'deepseek',
+    };
+    const row = (abilities: unknown) => ({
+      abilities,
+      enabled: true,
+      id: 'deepseek-flash',
+      providerId: 'deepseek',
+      type: 'chat',
+    });
+    const listAbilities = async (abilities: unknown) => {
+      getAllModels.mockResolvedValue([row(abilities)]);
+      loadModels.mockResolvedValue([card]);
+      const result = await createServerContextFactProviders(source()).listEnabledProviders!();
+      return result![0].models[0].abilities;
+    };
+
+    it('falls back to the catalog card when the saved abilities are empty', async () => {
+      await expect(listAbilities({})).resolves.toMatchObject({ functionCall: true, vision: true });
+    });
+
+    it('lets a non-empty saved config replace the card, as the run does', async () => {
+      await expect(listAbilities({ functionCall: true, reasoning: true })).resolves.toEqual({
+        audio: false,
+        functionCall: true,
+        reasoning: true,
+        video: false,
+        vision: false,
+      });
     });
   });
 

@@ -1,5 +1,5 @@
 import { type ToolIntervention } from '@lobechat/types';
-import { Block, cssVar, Icon, Spin, Tooltip } from '@lobehub/ui';
+import { cssVar, Icon, Spin, Tooltip } from '@lobehub/ui';
 import {
   AlertTriangle,
   Ban,
@@ -13,7 +13,9 @@ import {
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { hasToolResultBody } from '../toolResultBody';
+import StepStatusBox from '@/features/Conversation/components/StepStatusBox';
+
+import { hasToolResultBody, isPendingMcpToolResult } from '../toolResultBody';
 
 interface StatusIndicatorProps {
   intervention?: ToolIntervention;
@@ -40,7 +42,7 @@ const StatusIndicator = memo<StatusIndicatorProps>(
     const hasError = !!result?.error;
     const hasSuccessResult = hasToolResultBody(result);
     const hasResult = hasSuccessResult || hasError;
-    const isPending = intervention?.status === 'pending';
+    const isPending = intervention?.status === 'pending' || isPendingMcpToolResult(result);
     const isReject = intervention?.status === 'rejected';
     const isAbort = intervention?.status === 'aborted';
 
@@ -79,23 +81,7 @@ const StatusIndicator = memo<StatusIndicatorProps>(
       icon = <Spin size="small" variant="network" />;
     }
 
-    return (
-      <Block
-        horizontal
-        align={'center'}
-        flex={'none'}
-        gap={4}
-        height={24}
-        justify={'center'}
-        variant={'outlined'}
-        width={24}
-        style={{
-          fontSize: 12,
-        }}
-      >
-        {icon}
-      </Block>
-    );
+    return <StepStatusBox>{icon}</StepStatusBox>;
   },
 );
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Empty, Flexbox, Icon, Tag } from '@lobehub/ui';
+import { Empty, Flexbox, Tag } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { useMutation } from '@tanstack/react-query';
 import { Share2 } from 'lucide-react';
@@ -14,6 +14,7 @@ import { CredsListSkeleton } from '@/components/Skeleton/Settings/tabs/Creds';
 import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 
+import { type CredFilter, filterCreds } from './credFilter';
 import CredItem from './CredItem';
 import { createEditCredModal } from './EditCredModal';
 import MarketSignInGate from './MarketSignInGate';
@@ -26,13 +27,19 @@ const styles = stylex.create({
   empty: { paddingBlock: '48px', paddingInline: '0' },
 });
 
+interface CredsListProps {
+  /** The vault toolbar's search and type filter; every row when omitted. */
+  filter?: CredFilter;
+}
+
 /**
- * The caller's personal credentials, on the personal settings page. Each row
- * can be shared into the caller's workspaces (see {@link openShareCredModal});
+ * The caller's personal credentials, on the personal settings page. A row
+ * opens its detail, which edits, removes or shares it into the caller's
+ * workspaces (see {@link openShareCredModal});
  * the workspace page lists workspace credentials through `WorkspaceCredsList`.
  */
-const CredsList: FC = () => {
-  const { t } = useTranslation('setting');
+const CredsList: FC<CredsListProps> = ({ filter = {} }) => {
+  const { t } = useTranslation(['setting', 'common']);
   const { isAuthenticated } = useMarketAuth();
   const { allowed: canManageCredentials } = usePermission('manage_provider_key');
   const workspaces = useWorkspaces();
@@ -42,6 +49,7 @@ const CredsList: FC = () => {
   });
 
   const credentials = data?.data ?? [];
+  const visibleCredentials = filterCreds(credentials, filter);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -57,22 +65,26 @@ const CredsList: FC = () => {
     createEditCredModal({ cred, credsApi, onSuccess: () => refetch() });
   };
 
-  const handleView = (cred: UserCredSummary) => {
-    createViewCredModal({ cred, credsApi });
-  };
-
   // Self-hosted deployments have no workspaces to share into.
-  const shareItems = (cred: UserCredSummary) =>
-    workspaces.length > 0
-      ? [
-          {
-            icon: <Icon icon={Share2} />,
-            key: 'share',
-            label: t('creds.share.menu'),
-            onClick: () => openShareCredModal(cred),
-          },
-        ]
-      : [];
+  const handleOpen = (cred: UserCredSummary) =>
+    createViewCredModal({
+      actions:
+        workspaces.length > 0
+          ? [
+              {
+                icon: Share2,
+                key: 'share',
+                label: t('creds.share.menu'),
+                onClick: () => openShareCredModal(cred),
+              },
+            ]
+          : [],
+      canReadValues: canManageCredentials,
+      cred,
+      credsApi,
+      onDelete: canManageCredentials ? (id) => deleteMutation.mutateAsync(id) : undefined,
+      onEdit: canManageCredentials ? handleEdit : undefined,
+    });
 
   return (
     <MarketSignInGate>
@@ -93,20 +105,22 @@ const CredsList: FC = () => {
           onRetry={() => refetch()}
         >
           <Flexbox gap={0}>
-            {credentials.map((cred) => (
+            {visibleCredentials.length === 0 && (
+              <Empty
+                className={stylex.props(styles.empty).className}
+                description={t('visibilityFilter.empty', { ns: 'common' })}
+              />
+            )}
+            {visibleCredentials.map((cred) => (
               <CredItem
-                canManage={canManageCredentials}
                 cred={cred}
-                extraMenuItems={shareItems(cred)}
                 key={cred.id}
                 tags={
                   !!cred.shares?.length && (
                     <Tag>{t('creds.share.badge', { count: cred.shares.length })}</Tag>
                   )
                 }
-                onDelete={(id) => deleteMutation.mutate(id)}
-                onEdit={canManageCredentials ? handleEdit : undefined}
-                onView={handleView}
+                onClick={handleOpen}
               />
             ))}
           </Flexbox>

@@ -5,8 +5,10 @@ import {
   nanoBananaProParameters,
 } from '../../const/imageParameters';
 import type { ModelParamsSchema } from '../../standard-parameters';
-import type { AIChatModelCard, AIImageModelCard, AIVideoModelCard } from '../../types';
+import type { AIChatModelCard, AIImageModelCard } from '../../types';
 import { gemini25ChatModels } from './gemini25';
+import { googleTTSModels } from './tts';
+import { googleVideoModels } from './video';
 
 /**
  * gemini implicit caching not extra cost
@@ -63,7 +65,8 @@ const googleChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -107,7 +110,8 @@ const googleChatModels: AIChatModelCard[] = [
     },
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -148,7 +152,8 @@ const googleChatModels: AIChatModelCard[] = [
     },
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'minimal', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -195,7 +200,56 @@ const googleChatModels: AIChatModelCard[] = [
     // https://ai.google.dev/gemini-api/docs/latest-model
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high'] },
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      audio: true,
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    // Unified 1M window shared by input, thinking and output: 64K output per synchronous request,
+    // up to 1M with long decode.
+    // https://ai.google.dev/gemini-api/docs/models/gemini-4-neon
+    contextWindowTokens: 1_048_576,
+    description:
+      'Gemini 4 Neon sits between Hydrogen and Carbon, bringing near-Carbon quality to complex software engineering, knowledge work and science workflows at faster speeds and lower cost.',
+    displayName: 'Gemini 4 Neon',
+    enabled: true,
+    family: 'gemini',
+    generation: 'gemini-4',
+    id: 'gemini-4-neon',
+    isOfficial: true,
+    maxOutput: 65_536,
+    /** Explicit caching is not supported, so there is no cache-write price.
+     * @see https://ai.google.dev/gemini-api/docs/pricing
+     */
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-11-18',
+    // Thinking levels are low / medium / high (default) / xhigh; `minimal` is rejected and
+    // sampling parameters are ignored. https://ai.google.dev/gemini-api/docs/whats-new-gemini-4-neon
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -244,7 +298,8 @@ const googleChatModels: AIChatModelCard[] = [
     // https://ai.google.dev/gemini-api/docs/latest-model
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -293,7 +348,8 @@ const googleChatModels: AIChatModelCard[] = [
     releasedAt: '2026-09-02',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -341,7 +397,8 @@ const googleChatModels: AIChatModelCard[] = [
     releasedAt: '2026-08-13',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -389,7 +446,8 @@ const googleChatModels: AIChatModelCard[] = [
     releasedAt: '2026-07-21',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -433,7 +491,8 @@ const googleChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-05-19',
     settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -479,7 +538,8 @@ const googleChatModels: AIChatModelCard[] = [
     releasedAt: '2026-07-21',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'minimal', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -551,7 +611,8 @@ const googleChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-05-28',
     settings: {
-      extendParams: ['imageAspectRatio2', 'imageResolution2', 'thinkingLevel4'],
+      extendParams: ['imageAspectRatio2', 'imageResolution2'],
+      reasoningEffort: { default: 'minimal', levels: ['minimal', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -584,7 +645,8 @@ const googleChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-26',
     settings: {
-      extendParams: ['imageAspectRatio2', 'imageResolution2', 'thinkingLevel4'],
+      extendParams: ['imageAspectRatio2', 'imageResolution2'],
+      reasoningEffort: { levels: ['minimal', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -712,7 +774,8 @@ const googleChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-19',
     settings: {
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -751,7 +814,8 @@ const googleChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-05-07',
     settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'minimal', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -788,7 +852,8 @@ const googleChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-04',
     settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -831,7 +896,8 @@ const googleChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-12-17',
     settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -893,7 +959,7 @@ const googleChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['thinkingLevel4'],
+      reasoningEffort: { default: 'minimal', levels: ['minimal', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -921,7 +987,7 @@ const googleChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['thinkingLevel4'],
+      reasoningEffort: { default: 'minimal', levels: ['minimal', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -1060,114 +1126,11 @@ const googleImageModels: AIImageModelCard[] = [
   },
 ];
 
-const googleVideoModels: AIVideoModelCard[] = [
-  {
-    description:
-      'Our latest video generation model, available to developers on the paid tier of the Gemini API.',
-    displayName: 'Veo 3.1 Generate Preview',
-    enabled: true,
-    id: 'veo-3.1-generate-preview',
-    parameters: {
-      aspectRatio: {
-        default: '16:9',
-        enum: ['16:9', '9:16'],
-      },
-      duration: { default: 8, enum: [4, 6, 8] },
-      endImageUrl: {
-        default: null,
-      },
-      imageUrls: {
-        default: [],
-        maxCount: 3,
-      },
-      prompt: { default: '' },
-      resolution: {
-        default: '720p',
-        enum: ['720p', '1080p', '4k'],
-      },
-      seed: { default: null },
-    },
-    pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.6, strategy: 'fixed', unit: 'second' }],
-    },
-    releasedAt: '2026-01-13',
-    type: 'video',
-  },
-  {
-    description:
-      'Our latest video generation model, available to developers on the paid tier of the Gemini API.',
-    displayName: 'Veo 3.1 Fast Generate Preview',
-    enabled: true,
-    id: 'veo-3.1-fast-generate-preview',
-    parameters: {
-      aspectRatio: {
-        default: '16:9',
-        enum: ['16:9', '9:16'],
-      },
-      duration: { default: 8, enum: [4, 6, 8] },
-      endImageUrl: {
-        default: null,
-      },
-      imageUrls: {
-        default: [],
-        maxCount: 3,
-      },
-      prompt: { default: '' },
-      resolution: {
-        default: '720p',
-        enum: ['720p', '1080p', '4k'],
-      },
-      seed: { default: null },
-    },
-    pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.35, strategy: 'fixed', unit: 'second' }],
-    },
-    releasedAt: '2026-01-13',
-    type: 'video',
-  },
-  {
-    description:
-      "Google's video generation and editing model with native audio: text, image and reference-guided video, first/last frame interpolation, and conversational editing.",
-    displayName: 'Gemini Omni 1.1 Flash',
-    enabled: true,
-    id: 'gemini-omni-1.1-flash',
-    isOfficial: true,
-    parameters: {
-      aspectRatio: {
-        default: '16:9',
-        enum: ['16:9', '9:16'],
-      },
-      duration: { default: 8, max: 10, min: 3, step: 1 },
-      endImageUrl: {
-        default: null,
-      },
-      imageUrls: {
-        default: [],
-        maxCount: 7,
-      },
-      prompt: { default: '' },
-      resolution: {
-        default: '720p',
-        enum: ['360p', '720p', '1080p', '4k'],
-      },
-    },
-    pricing: {
-      // Billed per token: video output is about 5,792 tokens per second of 720p video (~$0.10/s).
-      // https://ai.google.dev/gemini-api/docs/pricing
-      units: [
-        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'imageInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'videoInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'audioInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'videoGeneration', rate: 17.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2026-08-27',
-    type: 'video',
-  },
+export const allModels = [
+  ...googleChatModels,
+  ...googleImageModels,
+  ...googleVideoModels,
+  ...googleTTSModels,
 ];
-
-export const allModels = [...googleChatModels, ...googleImageModels, ...googleVideoModels];
 
 export default allModels;

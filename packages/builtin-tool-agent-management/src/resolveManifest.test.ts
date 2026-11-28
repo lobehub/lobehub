@@ -109,3 +109,18 @@ describe('systemPromptWithoutCallAgent', () => {
     }
   });
 });
+
+describe('agent self-configuration', () => {
+  /**
+   * @example
+   * The activator lists this tool by `meta.description`, so a model told
+   * "你是我的文案助理" must be able to find it as the place to configure itself,
+   * and the system role must send the role there instead of to user memory.
+   */
+  it('advertises self-configuration for role assignments', () => {
+    expect(AgentManagementManifest.meta.description).toContain('your own system prompt');
+    expect(systemPrompt).toContain('**Role assignments are self-configuration**');
+    expect(systemPrompt).toContain('你是我的文案助理');
+    expect(systemPromptWithoutCallAgent).toContain('**Role assignments are self-configuration**');
+  });
+});

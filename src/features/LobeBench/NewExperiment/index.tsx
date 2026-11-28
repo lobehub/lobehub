@@ -72,11 +72,13 @@ import {
 } from '@/features/LobeBench/useLobeBench';
 import { useSavedContenders } from '@/features/LobeBench/useSavedContenders';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useSelectableChatModels } from '@/hooks/useSelectableChatModels';
 import { agentEvalService } from '@/services/agentEval';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { useEvalStore } from '@/store/eval';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import {
   forgetExperimentLaunch,
@@ -102,11 +104,11 @@ const styles = stylex.create({
   // One contender per row, the same outline and radius as the page's inputs.
   row: {
     display: 'flex',
-    gap: 12,
+    gap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingBlock: 10,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderWidth: 1,
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
@@ -128,7 +130,9 @@ const NewExperiment = memo(() => {
 
   const userId = useUserStore(userProfileSelectors.userId);
   const workspaceId = useActiveWorkspaceId();
-  const enabledModels = useAiInfraStore((s) => s.enabledChatModelList);
+  // Models a business policy hides from this user (e.g. above their workspace
+  // tier) cannot be run, so a saved contender or judge on one counts as missing.
+  const enabledModels = useSelectableChatModels();
   const modelsReady = useAiInfraStore((s) => s.isInitAiProviderRuntimeState);
   const [starting, setStarting] = useState(false);
   const [confirmationOpen, setConfirmationOpen] = useState(false);

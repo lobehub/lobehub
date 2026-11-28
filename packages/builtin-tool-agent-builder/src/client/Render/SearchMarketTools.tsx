@@ -1,8 +1,7 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar, Button, Tag } from '@lobehub/ui';
+import { Avatar, Button, Flexbox, Tag } from '@lobehub/ui';
 import { CheckCircle, Download, Package, Search } from 'lucide-react';
 import { memo, useState } from 'react';
 
@@ -47,7 +46,7 @@ const ToolItem = memo<ToolItemProps>(({ tool }) => {
     try {
       const isSuccess = await installMCPPlugin(tool.identifier);
       if (isSuccess) {
-        await togglePlugin(tool.identifier);
+        await togglePlugin(tool.identifier, true);
       }
     } finally {
       setLocalInstalling(false);

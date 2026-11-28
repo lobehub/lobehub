@@ -11,11 +11,14 @@ import {
   resolveModelParams,
 } from '@lobechat/mecha';
 import type { UIChatMessage } from '@lobechat/types';
-import type { AiModelConfig, LobeDefaultAiModelListItem } from 'model-bank';
+import type { LobeDefaultAiModelListItem } from 'model-bank';
 
 import { loadModels } from '@/business/client/model-bank/loadModels';
 import type { AiModelModel } from '@/database/models/aiModel';
-import { createServerModelParamsProviders } from '@/server/modules/Mecha/ModelParams/providers';
+import {
+  createServerModelParamsProviders,
+  toUserModelRowFacts,
+} from '@/server/modules/Mecha/ModelParams/providers';
 
 import type { RuntimeExecutorContext } from '../context';
 
@@ -71,16 +74,7 @@ export const resolveModelExtendParamsForUser = async ({
           ...cards,
           getUserModelRow: async (m, p) => {
             const row = await aiModelModel.findByIdAndProvider(m, p);
-            if (!row) return null;
-            return {
-              abilities: row.abilities,
-              // Carried so the frozen facts merge the user's deployment alias
-              // over the bundled card; without it the transport injects the
-              // catalog default instead of the user's endpoint.
-              deploymentName: (row.config as AiModelConfig | null)?.deploymentName ?? null,
-              displayName: row.displayName,
-              extendParams: row.settings?.extendParams ?? undefined,
-            };
+            return row ? toUserModelRowFacts(row) : null;
           },
         }
       : cards,

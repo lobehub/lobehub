@@ -1,5 +1,7 @@
 import { createStaticStyles, cssVar } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 // The sidebar takes 272px (rail + gap) off the reading column for the whole
 // page, so it only appears once that column still has room for prose.
 export const TASK_DETAIL_SIDEBAR_MIN_WIDTH = 880;
@@ -25,7 +27,7 @@ export const taskDetailLayoutStyles = createStaticStyles(({ css }) => ({
   grid: css`
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    row-gap: 16px;
+    row-gap: ${densityVars.sectionGap};
     padding-block-start: 24px;
 
     @container task-detail (width >= ${TASK_DETAIL_SIDEBAR_MIN_WIDTH}px) {
@@ -36,6 +38,20 @@ export const taskDetailLayoutStyles = createStaticStyles(({ css }) => ({
   `,
   main: css`
     min-width: 0;
+  `,
+  // Goal and parent links share one line above the title; with neither, the
+  // row collapses instead of leaving the main column's gap behind.
+  meta: css`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    align-items: center;
+
+    min-width: 0;
+
+    &:empty {
+      display: none;
+    }
   `,
   side: css`
     min-width: 0;
@@ -51,7 +67,7 @@ export const taskDetailLayoutStyles = createStaticStyles(({ css }) => ({
       padding-block-start: 8px;
     }
   `,
-  // 36px under the header in both forms: the grid's 16px row gap plus this.
+  // The grid's row gap (16px loose / 12px compact) plus this under the header.
   body: css`
     min-width: 0;
     margin-block-start: 20px;
@@ -112,6 +128,31 @@ export const taskDetailLayoutStyles = createStaticStyles(({ css }) => ({
       width: 100%;
       height: 30px;
       background: transparent;
+    }
+  `,
+  // Rows whose trigger is a control of its own (model select, runtime and
+  // execution chips): the slot gives them the row's box, and in the sidebar the
+  // trigger fills it so every row starts on the same edge.
+  propertyControl: css`
+    display: flex;
+    gap: 4px;
+    align-items: center;
+
+    max-width: 100%;
+    min-height: 28px;
+    border-radius: ${cssVar.borderRadius};
+
+    background: ${cssVar.colorFillTertiary};
+
+    @container task-detail (width >= ${TASK_DETAIL_SIDEBAR_MIN_WIDTH}px) {
+      flex-wrap: wrap;
+      width: 100%;
+      min-height: 30px;
+      background: transparent;
+
+      & > * {
+        max-width: 100%;
+      }
     }
   `,
 }));

@@ -9,6 +9,7 @@ export type { ModelRuntimeHooks } from './core/ModelRuntime';
 export { describeGenerateObjectError, ModelRuntime } from './core/ModelRuntime';
 export { createOpenAICompatibleRuntime } from './core/openaiCompatible';
 export { StructuredOutputError } from './core/openaiCompatible/structuredOutput';
+export { cacheTTLToSeconds } from './core/protocols/anthropicMessages/resolveCacheTTL';
 export * from './core/RouterRuntime';
 export { createCallbacksTransformer } from './core/streams/protocol';
 export * from './core/usageConverters';
@@ -57,7 +58,9 @@ export { LobeChatGPTAI } from './providers/chatGPT';
 export { LobeCometAPIAI } from './providers/cometapi';
 export { LobeComfyUI } from './providers/comfyui';
 export { LobeDeepSeekAI } from './providers/deepseek';
+export { LobeDoubaoSpeechAI } from './providers/doubaospeech';
 export { LobeElevenLabsAI } from './providers/elevenlabs';
+export { LobeFishAudioAI } from './providers/fishaudio';
 export { LobeGLMCodingPlanAI } from './providers/glmCodingPlan';
 export { LobeGMICloudAI } from './providers/gmicloud';
 export { LobeGoogleAI } from './providers/google';
@@ -99,12 +102,12 @@ export { consumeStreamUntilDone } from './utils/consumeStream';
 export { AgentRuntimeError } from './utils/createError';
 export { getModelPropertyWithFallback } from './utils/getFallbackModelProperty';
 export { getModelParameters, getModelPricing } from './utils/getModelPricing';
+export { resolveImplicitCacheTTLSeconds } from './utils/implicitCacheTTL';
 export {
   applyModelExtendParams,
   type ApplyModelExtendParamsContext,
   type ModelExtendParams,
   resolveDefaultEnableAdaptiveThinkingForModel,
-  resolveDefaultThinkingLevelForModel,
   resolveEffectiveReasoningChatConfig,
   type ResolveEffectiveReasoningChatConfigContext,
 } from './utils/modelExtendParams';

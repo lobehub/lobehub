@@ -1,5 +1,6 @@
 import { type LobeToolManifest } from '@lobechat/context-engine';
 import { type LobeChatDatabase } from '@lobechat/database';
+import type { McpElicitationContinuation } from '@lobechat/mcp-elicitation';
 import {
   type AgentShareVisitorContext,
   type CancelVirtualSubAgentResult,
@@ -162,7 +163,24 @@ export interface ServerAgentMemberRunner {
   run: (params: ServerAgentMemberRunParams) => Promise<ServerAgentMemberRunResult>;
 }
 
+/** What the run already has on the active device, built from its state. */
+export interface RunAgentFiles {
+  /** The device the record below describes; discovery on another device starts over. */
+  deviceId?: string;
+  /**
+   * Skill ids the agent has turned off (`project:<name>` for a filesystem
+   * skill), so a discovered skill the user disabled is never offered.
+   */
+  disabledSkillIds?: string[];
+  instructionPaths: string[];
+  /** The bound working directory, its scanned parents, and every directory walked mid-run. */
+  knownDirs: string[];
+  /** Every skill name in the run's pool, so a discovered skill never shadows one. */
+  skillNames: string[];
+}
+
 export interface ToolExecutionContext {
+  abortSignal?: AbortSignal;
   /**
    * Skills activated so far in the conversation (activateSkill /
    * activateTools tool results), extracted by the runtime executors from the
@@ -183,6 +201,12 @@ export interface ToolExecutionContext {
    * mid-run activation always picks from the workspace pool).
    */
   activeDeviceScope?: 'personal' | 'workspace';
+  /**
+   * Agent files the run already has on the active device: the start-of-run
+   * scan plus every mid-run discovery. File tools compare against it before
+   * asking the device for a directory's `AGENTS.md` and skills.
+   */
+  agentFiles?: RunAgentFiles;
   /** Agent ID executing the tool call */
   agentId?: string;
   /**
@@ -319,6 +343,7 @@ export interface ToolExecutionContext {
    * {@link localSandbox}.
    */
   localSandboxNetwork?: boolean;
+  mcpContinuation?: McpElicitationContinuation;
   memoryEffort?: string;
   memoryEmbeddingRuntime?: ToolExecutionMemoryEmbeddingRuntime;
   /** Memory tool permission from agent chat config */
@@ -344,9 +369,20 @@ export interface ToolExecutionContext {
    * execution device. Used by the Skills runtime to load them on demand via the
    * device gateway. Derived from the operation's skill set.
    */
-  projectSkills?: { location: string; name: string; source?: 'device' | 'project' }[];
+  projectSkills?: {
+    description?: string;
+    location: string;
+    name: string;
+    source?: 'device' | 'project';
+  }[];
   /** Root AI runtime operation ID used to aggregate artifacts produced by one run. */
   rootOperationId?: string;
+  /**
+   * Identifiers of the skills in this operation's pool. A library skill is
+   * opt-in per agent, and the pool is where a turn's selection or a share's
+   * grant opted one in without it being turned on in the agent's own config.
+   */
+  runSkillIds?: string[];
   /** Conversation scope captured when the operation was created */
   scope?: string | null;
   /** Server database for LobeHub Skills execution */
@@ -364,6 +400,12 @@ export interface ToolExecutionContext {
   taskId?: string;
   /** Current thread ID for thread-scoped conversations */
   threadId?: string | null;
+  /**
+   * Todo-mutating calls made right before this one with no other tool call in
+   * between, counted by the runtime executors. The lobe-agent todo APIs pause
+   * once it reaches their limit.
+   */
+  todoCallStreak?: number;
   /** Stable LLM tool call ID for structured tool outcome identity. */
   toolCallId?: string;
   toolManifestMap: Record<string, LobeToolManifest>;

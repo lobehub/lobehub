@@ -17,6 +17,13 @@ const xaiChatModels: AIChatModelCard[] = [
     enabled: true,
     id: 'grok-4.7',
     isOfficial: true,
+    /**
+     * xAI publishes no output cap for this model (its release notes state no text output limit).
+     * Value matches public platform data (models.dev, AIHubMix, Vercel AI Gateway, Cloudflare).
+     * @see https://docs.x.ai/developers/models/grok-4.7
+     * @see https://models.dev
+     */
+    maxOutput: 500_000,
     /** @see https://docs.x.ai/developers/models/grok-4.7 */
     pricing: {
       units: [
@@ -51,7 +58,7 @@ const xaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-09-21',
     settings: {
-      extendParams: ['grok4_7ReasoningEffort'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -74,6 +81,13 @@ const xaiChatModels: AIChatModelCard[] = [
     enabled: true,
     id: 'grok-4.6',
     isOfficial: true,
+    /**
+     * xAI publishes no output cap for this model (its release notes state no text output limit).
+     * Value matches public platform data (models.dev, AIHubMix, Vercel AI Gateway, Cloudflare).
+     * @see https://docs.x.ai/developers/models/grok-4.6
+     * @see https://models.dev
+     */
+    maxOutput: 500_000,
     /** @see https://docs.x.ai/developers/models/grok-4.6 */
     pricing: {
       units: [
@@ -108,7 +122,7 @@ const xaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-08-12',
     settings: {
-      extendParams: ['grok4_6ReasoningEffort'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -133,6 +147,13 @@ const xaiChatModels: AIChatModelCard[] = [
     generation: 'grok-4.5',
     id: 'grok-4.5',
     isOfficial: true,
+    /**
+     * xAI publishes no output cap for this model.
+     * Value matches public platform data (models.dev, AIHubMix, Vercel AI Gateway, Cloudflare).
+     * @see https://docs.x.ai/developers/models/grok-4.5
+     * @see https://models.dev
+     */
+    maxOutput: 500_000,
     pricing: {
       units: [
         {
@@ -166,7 +187,7 @@ const xaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-07-08',
     settings: {
-      extendParams: ['grok4_5ReasoningEffort'],
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -187,6 +208,13 @@ const xaiChatModels: AIChatModelCard[] = [
     id: 'grok-4.3',
     isOfficial: true,
     knowledgeCutoff: '2025-12',
+    /**
+     * xAI publishes no output cap for this model.
+     * Value matches public platform data (models.dev, AIHubMix, Vercel AI Gateway, Cloudflare).
+     * @see https://docs.x.ai/developers/models/grok-4.3
+     * @see https://models.dev
+     */
+    maxOutput: 30_000,
     pricing: {
       units: [
         {
@@ -220,7 +248,7 @@ const xaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-05-01',
     settings: {
-      extendParams: ['grok4_3ReasoningEffort'],
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -376,7 +404,7 @@ const xaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-09',
     settings: {
-      extendParams: ['grok4_20ReasoningEffort'],
+      reasoningEffort: { levels: ['low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',

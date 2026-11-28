@@ -1,5 +1,7 @@
 import { createStaticStyles, cssVar } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 export const styles = createStaticStyles(({ css }) => ({
   anchor: css`
     cursor: pointer;
@@ -34,16 +36,16 @@ export const styles = createStaticStyles(({ css }) => ({
   `,
   card: css`
     position: relative;
-    padding-block: 14px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    padding-block: ${densityVars.contentGap};
 
-    &:hover .topic-comment-actions {
+    &:hover .topic-comment-actions,
+    &:focus-within .topic-comment-actions {
       opacity: 1;
     }
   `,
   cardActions: css`
     position: absolute;
-    inset-block-start: 8px;
+    inset-block-start: 12px;
     inset-inline-end: 0;
 
     opacity: 1;
@@ -54,10 +56,48 @@ export const styles = createStaticStyles(({ css }) => ({
       opacity: 0;
     }
   `,
+  /** Independent threads in the list: a hairline between neighbours, none after the last. */
+  cardDivided: css`
+    & + & {
+      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+    }
+  `,
+  /** Left-aligned under the content; pulled out so the icon lines up with the text column. */
+  cardFooter: css`
+    margin-inline-start: -8px;
+    color: ${cssVar.colorTextSecondary};
+  `,
   composer: css`
     flex-shrink: 0;
-    margin-block: 12px 16px;
+    margin-block: 8px 16px;
     margin-inline: 16px;
+  `,
+  composerEditor: css`
+    flex: 1;
+    min-width: 0;
+    padding-block: 2px;
+  `,
+  /** One row like a chat app: the input grows with its content, Send sits at its last line. */
+  composerRow: css`
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+
+    min-height: 44px;
+    padding-block: 8px;
+    padding-inline: ${densityVars.contentGap} 8px;
+  `,
+  /**
+   * Mentions render as plain coloured text here, so the chip's own inset would
+   * push a line-leading mention off the text column.
+   */
+  content: css`
+    min-width: 0;
+
+    .editor_mention {
+      margin-inline: 0;
+      padding-inline: 0;
+    }
   `,
   deleted: css`
     font-style: italic;
@@ -88,14 +128,27 @@ export const styles = createStaticStyles(({ css }) => ({
     flex: 1;
 
     min-height: 0;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
   `,
   moderatedContent: css`
     opacity: 0.62;
   `,
-  reply: css`
-    margin-inline-start: 20px;
-    padding-inline-start: 12px;
-    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
+  /** "3 replies" followed by a rule: the one line that separates the comment from its replies. */
+  repliesDivider: css`
+    display: flex;
+    gap: ${densityVars.contentGap};
+    align-items: center;
+
+    margin-block: 4px;
+
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+
+    &::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: ${cssVar.colorBorderSecondary};
+    }
   `,
 }));

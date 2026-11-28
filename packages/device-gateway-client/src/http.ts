@@ -1,4 +1,10 @@
-import type { DeviceClient, DeviceMetricSample } from '@lobechat/types';
+import type {
+  AgentRunCredential,
+  CodexCollaborationMode,
+  DeviceClient,
+  DeviceMetricSample,
+  HeteroPermissionMode,
+} from '@lobechat/types';
 
 import {
   describeGatewayRequestFailure,
@@ -11,11 +17,16 @@ import type {
   DeviceSystemInfo,
   GatewayDevice,
   GatewayMcpParams,
+  GatewayToolCallCompletion,
   GatewayToolCallType,
   GatewayTunnelRegistration,
 } from './types';
 
 const DEFAULT_GATEWAY_TOOL_CALL_TIMEOUT_MS = 30_000;
+
+/** Replace every occurrence of `secret` in `text`. */
+const withoutSecret = (text: string, secret: string | undefined) =>
+  secret ? text.split(secret).join('[redacted]') : text;
 /**
  * Device *reads* are on the critical path of every routing decision, and `post`
  * has no deadline of its own — an unanswered read would otherwise hang for as
@@ -151,6 +162,12 @@ export class GatewayHttpClient {
        * knows; otherwise `resolveClientKinds` decides from the tool identifier.
        */
       clientKinds?: DeviceClient[];
+      /**
+       * Lets the device deliver this call's final result later. The gateway
+       * keeps `callbackUrl` for `ttlMs` and posts the device's
+       * `tool_call_completion` there; the device only learns `toolCallId`.
+       */
+      completion?: GatewayToolCallCompletion;
       deviceId?: string;
       operationId?: string;
       timeout?: number;
@@ -174,6 +191,8 @@ export class GatewayHttpClient {
   async executeMcpCall(mcpCall: {
     apiName: string;
     arguments: string;
+    /** The device's client that runs the call; omitted, `resolveClientKinds` decides. */
+    clientKinds?: DeviceClient[];
     deviceId?: string;
     identifier: string;
     params: GatewayMcpParams;
@@ -181,9 +200,9 @@ export class GatewayHttpClient {
     userId: string;
     workspaceId?: string;
   }): Promise<DeviceToolCallResult> {
-    const { deviceId, timeout, userId, workspaceId, ...toolCall } = mcpCall;
+    const { clientKinds, deviceId, timeout, userId, workspaceId, ...toolCall } = mcpCall;
     return this.postToolCall(
-      { deviceId, timeout, userId, workspaceId },
+      { clientKinds, deviceId, timeout, userId, workspaceId },
       { ...toolCall, type: 'mcp' },
     );
   }
@@ -191,6 +210,7 @@ export class GatewayHttpClient {
   private async postToolCall(
     params: {
       clientKinds?: DeviceClient[];
+      completion?: GatewayToolCallCompletion;
       deviceId?: string;
       operationId?: string;
       timeout?: number;
@@ -221,6 +241,7 @@ export class GatewayHttpClient {
                 kind: 'tool',
                 type: toolCall.type ?? 'tool',
               }),
+          completion: params.completion,
           deviceId: params.deviceId,
           operationId: params.operationId,
           timeout: params.timeout,
@@ -322,15 +343,24 @@ export class GatewayHttpClient {
     claudeCodeEntrypoint?: string;
     /** Restricts the run to connections of these clients; omitted means any client. */
     clientKinds?: DeviceClient[];
+    /** Codex Plan switch; see `AgentRunRequestMessage.collaborationMode`. */
+    collaborationMode?: CodexCollaborationMode;
     cwd?: string;
     deviceId?: string;
     /** Image attachments forwarded into the `agent_run_request` message. */
     imageList?: Array<{ id?: string; url: string }>;
     jwt: string;
     operationId: string;
+    /** Claude Code permission mode; see `AgentRunRequestMessage.permissionMode`. */
+    permissionMode?: HeteroPermissionMode;
     prompt: string;
     resumeFallbackSystemContext?: string;
     resumeSessionId?: string;
+    /**
+     * Per-run credential; see `AgentRunRequestMessage.runCredential`. A secret:
+     * it travels only in the request body, which no failure path here echoes.
+     */
+    runCredential?: AgentRunCredential;
     systemContext?: string;
     timeout?: number;
     topicId: string;
@@ -346,7 +376,12 @@ export class GatewayHttpClient {
   }): Promise<{ success: boolean; error?: string; errorData?: DeviceUnavailableErrorData }> {
     const res = await this.post('/api/device/agent/run', params);
     if (!res.ok) {
-      const text = await res.text().catch(() => '');
+      // A gateway that echoes the request in its error must not carry the
+      // run credential into the error this returns (and the logs it reaches).
+      const text = withoutSecret(
+        await res.text().catch(() => ''),
+        params.runCredential?.secret.token,
+      );
       const failure = describeGatewayResponseFailure(res.status, text, 'agent run', params);
       return {
         error: failure.error,

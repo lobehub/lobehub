@@ -91,6 +91,21 @@ const isEditUnavailable = (error: unknown): boolean => {
  * Lightweight platform client for Telegram Bot API operations used by
  * callback and extension flows outside the Chat SDK adapter surface.
  */
+/**
+ * `message_thread_id` targets a forum topic. Omitted entirely (not sent as
+ * `null`) for plain chats so existing payloads stay byte-identical.
+ */
+const topicField = (messageThreadId?: number): { message_thread_id?: number } =>
+  typeof messageThreadId === 'number' ? { message_thread_id: messageThreadId } : {};
+
+type TelegramMediaParams = {
+  caption?: string;
+  chatId: string | number;
+  /** Forum topic to post into; omit for the chat's main timeline / General topic. */
+  messageThreadId?: number;
+  source: { url: string } | { buffer: Buffer; filename: string; mimeType?: string };
+};
+
 export class TelegramApi {
   private readonly botToken: string;
 
@@ -98,8 +113,12 @@ export class TelegramApi {
     this.botToken = botToken;
   }
 
-  async sendMessage(chatId: string | number, text: string): Promise<{ message_id: number }> {
-    log('sendMessage: chatId=%s', chatId);
+  async sendMessage(
+    chatId: string | number,
+    text: string,
+    messageThreadId?: number,
+  ): Promise<{ message_id: number }> {
+    log('sendMessage: chatId=%s, messageThreadId=%s', chatId, messageThreadId);
     if (!text.trim()) {
       // Telegram rejects empty / whitespace-only messages with 400 "message
       // text is empty". Throwing here surfaces the bug at the call site
@@ -110,6 +129,7 @@ export class TelegramApi {
     try {
       const data = await this.call('sendMessage', {
         chat_id: chatId,
+        ...topicField(messageThreadId),
         parse_mode: 'HTML',
         text: truncated,
       });
@@ -122,6 +142,7 @@ export class TelegramApi {
       log('sendMessage: HTML parse failed, retrying as plain text. chatId=%s', chatId);
       const data = await this.call('sendMessage', {
         chat_id: chatId,
+        ...topicField(messageThreadId),
         text: this.truncateText(stripHTML(text)),
       });
       return { message_id: data.result.message_id };
@@ -261,9 +282,17 @@ export class TelegramApi {
     });
   }
 
-  async sendChatAction(chatId: string | number, action = 'typing'): Promise<void> {
+  async sendChatAction(
+    chatId: string | number,
+    action = 'typing',
+    messageThreadId?: number,
+  ): Promise<void> {
     log('sendChatAction: chatId=%s, action=%s', chatId, action);
-    await this.call('sendChatAction', { action, chat_id: chatId });
+    await this.call('sendChatAction', {
+      action,
+      chat_id: chatId,
+      ...topicField(messageThreadId),
+    });
   }
 
   async deleteMessage(chatId: string | number, messageId: number): Promise<void> {
@@ -559,12 +588,9 @@ export class TelegramApi {
   private async sendMedia(
     method: 'sendPhoto' | 'sendDocument' | 'sendVideo' | 'sendAudio',
     binaryField: 'photo' | 'document' | 'video' | 'audio',
-    params: {
-      caption?: string;
-      chatId: string | number;
+    params: TelegramMediaParams & {
       /** Method-specific scalars (e.g. `supports_streaming` on sendVideo). */
       extraFields?: Record<string, boolean | number | string | undefined>;
-      source: { url: string } | { buffer: Buffer; filename: string; mimeType?: string };
     },
   ): Promise<{ message_id: number }> {
     const caption = params.caption ? this.truncateCaption(params.caption) : undefined;
@@ -582,6 +608,7 @@ export class TelegramApi {
           ...params.extraFields,
           caption: captionForSend,
           chat_id: params.chatId,
+          ...topicField(params.messageThreadId),
           parse_mode: captionForSend && useHtml ? 'HTML' : undefined,
           [binaryField]: params.source.url,
         });
@@ -593,6 +620,7 @@ export class TelegramApi {
           ...params.extraFields,
           caption: captionForSend,
           chat_id: params.chatId,
+          ...topicField(params.messageThreadId),
           parse_mode: captionForSend && useHtml ? 'HTML' : undefined,
         },
         {
@@ -619,20 +647,12 @@ export class TelegramApi {
     }
   }
 
-  async sendPhoto(params: {
-    caption?: string;
-    chatId: string | number;
-    source: { url: string } | { buffer: Buffer; filename: string; mimeType?: string };
-  }): Promise<{ message_id: number }> {
+  async sendPhoto(params: TelegramMediaParams): Promise<{ message_id: number }> {
     log('sendPhoto: chatId=%s', params.chatId);
     return this.sendMedia('sendPhoto', 'photo', params);
   }
 
-  async sendDocument(params: {
-    caption?: string;
-    chatId: string | number;
-    source: { url: string } | { buffer: Buffer; filename: string; mimeType?: string };
-  }): Promise<{ message_id: number }> {
+  async sendDocument(params: TelegramMediaParams): Promise<{ message_id: number }> {
     log('sendDocument: chatId=%s', params.chatId);
     return this.sendMedia('sendDocument', 'document', params);
   }
@@ -650,11 +670,7 @@ export class TelegramApi {
    * playback entirely. Adding a silent audio track is the only real fix and
    * needs ffmpeg, which this path deliberately does not carry.
    */
-  async sendVideo(params: {
-    caption?: string;
-    chatId: string | number;
-    source: { url: string } | { buffer: Buffer; filename: string; mimeType?: string };
-  }): Promise<{ message_id: number }> {
+  async sendVideo(params: TelegramMediaParams): Promise<{ message_id: number }> {
     log('sendVideo: chatId=%s', params.chatId);
     return this.sendMedia('sendVideo', 'video', {
       ...params,
@@ -662,11 +678,7 @@ export class TelegramApi {
     });
   }
 
-  async sendAudio(params: {
-    caption?: string;
-    chatId: string | number;
-    source: { url: string } | { buffer: Buffer; filename: string; mimeType?: string };
-  }): Promise<{ message_id: number }> {
+  async sendAudio(params: TelegramMediaParams): Promise<{ message_id: number }> {
     log('sendAudio: chatId=%s', params.chatId);
     return this.sendMedia('sendAudio', 'audio', params);
   }

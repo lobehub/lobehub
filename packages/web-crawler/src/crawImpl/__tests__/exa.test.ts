@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockResponse } from '../../test-utils';
-import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../../utils/errorType';
+import {
+  BlockedPageError,
+  NetworkConnectionError,
+  PageNotFoundError,
+  TimeoutError,
+} from '../../utils/errorType';
 import { exa } from '../exa';
 
 // Mock dependencies
@@ -95,6 +100,21 @@ describe('exa crawler', () => {
     );
 
     consoleSpy.mockRestore();
+  });
+
+  it('should throw BlockedPageError for a challenge page shorter than the minimum length', async () => {
+    process.env.EXA_API_KEY = 'test-api-key';
+
+    const mockResponse = createMockResponse({
+      results: [{ title: 'Access Denied', url: 'https://example.com', text: 'Reference #18.2f' }],
+    });
+
+    const { withTimeout } = await import('../../utils/withTimeout');
+    vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
+
+    await expect(exa('https://example.com', { filterOptions: {} })).rejects.toThrow(
+      BlockedPageError,
+    );
   });
 
   it('should return undefined for short content', async () => {

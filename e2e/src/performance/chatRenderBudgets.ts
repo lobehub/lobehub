@@ -6,8 +6,8 @@ import { RENDER_REGIONS, type RenderRegion } from './renderProfile';
  * scenario's samples (`renders` / `actualDurationMs` per region, ms for the
  * frame gap).
  *
- * Local baseline (2026-11-13, M5 Max, headless Chromium, 3 runs, p50 range; durations
- * swing up to 2x with machine load):
+ * Local baseline for durations (2026-11-13, M5 Max, headless Chromium, 3 runs,
+ * p50 range; durations swing up to 2x with machine load):
  *
  * | scenario       | sidebar        | conversation     | messages        | frame gap  |
  * | -------------- | -------------- | ---------------- | --------------- | ---------- |
@@ -15,6 +15,17 @@ import { RENDER_REGIONS, type RenderRegion } from './renderProfile';
  * | switchCached   | 7× 5–10ms      | 18× 34–57ms      | 8× 11–22ms      | 33–100ms   |
  * | switchUncached | 9× 8–13ms      | 43× 59–93ms      | 27× 36–56ms     | 33–67ms    |
  * | switchCold     | 9× 8–14ms      | 43–45× 56–97ms   | 26× 32–60ms     | 33–83ms    |
+ *
+ * Render counts were re-measured on 2026-11-27 from CI receipts after
+ * local-replica 0.4.1 and the topic-switch fixes landed (p50 range over
+ * 3 canary runs; render counts match local):
+ *
+ * | scenario       | sidebar | conversation | messages |
+ * | -------------- | ------- | ------------ | -------- |
+ * | open           | 14–15×  | 59–62×       | 30–31×   |
+ * | switchCached   | 8×      | 12×          | 6×       |
+ * | switchUncached | 8×      | 36×          | 24×      |
+ * | switchCold     | 8×      | 33–35×       | 22×      |
  *
  * Render counts barely move between runs, so their ceilings sit about 20%
  * above the baseline and catch a new re-render loop. Durations move with
@@ -26,33 +37,33 @@ const LOCAL: Record<ChatRenderScenario, ScenarioBudget> = {
   open: {
     maxFrameGapMs: 300,
     regions: {
-      conversation: { actualDurationMs: 260, renders: 80 },
-      messages: { actualDurationMs: 120, renders: 42 },
-      sidebar: { actualDurationMs: 70, renders: 25 },
+      conversation: { actualDurationMs: 260, renders: 75 },
+      messages: { actualDurationMs: 120, renders: 37 },
+      sidebar: { actualDurationMs: 70, renders: 18 },
     },
   },
   switchCached: {
     maxFrameGapMs: 200,
     regions: {
-      conversation: { actualDurationMs: 120, renders: 22 },
-      messages: { actualDurationMs: 50, renders: 10 },
+      conversation: { actualDurationMs: 120, renders: 15 },
+      messages: { actualDurationMs: 50, renders: 8 },
       sidebar: { actualDurationMs: 30, renders: 9 },
     },
   },
   switchCold: {
     maxFrameGapMs: 200,
     regions: {
-      conversation: { actualDurationMs: 200, renders: 54 },
-      messages: { actualDurationMs: 120, renders: 32 },
-      sidebar: { actualDurationMs: 35, renders: 11 },
+      conversation: { actualDurationMs: 200, renders: 42 },
+      messages: { actualDurationMs: 120, renders: 27 },
+      sidebar: { actualDurationMs: 35, renders: 10 },
     },
   },
   switchUncached: {
     maxFrameGapMs: 170,
     regions: {
-      conversation: { actualDurationMs: 190, renders: 52 },
-      messages: { actualDurationMs: 120, renders: 33 },
-      sidebar: { actualDurationMs: 30, renders: 11 },
+      conversation: { actualDurationMs: 190, renders: 43 },
+      messages: { actualDurationMs: 120, renders: 29 },
+      sidebar: { actualDurationMs: 30, renders: 10 },
     },
   },
 };

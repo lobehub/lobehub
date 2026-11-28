@@ -22,8 +22,10 @@ import TaskTriggerTag from '../features/TaskTriggerTag';
 import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
 import { shouldShowMemberAssignee } from '../shared/memberAssigneeMode';
 import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
-import TaskAcceptanceStateRow from './TaskAcceptanceStateRow';
+import TaskDetailAssignee from './TaskDetailAssignee';
 import { taskDetailLayoutStyles as styles } from './taskDetailLayoutStyles';
+import TaskExecutionConfig from './TaskExecutionConfig';
+import TaskModelConfig from './TaskModelConfig';
 import TaskScheduleConfig from './TaskScheduleConfig';
 import { useTaskAcceptanceWait } from './useTaskAcceptanceWait';
 
@@ -75,6 +77,7 @@ const TaskProperties = memo(() => {
   const setTaskLabels = useTaskStore((s) => s.setTaskLabels);
   const projectId = useTaskStore(taskDetailSelectors.activeTaskProjectId);
   const hasParent = !!useTaskStore(taskDetailSelectors.activeTaskParent);
+  const subtaskCount = useTaskStore(taskDetailSelectors.activeTaskSubtaskCount);
   // The picker renders nothing while the Projects lab is off, which would leave
   // the group's title standing over an empty row.
   const enableProjects = useUserStore(labPreferSelectors.enableProjects);
@@ -128,12 +131,6 @@ const TaskProperties = memo(() => {
             </Text>
           </Block>
         )}
-
-        {/* The human layer: whether the delivery is accepted. Read-only here —
-            the decision itself is made on the acceptance page this links to.
-            Recurring tasks have no delivery acceptance, so no state to show. */}
-        {!automationMode && <TaskAcceptanceStateRow />}
-
         <TaskPriorityTag priority={priority} taskIdentifier={taskId}>
           <Block
             clickable
@@ -186,11 +183,6 @@ const TaskProperties = memo(() => {
             </Block>
           </AssigneeMemberSelector>
         )}
-
-        {/* Where the runs go lives in the detail header's main column, next to the
-            assignee it inherits from — not in this rail. See
-            `TaskExecutionConfig`. */}
-
         <TaskScheduleConfig>
           <Block
             clickable
@@ -209,6 +201,16 @@ const TaskProperties = memo(() => {
             />
           </Block>
         </TaskScheduleConfig>
+      </section>
+
+      {/* Who runs it and how: the agent, its model and where the run lands.
+          Run, stop and schedule themselves live in the status strip under the
+          title. */}
+      <section className={styles.propertyGroup}>
+        <div className={styles.propertyGroupTitle}>{t('taskDetail.executionGroup')}</div>
+        <TaskDetailAssignee />
+        <TaskModelConfig />
+        <TaskExecutionConfig />
       </section>
 
       <section className={styles.propertyGroup}>
@@ -252,6 +254,7 @@ const TaskProperties = memo(() => {
           <ProjectSelector
             fullWidth
             disabledReason={hasParent ? t('taskProject.inheritedFromParent') : undefined}
+            subtaskCount={subtaskCount}
             taskIdentifier={taskId}
             value={projectId}
           >

@@ -1,5 +1,5 @@
 import { RequestTrigger } from '@lobechat/types';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import InputEditor from './index';
@@ -42,6 +42,12 @@ const mocks = vi.hoisted(() => {
       enabled: false,
       model: 'gpt-4o-mini',
       provider: 'openai',
+    },
+    mention: {
+      /** Offer Market skills, which turns the mention menu on. */
+      marketSkills: false,
+      /** `enabled` of every `MentionSourceSync` render, in order. */
+      syncEnabled: [] as boolean[],
     },
     recordTracingFeedback: vi.fn(),
   };
@@ -94,10 +100,6 @@ vi.mock('@lobechat/const', () => ({
   isDesktop: false,
   TRACING_SCENARIOS: { InputCompletion: 'input_completion' },
 }));
-vi.mock('@lobechat/const/hotkeys', () => ({
-  HotkeyEnum: { AddUserMessage: 'add-user-message' },
-  KeyEnum: { Alt: 'alt', Enter: 'enter' },
-}));
 vi.mock('@lobechat/heterogeneous-agents', () => ({ HETEROGENEOUS_TYPE_LABELS: {} }));
 vi.mock('@lobechat/prompts', () => ({
   chainInputCompletion: mocks.chainInputCompletion,
@@ -143,12 +145,6 @@ vi.mock('fuse.js', () => ({
   },
 }));
 vi.mock('lexical', () => ({ KEY_ESCAPE_COMMAND: 'escape' }));
-vi.mock('react-hotkeys-hook', () => ({
-  useHotkeysContext: () => ({
-    disableScope: vi.fn(),
-    enableScope: vi.fn(),
-  }),
-}));
 
 vi.mock('@/components/DragUploadZone', () => ({
   usePasteFile: vi.fn(),
@@ -210,7 +206,6 @@ vi.mock('@/store/user', () => {
   return { useUserStore };
 });
 vi.mock('@/store/user/selectors', () => ({
-  settingsSelectors: { getHotkeyById: () => () => 'alt+enter' },
   systemAgentSelectors: {
     inputCompletion: () => mocks.inputCompletionConfig,
   },
@@ -252,6 +247,7 @@ vi.mock('./ActionTag', () => ({
   INSERT_ACTION_TAG_COMMAND: 'insert-action-tag',
   useSlashActionItems: () => [],
 }));
+vi.mock('./ImageRefTag', () => ({ useImageRefTagSync: vi.fn() }));
 vi.mock('./MentionMenu', () => ({ createMentionMenu: vi.fn(() => vi.fn(() => null)) }));
 vi.mock('./Placeholder', () => ({
   default: () => <span>placeholder</span>,
@@ -279,6 +275,10 @@ vi.mock('./marketMentionItems', () => ({
   toMarketSkillItem: vi.fn(),
 }));
 vi.mock('./useMentionCategories', () => ({
+  MentionSourceSync: ({ enabled }: { enabled: boolean }) => {
+    mocks.mention.syncEnabled.push(enabled);
+    return null;
+  },
   useMentionCategories: () => ({
     categories: [],
     market: {
@@ -288,7 +288,7 @@ vi.mock('./useMentionCategories', () => ({
       installedAgentSources: new Set(),
       installedSkills: new Set(),
       skillCategory: { icon: null, id: 'skill', label: 'Skills' },
-      skills: false,
+      skills: mocks.mention.marketSkills,
     },
   }),
 }));
@@ -300,6 +300,8 @@ describe('ChatInput InputEditor', () => {
     platform.isMobile = false;
     userSettings.enablePasteAutoConvert = true;
     mocks.inputCompletionConfig.enabled = false;
+    mocks.mention.marketSkills = false;
+    mocks.mention.syncEnabled = [];
     mocks.inputCompletionConfig.model = 'gpt-4o-mini';
     mocks.inputCompletionConfig.provider = 'openai';
     mocks.chatInputState.inputCompletionError = undefined;
@@ -336,7 +338,7 @@ describe('ChatInput InputEditor', () => {
     expect(props.markdownOption).toBeUndefined();
   });
 
-  it('converts pasted markdown when paste auto-convert is on', async () => {
+  it('enables the editor markdown-paste option when auto-convert is on', async () => {
     render(<InputEditor />);
 
     const props = await getEditorProps();
@@ -344,7 +346,7 @@ describe('ChatInput InputEditor', () => {
     expect(props.pasteAsPlainText).toBe(true);
   });
 
-  it('pastes verbatim when paste auto-convert is off', async () => {
+  it('disables the editor markdown-paste option when auto-convert is off', async () => {
     userSettings.enablePasteAutoConvert = false;
 
     render(<InputEditor />);
@@ -369,6 +371,24 @@ describe('ChatInput InputEditor', () => {
     render(<InputEditor />);
 
     expect((await getEditorStyle())?.fontSize).toBeUndefined();
+  });
+
+  it('starts the mention source syncs only when the mention menu first opens', async () => {
+    // Mentions are rare; opening a conversation must not fetch the menu's
+    // market and installed-skill lists or re-render the editor for them.
+    mocks.mention.marketSkills = true;
+    render(<InputEditor />);
+
+    expect(mocks.mention.syncEnabled).not.toContain(true);
+
+    const { mentionOption } = (await getEditorProps()) as {
+      mentionOption?: { items: (search: null) => Promise<unknown> };
+    };
+    await act(async () => {
+      await mentionOption!.items(null);
+    });
+
+    expect(mocks.mention.syncEnabled.at(-1)).toBe(true);
   });
 
   it('tags autocomplete requests with the input completion trigger', async () => {

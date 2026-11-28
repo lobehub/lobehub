@@ -54,7 +54,7 @@ const mockCreateHeaderWithAuth = vi.hoisted(() =>
 
 // Helper to compute expected date content from SystemDateProvider
 const getCurrentDateContent = () => {
-  const tz = 'UTC';
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const today = new Date();
   const year = today.toLocaleString('en-US', { timeZone: tz, year: 'numeric' });
   const month = today.toLocaleString('en-US', { month: '2-digit', timeZone: tz });
@@ -569,169 +569,6 @@ describe('ChatService', () => {
             thinking: {
               budget_tokens: 1024, // default value
               type: 'enabled',
-            },
-          }),
-          expect.anything(),
-        );
-      });
-
-      it('should set reasoning_effort when model supports reasoningEffort and user configures it', async () => {
-        const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
-        const messages = [{ content: 'Test reasoning effort', role: 'user' }] as UIChatMessage[];
-
-        // Mock aiModelSelectors for extend params support
-        vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
-        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => ['reasoningEffort']);
-        // The user-level model-instance config supplies the effort; the legacy
-        // agent chatConfig value below must be ignored by the resolver
-        vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({
-          reasoningEffort: 'high',
-        }));
-
-        await chatService.createAssistantMessage({
-          messages,
-          model: 'test-model',
-          provider: 'test-provider',
-          resolvedAgentConfig: createMockResolvedConfig({
-            agentConfig: { model: 'test-model', provider: 'test-provider' },
-            chatConfig: { reasoningEffort: 'low' },
-          }),
-        });
-
-        expect(getChatCompletionSpy).toHaveBeenCalledWith(
-          expect.objectContaining({
-            reasoning_effort: 'high',
-          }),
-          expect.anything(),
-        );
-      });
-
-      it('should map DeepSeek reasoning effort to enabled thinking', async () => {
-        const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
-        const messages = [
-          { content: 'Test DeepSeek reasoning effort', role: 'user' },
-        ] as UIChatMessage[];
-
-        vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
-        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
-          'deepseekV4ReasoningEffort',
-        ]);
-        // Reasoning fields are user-level model-instance settings now — agent
-        // chatConfig values are ignored by the resolver
-        vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({
-          deepseekV4ReasoningEffort: 'max',
-        }));
-
-        await chatService.createAssistantMessage({
-          messages,
-          model: 'deepseek-v4-pro',
-          provider: 'deepseek',
-          resolvedAgentConfig: createMockResolvedConfig({
-            agentConfig: { model: 'deepseek-v4-pro', provider: 'deepseek' },
-          }),
-        });
-
-        expect(getChatCompletionSpy).toHaveBeenCalledWith(
-          expect.objectContaining({
-            reasoning_effort: 'max',
-            thinking: {
-              type: 'enabled',
-            },
-          }),
-          expect.anything(),
-        );
-      });
-
-      it('should map DeepSeek reasoning effort none to disabled thinking', async () => {
-        const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
-        const messages = [
-          { content: 'Test DeepSeek reasoning disabled', role: 'user' },
-        ] as UIChatMessage[];
-
-        vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
-        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
-          'deepseekV4ReasoningEffort',
-        ]);
-        vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({
-          deepseekV4ReasoningEffort: 'none',
-        }));
-
-        await chatService.createAssistantMessage({
-          messages,
-          model: 'deepseek-v4-pro',
-          provider: 'deepseek',
-          resolvedAgentConfig: createMockResolvedConfig({
-            agentConfig: { model: 'deepseek-v4-pro', provider: 'deepseek' },
-          }),
-        });
-
-        expect(getChatCompletionSpy).toHaveBeenCalledWith(
-          expect.objectContaining({
-            thinking: {
-              type: 'disabled',
-            },
-          }),
-          expect.anything(),
-        );
-      });
-
-      it('should map Qwen3.8 Max reasoning effort to enabled thinking', async () => {
-        const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
-        const messages = [
-          { content: 'Test Qwen3.8 Max reasoning effort', role: 'user' },
-        ] as UIChatMessage[];
-
-        vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
-        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
-          'qwen38ReasoningEffort',
-        ]);
-
-        await chatService.createAssistantMessage({
-          messages,
-          model: 'qwen3.8-max',
-          provider: 'qwen',
-          resolvedAgentConfig: createMockResolvedConfig({
-            agentConfig: { model: 'qwen3.8-max', provider: 'qwen' },
-            chatConfig: { qwen38ReasoningEffort: 'medium' },
-          }),
-        });
-
-        expect(getChatCompletionSpy).toHaveBeenCalledWith(
-          expect.objectContaining({
-            reasoning_effort: 'medium',
-            thinking: {
-              type: 'enabled',
-            },
-          }),
-          expect.anything(),
-        );
-      });
-
-      it('should map Qwen3.8 Max reasoning effort none to disabled thinking', async () => {
-        const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
-        const messages = [
-          { content: 'Test Qwen3.8 Max reasoning disabled', role: 'user' },
-        ] as UIChatMessage[];
-
-        vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
-        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
-          'qwen38ReasoningEffort',
-        ]);
-
-        await chatService.createAssistantMessage({
-          messages,
-          model: 'qwen3.8-max',
-          provider: 'qwen',
-          resolvedAgentConfig: createMockResolvedConfig({
-            agentConfig: { model: 'qwen3.8-max', provider: 'qwen' },
-            chatConfig: { qwen38ReasoningEffort: 'none' },
-          }),
-        });
-
-        expect(getChatCompletionSpy).toHaveBeenCalledWith(
-          expect.objectContaining({
-            thinking: {
-              type: 'disabled',
             },
           }),
           expect.anything(),
@@ -1258,9 +1095,9 @@ describe('ChatService', () => {
             role: 'system',
           }),
         );
-        expect(requestMessages[0].content).toContain('<available_skills>');
-        expect(requestMessages[0].content).toContain(
-          'Use the activateSkill tool to activate a skill when needed.',
+        expect(requestMessages[0].content).not.toContain('<available_skills>');
+        expect(requestMessages[0].content).not.toContain(
+          "Use the activateSkill tool to load a skill when the user's task matches its description.",
         );
         expect(requestMessages[0].content).toContain('<tool name="SEO">');
         expect(requestMessages[1]).toEqual(
@@ -1342,7 +1179,7 @@ describe('ChatService', () => {
             role: 'system',
           }),
         );
-        expect(requestMessages[0].content).toContain('<available_skills>');
+        expect(requestMessages[0].content).not.toContain('<available_skills>');
         expect(requestMessages[0].content).toContain('<tool name="SEO">');
         expect(requestMessages[1]).toEqual(
           expect.objectContaining({
@@ -1394,7 +1231,7 @@ describe('ChatService', () => {
             role: 'system',
           }),
         );
-        expect(requestMessages[0].content).toContain('<available_skills>');
+        expect(requestMessages[0].content).not.toContain('<available_skills>');
         expect(requestMessages[0].content).not.toContain('<tool name="SEO">');
         expect(requestMessages[1]).toEqual(
           expect.objectContaining({
@@ -2160,7 +1997,13 @@ describe('ChatService private methods', () => {
 
       // Mock aiModelSelectors for extend params support
       vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
-      vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => ['reasoningEffort']);
+      vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => []);
+      vi.spyOn(aiModelSelectors, 'getEnabledModelById').mockReturnValue(
+        () =>
+          ({
+            settings: { reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] } },
+          }) as any,
+      );
       // The user-level model-instance config supplies the effort; the legacy
       // agent chatConfig value below must be ignored by the resolver
       vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({

@@ -214,3 +214,40 @@ describe('LarkApiClient.getAppOwnerId', () => {
     await expect(client().getAppOwnerId()).rejects.toThrow(/99991672|no permission/);
   });
 });
+
+describe('LarkApiClient sendMessage', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const reply = () => jsonResponse({ code: 0, data: { message_id: 'om_1' }, msg: 'ok' });
+
+  it('addresses a chat by chat_id by default', async () => {
+    fetchMock.mockResolvedValueOnce(tokenResponse()).mockResolvedValueOnce(reply());
+
+    await new LarkApiClient('cli_app', 'secret', 'feishu').sendMessage('oc_chat', 'hi');
+
+    const [url, init] = fetchMock.mock.calls[1];
+    expect(url).toBe('https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id');
+    expect(JSON.parse(init.body).receive_id).toBe('oc_chat');
+  });
+
+  it("messages a user's private chat by open_id", async () => {
+    fetchMock.mockResolvedValueOnce(tokenResponse()).mockResolvedValueOnce(reply());
+
+    await expect(
+      new LarkApiClient('cli_app', 'secret', 'feishu').sendMessage('ou_owner', 'hi', 'open_id'),
+    ).resolves.toMatchObject({ messageId: 'om_1' });
+
+    const [url, init] = fetchMock.mock.calls[1];
+    expect(url).toBe('https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=open_id');
+    expect(JSON.parse(init.body).receive_id).toBe('ou_owner');
+  });
+});

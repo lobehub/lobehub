@@ -1,5 +1,5 @@
 import type { TaskStatus } from '@lobechat/types';
-import { Block, cssVar, Text, Tooltip, useThemeMode } from '@lobehub/ui';
+import { Block, cssVar, Text, Tooltip } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,6 +13,7 @@ import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
 import AssigneeAvatar from '../features/AssigneeAvatar';
 import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
+import { taskDetailLayoutStyles as styles } from './taskDetailLayoutStyles';
 
 const TaskDetailAssignee = memo(() => {
   const { t } = useTranslation('chat');
@@ -26,7 +27,6 @@ const TaskDetailAssignee = memo(() => {
   const assigneeHeterogeneousType = useHomeStore(
     (s) => homeAgentListSelectors.getAgentById(assigneeAgentId ?? '')(s)?.heterogeneousType,
   );
-  const { isDarkMode } = useThemeMode();
 
   if (!taskId) return null;
 
@@ -43,23 +43,21 @@ const TaskDetailAssignee = memo(() => {
           clickable
           horizontal
           align="center"
+          className={styles.propertyItem}
           gap={8}
-          paddingBlock={4}
-          paddingInline={12}
-          style={{ flex: 'none', maxWidth: '100%', minHeight: 32 }}
-          variant={isDarkMode ? 'filled' : 'outlined'}
+          variant={'borderless'}
         >
           {assigneeAgentId ? (
             <>
-              <AssigneeAvatar agentId={assigneeAgentId} size={20} />
-              <Text ellipsis weight={500}>
+              <AssigneeAvatar agentId={assigneeAgentId} size={16} />
+              <Text ellipsis style={{ minWidth: 0 }} weight={500}>
                 {assigneeMeta?.title}
               </Text>
               <HeterogeneousTag type={assigneeHeterogeneousType} />
             </>
           ) : (
             <>
-              <UnassignedAssigneeIcon kind={'agent'} />
+              <UnassignedAssigneeIcon kind={'agent'} size={16} />
               <Text style={{ color: cssVar.colorTextDescription }} weight={500}>
                 {t('createTask.assignee')}
               </Text>

@@ -21,9 +21,11 @@ import { default as cohere } from './cohere';
 import { default as cometapi } from './cometapi';
 import { default as comfyui } from './comfyui';
 import { default as deepseek } from './deepseek';
+import { default as doubaospeech } from './doubaospeech';
 import { default as elevenlabs } from './elevenlabs';
 import { default as fal } from './fal';
 import { default as fireworksai } from './fireworksai';
+import { default as fishaudio } from './fishaudio';
 import { default as giteeai } from './giteeai';
 import { default as github } from './github';
 import { default as githubcopilot } from './githubCopilot';
@@ -137,9 +139,11 @@ const staticModelMap: ModelsMap = {
   cometapi,
   comfyui,
   deepseek,
+  doubaospeech,
   elevenlabs,
   fal,
   fireworksai,
+  fishaudio,
   giteeai,
   github,
   githubcopilot,
@@ -210,6 +214,26 @@ const staticModelMap: ModelsMap = {
 
 export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList(staticModelMap);
 
+let effortCardKeys: Set<string> | undefined;
+
+/**
+ * Whether the provider's card supplies a model's `settings.reasoningEffort`:
+ * the bundled card for `providerId/id` declares one, or the provider is
+ * LobeHub, whose model list is managed server-side so its cards always apply.
+ * A card without a spec does not count: a user row's legacy effort param
+ * (e.g. OpenRouter `openai/o3-mini`, written by the remote model fetch) is the
+ * only source of that model's levels, merged over the spec-less card.
+ */
+export const providerCardDeclaresEffort = (providerId: string, id: string) => {
+  if (providerId === 'lobehub') return true;
+  effortCardKeys ??= new Set(
+    LOBE_DEFAULT_MODEL_LIST.filter((m) => !!m.settings?.reasoningEffort).map(
+      (m) => `${m.providerId}/${m.id}`,
+    ),
+  );
+  return effortCardKeys.has(`${providerId}/${id}`);
+};
+
 export const loadModels = async (
   options?: LoadModelsOptions,
 ): Promise<LobeDefaultAiModelListItem[]> => {
@@ -259,9 +283,11 @@ export { default as cohere } from './cohere';
 export { default as cometapi } from './cometapi';
 export { default as comfyui } from './comfyui';
 export { default as deepseek } from './deepseek';
+export { default as doubaospeech } from './doubaospeech';
 export { default as elevenlabs } from './elevenlabs';
 export { default as fal, fluxSchnellParamsSchema } from './fal';
 export { default as fireworksai } from './fireworksai';
+export { default as fishaudio } from './fishaudio';
 export { default as giteeai } from './giteeai';
 export { default as github } from './github';
 export { default as githubcopilot } from './githubCopilot';

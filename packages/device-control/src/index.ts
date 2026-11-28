@@ -6,6 +6,7 @@ export {
 } from './claudeCodeMemory';
 export { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
 export {
+  AGENT_CREDENTIAL_UNSUPPORTED_MESSAGE,
   APP_UPDATE_UNSUPPORTED_MESSAGE,
   CLI_UPDATE_UNSUPPORTED_MESSAGE,
   DEVICE_RPC_METHODS,
@@ -42,4 +43,10 @@ export {
 } from './projectFileIndex';
 export { defaultSkillCacheRoot, prepareSkillDirectory } from './skillDirectory';
 export * from './types';
-export { browseDirectory, initWorkspace, listProjectSkills, statPath } from './workspace';
+export {
+  browseDirectory,
+  discoverAgentFiles,
+  initWorkspace,
+  listProjectSkills,
+  statPath,
+} from './workspace';

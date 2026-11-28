@@ -46,9 +46,10 @@ import { useSingleton } from '@/hooks/useSingleton';
 import { type VerifyCriterionDraft, verifyService } from '@/services/verify';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import { resolveTaskAcceptanceGoal } from './resolveTaskAcceptanceGoal';
-import { TaskAcceptanceHeader } from './TaskAcceptanceHeader';
+import TaskSectionHeader from './TaskSectionHeader';
 
 const SAVE_DEBOUNCE_MS = 600;
 
@@ -65,7 +66,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   row: css`
     cursor: pointer;
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     & + & {
       border-block-start: 1px solid ${cssVar.colorBorderSecondary};
@@ -79,11 +80,46 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: 1;
   `,
   section: css`
-    padding-block: 12px;
-    padding-inline: 12px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.contentGap};
   `,
   subtitle: css`
     color: ${cssVar.colorTextSecondary};
+  `,
+  // Empty state under the heading: one muted line whose two actions are
+  // inline text buttons, so it never outweighs sections that hold content.
+  emptyLine: css`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    align-items: center;
+
+    font-size: 12px;
+    line-height: 20px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  emptyLink: css`
+    cursor: pointer;
+
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+
+    font: inherit;
+    color: ${cssVar.colorTextSecondary};
+    text-decoration: underline;
+    text-underline-offset: 3px;
+
+    background: none;
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: 2px;
+    }
   `,
 }));
 
@@ -380,7 +416,8 @@ const TaskVerifyConfig = memo(() => {
   }, [generateCriteria, generating, requirement]);
 
   const handleCollapsedClick = useCallback(() => {
-    if (savedCount > 0 || requirement.trim()) {
+    // Configured, or nothing to draft from: open the editor instead of generating.
+    if (savedCount > 0 || requirement.trim() || !taskAcceptanceGoal) {
       setExpanded(true);
       return;
     }
@@ -502,48 +539,53 @@ const TaskVerifyConfig = memo(() => {
 
   const hasConfig = drafts.length > 0;
 
-  // ---- Collapsed trigger (default): a "+" row; reveals the editor on click ----
+  // ---- Collapsed (default) ----
   if (!expanded) {
     // A task may have verify configured via the natural-language requirement only
     // (config.verify.requirement) without ever materializing structured criteria.
     // Treat that as "configured" too, so the panel never reads as "never set".
     const requirementPreview = requirement.trim();
     const isConfigured = savedCount > 0 || requirementPreview.length > 0;
-    // When the gate is a requirement sentence (no structured criteria), render the
-    // requirement as flat body text BELOW the trigger — it's readable content, not
-    // a clickable target. Only the compact title row stays clickable-to-expand, so
-    // hovering the requirement doesn't light up a big clickable block.
-    const showRequirement = savedCount === 0 && requirementPreview.length > 0;
+
+    // Nothing configured: a plain heading like every other section, with the
+    // empty state and its two ways in underneath — not a toggle that hides them.
+    if (!isConfigured) {
+      return (
+        <Flexbox gap={4}>
+          <TaskSectionHeader icon={ShieldCheck} title={t('verifyConfig.empty.title')} />
+          <div className={styles.emptyLine}>
+            <span>{t('verifyConfig.emptyState')}</span>
+            <button className={styles.emptyLink} type={'button'} onClick={handleCollapsedClick}>
+              {t('verifyConfig.collapsedHint')}
+            </button>
+            <span aria-hidden>·</span>
+            <button
+              className={styles.emptyLink}
+              type={'button'}
+              onClick={() => {
+                setExpanded(true);
+                handleManualAdd();
+              }}
+            >
+              {t('verifyConfig.manualAdd')}
+            </button>
+          </div>
+        </Flexbox>
+      );
+    }
+
     const trigger = (
-      <Block
-        clickable
-        horizontal
-        align={'center'}
-        gap={8}
-        paddingBlock={4}
-        paddingInline={8}
-        style={{ marginInlineStart: -8, width: 'fit-content' }}
-        variant={'borderless'}
-        onClick={handleCollapsedClick}
-      >
-        <Icon
-          color={cssVar.colorTextDescription}
-          icon={isConfigured ? ShieldCheck : Plus}
-          size={16}
-        />
-        <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
-          {t('verifyConfig.empty.title')}
-        </Text>
-        {savedCount > 0 ? (
-          <Tag>{t('verifyConfig.criteriaCount', { count: savedCount })}</Tag>
-        ) : showRequirement ? null : (
-          <Text className={styles.subtitle} fontSize={12}>
-            {t('verifyConfig.collapsedHint')}
-          </Text>
-        )}
-      </Block>
+      <TaskSectionHeader
+        count={savedCount > 0 ? t('verifyConfig.criteriaCount', { count: savedCount }) : undefined}
+        icon={ShieldCheck}
+        isOpen={false}
+        title={t('verifyConfig.empty.title')}
+        onToggle={handleCollapsedClick}
+      />
     );
-    if (!showRequirement) return trigger;
+    // A requirement sentence without structured criteria is readable content:
+    // flat body text below the heading, not part of the clickable toggle.
+    if (savedCount > 0) return trigger;
     return (
       <Flexbox gap={2}>
         {trigger}
@@ -590,8 +632,8 @@ const TaskVerifyConfig = memo(() => {
         <Flexbox gap={12}>
           <Flexbox horizontal align={'center'} justify={'space-between'}>
             <Flexbox horizontal align={'center'} gap={8}>
-              <Icon icon={ShieldCheck} size={18} />
-              <Text weight={600}>{t('verifyConfig.empty.title')}</Text>
+              <Icon color={cssVar.colorTextDescription} icon={ShieldCheck} size={16} />
+              <Text weight={500}>{t('verifyConfig.empty.title')}</Text>
             </Flexbox>
             {/* Actions live top-right, de-emphasized, so they never outweigh the
                 requirement input that is the empty state's primary focus. */}
@@ -684,20 +726,27 @@ const TaskVerifyConfig = memo(() => {
   ];
 
   return (
-    <Flexbox className={styles.section}>
+    // No inset of its own: the header must start on the same edge as every other
+    // section heading on the page.
+    <Flexbox>
       <Flexbox gap={12}>
         {/* Definition and result modes share one title contract. Mode-specific
             controls stay on the right without changing the information hierarchy. */}
-        <Flexbox horizontal align={'center'} justify={'space-between'}>
-          <TaskAcceptanceHeader isOpen count={drafts.length} onToggle={() => setExpanded(false)} />
-          <DropdownMenu items={headerMenuItems} placement={'bottomRight'}>
-            <ActionIcon
-              icon={MoreHorizontal}
-              size={'small'}
-              title={t('verifyConfig.moreActions')}
-            />
-          </DropdownMenu>
-        </Flexbox>
+        <TaskSectionHeader
+          count={drafts.length || undefined}
+          icon={ShieldCheck}
+          title={t('verifyConfig.empty.title')}
+          extra={
+            <DropdownMenu items={headerMenuItems} placement={'bottomRight'}>
+              <ActionIcon
+                icon={MoreHorizontal}
+                size={'small'}
+                title={t('verifyConfig.moreActions')}
+              />
+            </DropdownMenu>
+          }
+          onToggle={() => setExpanded(false)}
+        />
 
         <Flexbox gap={6}>
           <Text className={styles.subtitle} fontSize={12}>

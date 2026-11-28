@@ -16,8 +16,23 @@ vi.mock('@lobechat/model-runtime', () => ({
 
 vi.mock('@lobechat/types', () => ({
   ChatErrorType: {
+    Forbidden: 'Forbidden',
     InternalServerError: 'InternalServerError',
     Unauthorized: 'Unauthorized',
+  },
+}));
+
+const { authorizeCaller } = vi.hoisted(() => ({ authorizeCaller: vi.fn() }));
+
+vi.mock('@/server/services/heterogeneousAgent/callerToken', () => ({
+  authorizeHeteroCallerToken: authorizeCaller,
+  HeteroCallerTokenError: class extends Error {
+    constructor(
+      message: string,
+      readonly status: 401 | 403,
+    ) {
+      super(message);
+    }
   },
 }));
 
@@ -271,6 +286,63 @@ describe('checkAuth', () => {
       await checkAuth(mockHandler)(mockRequest, mockOptions);
 
       expect(mockHandler).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('device run caller token', () => {
+    const callerPayload = (capabilities = ['caller:act', 'hetero:ingest', 'hetero:finish']) => ({
+      aud: 'urn:lobehub:hetero-operation',
+      capabilities,
+      exp: 2,
+      iat: 1,
+      iss: 'urn:lobehub:internal',
+      jti: 'jti-1',
+      operation_id: 'op-1',
+      purpose: 'hetero-operation',
+      sub: 'user-initiator',
+      workspace_id: 'ws-team',
+    });
+    const callerRequest = () =>
+      new Request('https://example.com/webapi/upload', {
+        headers: { 'Oidc-Auth': 'caller-token', 'X-Workspace-Id': 'ws-other' },
+      });
+    const mockCallerToken = (capabilities?: string[]) =>
+      vi.mocked(validateOIDCJWT).mockResolvedValueOnce({
+        payload: callerPayload(capabilities),
+        tokenData: { purpose: 'hetero-operation', sub: 'user-initiator' },
+        userId: 'user-initiator',
+      } as unknown as Awaited<ReturnType<typeof validateOIDCJWT>>);
+
+    it('checks the run and the requested workspace before running the handler', async () => {
+      const { HeteroCallerTokenError } =
+        await import('@/server/services/heterogeneousAgent/callerToken');
+      mockCallerToken();
+      authorizeCaller.mockRejectedValueOnce(
+        new HeteroCallerTokenError(
+          "This run's token only works in workspace ws-team, not in workspace ws-other.",
+          403,
+        ),
+      );
+
+      await checkAuth(mockHandler)(callerRequest(), mockOptions);
+
+      expect(authorizeCaller).toHaveBeenCalledWith(
+        expect.objectContaining({ requestedWorkspaceId: 'ws-other' }),
+      );
+      expect(AgentRuntimeError.createError).toHaveBeenCalledWith(ChatErrorType.Forbidden, {
+        message: "This run's token only works in workspace ws-team, not in workspace ws-other.",
+      });
+      expect(mockHandler).not.toHaveBeenCalled();
+    });
+
+    it('leaves an operation token without caller:act as before', async () => {
+      mockCallerToken(['hetero:ingest', 'hetero:finish']);
+      vi.mocked(mockHandler).mockResolvedValueOnce(new Response('ok'));
+
+      await checkAuth(mockHandler)(callerRequest(), mockOptions);
+
+      expect(authorizeCaller).not.toHaveBeenCalled();
+      expect(mockHandler).toHaveBeenCalled();
     });
   });
 });

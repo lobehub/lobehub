@@ -678,14 +678,14 @@ const createFakeProc = ({
   const writes: string[] = [];
   proc.stdout = stdout;
   proc.stderr = stderr;
-  proc.stdin = {
+  proc.stdin = Object.assign(new EventEmitter(), {
     end: vi.fn(),
     write: vi.fn((chunk: string, cb?: () => void) => {
       writes.push(chunk);
       cb?.();
       return true;
     }),
-  };
+  });
   proc.kill = vi.fn();
   proc.killed = false;
   let started = false;
@@ -1639,9 +1639,9 @@ describe('HeterogeneousAgentCtr', () => {
           commandPath: 'claude',
           cwd: FAKE_DESKTOP_PATH,
           operationId: 'op-test',
+          replayUserMessages: true,
           stdinPayload: expect.stringContaining('watch ci'),
-          // `Read` on an image echoes base64; without this the SDK path would
-          // persist an `[Image: …]` placeholder instead of a thumbnail.
+          // `Read` on an image echoes base64; without it an `[Image: …]` placeholder is stored.
           uploadImage: expect.any(Function),
         }),
       );
@@ -4988,13 +4988,13 @@ describe('HeterogeneousAgentCtr', () => {
       const stderr = new PassThrough();
       proc.stdout = stdout;
       proc.stderr = stderr;
-      proc.stdin = {
+      proc.stdin = Object.assign(new EventEmitter(), {
         end: vi.fn(),
         write: vi.fn((_chunk: any, cb?: () => void) => {
           cb?.();
           return true;
         }),
-      };
+      });
       proc.kill = vi.fn();
       proc.killed = false;
       proc.__start = () => {
@@ -5111,13 +5111,13 @@ describe('HeterogeneousAgentCtr', () => {
       const stderr = new PassThrough();
       proc.stdout = stdout;
       proc.stderr = stderr;
-      proc.stdin = {
+      proc.stdin = Object.assign(new EventEmitter(), {
         end: vi.fn(),
         write: vi.fn((_chunk: any, cb?: () => void) => {
           cb?.();
           return true;
         }),
-      };
+      });
       proc.kill = vi.fn();
       proc.killed = false;
 

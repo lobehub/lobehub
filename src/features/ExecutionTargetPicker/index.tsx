@@ -2,10 +2,11 @@
 
 import type { DeviceExecutionTarget, DeviceListItem } from '@lobechat/types';
 import { createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
-import { BoxIcon, LaptopIcon, MonitorOffIcon, SparklesIcon } from 'lucide-react';
+import { BoxIcon, LaptopIcon, MonitorOffIcon, MonitorSmartphoneIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   dotOffline: css`
@@ -51,10 +52,10 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 24px;
-    height: 24px;
+    width: ${densityVars.iconBox};
+    height: ${densityVars.iconBox};
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
+    border-radius: ${densityVars.radius};
 
     color: ${cssVar.colorText};
 
@@ -63,7 +64,7 @@ const styles = createStaticStyles(({ css }) => ({
   optionName: css`
     overflow: hidden;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
     line-height: 20px;
     color: ${cssVar.colorText};
@@ -71,7 +72,7 @@ const styles = createStaticStyles(({ css }) => ({
     white-space: nowrap;
   `,
   selectItem: css`
-    min-height: 40px;
+    min-height: ${densityVars.listRowHeight};
   `,
   selectPopup: css`
     max-width: calc(100vw - 24px);
@@ -248,42 +249,6 @@ export const findOwnWorkspaceDevice = (
       localMachineIds.includes(device.deviceId),
   );
 
-/**
- * The target a desktop picker writes on its own, or `undefined` to leave the
- * agent alone.
- *
- * - Nothing stored yet: this machine — its workspace row through the gateway
- *   when it has one, else the in-app `local` path.
- * - The member's own plain `local` pick on a workspace agent whose machine now
- *   has a workspace row moves to that row, so runs go through the gateway. A
- *   sandboxed `local` stays: only the in-app path can fence commands. A shared
- *   `local` the member merely inherits (`isOwnPick: false`) is not theirs to move.
- */
-export const getMachineDefaultTarget = ({
-  boundDeviceId,
-  executionTarget,
-  isOwnPick,
-  localSandboxEnabled,
-  ownWorkspaceDeviceId,
-}: {
-  boundDeviceId?: string;
-  executionTarget?: DeviceExecutionTarget;
-  isOwnPick: boolean;
-  localSandboxEnabled: boolean;
-  ownWorkspaceDeviceId?: string;
-}): ExecutionTargetSelection | undefined => {
-  if (executionTarget === undefined && boundDeviceId === undefined) {
-    return ownWorkspaceDeviceId
-      ? { deviceId: ownWorkspaceDeviceId, target: 'device' }
-      : { target: 'local' };
-  }
-
-  if (executionTarget === 'local' && isOwnPick && !localSandboxEnabled && ownWorkspaceDeviceId)
-    return { deviceId: ownWorkspaceDeviceId, target: 'device' };
-
-  return undefined;
-};
-
 interface ExecutionTargetIconProps {
   devicePlatform?: string | null;
   size?: number;
@@ -294,7 +259,9 @@ export const ExecutionTargetIcon = memo<ExecutionTargetIconProps>(
   ({ devicePlatform, size = 14, target }) => {
     switch (target) {
       case 'auto': {
-        return <Icon icon={SparklesIcon} size={size} />;
+        // A device family, not sparkles: `auto` picks among the user's
+        // devices, and sparkles read as an AI mode next to the model picker.
+        return <Icon icon={MonitorSmartphoneIcon} size={size} />;
       }
       case 'device': {
         return <>{getDeviceIcon(devicePlatform, size)}</>;

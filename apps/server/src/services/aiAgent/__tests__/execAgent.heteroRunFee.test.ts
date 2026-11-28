@@ -1,4 +1,4 @@
-import { ChatErrorType } from '@lobechat/types';
+import { ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
@@ -182,6 +182,7 @@ vi.mock('@/server/services/heterogeneousAgent', () => ({
   HeterogeneousAgentService: vi.fn().mockImplementation(function () {
     return {
       getHeterogeneousResumeSessionId: mockGetHeterogeneousResumeSessionId,
+      getThreadResumeSessionId: vi.fn().mockResolvedValue(undefined),
     };
   }),
 }));
@@ -281,13 +282,41 @@ describe('AiAgentService.execAgent - external agent run fee', () => {
     expect(result.success).toBe(true);
     expect(mockDispatchAgentRun).toHaveBeenCalled();
     const [{ holderId }] = fees.holdAgentRunFee.mock.calls[0];
-    expect(fees.holdAgentRunFee).toHaveBeenCalledWith({ holderId, userId: 'test-user-id' });
+    expect(fees.holdAgentRunFee).toHaveBeenCalledWith({
+      holderId,
+      model: 'claude-code',
+      provider: 'anthropic',
+      userId: 'test-user-id',
+    });
     expect(fees.rebindAgentRunFee).toHaveBeenCalledWith(
       'test-user-id',
       holderId,
       result.operationId,
     );
     expect(fees.releaseAgentRunFee).not.toHaveBeenCalled();
+  });
+
+  it('grants goal management to a saved chat turn without inserting another user message', async () => {
+    topicMock.findById.mockResolvedValue({ id: 'topic-1', metadata: {} });
+    const result = await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      parentMessageId: 'msg_saved',
+      persistedUserMessageId: 'msg_saved',
+      prompt: 'Create a goal to fix the bug',
+      suppressUserMessage: true,
+      trigger: RequestTrigger.Chat,
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockSignHeteroOperationJWT).toHaveBeenCalledWith(
+      expect.objectContaining({ capabilities: expect.arrayContaining(['goal:manage']) }),
+    );
+    expect(mockMessageCreate).toHaveBeenCalledTimes(1);
+    expect(mockMessageCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ parentId: 'msg_saved', role: 'assistant' }),
+      undefined,
+    );
   });
 
   it('leaves a refused dispatch’s fee to the completion that settles its error', async () => {

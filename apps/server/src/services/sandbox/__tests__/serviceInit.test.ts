@@ -4,6 +4,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import type { FileService } from '@/server/services/file';
 import type { MarketService } from '@/server/services/market';
 
+import { SANDBOX_FILES_MARKER_DIR } from '../bootstrap';
 import { SandboxMiddlewareService } from '../service';
 import type { SandboxProvider } from '../types';
 
@@ -67,6 +68,22 @@ describe('SandboxMiddlewareService file initialization', () => {
     expect(provider.callTool).toHaveBeenNthCalledWith(2, 'listFiles', {
       directoryPath: '/mnt/data',
     });
+  });
+
+  it('checks every file against its own marker, so a file attached later still syncs', async () => {
+    findFilesToInitInSandbox.mockResolvedValue([
+      { fileType: 'text/csv', id: 'f1', name: 'data.csv', size: 10, url: 'key-1' },
+      { fileType: 'text/csv', id: 'f2', name: 'later.csv', size: 10, url: 'key-2' },
+    ]);
+    const provider = createProvider();
+    const service = new SandboxMiddlewareService(provider, baseOptions());
+
+    await service.callTool('listFiles', {});
+
+    const [, params] = (provider.callTool as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(params.command).toContain(`if [ ! -f '${SANDBOX_FILES_MARKER_DIR}/f1' ]`);
+    expect(params.command).toContain(`if [ ! -f '${SANDBOX_FILES_MARKER_DIR}/f2' ]`);
+    expect(params.command).toContain(`-o '/mnt/data/later.csv'`);
   });
 
   it('only runs the sync once per service instance', async () => {

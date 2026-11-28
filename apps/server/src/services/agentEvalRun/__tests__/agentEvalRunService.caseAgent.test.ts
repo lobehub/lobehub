@@ -234,7 +234,7 @@ describe('AgentEvalRunService case Agents', () => {
     ]);
 
     const service = new AgentEvalRunService(serverDB, userId);
-    const chatConfig = { enableReasoning: true, gpt5_6ReasoningEffort: 'high' as const };
+    const chatConfig = { enableReasoning: true, reasoningEffort: 'high' as const };
     const run = await service.createRun({
       config: { chatConfig, model: 'gpt-6.1-terra', provider: 'openrouter' },
       datasetId: dataset.id,
@@ -253,6 +253,37 @@ describe('AgentEvalRunService case Agents', () => {
     expect(mockExecAgent).toHaveBeenCalledWith(
       expect.objectContaining({ chatConfigOverride: chatConfig }),
     );
+  });
+
+  it('preserves base agent auto skills and disabled opt-outs when cloning a case Agent', async () => {
+    const basePlugins = [
+      { identifier: 'my-skill', mode: 'auto' as const },
+      { identifier: 'github', mode: 'disabled' as const },
+    ];
+    const [target] = await serverDB
+      .insert(agents)
+      .values({
+        model: 'gpt-4.1-mini',
+        plugins: basePlugins,
+        provider: 'openai',
+        systemRole: 'Base role',
+        userId,
+      })
+      .returning();
+    const { dataset, testCases } = await createDataset([
+      { agent: { systemRole: 'Case override' }, input: 'Check orders' },
+    ]);
+
+    const service = new AgentEvalRunService(serverDB, userId);
+    const run = await service.createRun({
+      datasetId: dataset.id,
+      targetAgentId: target.id,
+    });
+
+    const created = await hiddenAgents();
+    const caseAgentId = await topicAgentOf(run.id, testCases[0].id);
+    const cloned = created.find((item) => item.id === caseAgentId)!;
+    expect(cloned.plugins).toEqual(basePlugins);
   });
 
   it('deletes the hidden Agents with the run', async () => {

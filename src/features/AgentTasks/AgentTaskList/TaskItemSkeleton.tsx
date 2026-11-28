@@ -1,14 +1,18 @@
 import { Block, Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
+import { useDensityTokens } from '@/styles/density';
+
 interface TaskItemSkeletonProps {
   variant?: 'compact' | 'default';
 }
 
 const TaskItemSkeleton = memo<TaskItemSkeletonProps>(({ variant = 'default' }) => {
+  const { cardPadding, listRowHeight } = useDensityTokens();
+
   if (variant === 'compact') {
     return (
-      <Block gap={8} padding={12} variant={'borderless'}>
+      <Block gap={8} padding={cardPadding} variant={'borderless'}>
         <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
           <Skeleton height={14} style={{ minWidth: 60 }} width={60} />
           <Skeleton.Avatar shape={'circle'} size={'small'} />
@@ -26,7 +30,12 @@ const TaskItemSkeleton = memo<TaskItemSkeletonProps>(({ variant = 'default' }) =
   }
 
   return (
-    <Block gap={8} padding={12} variant={'borderless'}>
+    <Block
+      gap={8}
+      paddingBlock={(listRowHeight - 24) / 2}
+      paddingInline={12}
+      variant={'borderless'}
+    >
       <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
         <Flexbox horizontal align={'center'} gap={8} style={{ flex: 1, minWidth: 0 }}>
           <Skeleton.Avatar shape={'square'} size={16} style={{ borderRadius: 4, flex: 'none' }} />

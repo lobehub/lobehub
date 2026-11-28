@@ -5,11 +5,13 @@ import { AlertTriangle, CornerUpRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { resolveRejectedCopyKey } from './resolveRejectedCopyKey';
 
 const styles = stylex.create({
   container: { paddingBlock: '8px', paddingInline: '6px' },
-  title: { fontSize: '14px', color: cssVar.colorTextSecondary },
+  title: { fontSize: densityTokens['--lobe-density-font-size'], color: cssVar.colorTextSecondary },
 });
 
 interface RejectedResponseProps {

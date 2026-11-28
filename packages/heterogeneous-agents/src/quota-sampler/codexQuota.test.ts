@@ -78,6 +78,42 @@ describe('fetchCodexQuota', () => {
     vi.useRealTimers();
   });
 
+  it.each([
+    {
+      expected: { balance: '1250.75', unlimited: false },
+      rateLimits: { credits: { balance: '1250.75', hasCredits: true, unlimited: false } },
+    },
+    {
+      expected: { balance: '0', unlimited: false },
+      rateLimits: { credits: { balance: '0', hasCredits: false, unlimited: false } },
+    },
+    {
+      expected: { balance: null, unlimited: true },
+      rateLimits: {},
+      rateLimitsByLimitId: {
+        codex: { credits: { balance: null, hasCredits: true, unlimited: true } },
+      },
+    },
+    {
+      expected: undefined,
+      rateLimits: { credits: { balance: null, hasCredits: true, unlimited: false } },
+      rateLimitsByLimitId: {
+        other: { credits: { balance: '99', hasCredits: true, unlimited: false } },
+      },
+    },
+  ])('reads the account credit balance from the Codex quota RPC (%#)', async (fixture) => {
+    const child = new RpcChild();
+    spawnMock.mockReturnValue(child);
+    vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
+    const { expected, ...response } = fixture;
+    mockRpcRateLimits(child, response);
+
+    const result = fetchCodexQuota({ includeResetCredits: false });
+    await vi.advanceTimersByTimeAsync(2);
+
+    expect((await result).credits).toEqual(expected);
+  });
+
   it('fills reset-credit metadata from the Codex backend when RPC omits it', async () => {
     const child = new RpcChild();
     spawnMock.mockReturnValue(child);

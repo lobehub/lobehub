@@ -5,11 +5,13 @@ import pMap from 'p-map';
 
 import type { AgentItem } from '../../schemas';
 import { agents, agentsToSessions, sessions } from '../../schemas';
+import { getNewAgentPlugins } from '../../utils/agentConfig';
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
 import { sanitizeAgentApiConfig } from '../../utils/sanitizeAgentApiConfig';
 import { buildWorkspacePayload } from '../../utils/workspace';
 import { RESERVED_AGENT_SLUGS } from './constants';
 import { type AgentModelContext } from './context';
+import { translateSubAgentLegacyEffort } from './subAgentEffort';
 
 export const stripReservedSlug = <T extends { slug?: string | null }>(config: T): T => {
   if (!config.slug || !RESERVED_AGENT_SLUGS.has(config.slug)) return config;
@@ -26,11 +28,11 @@ export const create = async (
 ): Promise<AgentItem> => {
   const config = stripReservedSlug(input);
   const agencyConfig = ctx.withWorkspaceSelectionPolicyDefaults(
-    sanitizeAgentApiConfig(config.agencyConfig),
+    sanitizeAgentApiConfig(translateSubAgentLegacyEffort(config.agencyConfig)),
   );
 
   await ctx.assertWorkspaceDeviceBinding(ctx.workspaceId ?? null, agencyConfig);
-  await ctx.assertFixedExecutionTarget(ctx.workspaceId ?? null, agencyConfig);
+  await ctx.assertFixedExecutionTarget(ctx.workspaceId ?? null, agencyConfig, config.visibility);
 
   const [result] = await ctx.db
     .insert(agents)
@@ -41,6 +43,7 @@ export const create = async (
           ...config,
           agencyConfig,
           model: typeof config.model === 'string' ? config.model : null,
+          plugins: getNewAgentPlugins(config),
         },
       ),
     ])
@@ -62,7 +65,7 @@ export const batchCreate = async (
   const normalizedConfigs = configs.map((config) => ({
     ...stripReservedSlug(config),
     agencyConfig: ctx.withWorkspaceSelectionPolicyDefaults(
-      sanitizeAgentApiConfig(config.agencyConfig),
+      sanitizeAgentApiConfig(translateSubAgentLegacyEffort(config.agencyConfig)),
     ),
   }));
 
@@ -73,7 +76,11 @@ export const batchCreate = async (
     (config) =>
       Promise.all([
         ctx.assertWorkspaceDeviceBinding(ctx.workspaceId ?? null, config.agencyConfig),
-        ctx.assertFixedExecutionTarget(ctx.workspaceId ?? null, config.agencyConfig),
+        ctx.assertFixedExecutionTarget(
+          ctx.workspaceId ?? null,
+          config.agencyConfig,
+          config.visibility,
+        ),
       ]),
     { concurrency: 5 },
   );
@@ -87,6 +94,7 @@ export const batchCreate = async (
           {
             ...config,
             model: typeof config.model === 'string' ? config.model : null,
+            plugins: getNewAgentPlugins(config),
           },
         ),
       ),
@@ -147,7 +155,9 @@ export const duplicate = async (
           openingMessage: sourceAgent.openingMessage,
           openingQuestions: sourceAgent.openingQuestions,
           params: sourceAgent.params,
-          pinned: sourceAgent.pinned,
+          // In a workspace a public row's `pinned` is the owner/admin team pin, so a
+          // copy never inherits it — copying is not a way to create team pins.
+          pinned: ctx.workspaceId ? false : sourceAgent.pinned,
           // Config
           plugins: sourceAgent.plugins,
           provider: sourceAgent.provider,

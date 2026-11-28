@@ -17,8 +17,10 @@ A CLI that predates `lh acceptance plan` has the same command as
 Use the CLI's plan-state help to read the supplied operation's frozen plan.
 Keep its check item IDs, definitions, required flags and evidence declarations
 unchanged. `verifyPlan[].id` is the stable check-item key; `index` is display
-ordering. `verifierConfig.requiredEvidence` declares `{ type, hint }` requirements;
-empty means that criterion is judged on deliverable text. Reuse an acquired
+ordering. `verifierConfig.requiredEvidence` declares `{ type, hint }` requirements,
+optionally with `"provenance": "execution"` (only a captured or imported
+`terminal` bundle covers it); empty means that criterion is judged on deliverable
+text. Reuse an acquired
 plan state instead of querying it again to learn the response shape.
 
 ## Write the round against the frozen plan
@@ -42,6 +44,11 @@ Then pick the surface for each item and capture into `$REPORT_DIR/assets/`
 exactly as an authored round does. Every recording gets its chapters while you
 drive it; each case's `observation` says what you saw. Leave `status` honest —
 it is your record, not the verdict.
+
+A frozen item's text stays unchanged, so before capturing each visual item
+write its fixture data — counts, title lengths and state mix, by the
+[authored-plan rule](report.md#workflow) — into the round's review notes, in
+every round, and seed to it.
 
 Only items with a non-empty `requiredEvidence` need an artifact; the rest are
 judged on the deliverable text — don't fabricate evidence for them. The `hint`
@@ -101,7 +108,8 @@ Use complete already acquired publication results when they establish coverage;
 query only missing rows or changed evidence, rather than rereading every result.
 
 Coverage rule: for each required criterion, **every** `requiredEvidence[].type`
-appears at least once in its evidence list, and every video has chapters. A gap →
+appears at least once in its evidence list (from a real command run where the
+requirement says `"provenance": "execution"`), and every video has chapters. A gap →
 capture and supplement it; then hand off per SKILL.md (acceptance URL +
 `coverage: n/n`).
 

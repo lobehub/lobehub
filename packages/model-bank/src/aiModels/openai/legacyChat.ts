@@ -28,7 +28,7 @@ export const openaiLegacyChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-04-17',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -57,7 +57,7 @@ export const openaiLegacyChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-06-10',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -88,7 +88,7 @@ export const openaiLegacyChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-04-16',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -116,7 +116,7 @@ export const openaiLegacyChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-01-31',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -143,7 +143,7 @@ export const openaiLegacyChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-03-19',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -171,7 +171,7 @@ export const openaiLegacyChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2024-12-17',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -301,6 +301,8 @@ export const openaiLegacyChatModels: AIChatModelCard[] = [
     id: 'gpt-4o',
     isOfficial: true,
     knowledgeCutoff: '2023-10',
+    /** @see https://developers.openai.com/api/docs/models/gpt-4o */
+    maxOutput: 16_384,
     pricing: {
       units: [
         { name: 'textInput_cacheRead', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
@@ -407,6 +409,8 @@ export const openaiLegacyChatModels: AIChatModelCard[] = [
     id: 'gpt-4-turbo',
     isOfficial: true,
     knowledgeCutoff: '2023-12',
+    /** @see https://developers.openai.com/api/docs/models/gpt-4-turbo */
+    maxOutput: 4096,
     pricing: {
       units: [
         { name: 'textInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },

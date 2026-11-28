@@ -1,5 +1,6 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
 
+import { ACTIVATE_TOOLS_AUDIT } from './interventionAudit';
 import { systemPrompt } from './systemRole';
 import { ActivatorApiName, LobeActivatorIdentifier } from './types';
 
@@ -8,7 +9,9 @@ export const LobeActivatorManifest: BuiltinToolManifest = {
     {
       description:
         'Activate tools from the <available_tools> list so their full API schemas become available for use. Call this before using any tool that is not yet activated. You can activate multiple tools at once.',
-      humanIntervention: 'required',
+      humanIntervention: {
+        dynamic: { default: 'never', policy: 'required', type: ACTIVATE_TOOLS_AUDIT },
+      },
       name: ActivatorApiName.activateTools,
       parameters: {
         properties: {

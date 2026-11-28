@@ -26,6 +26,7 @@ import { useTaskStore } from '@/store/task';
 import { taskLabelSelectors, taskListSelectors } from '@/store/task/selectors';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 import { saveToast } from '@/store/utils/saveToast';
+import { densityVars } from '@/styles/densityVars';
 
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
@@ -58,10 +59,10 @@ const styles = createStaticStyles(({ css }) => ({
     overflow-x: auto;
     display: flex;
     flex: 1;
-    gap: 8px;
+    gap: ${densityVars.sectionGap};
 
-    padding-block: 0 16px;
-    padding-inline: 12px;
+    padding-block: 0 ${densityVars.pagePaddingBlockEnd};
+    padding-inline: ${densityVars.pagePaddingInline};
   `,
 }));
 

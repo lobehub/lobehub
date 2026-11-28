@@ -20,9 +20,10 @@ import { WorkModel } from '@/database/models/work';
 import { type LobeChatDatabase } from '@/database/type';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
-import { createSandboxService } from '@/server/services/sandbox';
+import { createSandboxService, resolveSandboxSessionConfig } from '@/server/services/sandbox';
 
 import { UNEXECUTED_INTERVENTION_STATUSES } from './constants';
+import { createShellPullRequestLinking } from './pullRequestLinking';
 import { resolveRunWorkAccessScope, type ShareVisitorWorkIdentity } from './shareWorkScope';
 import { registerShellWorks } from './shellWorkRegistration';
 
@@ -359,6 +360,45 @@ export const registerWorksForOperation = async (
     return { attempted: 0, failed: 0 };
   }
 
+  const workModel = new WorkModel(serverDB, userId, workspaceId, accessScope);
+
+  // The whole operation's spend/usage is attached to each version registered
+  // this round (an operation-level, not per-file, figure — the scanner can't
+  // attribute cost to individual files). Prefer the terminal state's live blobs
+  // over the op row: on the pre-snapshot path the row's cost/usage columns are
+  // written only later by `recordCompletion`, so the row reads null/stale here.
+  // The op row's `totalCost` also rolls up terminal child ops; replicate that
+  // from the already-loaded tree (children complete before their root, so their
+  // rows carry final totals) to keep the state-sourced figure equivalent.
+  const childCost = tree
+    .filter((op) => op.id !== operationId)
+    .reduce((sum, op) => sum + (op.totalCost ?? 0), 0);
+  const ownCost = params.finalCost?.total;
+  const cumulativeCost =
+    typeof ownCost === 'number' ? ownCost + childCost : (completingOp.totalCost ?? null);
+  const usageBlob = params.finalUsage ?? completingOp.usage;
+  const cumulativeUsage: WorkVersionCumulativeUsage | null = usageBlob
+    ? {
+        capturedAt: new Date().toISOString(),
+        cost: params.finalCost ?? completingOp.cost ?? undefined,
+        usage: usageBlob,
+      }
+    : null;
+
+  // Works the agent wrote itself (`lobe-work` / `lh work`) were saved mid-run
+  // without a cost; give them the same run total the Works below carry. This
+  // runs before the record scan: a run whose only output is such a Work may
+  // leave no plugin records the scan below needs.
+  try {
+    await workModel.fillAgentWorkCost({
+      cumulativeCost,
+      cumulativeUsage,
+      rootOperationId: operationId,
+    });
+  } catch (error) {
+    log('[%s] Failed to fill agent Work cost (non-fatal): %O', operationId, error);
+  }
+
   // A share visitor's tool rows live under a topic with a non-null `senderId`,
   // which `MessageModel.ownership()` excludes by default — without the opt-in
   // the scan (and the anchor stamp below) silently sees nothing for that run.
@@ -397,42 +437,29 @@ export const registerWorksForOperation = async (
     return undefined;
   };
 
-  const workModel = new WorkModel(serverDB, userId, workspaceId, accessScope);
-
-  // The whole operation's spend/usage is attached to each version registered
-  // this round (an operation-level, not per-file, figure — the scanner can't
-  // attribute cost to individual files). Prefer the terminal state's live blobs
-  // over the op row: on the pre-snapshot path the row's cost/usage columns are
-  // written only later by `recordCompletion`, so the row reads null/stale here.
-  // The op row's `totalCost` also rolls up terminal child ops; replicate that
-  // from the already-loaded tree (children complete before their root, so their
-  // rows carry final totals) to keep the state-sourced figure equivalent.
-  const childCost = tree
-    .filter((op) => op.id !== operationId)
-    .reduce((sum, op) => sum + (op.totalCost ?? 0), 0);
-  const ownCost = params.finalCost?.total;
-  const cumulativeCost =
-    typeof ownCost === 'number' ? ownCost + childCost : (completingOp.totalCost ?? null);
-  const usageBlob = params.finalUsage ?? completingOp.usage;
-  const cumulativeUsage: WorkVersionCumulativeUsage | null = usageBlob
-    ? {
-        capturedAt: new Date().toISOString(),
-        cost: params.finalCost ?? completingOp.cost ?? undefined,
-        usage: usageBlob,
-      }
-    : null;
-
   // Recover external Works (github issue/PR today) from hetero / device shell
   // records (codex, claude-code, lobe-local-system) — these surfaces never pass
   // the skill-tool registration hook. Self-guarded: per-record failures are
   // counted, never thrown. Unlike file Works there is no device-provenance
   // objection: the registered entities are REMOTE resources whose identity/url
   // is independent of where the CLI ran.
+  // A share visitor's run is fenced off from the creator's topics, so it never
+  // links pull requests into them.
+  const pullRequestLinking = params.agentShareVisitor
+    ? undefined
+    : createShellPullRequestLinking({
+        db: serverDB,
+        topicId,
+        userId,
+        workModel,
+        workspaceId,
+      });
   const shellOutcome = await registerShellWorks({
     agentId: completingOp.agentId,
     cumulativeCost,
     cumulativeUsage,
     operationId,
+    pullRequestLinking,
     records,
     threadId: completingOp.threadId,
     topicId,
@@ -549,13 +576,39 @@ export const registerWorksForOperation = async (
     };
   }
 
-  // The sandbox is derived from userId + topicId and outlives the operation, so
-  // it is safe to build once here for every export.
-  const marketService = new MarketService({ userInfo: { userId } });
+  // The sandbox outlives the operation, so it is safe to build once here for
+  // every export. It must be the SAME sandbox the run's tools wrote to: the
+  // session is keyed by the acting account (`workspaceId`) and the drive
+  // entitlement (`sandboxStorage` claim) on the trusted token, plus the topic's
+  // placement. Resolve them exactly like the `lobe-skills` / `lobe-cloud-sandbox`
+  // runtimes do; a token without them reaches the personal ephemeral sandbox,
+  // where a workspace or drive-entitled run's file does not exist, so the
+  // export fails and the file card never appears.
+  const sandbox = await resolveSandboxSessionConfig({
+    isShareVisitorRun: Boolean(params.agentShareVisitor),
+    serverDB,
+    topicId,
+    userId,
+    workspaceId,
+  });
+  const marketService = new MarketService({
+    userInfo: {
+      sandboxOperation: { operationId, topicId },
+      sandboxStorage: sandbox.claim,
+      userId,
+      workspaceId: workspaceId ?? undefined,
+    },
+  });
   const fileService = new FileService(serverDB, userId, workspaceId);
   const sandboxService = createSandboxService({
     fileService,
     marketService,
+    sandboxCwd: sandbox.cwd,
+    sandboxInitialization: sandbox.initialization,
+    sandboxInstanceId: sandbox.environment,
+    sandboxMode: sandbox.mode,
+    sandboxSpecification: sandbox.specification,
+    sandboxWorkingDir: sandbox.workingDir,
     serverDB,
     topicId,
     userId,
@@ -634,11 +687,16 @@ export const registerWorksForOperation = async (
           storageName,
         });
         if (!exported.success) {
-          log(
-            '[%s] Skipping file %s: sandbox export failed: %s',
+          // console, not the debug logger: production does not enable this
+          // namespace, and a silent failure here only shows up as a missing card.
+          // Log only structured error fields: the file path and the raw upstream
+          // message can carry user file names into production logs.
+          console.warn(
+            '[work-registration] [%s] Skipping a file: sandbox export failed (code=%s, name=%s, status=%s)',
             operationId,
-            entry.path,
-            exported.error?.message ?? 'unknown error',
+            exported.error?.code ?? 'unknown',
+            exported.error?.name ?? 'unknown',
+            exported.error?.status ?? 'unknown',
           );
           // A failed export leaves nothing to register — count it so the caller
           // withholds the marker and a later call retries this file.

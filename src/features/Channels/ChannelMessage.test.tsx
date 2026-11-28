@@ -1,7 +1,12 @@
 /**
  * @vitest-environment happy-dom
  */
-import type { ChannelDetail, ChannelPublicMessage, ExternalWorkSummaryItem } from '@lobechat/types';
+import type {
+  ChannelDetail,
+  ChannelPublicJob,
+  ChannelPublicMessage,
+  ExternalWorkSummaryItem,
+} from '@lobechat/types';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { act, createElement, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -53,6 +58,14 @@ vi.mock('@/features/AgentProfileCard/AgentProfilePopup', () => ({
       children,
     ),
 }));
+vi.mock('@/components/AgentAvatar', () => ({
+  default: ({ agentId, size }: { agentId?: string; size?: number }) =>
+    createElement('span', {
+      'data-agent-id': agentId,
+      'data-size': size,
+      'data-testid': 'agent-avatar',
+    }),
+}));
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   DropdownMenu: ({ items }: { items: { key: string; label: string; onClick: () => void }[] }) =>
@@ -83,12 +96,16 @@ vi.mock('@/store/user', () => ({
   useUserStore: (selector: (s: unknown) => unknown) => selector({}),
 }));
 vi.mock('@/store/user/selectors', () => ({
+  userGeneralSettingsSelectors: { interfaceDensity: () => 'loose' },
   userProfileSelectors: { userId: () => 'user-self' },
 }));
 vi.mock('./MessageAttachments', () => ({ MessageAttachments: () => null }));
 vi.mock('./MessageReceipts', () => ({
-  MessageFailureMark: () => null,
   MessageRoutingStatus: () => null,
+}));
+vi.mock('./ReplyFailure', () => ({
+  ReplyFailureCard: ({ job }: { job: { id: string } }) =>
+    createElement('div', { 'data-testid': 'reply-failure' }, job.id),
 }));
 
 const detail = {
@@ -276,6 +293,11 @@ describe('ChannelMessage thread card', () => {
     expect(card.querySelector('.lucide-git-branch')).toBeNull();
     expect(screen.getByText('Nasa')).toBeTruthy();
     expect(screen.getByText('PR is up')).toBeTruthy();
+    // An Agent without an avatar of its own shows the character generated from its id, as the
+    // thread does, not the generic fallback.
+    expect(
+      replyRow.querySelector('[data-testid="agent-avatar"]')?.getAttribute('data-agent-id'),
+    ).toBe('agt_1');
 
     fireEvent.click(screen.getByRole('button', { name: /Topic header is unclickable/ }));
     expect(onOpenThread).toHaveBeenCalledWith('cht_1');
@@ -321,5 +343,22 @@ describe('ChannelMessage thread card', () => {
       screen.getByRole('button', { name: /openThread/ }).querySelector('.lucide-corner-down-right'),
     ).not.toBeNull();
     expect(screen.queryByText('threadCard.messages')).toBeNull();
+  });
+});
+
+describe('ChannelMessage reply failures', () => {
+  it('mounts the failure card of a reply under the acknowledgement it posted', () => {
+    render(
+      <ChannelMessage
+        detail={detail}
+        failures={[{ id: 'job_1' } as ChannelPublicJob]}
+        message={{
+          ...message({ avatar: null, id: 'agt_1', name: 'Sanjo', type: 'agent' }),
+          content: 'On it, checking CI first.',
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('reply-failure').textContent).toBe('job_1');
   });
 });

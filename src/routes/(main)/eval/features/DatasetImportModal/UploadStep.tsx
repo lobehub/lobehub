@@ -6,6 +6,8 @@ import { CloudUpload, ImportIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 import { type DatasetPreset } from '../../config/datasetPresets';
 import { ROLE_COLORS } from './const';
 
@@ -14,7 +16,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     overflow: hidden;
 
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 

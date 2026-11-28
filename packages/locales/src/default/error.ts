@@ -12,6 +12,10 @@ export default {
   'chatRequestBlocked.description':
     'This request was blocked by our security checks. If you think this is a mistake, contact support to restore access.',
   'chatRequestBlocked.title': 'Request blocked',
+  'chatOnboardingRequired.action': 'Finish onboarding',
+  'chatOnboardingRequired.description':
+    'Finish the short onboarding to keep chatting. You will come back to this conversation afterwards.',
+  'chatOnboardingRequired.title': 'Finish onboarding to continue',
   'saveState.retry': 'Retry',
   'saveState.saveFailed': 'Failed to save your changes. Please try again.',
   'error.backHome': 'Back to Home',
@@ -21,6 +25,9 @@ export default {
   'error.title': 'Oops, something went wrong..',
   'fetchError.detail': 'Error details',
   'fetchError.title': 'Request failed',
+  'import.github.access':
+    'Couldn’t open this repository or branch. Check the link and your GitHub account’s access.',
+  'import.github.connect': 'Private repositories need a GitHub account with read access.',
   'import.importConfigFile.description': 'Error reason: {{reason}}',
   'import.importConfigFile.title': 'Import Failed',
   'import.incompatible.description':
@@ -36,8 +43,8 @@ export default {
   'notFound.check': 'Please check if your URL is correct.',
   'notFound.desc': "We couldn't find the page you were looking for.",
   'notFound.title': 'Entered Unknown Territory?',
-  'pluginSettings.desc': 'Complete the following configuration to start using this skill',
-  'pluginSettings.title': '{{name}} Skill Settings',
+  'pluginSettings.desc': 'Complete the following configuration to start using this connector',
+  'pluginSettings.title': '{{name}} Connector Settings',
   'response.400':
     'Sorry, the server does not understand your request. Please make sure your request parameters are correct.',
   'response.401':
@@ -130,9 +137,9 @@ export default {
   'response.QuotaLimitReachedCloud':
     'The model service is currently under heavy load. Please try again later or switch to another model.',
   'response.FreePlanLimit':
-    'You are currently a free user and cannot use this feature. Please upgrade to a paid plan to continue using it.',
+    'Your free allowance is used up. Top up or upgrade your plan to continue, or use a model on your own API key.',
   'response.InsufficientBudgetForAgentRunFee':
-    'Not enough credits to pay the agent run fee. Each agent run carries a fee, even on your own CLI account. Top up or upgrade your plan, then try again.',
+    'Not enough credits to pay the agent run fee. Each agent run carries a small fee, including runs on your own CLI account. Top up or upgrade your plan, then try again.',
   'response.InsufficientBudgetForModel':
     'Your remaining balance is insufficient for this model. Please top up, upgrade your plan, or try a less expensive model.',
   'response.GoogleAIBlockReason.BLOCKLIST':
@@ -161,31 +168,31 @@ export default {
     'The selected model and related models are temporarily unavailable due to content safety restrictions. Access is expected to resume at {{time}}. You can use a different model meanwhile.',
   'response.NoOpenAIAPIKey': 'OpenAI API Key is empty, please add a custom OpenAI API Key',
   'response.PluginApiNotFound':
-    "Sorry, the API does not exist in the skill's manifest. Please check if your request method matches the skill manifest API",
+    "Sorry, the API does not exist in the connector's manifest. Please check if your request method matches the connector manifest API",
   'response.PluginApiParamsError':
-    'Sorry, the input parameter validation for the skill request failed. Please check if the input parameters match the API description',
+    'Sorry, the input parameter validation for the tool request failed. Please check if the input parameters match the API description',
   'response.PluginFailToTransformArguments':
-    'Sorry, the skill failed to parse the arguments. Please try regenerating the agent message or switch to a more powerful AI model with Tools Calling capability and try again',
+    'Sorry, the tool call arguments could not be parsed. Please try regenerating the agent message or switch to a more powerful AI model with Tools Calling capability and try again',
   'response.PluginGatewayError':
-    'Sorry, there was an error with the skill gateway. Please check if the skill gateway configuration is correct.',
+    'Sorry, there was an error with the connector gateway. Please check if the connector gateway configuration is correct.',
   'response.PluginManifestInvalid':
-    "Sorry, the skill's manifest validation failed. Please check if the manifest format is correct",
+    "Sorry, the connector's manifest validation failed. Please check if the manifest format is correct",
   'response.PluginManifestNotFound':
-    "Sorry, the server could not find the skill's manifest file (manifest.json). Please check if the skill manifest file address is correct",
+    "Sorry, the server could not find the connector's manifest file (manifest.json). Please check if the connector manifest file address is correct",
   'response.PluginMarketIndexInvalid':
-    'Sorry, the skill index validation failed. Please check if the index file format is correct',
+    'Sorry, the connector index validation failed. Please check if the index file format is correct',
   'response.PluginMarketIndexNotFound':
-    'Sorry, the server could not find the skill index. Please check if the index address is correct',
+    'Sorry, the server could not find the connector index. Please check if the index address is correct',
   'response.PluginMetaInvalid':
-    "Sorry, the skill's metadata validation failed. Please check if the skill metadata format is correct",
+    "Sorry, the connector's metadata validation failed. Please check if the connector metadata format is correct",
   'response.PluginMetaNotFound':
-    "Sorry, the skill was not found in the index. Please check the skill's configuration information in the index",
+    "Sorry, the connector was not found in the index. Please check the connector's configuration information in the index",
   'response.PluginOpenApiInitError':
     'Sorry, the OpenAPI client failed to initialize. Please check if the OpenAPI configuration information is correct.',
   'response.PluginServerError':
-    'Skill server request returned an error. Please check your skill manifest file, skill configuration, or server implementation based on the error information below',
+    'Connector server request returned an error. Please check your connector manifest file, connector configuration, or server implementation based on the error information below',
   'response.PluginSettingsInvalid':
-    'This skill needs to be correctly configured before it can be used. Please check if your configuration is correct',
+    'This connector needs to be correctly configured before it can be used. Please check if your configuration is correct',
   'response.ProviderContentModeration':
     'Content policy check failed. Revise your prompt and try again.',
   'response.ProviderContentModerationWarning':
@@ -318,6 +325,7 @@ export default {
   'upload.desc': 'Details: {{detail}}',
   'upload.fileOnlySupportInServerMode':
     'The current deployment mode does not support uploading non-image files. To upload files in {{ext}} format, please switch to server database deployment or use the {{cloud}} service.',
+  'upload.fileTooLarge': 'This file is over the {{max}} upload limit and can’t be uploaded.',
   'upload.networkError':
     "Please check your network connection and ensure that the file storage service's cross-origin configuration is correct.",
   'upload.serviceUnavailable':
@@ -340,6 +348,8 @@ export default {
   'upload.permissionDenied': "You don't have permission to upload files in this workspace.",
   'upload.storageLimitExceeded':
     'Your file storage has reached the plan limit. Please upgrade your plan or delete unused files to free up space.',
+  'upload.storageRejected':
+    'The file storage service rejected the upload ({{detail}}). Please try again later.',
   'upload.title': 'File upload failed. Please check your network connection or try again later',
   'upload.unknownError': 'Error reason: {{reason}}',
   'upload.uploadFailed': 'File upload failed.',

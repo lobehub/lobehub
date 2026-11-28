@@ -1,24 +1,33 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Button, Icon, Input, InputPassword, Text } from '@lobehub/ui';
+import { Button, cssVar, Icon, Input, InputPassword, Text } from '@lobehub/ui';
 import { Form } from '@lobehub/ui/form';
 import { Lock, Mail } from 'lucide-react';
 import { type CSSProperties, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { AuthCard } from '@/features/AuthCard';
 import AuthAgreement from '@/features/AuthShell/AuthAgreement';
+import { isEmbeddedAuth } from '@/features/AuthShell/embedded';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 
 import { EMAIL_REGEX } from '../SignIn/SignInEmailStep';
 import { useSignUp } from './useSignUp';
 
+// Same as the sign-in page's "No account? Create one" link, so the two pages match.
+const INLINE_LINK_STYLE: CSSProperties = {
+  color: cssVar.colorPrimary,
+  textDecoration: 'underline',
+};
+
 const FIELD_STYLE: CSSProperties = { gap: 0, paddingBlock: '0 24px' };
 
 const BetterAuthSignUpForm = () => {
-  const { agreementChecked, businessElement, form, loading, setAgreementChecked } = useSignUp();
+  const { agreementChecked, businessElement, form, formError, loading, setAgreementChecked } =
+    useSignUp();
 
   const { t } = useTranslation('auth');
   const navigate = useNavigate();
@@ -38,9 +47,10 @@ const BetterAuthSignUpForm = () => {
   }, [searchParams, form]);
 
   const footer = (
-    <Text>
+    <Text align={'center'} fontSize={13} type={'secondary'}>
       {t('betterAuth.signup.hasAccount')}{' '}
       <Link
+        style={INLINE_LINK_STYLE}
         to={`/signin?${searchParams.toString()}`}
         onClick={(event) => {
           event.preventDefault();
@@ -55,14 +65,21 @@ const BetterAuthSignUpForm = () => {
   );
 
   return (
-    <AuthCard footer={footer} title={t('betterAuth.signup.cardTitle', { appName: BRANDING_NAME })}>
+    <AuthCard
+      footer={footer}
+      title={
+        isEmbeddedAuth()
+          ? t('betterAuth.signup.title')
+          : t('betterAuth.signup.cardTitle', { appName: BRANDING_NAME })
+      }
+    >
       <Form form={form} gap={0} layout="vertical">
         <Form.Field
           name="email"
           style={FIELD_STYLE}
           validate={(value: string) => {
             if (!value) return t('betterAuth.errors.emailRequired');
-            if (!EMAIL_REGEX.test(value)) return t('betterAuth.errors.emailInvalid');
+            if (!EMAIL_REGEX.test(value)) return t('betterAuth.errors.signupEmailInvalid');
           }}
         >
           <Input
@@ -135,6 +152,7 @@ const BetterAuthSignUpForm = () => {
         {businessElement && <div style={{ paddingBlockEnd: 24 }}>{businessElement}</div>}
 
         <AuthAgreement checked={agreementChecked} onChange={setAgreementChecked} />
+        {formError && <InlineErrorText style={{ marginBlockEnd: 12 }}>{formError}</InlineErrorText>}
         <Button block htmlType="submit" loading={loading} size="large" type="primary">
           {t('betterAuth.signup.submit')}
         </Button>

@@ -10,6 +10,8 @@ import { useTranslation } from 'react-i18next';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { describeError } from '@/features/EnvironmentManager/errorMessage';
+import { useDensityTokens } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 import { formatSize } from '@/utils/format';
 
 import { STORAGE_CATEGORIES } from './analysis';
@@ -26,7 +28,7 @@ const styles = stylex.create({
     borderTopStyle: 'solid',
     borderTopWidth: 1,
     bottom: 0,
-    paddingBlock: 12,
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
     position: 'sticky',
   },
   bar: {
@@ -57,6 +59,7 @@ interface StorageCleanupProps {
  */
 const StorageCleanup = memo<StorageCleanupProps>(({ drive, onBack }) => {
   const { t } = useTranslation(['setting', 'common']);
+  const { pageTitleFontSize } = useDensityTokens();
   const { analysis, error, remove, rescan, scanning } = useStorageAnalysis(drive);
   const result = analysis?.result;
   const selection = useCleanupSelection(result);
@@ -118,7 +121,7 @@ const StorageCleanup = memo<StorageCleanupProps>(({ drive, onBack }) => {
       <Flexbox horizontal align={'center'} gap={8}>
         <ActionIcon icon={ArrowLeftIcon} title={t('drive.cleanup.back')} onClick={onBack} />
         <Flexbox flex={1} gap={2}>
-          <Text as={'h2'} fontSize={16} style={{ margin: 0 }} weight={600}>
+          <Text as={'h2'} fontSize={pageTitleFontSize} style={{ margin: 0 }} weight={600}>
             {t('drive.cleanup.title')}
           </Text>
           <Text fontSize={12} type={'secondary'}>

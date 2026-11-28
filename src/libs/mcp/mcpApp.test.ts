@@ -87,3 +87,52 @@ describe('MCP App views from a desktop', () => {
     expect(canServeMcpAppHere({ resourceUri: 'ui://a' }, undefined)).toBe(true);
   });
 });
+
+describe('MCP App views relayed from a device', () => {
+  const relayed = {
+    content: [],
+    mcpApp: {
+      relayDeviceId: 'home-linux',
+      relayWorkspaceId: 'ws-1',
+      resourceUri: 'ui://a',
+      server: 'fp',
+    },
+  };
+
+  it('reads the device the server relays the view from, nested at either depth', () => {
+    const expected = {
+      relayDeviceId: 'home-linux',
+      relayWorkspaceId: 'ws-1',
+      resourceUri: 'ui://a',
+      server: 'fp',
+    };
+    expect(getMcpAppFromState(relayed)).toEqual(expected);
+    expect(getMcpAppFromState({ content: 'x', state: relayed, success: true })).toEqual(expected);
+  });
+
+  it('serves a relayed view on any client: the server reads it and runs its calls', () => {
+    const view = getMcpAppFromState(relayed)!;
+
+    expect(canServeMcpAppHere(view, 'another-desktop')).toBe(true);
+    expect(canServeMcpAppHere(view, 'home-linux')).toBe(true);
+    expect(canServeMcpAppHere(view, undefined)).toBe(true);
+  });
+});
+
+describe('persisted MCP App display preference', () => {
+  it.each(['inline', 'fullscreen'] as const)('replays %s from both host envelopes', (mode) => {
+    const state = {
+      content: [],
+      mcpApp: { preferredModelDisplayMode: mode, resourceUri: 'ui://app' },
+    };
+    expect(getMcpAppFromState(state)?.preferredModelDisplayMode).toBe(mode);
+    expect(
+      getMcpAppFromState({ content: 'result', state, success: true })?.preferredModelDisplayMode,
+    ).toBe(mode);
+  });
+  it('discards unsupported preferences in historical JSON', () => {
+    expect(
+      getMcpAppFromState({ mcpApp: { preferredModelDisplayMode: 'pip', resourceUri: 'ui://app' } }),
+    ).toEqual({ resourceUri: 'ui://app' });
+  });
+});

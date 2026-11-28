@@ -1,7 +1,8 @@
 'use client';
 
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
@@ -13,6 +14,7 @@ import { resolveAgentListContentState } from './agentListContentState';
 import Group from './Group';
 import InboxItem from './InboxItem';
 import SessionList from './List';
+import SortableList from './SortableList';
 import { useAgentList } from './useAgentList';
 
 interface AgentListContentProps {
@@ -38,7 +40,26 @@ const AgentListContent = memo<AgentListContentProps>(({ hideInbox, onMoreClick }
     isInit,
     isLogin: !!isLogin,
   });
-  const { customList, pinnedList, defaultList } = useAgentList();
+  const hasInboxAgent = useHomeStore(homeAgentListSelectors.hasInboxAgent);
+  const { customList, pinnedList, defaultList, inboxItem } = useAgentList();
+  // Personal pins are the user's own, so they can always be reordered.
+  // Workspaces render `WorkspaceAgentListContent` instead, where each member
+  // arranges their own pinned list.
+  const isWorkspace = !!useActiveWorkspaceId();
+  const pinnedAgents = useHomeStore(homeAgentListSelectors.pinnedAgents);
+  const reorderPinnedAgents = useHomeStore((s) => s.reorderPinnedAgents);
+
+  // Pins hidden from the sidebar keep their place after the visible ones.
+  const handleReorderPinned = useCallback(
+    (ids: string[]) => {
+      const moved = new Set(ids);
+      return reorderPinnedAgents([
+        ...ids,
+        ...pinnedAgents.map((item) => item.id).filter((id) => !moved.has(id)),
+      ]);
+    },
+    [pinnedAgents, reorderPinnedAgents],
+  );
 
   // Memoize computed visibility flags to prevent unnecessary recalculations
   const { showPinned, showCustom } = useMemo(() => {
@@ -51,20 +72,35 @@ const AgentListContent = memo<AgentListContentProps>(({ hideInbox, onMoreClick }
     };
   }, [pinnedList?.length, customList?.length]);
 
+  // Signed-in lists carry Lobe AI (the inbox) as an ordinary item from the
+  // server, so it can be pinned, hidden and found again like any Agent. The
+  // standalone entry covers the moments no list row exists: a signed-out
+  // visitor, the first load, and a list cached or fetched before the inbox row.
+  const showStandaloneInbox = !hideInbox && (contentState !== 'ready' || !hasInboxAgent);
+
+  if (contentState === 'inbox') return showStandaloneInbox ? <InboxItem /> : null;
   if (contentState !== 'ready')
     return (
       <>
-        {!hideInbox && <InboxItem style={{ minHeight: 36 }} />}
-        {contentState === 'loading' && <SkeletonList rows={3} />}
+        {showStandaloneInbox && <InboxItem />}
+        <SkeletonList rows={3} />
       </>
     );
 
   // Always render the default SessionList so the "+ Create Agent" entry is visible
   // even when the user has only the built-in Lobe AI inbox.
+  // Lobe AI's own row leads the list, ahead of the pins, like the standalone
+  // entry it replaces.
   return (
     <>
-      {!hideInbox && <InboxItem style={{ minHeight: 36 }} />}
-      {showPinned && <SessionList dataSource={pinnedList!} />}
+      {showStandaloneInbox && <InboxItem />}
+      {inboxItem && <SessionList dataSource={[inboxItem]} />}
+      {showPinned &&
+        (isWorkspace ? (
+          <SessionList dataSource={pinnedList!} />
+        ) : (
+          <SortableList dataSource={pinnedList!} onReorder={handleReorderPinned} />
+        ))}
       {showCustom && <Group dataSource={customList!} />}
       <SessionList
         dataSource={defaultList ?? []}

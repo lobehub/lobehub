@@ -2,6 +2,8 @@ import { createStaticStyles, cx, Text } from '@lobehub/ui';
 import { type PropsWithChildren } from 'react';
 import { memo } from 'react';
 
+import { densityVars } from '@/styles/densityVars';
+
 const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     desc: css`
@@ -13,7 +15,7 @@ const styles = createStaticStyles(({ css, cssVar }) => {
       height: 28px;
       margin-block: 4px 0 !important;
 
-      font-size: 14px;
+      font-size: ${densityVars.fontSize};
       line-height: 28px;
       color: ${cssVar.colorTextSecondary};
       text-overflow: ellipsis;

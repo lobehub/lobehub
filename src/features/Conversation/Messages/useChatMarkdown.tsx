@@ -81,16 +81,25 @@ export const useChatMarkdown = ({
     [id],
   );
 
+  /**
+   * Keeps one identity for the life of the message. `@lobehub/ui` builds its
+   * `pre` renderer from `componentProps` and compares callbacks by reference, so
+   * a new `onExpand` gives every code block a new component type. When a reply
+   * finishes, `animated` flips and `markdownProps` recomputes while lobe-ui
+   * still streams for another second: remounted code blocks start a fresh fade
+   * and every highlighted token fades in again at once (T-14992).
+   */
+  const componentProps = useMemo<MarkdownProps['componentProps']>(
+    () => ({ html: { onExpand: (content: string) => setDrawerContent(content) } }),
+    [],
+  );
+
   const markdownProps = useMemo(
     () =>
       ({
         animated,
         citations,
-        componentProps: {
-          html: {
-            onExpand: (content: string) => setDrawerContent(content),
-          },
-        },
+        componentProps,
         components,
         enableCustomFootnotes: true,
         // @deprecated Inline HTML preview and streaming are superseded by Canvas; kept for existing messages.
@@ -100,7 +109,7 @@ export const useChatMarkdown = ({
         remarkPlugins,
         showFootnotes: !citations?.length || citations.every((item) => item.title !== item.url),
       }) satisfies Partial<MarkdownProps>,
-    [animated, citations, components, enableStream],
+    [animated, citations, componentProps, components, enableStream],
   );
 
   const drawer = useMemo(

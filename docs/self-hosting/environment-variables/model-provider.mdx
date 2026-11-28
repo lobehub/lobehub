@@ -702,7 +702,7 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 ### `FAL_API_KEY`
 
 - Type: Required
-- Description: This is the API key you applied for in the FAL service.
+- Description: This is the API key you applied for in the FAL service (create one at [fal.ai/dashboard/keys](https://fal.ai/dashboard/keys)). If `FAL_API_KEY` is not set, LobeHub reads `FAL_KEY`, the name fal's own SDKs use. The key powers fal image, video and music generation. Music (MiniMax Music and ACE-Step 1.5) is only available through fal: MiniMax has stopped selling its official music API to new accounts. See [Music Generation](/docs/usage/getting-started/music).
 - Default: -
 - Example: `fal-xxxxxx...xxxxxx`
 
@@ -741,6 +741,70 @@ Text-to-speech only. See [Using ElevenLabs in LobeHub](/docs/usage/providers/ele
 - Example: `-all,+eleven_v4,+eleven_flash_v2_5`
 
 The example hides all default models and enables only `eleven_v4` and `eleven_flash_v2_5`.
+
+## Fish Audio
+
+Text-to-speech only. See [Using Fish Audio in LobeHub](/docs/usage/providers/fishaudio) for setup instructions.
+
+### `FISHAUDIO_API_KEY`
+
+- Type: Optional for the deployment; required when providing a shared server key. Users can instead enter their own key in Fish Audio provider settings, which takes precedence.
+- Description: A key created on the [Fish Audio API Keys](https://fish.audio/app/api-keys) page. Setting a non-empty key automatically enables Fish Audio in the server configuration. `ENABLED_FISHAUDIO` is derived from this key, not a separate environment switch. Without a key from either source, speech requests to Fish Audio fail with an `InvalidProviderAPIKey` error.
+- Default: Unset; no shared server key.
+- Example: `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+### `FISHAUDIO_PROXY_URL`
+
+- Type: Optional
+- Description: Overrides the Fish Audio API base URL. Only used together with the server key. A trailing `/v1` is accepted.
+- Default: `https://api.fish.audio`
+- Example: `https://fish-proxy.example.com`
+
+### `FISHAUDIO_MODEL_LIST`
+
+- Type: Optional
+- Description: Customizes the Fish Audio model list using the shared [model-list syntax][model-list].
+- Default: Unset; uses the built-in model list.
+- Example: `-all,+s2.1-pro`
+
+## Doubao Speech
+
+Volcengine speech synthesis, text-to-speech only; separate from the Volcengine Ark provider. See [Using Doubao Speech in LobeHub](/docs/usage/providers/doubaospeech) for setup instructions. Configure either `DOUBAOSPEECH_API_KEY`, or `DOUBAOSPEECH_APP_ID` together with `DOUBAOSPEECH_ACCESS_TOKEN`. Credentials a user saves in Doubao Speech provider settings take precedence and are never combined with the server's.
+
+### `DOUBAOSPEECH_API_KEY`
+
+- Type: Optional
+- Description: An API key from the new Volcengine speech console (API Key management), sent as `X-Api-Key`. Used instead of the App ID + Access Token when both are set. `ENABLED_DOUBAOSPEECH` is derived from the configured credentials, not a separate environment switch.
+- Default: Unset
+- Example: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
+
+### `DOUBAOSPEECH_APP_ID`
+
+- Type: Optional
+- Description: Legacy speech console App ID, used together with `DOUBAOSPEECH_ACCESS_TOKEN`.
+- Default: Unset
+- Example: `1234567890`
+
+### `DOUBAOSPEECH_ACCESS_TOKEN`
+
+- Type: Optional
+- Description: Legacy speech console Access Token, used together with `DOUBAOSPEECH_APP_ID`.
+- Default: Unset
+- Example: `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+### `DOUBAOSPEECH_PROXY_URL`
+
+- Type: Optional
+- Description: Overrides the Doubao Speech API base URL. Only used together with the server credentials. A trailing `/api/v3` is accepted.
+- Default: `https://openspeech.bytedance.com`
+- Example: `https://doubao-proxy.example.com`
+
+### `DOUBAOSPEECH_MODEL_LIST`
+
+- Type: Optional
+- Description: Customizes the Doubao Speech model list using the shared [model-list syntax][model-list].
+- Default: Unset; uses the built-in model list.
+- Example: `-all,+seed-tts-2.0`
 
 ## ComfyUI
 

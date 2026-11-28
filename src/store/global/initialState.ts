@@ -49,6 +49,7 @@ export type WorkingSidebarTab =
   | 'review'
   | 'search'
   | 'skills'
+  | 'tools'
   | 'web'
   | (string & {});
 
@@ -56,6 +57,11 @@ export const CANVAS_TAB_PREFIX = 'canvas:';
 export const canvasTabKey = (canvasId: string) => `${CANVAS_TAB_PREFIX}${canvasId}`;
 export const canvasIdOfTab = (tab: string) =>
   tab.startsWith(CANVAS_TAB_PREFIX) ? tab.slice(CANVAS_TAB_PREFIX.length) : undefined;
+
+export const ARTBOARD_TAB_PREFIX = 'artboard:';
+export const artboardTabKey = (artboardId: string) => `${ARTBOARD_TAB_PREFIX}${artboardId}`;
+export const artboardIdOfTab = (tab: string) =>
+  tab.startsWith(ARTBOARD_TAB_PREFIX) ? tab.slice(ARTBOARD_TAB_PREFIX.length) : undefined;
 
 export const DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS = {
   date: 160,
@@ -71,12 +77,16 @@ export enum SettingsTabs {
   Agent = 'agent',
   APIKey = 'apikey',
   Appearance = 'appearance',
+  Automations = 'automations',
   Billing = 'billing',
-  /** @deprecated Use Appearance instead */
+  /** @deprecated Use Conversation instead */
   ChatAppearance = 'chat-appearance',
+  /** Optional business tab; listed only where `useCodingPlansTab` supplies it. */
+  CodingPlans = 'coding-plans',
   /** @deprecated Use Appearance instead */
   Common = 'common',
   Connector = 'connector',
+  Conversation = 'conversation',
   Credits = 'credits',
   Creds = 'credential',
   Devices = 'devices',
@@ -84,12 +94,10 @@ export enum SettingsTabs {
   Hotkey = 'hotkey',
   /** @deprecated Use ServiceModel instead */
   Image = 'image',
-  Integrations = 'integrations',
   Labels = 'labels',
   Labs = 'labs',
   LLM = 'llm',
   Memory = 'memory',
-  Messenger = 'messenger',
   Notification = 'notification',
   OAuthApps = 'oauth-apps',
   // business
@@ -101,15 +109,17 @@ export enum SettingsTabs {
   Security = 'security',
   ServiceModel = 'service-model',
   Skill = 'skill',
-
   Stats = 'stats',
+
   Storage = 'storage',
+  SubscriptionAccounts = 'subscription-accounts',
   SystemTools = 'system-tools',
   Tools = 'tools',
   Trash = 'trash',
   /** @deprecated Use ServiceModel instead */
   TTS = 'tts',
   Usage = 'usage',
+  Webhooks = 'webhooks',
 }
 
 /**
@@ -154,7 +164,7 @@ export type TaskViewMode = 'kanban' | 'list';
 /** How topics inside one byProject sidebar group are sectioned. */
 export type ProjectTopicSubGroupMode = 'none' | 'byDevice' | 'byTime' | 'byStatus';
 
-export const DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS = ['favorites', 'recents', 'agent', 'private'];
+export const DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS = ['favorites', 'recents', 'agent'];
 
 /** How the agent document tree orders sibling rows. */
 export interface AgentDocumentSort {
@@ -183,9 +193,6 @@ export const DEFAULT_DOCS_PAGE_SECTION_VIEW: DocsPageSectionView = {
   sortBy: 'updatedAt',
   type: 'all',
 };
-
-/** How the Contacts list is ordered: by name, or most recently updated first. */
-export type ContactListSortBy = 'title' | 'updatedAt';
 
 /** How a sidebar Channel section orders its Channels. */
 export interface ChannelListSort {
@@ -216,10 +223,22 @@ export interface SystemStatus {
    */
   agentListExpandedGroupKeys?: string[];
   /**
-   * Whether the "in sidebar" overview section of the agent view-all page is
-   * collapsed. Defaults to expanded so the section is discoverable.
+   * Whether the "Recommended agents" section of the agent view-all page is
+   * collapsed. Defaults to expanded: it is how members find what their
+   * workspace recommends.
+   */
+  agentListRecommendedSectionCollapsed?: boolean;
+  /**
+   * @deprecated Read and written by earlier builds only, whose default
+   *   (expanded) was persisted for everyone; replaced by
+   *   `agentListSidebarSectionExpanded` so the section starts collapsed.
    */
   agentListSidebarSectionCollapsed?: boolean;
+  /**
+   * Whether the "in sidebar" overview section of the agent view-all page is
+   * expanded. Defaults to collapsed: the sidebar itself already shows it.
+   */
+  agentListSidebarSectionExpanded?: boolean;
   /**
    * View mode of the agent view-all page (badge-wall card grid vs table list); defaults to card
    */
@@ -228,7 +247,8 @@ export interface SystemStatus {
    * Display options of the agent view-all page (grouping / ordering / hidden-agent visibility)
    */
   agentListViewOptions?: {
-    groupBy: 'author' | 'label' | 'none';
+    /** Unset until the member picks one; the page then defaults per mode. */
+    groupBy?: 'author' | 'folder' | 'label' | 'none';
     orderBy: 'author' | 'title' | 'updatedAt';
     orderDirection: 'asc' | 'desc';
     showSidebarHidden: boolean;
@@ -247,6 +267,11 @@ export interface SystemStatus {
    * Order of the sidebar Channel sections. Device-local view setting.
    */
   channelListSort?: ChannelListSort;
+  /**
+   * Channels whose sidebar thread list is folded, keyed by Channel id. Nested booleans for the
+   * same lodash `merge` reason as `assigneeAgentSelectorCollapsedGroups`. Device-local.
+   */
+  channelThreadsCollapsed?: Record<string, boolean>;
   chatInputHeight?: number;
   /**
    * Which topicGroups are collapsed, bucketed by group mode. We persist the
@@ -256,8 +281,6 @@ export interface SystemStatus {
    * match and every group would render collapsed.
    */
   collapsedTopicGroupKeysByMode?: Partial<Record<TopicGroupMode, string[]>>;
-  /** Order of the Contacts list; absent means by name. Device-local view setting. */
-  contactListSortBy?: ContactListSortBy;
   disabledModelProvidersSortType?: string;
   disabledModelsSortType?: string;
   /**
@@ -313,6 +336,14 @@ export interface SystemStatus {
    * affordance is only a scroll trick.
    */
   homeGoalsCollapsed?: boolean;
+  /**
+   * Whether the home rail last settled with no card, keyed by cache scope
+   * (`${userId}:${workspaceId}`). Restored before the first render so a rail
+   * that is usually empty starts in one column, instead of showing loading
+   * skeletons beside a narrowed page and sliding back once its feeds answer
+   * empty on every reload.
+   */
+  homeRailEmptyByScope?: Record<string, boolean>;
   homeRecentsCount?: number;
   /**
    * Agent picked from the home AgentSelect dropdown, keyed by cache scope
@@ -345,6 +376,8 @@ export interface SystemStatus {
    * Remember user's last selected image generation provider
    */
   lastSelectedImageProvider?: string;
+  lastSelectedMusicModel?: string;
+  lastSelectedMusicProvider?: string;
   lastSelectedVideoModel?: string;
   lastSelectedVideoProvider?: string;
   latestChangelogId?: string;
@@ -374,6 +407,7 @@ export interface SystemStatus {
    * ModelSwitchPanel width
    */
   modelSwitchPanelWidth?: number;
+  musicTopicViewMode?: 'grid' | 'list';
   noWideScreen?: boolean;
   pageAgentPanelWidth?: number;
   /**
@@ -491,6 +525,13 @@ export interface SystemStatus {
    * Whether the right-side "Hidden columns" panel on the Kanban board is collapsed.
    */
   taskKanbanHiddenPanelCollapsed?: boolean;
+  /**
+   * Folded group / sub-group headers of the task list view, one entry per view
+   * (`taskListCollapseScopeKey`), so a folded group stays folded across
+   * navigation and reloads, as Linear keeps them per view. An array for the
+   * same reason as `taskListFilters`; see `useTaskListGroupCollapse`.
+   */
+  taskListCollapsedGroups?: { keys: string[]; scope: string }[];
   /**
    * Tasks page filters, one entry per list scope (workspace + global / agent /
    * project page). An array, not a map: status is deep-merged on write, which
@@ -648,10 +689,10 @@ export interface GlobalState {
 export const INITIAL_STATUS = {
   agentBuilderPanelWidth: 360,
   agentListExpandedGroupKeys: [] as string[],
-  agentListSidebarSectionCollapsed: false,
+  agentListRecommendedSectionCollapsed: false,
+  agentListSidebarSectionExpanded: false,
   agentListViewMode: 'card' as const,
   agentListViewOptions: {
-    groupBy: 'none' as const,
     orderBy: 'updatedAt' as const,
     orderDirection: 'desc' as const,
     showSidebarHidden: true,
@@ -729,6 +770,8 @@ export const INITIAL_STATUS = {
   terminalPanelHeight: 320,
   tokenDisplayFormatShort: true,
   topicPageSize: 20,
+  // Songs rarely carry cover art, so music topics read better as a titled list
+  musicTopicViewMode: 'list' as const,
   verifyReportPanelWidth: 300,
   videoPanelWidth: 320,
   videoTopicViewMode: 'grid' as const,
@@ -738,8 +781,8 @@ export const INITIAL_STATUS = {
 
 const statusStorage = new AsyncLocalStorage<SystemStatus>('LOBE_SYSTEM_STATUS');
 
-/** Keeps only `ownerId → boolean` entries of a persisted value of unknown shape. */
-const restoreTopicOnlyMineByAgent = (value: unknown): Record<string, boolean> | undefined => {
+/** Keeps only `key → boolean` entries of a persisted value of unknown shape. */
+const restoreBooleanRecord = (value: unknown): Record<string, boolean> | undefined => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   return Object.fromEntries(
     Object.entries(value).filter(
@@ -765,6 +808,7 @@ export const createInitialSystemStatus = (): SystemStatus => {
 
   return {
     ...INITIAL_STATUS,
+    homeRailEmptyByScope: restoreBooleanRecord(persistedStatus.homeRailEmptyByScope),
     hiddenHomeWidgets: Array.isArray(persistedStatus.hiddenHomeWidgets)
       ? persistedStatus.hiddenHomeWidgets
       : INITIAL_STATUS.hiddenHomeWidgets,
@@ -788,7 +832,7 @@ export const createInitialSystemStatus = (): SystemStatus => {
       typeof persistedStatus.showRightPanel === 'boolean'
         ? persistedStatus.showRightPanel
         : INITIAL_STATUS.showRightPanel,
-    topicOnlyMineByAgent: restoreTopicOnlyMineByAgent(persistedStatus.topicOnlyMineByAgent),
+    topicOnlyMineByAgent: restoreBooleanRecord(persistedStatus.topicOnlyMineByAgent),
     showWorkingOverview:
       typeof persistedStatus.showWorkingOverview === 'boolean'
         ? persistedStatus.showWorkingOverview

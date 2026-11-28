@@ -255,7 +255,7 @@ electron-dev.sh stop --all # stop every instance
 
 ### Round 1 — concurrency, login reuse, isolation (Model A)
 
-Golden profile `lobehub-desktop-dev` (logged in, user_2gmT…); 3 userData copies
+Golden profile `lobehub-desktop-dev` (logged in, user\_2gmT…); 3 userData copies
 (27 MB each), app name constant. inst1 = `electron-vite dev` (CDP 9223, Vite
 5173\), inst2/inst3 = raw electron (CDP 9224/9225) sharing Vite.
 

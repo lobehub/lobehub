@@ -492,7 +492,7 @@ describe('topic action', () => {
         useChatStore.setState({
           internal_resolveTopicReasoningSnapshot: vi
             .fn()
-            .mockResolvedValue({ deepseekV4GAReasoningEffort: 'high' }),
+            .mockResolvedValue({ reasoningEffort: 'high' }),
         });
       });
 
@@ -504,12 +504,12 @@ describe('topic action', () => {
       });
 
       expect(spy).toHaveBeenCalledWith('builder-topic', {
-        metadata: { reasoningConfig: { deepseekV4GAReasoningEffort: 'high' } },
+        metadata: { reasoningConfig: { reasoningEffort: 'high' } },
         model: 'deepseek-v4-flash',
         provider: 'lobehub',
       });
       expect(useChatStore.getState().topicDataMap[BUILDER_KEY].items[0]).toMatchObject({
-        metadata: { reasoningConfig: { deepseekV4GAReasoningEffort: 'high' } },
+        metadata: { reasoningConfig: { reasoningEffort: 'high' } },
         model: 'deepseek-v4-flash',
       });
     });
@@ -530,7 +530,7 @@ describe('topic action', () => {
                 {
                   ...state.topicDataMap[key].items[0],
                   metadata: {
-                    reasoningConfig: { glm5_2ReasoningEffort: 'max' },
+                    reasoningConfig: { reasoningEffort: 'max' },
                     workingDirectory: '/w',
                   },
                 },
@@ -3654,159 +3654,6 @@ describe('topic action', () => {
     });
   });
 
-  describe('internal_updateTopicLinkedPullRequest', () => {
-    const agentId = 'agent-1';
-    const topicId = 'topic-1';
-    const branch = 'fix/topic-running';
-    const path = '/repo';
-    const key = topicMapKey({ agentId });
-    const stalePR = {
-      number: 123,
-      state: 'OPEN',
-      title: 'fix: stop stale running topics',
-      url: 'https://github.com/lobehub/lobehub/pull/123',
-    };
-    const mergedPR = {
-      ...stalePR,
-      mergedAt: '2026-07-07T09:00:00Z',
-      state: 'MERGED',
-    };
-
-    const setupTopic = (
-      pullRequest: typeof stalePR | null = stalePR,
-      pullRequestStatus: 'error' | 'gh-missing' | 'ok' = 'ok',
-    ) => {
-      const topic: ChatTopic = {
-        createdAt: Date.now(),
-        favorite: false,
-        id: topicId,
-        metadata: {
-          workingDirectory: path,
-          workingDirectoryConfig: {
-            git: {
-              branch,
-              github: { pullRequest, pullRequestStatus },
-              isWorktree: false,
-            },
-            path,
-            repoType: 'github',
-          },
-        },
-        sessionId: agentId,
-        title: 'Topic',
-        updatedAt: Date.now(),
-      };
-
-      useChatStore.setState({
-        activeAgentId: agentId,
-        topicDataMap: {
-          [key]: singleTopicPage(topic),
-        },
-      });
-    };
-
-    it('silently patches the topic with the latest merged PR state', async () => {
-      const { result } = renderHook(() => useChatStore());
-      setupTopic();
-      const updateTopicMetadataMock = vi
-        .spyOn(topicService, 'updateTopicMetadata')
-        .mockResolvedValue(undefined as never);
-
-      await act(async () => {
-        await result.current.internal_updateTopicLinkedPullRequest(
-          { branch, path, pullRequestNumber: 123, topicId },
-          { pullRequest: mergedPR, pullRequestStatus: 'ok' },
-        );
-      });
-
-      const updatedTopic = useChatStore.getState().topicDataMap[key]!.items[0]!;
-      expect(updatedTopic.metadata?.workingDirectoryConfig?.git?.github).toEqual({
-        pullRequest: mergedPR,
-        pullRequestStatus: 'ok',
-      });
-      expect(updateTopicMetadataMock).toHaveBeenCalledWith(topicId, {
-        workingDirectoryConfig: {
-          git: {
-            branch,
-            github: { pullRequest: mergedPR, pullRequestStatus: 'ok' },
-            isWorktree: false,
-          },
-          path,
-          repoType: 'github',
-        },
-      });
-    });
-
-    it('updates empty PR metadata when no existing PR number is anchored', async () => {
-      const { result } = renderHook(() => useChatStore());
-      setupTopic(null, 'error');
-      const updateTopicMetadataMock = vi
-        .spyOn(topicService, 'updateTopicMetadata')
-        .mockResolvedValue(undefined as never);
-
-      await act(async () => {
-        await result.current.internal_updateTopicLinkedPullRequest(
-          { branch, path, topicId },
-          { pullRequest: null, pullRequestStatus: 'ok' },
-        );
-      });
-
-      expect(
-        useChatStore.getState().topicDataMap[key]!.items[0]!.metadata?.workingDirectoryConfig?.git
-          ?.github,
-      ).toEqual({ pullRequest: null, pullRequestStatus: 'ok' });
-      expect(updateTopicMetadataMock).toHaveBeenCalledTimes(1);
-    });
-
-    it('keeps the existing PR snapshot when lookup returns a different PR number', async () => {
-      const { result } = renderHook(() => useChatStore());
-      setupTopic();
-      const updateTopicMetadataMock = vi
-        .spyOn(topicService, 'updateTopicMetadata')
-        .mockResolvedValue(undefined as never);
-
-      await act(async () => {
-        await result.current.internal_updateTopicLinkedPullRequest(
-          { branch, path, pullRequestNumber: 123, topicId },
-          {
-            pullRequest: {
-              ...mergedPR,
-              number: 456,
-              url: 'https://github.com/lobehub/lobehub/pull/456',
-            },
-            pullRequestStatus: 'ok',
-          },
-        );
-      });
-
-      expect(updateTopicMetadataMock).not.toHaveBeenCalled();
-      expect(
-        useChatStore.getState().topicDataMap[key]!.items[0]!.metadata?.workingDirectoryConfig?.git
-          ?.github,
-      ).toEqual({ pullRequest: stalePR, pullRequestStatus: 'ok' });
-    });
-
-    it('keeps the existing PR snapshot when gh is unavailable', async () => {
-      const { result } = renderHook(() => useChatStore());
-      setupTopic();
-      const updateTopicMetadataMock = vi
-        .spyOn(topicService, 'updateTopicMetadata')
-        .mockResolvedValue(undefined as never);
-
-      await act(async () => {
-        await result.current.internal_updateTopicLinkedPullRequest(
-          { branch, path, topicId },
-          { ghMissing: true, pullRequest: null, pullRequestStatus: 'gh-missing' },
-        );
-      });
-
-      expect(updateTopicMetadataMock).not.toHaveBeenCalled();
-      expect(
-        useChatStore.getState().topicDataMap[key]!.items[0]!.metadata?.workingDirectoryConfig?.git
-          ?.github,
-      ).toEqual({ pullRequest: stalePR, pullRequestStatus: 'ok' });
-    });
-  });
   describe('optimistic topic preservation across refetches', () => {
     const agentId = 'agent-1';
     const key = topicMapKey({ agentId });
@@ -4297,7 +4144,7 @@ describe('topic action', () => {
         });
         let loaded = false;
         let finishLoad!: () => void;
-        vi.spyOn(aiModelSelectors, 'isModelHasReasoningExtendParams').mockReturnValue(() => true);
+        vi.spyOn(aiModelSelectors, 'isModelHasReasoningControls').mockReturnValue(() => true);
         vi.spyOn(aiModelSelectors, 'isModelReasoningConfigLoaded').mockReturnValue(() => loaded);
         vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({
           reasoningEffort: 'high',

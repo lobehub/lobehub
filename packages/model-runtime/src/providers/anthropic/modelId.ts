@@ -88,6 +88,41 @@ const hasMinorVersionAtLeast = (parsed: ParsedClaudeModelId, minorVersion: numbe
 const isClaudeFamily = (parsed: ParsedClaudeModelId, families: readonly string[]): boolean =>
   families.includes(parsed.family);
 
+// By-value definitions require inline-tools-2026-09-15. Keep unverified model aliases on the normal path.
+// https://platform.claude.com/docs/en/build-with-claude/mid-conversation-system-messages
+const inlineToolModels = new Set([
+  'claude-opus-4-8',
+  'claude-opus-5',
+  'claude-opus-5-5',
+  'claude-sonnet-5-5',
+  'claude-haiku-5-5',
+  'claude-fable-5',
+  'claude-fable-5-1',
+  'claude-fable-5-2',
+  'claude-mythos-5',
+  'claude-mythos-5-1',
+  'claude-mythos-5-2',
+]);
+
+/**
+ * Matches on the parsed family and version rather than the raw id, so a relay's own
+ * naming still resolves to the model it serves: a namespace the parser does not know
+ * (`<relay>/claude-opus-4-8`) or a trailing backend tag (`anthropic/claude-opus-4-8-aws`).
+ * The route still opts in explicitly through the inline-tools beta header, which is the
+ * operator's statement that this relay accepts the blocks. Bedrock ids stay excluded.
+ */
+export const supportsClaudeInlineToolChanges = (model: string): boolean => {
+  const parsed =
+    parseClaudeModelId(model) ?? parseClaudeModelId(model.trim().split('/').at(-1) ?? '');
+  if (!parsed || parsed.source === 'bedrock') return false;
+
+  const version =
+    parsed.minorVersion === undefined
+      ? `${parsed.majorVersion}`
+      : `${parsed.majorVersion}-${parsed.minorVersion}`;
+  return inlineToolModels.has(`claude-${parsed.family}-${version}`);
+};
+
 export const isContextCachingModel = (model: string): boolean => {
   const parsed = parseClaudeModelId(model);
   if (!parsed) return false;
@@ -230,6 +265,33 @@ export const supportsClaudeEffortLevel = (
     parsed.majorVersion === 5 ||
     (parsed.family === 'opus' && parsed.majorVersion === 4 && (parsed.minorVersion ?? 0) >= 7)
   );
+};
+
+const ANTHROPIC_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
+
+type AnthropicEffort = 'high' | 'low' | 'max' | 'medium' | 'xhigh';
+
+/**
+ * The `output_config.effort` to send for a request: an explicit `effort` wins, otherwise
+ * the unified `reasoning_effort`. Claude models only take levels they support. Other
+ * models served through an Anthropic-compatible endpoint (MiniMax behind the LobeHub
+ * router) forward any Anthropic level — their model card already bounds the value.
+ */
+export const resolveAnthropicEffort = (
+  model: string,
+  effort: string | undefined,
+  reasoningEffort: string | undefined,
+): AnthropicEffort | undefined => {
+  if (effort) return effort as AnthropicEffort;
+  if (!reasoningEffort) return;
+
+  if (parseClaudeModelId(model)) {
+    return supportsClaudeEffortLevel(model, reasoningEffort) ? reasoningEffort : undefined;
+  }
+
+  return ANTHROPIC_EFFORT_LEVELS.has(reasoningEffort)
+    ? (reasoningEffort as AnthropicEffort)
+    : undefined;
 };
 
 /**

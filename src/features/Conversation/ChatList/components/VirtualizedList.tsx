@@ -75,6 +75,8 @@ interface VirtualizedListProps {
   printable?: boolean;
   /** Reopen at the message the reader last had at the top of the viewport. */
   rememberReadingPosition?: boolean;
+  /** Row index of the row rendering a display message, or -1 when none does. */
+  resolveMessageRow?: (messageId: string) => number;
 }
 
 /**
@@ -93,6 +95,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
     paging,
     printable,
     rememberReadingPosition,
+    resolveMessageRow,
   }) => {
     const isForward = paging === 'forward';
     const virtuaRef = useRef<VListHandle>(null);
@@ -163,7 +166,6 @@ const VirtualizedList = memo<VirtualizedListProps>(
     const scrollToBottom = useConversationStore((s) => s.scrollToBottom);
     const resetVisibleItems = useConversationStore((s) => s.resetVisibleItems);
     const setActiveIndex = useConversationStore((s) => s.setActiveIndex);
-    const activeIndex = useConversationStore(virtuaListSelectors.activeIndex);
 
     const earlierHistory = useEarlierHistoryTrigger({ loadEarlierMessages, virtuaRef });
     const laterHistory = useLaterHistoryTrigger({
@@ -279,7 +281,10 @@ const VirtualizedList = memo<VirtualizedListProps>(
           ? Math.max(0, activeFromFindRaw - LEADING_ROWS)
           : null;
 
-      if (activeFromFind !== activeIndex) setActiveIndex(activeFromFind);
+      // Not a render subscription: the list never displays activeIndex, and
+      // subscribing re-rendered the whole list each time scrolling or the mount
+      // seed moved it. The action ignores unchanged values.
+      setActiveIndex(activeFromFind);
 
       const hasUserScrollIntent =
         Date.now() - lastUserScrollIntentAtRef.current <= USER_SCROLL_INTENT_TTL_MS;
@@ -315,7 +320,6 @@ const VirtualizedList = memo<VirtualizedListProps>(
         recordScroll(ref.scrollOffset, isAtBottom);
       }
     }, [
-      activeIndex,
       getDistanceToBottom,
       historyTrigger,
       markUserScrolling,
@@ -353,6 +357,14 @@ const VirtualizedList = memo<VirtualizedListProps>(
       setScrollState({ isScrolling: false });
     }, [setScrollState]);
 
+    // Read by the scroll methods registered once on mount.
+    const resolveMessageRowRef = useRef(resolveMessageRow);
+    const dataSourceRef = useRef(dataSource);
+    useEffect(() => {
+      resolveMessageRowRef.current = resolveMessageRow;
+      dataSourceRef.current = dataSource;
+    });
+
     // Register scroll methods to store on mount
     useEffect(() => {
       const ref = virtuaRef.current;
@@ -373,6 +385,11 @@ const VirtualizedList = memo<VirtualizedListProps>(
             if (scroller) scroller.scrollTop = scroller.scrollHeight;
           },
           scrollToIndex: (index, options) => ref.scrollToIndex(index + LEADING_ROWS, options),
+          scrollToMessage: (messageId, options) => {
+            const index =
+              resolveMessageRowRef.current?.(messageId) ?? dataSourceRef.current.indexOf(messageId);
+            if (index >= 0) ref.scrollToIndex(index + LEADING_ROWS, options);
+          },
         });
 
         // Seed active index once on mount (avoid requiring user scroll)
@@ -512,10 +529,14 @@ const VirtualizedList = memo<VirtualizedListProps>(
             <DebugInspector />
           </Suspense>
         )}
+        {/* Without a hint virtua sizes unmeasured rows at 40px, so the first frame
+            of a topic mounts every row that fits viewport + buffer at 40px —
+            ~20 rows of long replies, each a full markdown parse, for 1–2 visible. */}
         <VList
           bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
           className={VLIST_CLASS_NAME}
           data={dataWithSlots}
+          itemSize={300}
           keepMounted={keepMountedIndicesWithSlots}
           ref={virtuaRef}
           shift={shift}
@@ -525,8 +546,17 @@ const VirtualizedList = memo<VirtualizedListProps>(
         >
           {(messageId, index): ReactElement => {
             if (messageId === CONVERSATION_HEADER_ID) {
+              // `shift` makes virtua unshift unmeasured sizes at index 0, so this
+              // pinned row inherits the 300px estimate. While idle it stays
+              // zero-height and its ResizeObserver never fires again, leaving
+              // that much blank above the oldest message once the reader
+              // reaches the top. Re-keying it per first message remounts the
+              // row, and virtua measures a newly mounted row.
               return (
-                <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
+                <WideScreenContainer
+                  key={`${messageId}:${firstMessageId}`}
+                  style={{ position: 'relative' }}
+                >
                   {headerSlot}
                   <HistoryPageSkeleton side={'earlier'} />
                   <HistoryPageError side={'earlier'} />

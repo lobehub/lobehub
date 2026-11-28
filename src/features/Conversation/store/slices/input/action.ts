@@ -28,6 +28,11 @@ export interface InputAction {
   commitScheduledSend: (message: string, files?: { id: string }[]) => Promise<boolean>;
 
   /**
+   * Close the idle prompt-cache notice until a reply newer than `messageId` arrives.
+   */
+  dismissIdleCacheNotice: (messageId: string) => void;
+
+  /**
    * Fill the composer with editable text and move focus to the editor.
    */
   fillInputMessage: (message: string) => void;
@@ -107,6 +112,10 @@ export const inputSlice: StateCreator<State & InputAction, [], [], InputAction> 
     );
 
     return true;
+  },
+
+  dismissIdleCacheNotice: (messageId) => {
+    set({ dismissedIdleCacheNoticeId: messageId });
   },
 
   fillInputMessage: (message) => {

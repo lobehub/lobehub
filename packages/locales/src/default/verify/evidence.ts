@@ -8,6 +8,16 @@ export const verifyEvidenceMessages = {
   'report.evidence.collapse': 'Collapse',
   'report.evidence.comparison.after': 'After',
   'report.evidence.comparison.before': 'Before',
+  'report.evidence.comparison.exitFullscreen': 'Exit full screen (Esc)',
+  'report.evidence.comparison.fullscreen': 'Compare full screen',
+  'report.evidence.comparison.flipHint': 'Press Space to switch',
+  'report.evidence.comparison.modeFlip': 'Flip',
+  'report.evidence.comparison.modeSide': 'Side by side',
+  'report.evidence.comparison.zoomHint':
+    'Pinch or ⌘/Ctrl + scroll to zoom · double-click to zoom in',
+  'report.evidence.comparison.zoomIn': 'Zoom in (+)',
+  'report.evidence.comparison.zoomOut': 'Zoom out (-)',
+  'report.evidence.comparison.zoomReset': 'Fit to window (0)',
   'report.evidence.expand': 'Expand',
   'report.evidence.openDetail': 'Open {{name}}',
   'report.evidence.view': 'View evidence ({{count}})',
@@ -65,6 +75,7 @@ export const verifyEvidenceMessages = {
   'report.terminal.copyCommand': 'Copy command',
   'report.terminal.download': 'Download',
   'report.terminal.downloadRecording': 'Download recording',
+  'report.terminal.downloadTranscript': 'Download transcript',
   'report.terminal.env.hide': 'Hide',
   'report.terminal.error.hide': 'Hide details',
   'report.terminal.error.show': 'Show details',
@@ -97,6 +108,8 @@ export const verifyEvidenceMessages = {
   'report.terminal.output.lines_other': '{{count}} lines',
   'report.terminal.output.loadFailed':
     "Couldn't load this output. Try the Transcript view or download the file.",
+  'report.terminal.output.streamTooLarge': 'File is too large to preview',
+  'report.terminal.output.streamUnavailable': "Couldn't load this stream",
   'report.terminal.output.tooLarge':
     'Too large to preview here. Download it to read the full output.',
   'report.terminal.output.unavailable': "The output files aren't available.",

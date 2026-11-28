@@ -1,11 +1,52 @@
 import type { ChatTopicMetadata } from '@lobechat/types';
 import { and, eq, or, sql } from 'drizzle-orm';
+import { translateLegacyReasoningConfig } from 'model-bank/aiModel';
 
 import { type TopicItem, topics } from '../../schemas';
 import { joinTopicAgentsToProjects } from '../../utils/projectTopicAgents';
 import { recomputeTopicUsage } from '../topicUsage';
 import type { TopicModelContext } from './context';
+import { carriedOwnedWorktrees, withOwnedWorktreeClaim } from './ownedWorktree';
 import type { TopicMetadataPatch } from './types';
+
+/**
+ * An explicit metadata snapshot replaces the row's metadata, except for
+ * `ownedWorktrees`: that record is server-owned (which worktrees the app made
+ * for the topic, and their cleanup state), so a snapshot built from an older
+ * read must not erase it. The persisted list wins; a snapshot only seeds one
+ * where none exists yet.
+ */
+const replaceMetadataKeepingOwnedWorktrees = (
+  next: ChatTopicMetadata | null | undefined,
+  existing: ChatTopicMetadata | null | undefined,
+) => {
+  if (!next) return next;
+  // A legacy topic's claim lives only in the markers this snapshot replaces.
+  const claimed = withOwnedWorktreeClaim({ ...next, ...carriedOwnedWorktrees(existing) });
+  return sql`${JSON.stringify(claimed)}::jsonb || case when coalesce(jsonb_exists(${topics.metadata}, 'ownedWorktrees'), false) then jsonb_build_object('ownedWorktrees', ${topics.metadata} -> 'ownedWorktrees') else '{}'::jsonb end`;
+};
+
+const readMetadata = async (ctx: TopicModelContext, id: string) => {
+  const [row] = await ctx.db
+    .select({ metadata: topics.metadata })
+    .from(topics)
+    .where(and(eq(topics.id, id), ctx.ownership()));
+  return row?.metadata;
+};
+
+/**
+ * Moves the legacy effort keys a released client still writes in a topic's
+ * reasoning pin to `reasoningEffort`, reading the key the topic's model used.
+ */
+export const withCurrentReasoningPin = <T extends { reasoningConfig?: unknown } | undefined>(
+  metadata: T,
+  model: { model?: string | null; provider?: string | null },
+): T => {
+  const reasoningConfig = metadata?.reasoningConfig;
+  if (!reasoningConfig || typeof reasoningConfig !== 'object') return metadata;
+  const next = translateLegacyReasoningConfig(reasoningConfig, model);
+  return next === reasoningConfig ? metadata : { ...metadata, reasoningConfig: next };
+};
 
 export const update = async (ctx: TopicModelContext, id: string, data: Partial<TopicItem>) => {
   /**
@@ -40,7 +81,7 @@ export const update = async (ctx: TopicModelContext, id: string, data: Partial<T
    */
   const metadata =
     data.metadata !== undefined
-      ? data.metadata
+      ? replaceMetadataKeepingOwnedWorktrees(data.metadata, await readMetadata(ctx, id))
       : data.status === 'running'
         ? sql`case when ${topics.status} in ('running', 'waitingForHuman') then ${persistedMetadata} else jsonb_set(${persistedMetadata}, '{runStartedAt}', to_jsonb(now())) end`
         : modelChanged
@@ -123,12 +164,14 @@ export interface UpdateMetadataOptions {
    * earlier write without clobbering one that landed after it.
    */
   onlyIf?: (metadata: ChatTopicMetadata | null | undefined) => boolean;
+  /** Internal run startup: install its marker and running state in the same row-locked write. */
+  status?: 'running';
 }
 
 export const updateMetadata = async (
   ctx: TopicModelContext,
   id: string,
-  metadata: TopicMetadataPatch,
+  patch: TopicMetadataPatch,
   options?: UpdateMetadataOptions,
 ) => {
   // Merge into the existing metadata under a row lock so concurrent writers
@@ -143,7 +186,7 @@ export const updateMetadata = async (
   // while preserving the exact (shallow + nested onboardingSession) merge.
   return ctx.db.transaction(async (tx) => {
     const [existing] = await tx
-      .select({ metadata: topics.metadata })
+      .select({ metadata: topics.metadata, model: topics.model, provider: topics.provider })
       .from(topics)
       .where(and(eq(topics.id, id), ctx.ownership()))
       .for('update');
@@ -151,6 +194,8 @@ export const updateMetadata = async (
     // No row (missing or not owned) — nothing to update, mirror the old no-op.
     if (!existing) return [];
     if (options?.onlyIf && !options.onlyIf(existing.metadata)) return [];
+
+    const metadata = withCurrentReasoningPin(patch, existing);
 
     const mergedOnboardingSession =
       existing.metadata?.onboardingSession && metadata.onboardingSession
@@ -160,15 +205,18 @@ export const updateMetadata = async (
           }
         : metadata.onboardingSession;
 
-    const mergedMetadata = {
+    const mergedMetadata = withOwnedWorktreeClaim({
       ...existing.metadata,
       ...metadata,
       ...(mergedOnboardingSession && { onboardingSession: mergedOnboardingSession }),
-    } as ChatTopicMetadata;
+      // Server-owned: a patch never replaces it (see `./ownedWorktree`), and a
+      // legacy topic's claim is resolved from its old markers first.
+      ...carriedOwnedWorktrees(existing.metadata),
+    } as ChatTopicMetadata);
 
     return tx
       .update(topics)
-      .set({ metadata: mergedMetadata })
+      .set({ metadata: mergedMetadata, ...(options?.status ? { status: options.status } : {}) })
       .where(and(eq(topics.id, id), ctx.ownership()))
       .returning();
   });
@@ -186,7 +234,7 @@ export const updateModelPin = async (
   ctx: TopicModelContext,
   id: string,
   {
-    metadata,
+    metadata: pin,
     model,
     provider,
   }: {
@@ -204,6 +252,7 @@ export const updateModelPin = async (
 
     if (!existing) return [];
 
+    const metadata = withCurrentReasoningPin(pin, { model, provider });
     const { reasoningConfig: _stale, ...rest } = existing.metadata ?? {};
     const mergedMetadata: ChatTopicMetadata = {
       ...rest,
