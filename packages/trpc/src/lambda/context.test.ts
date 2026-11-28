@@ -81,6 +81,9 @@ vi.mock('@/utils/apiKey', async (importOriginal) => {
 
 const mockCanUseWorkspaceApiKeys = vi.hoisted(() => vi.fn(async () => true));
 
+const mockGetRequestClientGeo = vi.hoisted(() => vi.fn());
+vi.mock('@/utils/requestClientGeo', () => ({ getRequestClientGeo: mockGetRequestClientGeo }));
+
 const mockGetRequestClientIP = vi.hoisted(() => vi.fn());
 vi.mock('@/utils/requestClientIP', async (importOriginal) => {
   const actual = (await importOriginal()) as {
@@ -287,6 +290,17 @@ describe('createLambdaContext', () => {
 
     expect(mockGetRequestClientIP).toHaveBeenCalledWith(request.headers);
     expect(context.clientIp).toBe('198.51.100.3');
+  });
+
+  it('should resolve clientGeo through the overridable request geo module', async () => {
+    const geo = { city: 'Tokyo', country: 'JP', region: 'JP-13' };
+    mockGetRequestClientGeo.mockReturnValueOnce(geo);
+    const request = new NextRequest('https://example.com/trpc/lambda');
+
+    const context = await createLambdaContext(request);
+
+    expect(mockGetRequestClientGeo).toHaveBeenCalledWith(request.headers);
+    expect(context.clientGeo).toEqual(geo);
   });
 
   it('should authenticate with API key and skip session fallback', async () => {

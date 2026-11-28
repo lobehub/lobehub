@@ -23,6 +23,7 @@ import {
   readLlmRelayRequest,
 } from '@/server/modules/AgentRuntime/llmRelay/requestScope';
 import { isApiKeyExpired, validateApiKeyFormat } from '@/utils/apiKey';
+import { getRequestClientGeo, type RequestClientGeo } from '@/utils/requestClientGeo';
 import { getRequestClientIP } from '@/utils/requestClientIP';
 
 import { describeOIDCAuthFailure, setAuthFailureHeader } from '../utils/authFailure';
@@ -100,6 +101,11 @@ export interface AuthContext {
    * request used another auth method and scope enforcement does not apply.
    */
   apiKeyScopes?: string[] | null;
+  /**
+   * Where the request came from, located by an edge the server verifies (`getRequestClientGeo`);
+   * `undefined` when none did. Never taken from client input.
+   */
+  clientGeo?: RequestClientGeo | null;
   clientIp?: string | null;
   clientMetadata?: ClientMetadata;
   /**
@@ -164,6 +170,7 @@ export const createContextInner = async (params?: {
   actingAgentId?: string | null;
   apiKeyScopes?: string[] | null;
   authFailure?: string;
+  clientGeo?: RequestClientGeo | null;
   clientMetadata?: ClientMetadata;
   clientIp?: string | null;
   llmRelay?: LlmRelayRequest;
@@ -187,6 +194,7 @@ export const createContextInner = async (params?: {
   return {
     actingAgentId: params?.actingAgentId,
     apiKeyScopes: params?.apiKeyScopes,
+    clientGeo: params?.clientGeo,
     clientMetadata: params?.clientMetadata || { type: 'unknown' },
     clientIp: params?.clientIp,
     llmRelay: params?.llmRelay,
@@ -236,6 +244,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
 
   const userAgent = request.headers.get('user-agent') || undefined;
   const clientIp = getRequestClientIP(request.headers);
+  const clientGeo = getRequestClientGeo(request.headers);
 
   // get marketAccessToken from cookies
   const cookieHeader = request.headers.get('cookie');
@@ -253,6 +262,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
   const isBatch = request.nextUrl.searchParams.get('batch') === '1';
 
   const commonContext = {
+    clientGeo,
     clientMetadata,
     clientIp,
     llmRelay: isBatch ? undefined : readLlmRelayRequest(request.headers),
