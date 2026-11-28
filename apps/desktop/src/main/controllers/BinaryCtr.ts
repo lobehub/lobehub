@@ -45,17 +45,43 @@ export default class BinaryCtr extends ControllerModule {
     return this.manager.detect(name, force);
   }
 
+  /** The scan whose environment refresh already ran; see `beginScan`. */
+  private refreshedScanId?: string;
+
+  /**
+   * Refresh the environment once per scan rather than once per agent.
+   *
+   * A list probes a dozen agents at once. Each used to drop the cached PATH and
+   * everything learned inside WSL, so every list that opened re-probed WSL —
+   * booting its VM and running the distro's shell start-up files — before it
+   * could show anything. A Rescan still starts from nothing; a list that merely
+   * opened re-reads PATH (an install since the last look should show) but
+   * keeps what WSL already told this process.
+   */
+  private beginScan({ id, rescan }: NonNullable<DetectHeterogeneousAgentCommandParams['scan']>) {
+    if (id === this.refreshedScanId) return;
+    this.refreshedScanId = id;
+    invalidateLoginShellPathCache({ keepWslCache: !rescan });
+  }
+
   @IpcMethod()
   async detectHeterogeneousAgentCommand(
     params: DetectHeterogeneousAgentCommandParams,
   ): Promise<BinaryStatus> {
     logger.debug('Detecting heterogeneous agent command:', params);
+    const { scan } = params;
+    if (scan) this.beginScan(scan);
+    // Without a scan this is a one-off check, which refreshes as it always did.
+    const refreshEnvironment = !scan;
+    // Only a Rescan the user asked for (or a one-off check) may boot a stopped distro.
+    const wslScope = scan && !scan.rescan ? 'running' : undefined;
+
     if (isLocalRuntimeHeterogeneousType(params.agentType)) {
       // DeepSeek Harness is the user-installed `dsh` CLI. Probe it the way the
       // launch path does, so the wizard never offers an agent that cannot run;
       // drop the cached login-shell PATH so a Rescan sees a fresh install.
-      invalidateLoginShellPathCache();
-      return detectDshCommand(params.command?.trim() || DSH_COMMAND);
+      if (refreshEnvironment) invalidateLoginShellPathCache();
+      return detectDshCommand(params.command?.trim() || DSH_COMMAND, undefined, { wslScope });
     }
     if (isRemoteHeterogeneousType(params.agentType)) {
       return resolveRemotePlatformCommand(params.agentType);
@@ -66,16 +92,18 @@ export default class BinaryCtr extends ControllerModule {
       // Keep the explicit Rescan result in the same manager entry that launch
       // preflight reads. This refreshes both the login-shell PATH and stale
       // negative/positive binary status in one operation.
-      return this.manager.detect(defaultCommand, true);
+      return this.manager.detect(defaultCommand, true, { refreshEnvironment, wslScope });
     }
 
     // This is the Connect Agent Rescan path, and it bypasses `BinaryManager`
     // for custom commands, which have no registered manager entry. A user
     // pressing Rescan after installing one still has to see the PATH that its
     // installer wrote, not the one cached at first scan.
-    invalidateLoginShellPathCache();
+    if (refreshEnvironment) invalidateLoginShellPathCache();
 
-    return detectHeterogeneousCliCommand(params.agentType, params.command);
+    return detectHeterogeneousCliCommand(params.agentType, params.command, undefined, {
+      wslScope,
+    });
   }
 
   /**

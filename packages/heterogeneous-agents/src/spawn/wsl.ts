@@ -373,7 +373,20 @@ export const parseWslProbeOutput = (output: string): WslDistroProbe => {
   return { commands, pathEnv };
 };
 
+/**
+ * Which distros a lookup may probe.
+ *
+ * - `all`: every distro, starting the ones that are stopped. A spawn needs this
+ *   (the agent must run), and so does a Rescan the user asked for.
+ * - `running`: only distros already running, plus any already probed. Probing
+ *   a stopped distro boots WSL's VM, which takes seconds and holds its memory
+ *   afterwards; a list opening on its own must not do that to someone whose
+ *   agents are all on Windows.
+ */
+export type WslDistroScope = 'all' | 'running';
+
 let distrosPromise: Promise<string[]> | undefined;
+let runningDistrosPromise: Promise<string[]> | undefined;
 const distroProbes = new Map<string, Promise<WslDistroProbe | undefined>>();
 const settledPathEnv = new Map<string, string | undefined>();
 
@@ -388,6 +401,19 @@ const listWslDistros = (): Promise<string[]> => {
       return [];
     });
   return distrosPromise;
+};
+
+/** `wsl.exe --list --running` lists without starting anything. Exits non-zero when none run. */
+const listRunningWslDistros = (): Promise<string[]> => {
+  runningDistrosPromise ??= runWsl(['--list', '--running', '--quiet'], {
+    timeout: WSL_LIST_TIMEOUT_MS,
+  })
+    .then((output) => parseWslDistroList(decodeWslOutput(output)))
+    .catch(() => {
+      runningDistrosPromise = undefined;
+      return [];
+    });
+  return runningDistrosPromise;
 };
 
 const probeWslDistro = (distro: string): Promise<WslDistroProbe | undefined> => {
@@ -415,6 +441,7 @@ const probeWslDistro = (distro: string): Promise<WslDistroProbe | undefined> => 
 /** Drop what was learned about WSL so a Rescan sees agents installed since. */
 export const invalidateWslCache = (): void => {
   distrosPromise = undefined;
+  runningDistrosPromise = undefined;
   distroProbes.clear();
   settledPathEnv.clear();
 };
@@ -423,13 +450,24 @@ export const invalidateWslCache = (): void => {
  * Every `wsl://` location of `command`: each distro in the order
  * `wsl.exe --list` gives (the default distro first), and within a distro the
  * probe's order (shell PATH first, then install folders).
- * Empty off Windows.
+ * Empty off Windows. With `scope: 'running'`, a stopped distro this process has
+ * not probed yet is skipped rather than booted.
  */
-export const findWslCommandCandidates = async (command: string): Promise<string[]> => {
+export const findWslCommandCandidates = async (
+  command: string,
+  { scope = 'all' }: { scope?: WslDistroScope } = {},
+): Promise<string[]> => {
   if (platform() !== 'win32') return [];
 
   const distros = await listWslDistros();
-  const probes = await Promise.all(distros.map((distro) => probeWslDistro(distro)));
+  const running = scope === 'running' ? await listRunningWslDistros() : undefined;
+  const probes = await Promise.all(
+    distros.map((distro) =>
+      !running || running.includes(distro) || distroProbes.has(distro)
+        ? probeWslDistro(distro)
+        : undefined,
+    ),
+  );
 
   return distros.flatMap((distro, index) =>
     (probes[index]?.commands.get(command) ?? []).map((linuxPath) =>

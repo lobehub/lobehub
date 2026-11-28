@@ -43,6 +43,13 @@ export type DetectableHeterogeneousAgentType = HeterogeneousAgentType;
 export interface DetectHeterogeneousAgentCommandParams {
   agentType: DetectableHeterogeneousAgentType;
   command: string;
+  /**
+   * Set when this check is one agent of a list scan. The environment (PATH,
+   * WSL) is refreshed once for the scan instead of once per agent, and unless
+   * `rescan` is set, WSL is only searched in distros that are already running
+   * so opening a list never boots WSL's VM. Omit for a one-off check.
+   */
+  scan?: { id: string; rescan?: boolean };
 }
 
 /**

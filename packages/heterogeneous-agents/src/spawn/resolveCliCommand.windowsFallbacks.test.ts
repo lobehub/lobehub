@@ -1,7 +1,9 @@
 import * as childProcess from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import * as fsPromises from 'node:fs/promises';
 import type * as os from 'node:os';
 import path from 'node:path';
+import { PassThrough } from 'node:stream';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -174,5 +176,30 @@ describe('Windows install locations off PATH', () => {
       path: codex,
     });
     expect(spawnMock).not.toHaveBeenCalled();
+  });
+  it('looks for the agent only in running WSL distros when asked not to boot one', async () => {
+    answerExecFile(() => undefined);
+    const spawned: string[][] = [];
+    spawnMock.mockImplementation(((_file: string, args: string[]) => {
+      spawned.push(args);
+      const child = new EventEmitter() as childProcess.ChildProcess;
+      const stdout = new PassThrough();
+      const stdin = new PassThrough();
+      Object.assign(child, { kill: vi.fn(), stdin, stdout });
+      stdin.on('finish', () => {
+        // Ubuntu is installed but stopped.
+        const running = args.includes('--running');
+        stdout.end(args[0] === '--list' && !running ? 'Ubuntu\n' : '');
+        setImmediate(() => child.emit('close', running ? 1 : 0));
+      });
+      return child;
+    }) as never);
+
+    const { detectHeterogeneousCliCommand } = await importModule();
+
+    await expect(
+      detectHeterogeneousCliCommand('codex', 'codex', undefined, { wslScope: 'running' }),
+    ).resolves.toMatchObject({ available: false });
+    expect(spawned.some((args) => args[0] === '--distribution')).toBe(false);
   });
 });

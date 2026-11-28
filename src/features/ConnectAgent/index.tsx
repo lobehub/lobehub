@@ -280,6 +280,8 @@ const SectionLabel = memo<{ children: ReactNode }>(({ children }) => (
   </Text>
 ));
 
+const SKELETON_WIDTHS = [90, 70, 110, 80, 100, 75, 95];
+
 const SkeletonRow = memo<{ squareIcon?: boolean; width: number }>(({ squareIcon, width }) => (
   <div className={`${styles.row} ${styles.rowStatic}`}>
     <div
@@ -497,8 +499,9 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
 
     const targetLabel = target?.kind === 'device' ? deviceLabel(target.device) : localLabel;
 
+    // Also filled while scanning: a local scan reports each agent as it settles.
     const inventory = useMemo(() => {
-      if (scanState.status !== 'success' || !scanState.agents) return [];
+      if (!scanState.agents) return [];
       const rank = (available?: boolean) => (available ? 0 : 1);
       return [...CONNECTABLE_PROVIDERS]
         .map((provider) => ({ provider, status: scanState.agents?.[provider.type] }))
@@ -889,6 +892,26 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
     // ── Step 2: auto-scanned agent inventory ──
     if (step === 1 && target) {
       const scanning = scanState.status === 'scanning';
+      const foundRows = inventory.filter(({ status }) => status?.available);
+      const pendingCount = inventory.length
+        ? inventory.filter((entry) => !entry.status).length
+        : CONNECTABLE_PROVIDERS.length;
+      // Keep the scanning list as tall as the full skeleton so the modal never shrinks mid-scan.
+      const skeletonCount = Math.max(
+        Math.min(pendingCount, 1),
+        SKELETON_WIDTHS.length - foundRows.length,
+      );
+      const renderAgentRow = ({ provider, status }: (typeof inventory)[number]) => (
+        <AgentScanRow
+          key={provider.type}
+          provider={provider}
+          selected={selectedTypes.includes(provider.type)}
+          status={status}
+          subtitle={t(`connectAgent.providerDesc.${provider.type}`)}
+          unavailableText={t('connectAgent.create.notInstalled')}
+          onToggle={() => toggleType(provider)}
+        />
+      );
 
       // Rescan stays mounted (disabled while scanning) so nothing jumps when the scan settles.
       const rescanButton = !(scanState.status === 'success' && detectedCount === 0) &&
@@ -935,11 +958,11 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
             <Flexbox gap={6}>
               <SectionLabel>{t('connectAgent.create.scanning')}</SectionLabel>
               <ScrollableAgentList>
-                {[90, 70, 110, 80, 100, 75, 95]
-                  .slice(0, CONNECTABLE_PROVIDERS.length)
-                  .map((width, i) => (
-                    <SkeletonRow key={i} width={width} />
-                  ))}
+                {/* Found agents show (and can be picked) while slower probes finish. */}
+                {foundRows.map(renderAgentRow)}
+                {Array.from({ length: skeletonCount }, (_, i) => (
+                  <SkeletonRow key={i} width={SKELETON_WIDTHS[i % SKELETON_WIDTHS.length]} />
+                ))}
               </ScrollableAgentList>
             </Flexbox>
           )}
@@ -976,25 +999,12 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
               <SectionLabel>
                 {t('connectAgent.create.detectedCount', { total: detectedCount })}
               </SectionLabel>
-              <ScrollableAgentList>
-                {inventory.map(({ provider, status }) => (
-                  <AgentScanRow
-                    key={provider.type}
-                    provider={provider}
-                    selected={selectedTypes.includes(provider.type)}
-                    status={status}
-                    subtitle={t(`connectAgent.providerDesc.${provider.type}`)}
-                    unavailableText={t('connectAgent.create.notInstalled')}
-                    onToggle={() => toggleType(provider)}
-                  />
-                ))}
-              </ScrollableAgentList>
+              <ScrollableAgentList>{inventory.map(renderAgentRow)}</ScrollableAgentList>
             </Flexbox>
           )}
 
-          {scanState.status === 'success' && detectedCount > 0 && (
-            <CreateVisibilityField state={visibilityState} />
-          )}
+          {/* Shown as soon as an agent is found: it can be connected mid-scan. */}
+          {detectedCount > 0 && <CreateVisibilityField state={visibilityState} />}
 
           {createError && (
             <Alert
