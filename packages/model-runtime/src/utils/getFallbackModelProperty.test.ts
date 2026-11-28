@@ -71,6 +71,19 @@ describe('getModelPropertyWithFallback', () => {
     ).toBeUndefined();
   });
 
+  it('keeps unknown Ace metadata separate from a same-named vendor model', async () => {
+    for (const property of ['pricing', 'contextWindowTokens', 'abilities'] as const) {
+      expect(await getModelPropertyWithFallback('gpt-4', property, 'acedatacloud')).toBeUndefined();
+    }
+    expect(await getModelPropertyWithFallback('gpt-4', 'type', 'acedatacloud')).toBe('chat');
+    expect(
+      await getModelPropertyWithFallback('gpt-4', 'contextWindowTokens', 'acedatacloud', [
+        ...mockModelList,
+        { id: 'gpt-4', providerId: 'acedatacloud', type: 'chat', contextWindowTokens: 4096 },
+      ]),
+    ).toBe(4096);
+  });
+
   describe('when providerId is specified', () => {
     it('should use injected LobeHub model config before static fallback', async () => {
       loadModelsMock.mockResolvedValue([

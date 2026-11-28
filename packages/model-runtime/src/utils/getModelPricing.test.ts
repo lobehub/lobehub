@@ -77,4 +77,13 @@ describe('getModelPricing', () => {
       pricingContext: { plan: 'premium', scope: 'personal' },
     });
   });
+
+  it('does not estimate Ace usage using another provider price', async () => {
+    expect(await getModelPricing('gpt-4o', 'acedatacloud')).toBeUndefined();
+    loadModelsMock.mockResolvedValue([
+      { id: 'gpt-4o', providerId: 'openai', pricing: { units: [{ rate: 2.5 }] } },
+      { id: 'gpt-4o', providerId: 'acedatacloud', pricing: { units: [{ rate: 0.5 }] } },
+    ]);
+    expect(await getModelPricing('gpt-4o', 'acedatacloud')).toEqual({ units: [{ rate: 0.5 }] });
+  });
 });
