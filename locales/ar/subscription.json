@@ -565,7 +565,6 @@
   "navPanelUpgrade.dismiss": "إخفاء مؤقتًا",
   "payDiffPrice": "دفع الفرق",
   "payDiffPriceApprox": "تقريبًا",
-  "payDiffPriceTip": "المبلغ الفعلي يعتمد على صفحة الدفع",
   "payment.downgradeFailed.desc": "فشل في جدولة تخفيض خطتك. يرجى المحاولة مرة أخرى لاحقًا، أو التواصل معنا عبر البريد الإلكتروني إذا استمرت المشكلة.",
   "payment.downgradeFailed.title": "فشل التخفيض",
   "payment.error.actions.billing": "إدارة الفوترة",

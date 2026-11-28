@@ -567,7 +567,6 @@ export default {
   'navPanelUpgrade.dismiss': 'Hide for now',
   'payDiffPrice': 'Pay difference',
   'payDiffPriceApprox': 'Approx.',
-  'payDiffPriceTip': 'Actual amount subject to payment page',
   'payment.downgradeFailed.desc':
     'Failed to schedule your downgrade. Please try again later, or contact us via email if the problem persists',
   'payment.downgradeFailed.title': 'Downgrade failed',
@@ -1047,6 +1046,13 @@ export default {
   'tab.spend': 'Usage details',
   'tab.usage': 'Usage',
   'upgrade': 'Upgrade',
+  'upgradeConfirm.chargeNow':
+    'Confirming charges your saved payment method right away. No payment page follows.',
+  'upgradeConfirm.estimateTip':
+    'Estimated from list prices. The exact amount is charged when you confirm.',
+  'upgradeConfirm.payAndSwitchYearly': 'Pay {{amount}} and switch to yearly',
+  'upgradeConfirm.payAndUpgrade': 'Pay {{amount}} and upgrade',
+  'upgradeConfirm.paymentMethod.change': 'Change',
   'upgradeNow': 'Upgrade now',
   'upgradePlan': 'Upgrade plan',
   'upgradePlans.desc':

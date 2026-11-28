@@ -440,7 +440,6 @@
   "navPanelUpgrade.dismiss": "Ocultar por enquanto",
   "payDiffPrice": "Pagar Diferença",
   "payDiffPriceApprox": "Aprox.",
-  "payDiffPriceTip": "Valor real sujeito à página de pagamento",
   "payment.downgradeFailed.desc": "Falha ao agendar seu downgrade. Por favor, tente novamente mais tarde ou entre em contato conosco por e-mail se o problema persistir.",
   "payment.downgradeFailed.title": "Falha no Downgrade",
   "payment.error.actions.billing": "Gerenciar Cobrança",

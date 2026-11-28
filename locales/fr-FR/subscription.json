@@ -461,7 +461,6 @@
   "navPanelUpgrade.dismiss": "Masquer pour l'instant",
   "payDiffPrice": "Payer la différence",
   "payDiffPriceApprox": "Env.",
-  "payDiffPriceTip": "Montant réel selon la page de paiement",
   "payment.downgradeFailed.desc": "Échec de la planification de votre rétrogradation. Veuillez réessayer plus tard ou contactez-nous par e-mail si le problème persiste.",
   "payment.downgradeFailed.title": "Échec de la Rétrogradation",
   "payment.error.actions.billing": "Gestion de la facturation",

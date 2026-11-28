@@ -440,7 +440,6 @@
   "navPanelUpgrade.dismiss": "Ukryj na razie",
   "payDiffPrice": "Dopłać różnicę",
   "payDiffPriceApprox": "Około",
-  "payDiffPriceTip": "Rzeczywista kwota zgodna ze stroną płatności",
   "payment.downgradeFailed.desc": "Nie udało się zaplanować obniżenia planu. Spróbuj ponownie później lub skontaktuj się z nami mailowo, jeśli problem będzie się powtarzał.",
   "payment.downgradeFailed.title": "Niepowodzenie obniżenia planu",
   "payment.error.actions.billing": "Zarządzanie rozliczeniami",

@@ -440,7 +440,6 @@
   "navPanelUpgrade.dismiss": "Vorerst ausblenden",
   "payDiffPrice": "Differenz bezahlen",
   "payDiffPriceApprox": "Ca.",
-  "payDiffPriceTip": "Der tatsächliche Betrag richtet sich nach der Zahlungsseite",
   "payment.downgradeFailed.desc": "Das Plan-Upgrade konnte nicht geplant werden. Bitte versuchen Sie es später erneut oder kontaktieren Sie uns per E-Mail, falls das Problem weiterhin besteht.",
   "payment.downgradeFailed.title": "Upgrade fehlgeschlagen",
   "payment.error.actions.billing": "Abrechnungsverwaltung",

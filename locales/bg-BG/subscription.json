@@ -441,7 +441,6 @@
   "navPanelUpgrade.dismiss": "Скрий засега",
   "payDiffPrice": "Плати разликата",
   "payDiffPriceApprox": "Приблизително",
-  "payDiffPriceTip": "Действителната сума се определя на страницата за плащане",
   "payment.downgradeFailed.desc": "Неуспешно планиране на понижаване. Моля, опитайте отново по-късно или се свържете с нас по имейл, ако проблемът продължава.",
   "payment.downgradeFailed.title": "Неуспешно понижаване",
   "payment.error.actions.billing": "Управление на плащания",

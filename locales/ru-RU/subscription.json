@@ -452,7 +452,6 @@
   "navPanelUpgrade.dismiss": "Скрыть на время",
   "payDiffPrice": "Оплатить разницу",
   "payDiffPriceApprox": "Приблизительно",
-  "payDiffPriceTip": "Фактическая сумма указывается на странице оплаты",
   "payment.downgradeFailed.desc": "Не удалось запланировать понижение тарифа. Пожалуйста, попробуйте позже или свяжитесь с нами по электронной почте, если проблема сохранится.",
   "payment.downgradeFailed.title": "Ошибка понижения тарифа",
   "payment.error.actions.billing": "Управление оплатой",
