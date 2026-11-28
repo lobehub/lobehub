@@ -307,6 +307,12 @@ export interface MessagesEngineParams {
   /** Agent document configuration for context injection */
   agentDocuments?: AgentContextDocument[];
   /**
+   * Pre-formatted sandbox `<uploaded_files>` notices keyed by the user message
+   * that uploaded each attachment, keeping `{{sandbox_uploaded_files}}` in
+   * message `[0]` stable across mid-conversation uploads.
+   */
+  sandboxUploadedFilesByMessage?: Record<string, string>;
+  /**
    * Agent-document change notes keyed by the user message each belongs to.
    * The host passes them when `agentDocuments` renders the index from a
    * snapshot (see `resolveAgentDocumentIndex`).

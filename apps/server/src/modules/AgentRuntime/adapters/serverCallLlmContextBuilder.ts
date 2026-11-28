@@ -286,6 +286,9 @@ export const buildServerCallLlmContext = async ({
       documentReferences: facts.step.documentReferences,
     }),
     ...(facts.step.onboardingContext && { onboardingContext: facts.step.onboardingContext }),
+    ...(facts.step.sandboxUploadedFilesByMessage && {
+      sandboxUploadedFilesByMessage: facts.step.sandboxUploadedFilesByMessage,
+    }),
   };
 
   const { messages: processedMessages, metadata: ceMetadata } =

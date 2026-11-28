@@ -67,6 +67,7 @@ import {
   ProjectContextInjector,
   ProjectInstructionsInjector,
   RuntimeAdditionalContextProvider,
+  SandboxUploadedFilesInjector,
   selectActivatedSkills,
   SelectedSkillInjector,
   selectToolPromptManifests,
@@ -205,6 +206,7 @@ export class MessagesEngine {
       agentGroup,
       agentDocuments,
       agentDocumentChanges,
+      sandboxUploadedFilesByMessage,
       skillChanges,
       revokedDocumentReads,
       planTodo,
@@ -490,6 +492,13 @@ export class MessagesEngine {
         canActivateSkill,
         changes: skillChanges,
         enabled: isAgentMode && !!skillChanges,
+      }),
+      // Sandbox uploaded files → the user message that introduced each
+      // attachment (session-level and truncated-history files fall back to
+      // `{{sandbox_uploaded_files}}` in message `[0]`).
+      new SandboxUploadedFilesInjector({
+        enabled: !!sandboxUploadedFilesByMessage,
+        filesByMessage: sandboxUploadedFilesByMessage,
       }),
       // Active topic document → last user message, for continuing document work outside page scope
       new ActiveTopicDocumentContextInjector({

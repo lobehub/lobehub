@@ -152,6 +152,7 @@ export interface ContextStepSnapshot {
   groupAgentBuilderContext?: GroupAgentBuilderContext;
   onboardingContext?: OnboardingContext;
   planTodo?: PlanTodoConfig;
+  sandboxUploadedFilesByMessage?: Record<string, string>;
   topicReferences?: TopicReferenceItem[];
   workspaceContext?: WorkspaceContext;
 }

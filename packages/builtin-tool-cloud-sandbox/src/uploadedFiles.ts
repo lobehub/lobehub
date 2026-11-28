@@ -11,6 +11,12 @@ export const SANDBOX_INIT_MAX_FILE_SIZE = 100 * 1024 * 1024;
 export const SANDBOX_INIT_MAX_FILES = 50;
 
 export interface SandboxUploadedFileMeta {
+  /**
+   * Message that introduced this attachment, when attached to a topic message
+   * rather than the session itself. Used to anchor `<uploaded_files>` onto that
+   * user message so later uploads do not mutate message `[0]`.
+   */
+  messageId?: string;
   name: string;
   size?: number;
 }
@@ -97,4 +103,68 @@ export const formatUploadedFilesPrompt = (files: SandboxUploadedFileMeta[]): str
     ...lines,
     '</uploaded_files>',
   ].join('\n');
+};
+
+export interface PartitionedSandboxUploadedFiles {
+  /** Message-attached files anchored onto their owning visible user message. */
+  byMessageId: Record<string, SandboxUploadedFileMeta[]>;
+  /**
+   * Session-level files (no `messageId`) plus older message-attached files whose
+   * owning user message was truncated or compressed out of the visible window.
+   */
+  systemFiles: SandboxUploadedFileMeta[];
+}
+
+/**
+ * Split synced sandbox files between message-anchored entries (keeps message `[0]`
+ * byte-stable across mid-conversation uploads) and system-prompt fallbacks
+ * (session-level files or files whose originating user message is no longer
+ * visible in history).
+ *
+ * Applies the same `selectSandboxInitFiles` cap and resolved-path deduplication
+ * as the sandbox bootstrap and `formatUploadedFilesPrompt`.
+ */
+export const partitionSandboxUploadedFiles = (
+  files: SandboxUploadedFileMeta[],
+  visibleUserMessageIds: ReadonlySet<string>,
+): PartitionedSandboxUploadedFiles => {
+  const byMessageId: Record<string, SandboxUploadedFileMeta[]> = {};
+  const systemFiles: SandboxUploadedFileMeta[] = [];
+
+  if (!files || files.length === 0) {
+    return { byMessageId, systemFiles };
+  }
+
+  const seenPaths = new Set<string>();
+  for (const file of selectSandboxInitFiles(files)) {
+    if (!file?.name) continue;
+    const path = sandboxUploadedFilePath(file.name);
+    if (seenPaths.has(path)) continue;
+    seenPaths.add(path);
+
+    if (file.messageId && visibleUserMessageIds.has(file.messageId)) {
+      const bucket = byMessageId[file.messageId];
+      if (bucket) bucket.push(file);
+      else byMessageId[file.messageId] = [file];
+    } else {
+      systemFiles.push(file);
+    }
+  }
+
+  return { byMessageId, systemFiles };
+};
+
+/**
+ * Format each message's anchored sandbox uploads into a ready-to-inject string.
+ * Returns `undefined` when no visible user message has anchored uploads.
+ */
+export const formatSandboxUploadedFilesByMessage = (
+  byMessageId: Record<string, SandboxUploadedFileMeta[]>,
+): Record<string, string> | undefined => {
+  const formatted: Record<string, string> = {};
+  for (const [messageId, files] of Object.entries(byMessageId)) {
+    const content = formatUploadedFilesPrompt(files);
+    if (content) formatted[messageId] = content;
+  }
+  return Object.keys(formatted).length > 0 ? formatted : undefined;
 };

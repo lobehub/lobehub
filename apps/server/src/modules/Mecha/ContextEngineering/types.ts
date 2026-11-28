@@ -99,6 +99,8 @@ export interface ServerMessagesEngineParams {
   agentDocuments?: AgentContextDocument[];
   /** Agent-document change notes keyed by the user message each belongs to */
   agentDocumentChanges?: AgentDocumentChangesByMessage;
+  /** Pre-formatted sandbox `<uploaded_files>` blocks keyed by the user message that uploaded them */
+  sandboxUploadedFilesByMessage?: Record<string, string>;
   /** Documents deleted or disabled since earlier turns read them, per reading agent */
   revokedDocumentReads?: RevokedDocumentReads[];
   /** Immutable expertise captured when the operation started. */
