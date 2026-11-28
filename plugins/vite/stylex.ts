@@ -6,7 +6,11 @@ import { fileURLToPath } from 'node:url';
 import stylex from '@stylexjs/unplugin/vite';
 import type { Plugin, PluginOption, UserConfig } from 'vite';
 
-import { stylexProxiedDevCssPlugin } from './stylexDevCss';
+import {
+  type StylexDevCssOptions,
+  stylexDevCssWaitCode,
+  stylexProxiedDevCssPlugin,
+} from './stylexDevCss';
 import { createStylexEntryCss } from './stylexEntryCss';
 
 const findRepoRoot = (start: string) => {
@@ -41,6 +45,12 @@ export const stylexTokenModules = [
 
 const classNamePrefix = 'lh';
 
+/** Private hooks @stylexjs/unplugin 0.19.1 attaches to its plugin object (lib/core.js). */
+type StylexUnplugin = Plugin & {
+  __stylexCollectCss?: () => string;
+  __stylexGetSharedStore?: () => { rulesById: Map<string, unknown>; version: number };
+};
+
 export interface StylexPluginOptions {
   overlaySrcDirs?: string[];
 }
@@ -73,8 +83,13 @@ export function stylexPlugin({ overlaySrcDirs }: StylexPluginOptions = {}): Plug
     },
   });
 
-  const plugins = (Array.isArray(plugin) ? plugin : [plugin]) as Plugin[];
+  const plugins = (Array.isArray(plugin) ? plugin : [plugin]) as StylexUnplugin[];
+  let devCss: StylexDevCssOptions | undefined;
   for (const item of plugins) {
+    const sharedStore = item.__stylexGetSharedStore?.();
+    if (!isTest && !devCss && sharedStore && item.__stylexCollectCss) {
+      devCss = { collectCss: item.__stylexCollectCss, getVersion: () => sharedStore.version };
+    }
     // @lobehub/ui depends on @stylexjs/stylex but ships precompiled CSS. This hook
     // would pull that package out of dependency pre-bundling.
     delete item.config;
@@ -94,11 +109,35 @@ export function stylexPlugin({ overlaySrcDirs }: StylexPluginOptions = {}): Plug
           await Reflect.apply(transform, this, [readFileSync(filename, 'utf8'), filename]);
         }
       };
+      if (sharedStore) {
+        item.transform = async function (code, id, options) {
+          const result = await Reflect.apply(transform, this, [code, id, options]);
+          // Dev CSS reaches the page after the module's class names, through a
+          // polled update event, so a lazy chunk could render unstyled for about
+          // a second. Make the module wait for its own rules instead.
+          if (
+            this.environment?.mode !== 'dev' ||
+            this.environment.config.consumer !== 'client' ||
+            !result ||
+            typeof result !== 'object' ||
+            !sharedStore.rulesById.has(id)
+          ) {
+            return result;
+          }
+          return { ...result, code: result.code + stylexDevCssWaitCode(sharedStore.version) };
+        } as typeof transform;
+      }
     }
   }
 
   const [locateEntryCss, verifyEntryCss] = entryCss.plugins;
-  return [locateEntryCss, ...plugins, verifyEntryCss, stylexProxiedDevCssPlugin()] as PluginOption;
+  // The dev CSS plugin goes before the unplugin so its middleware and runtime win.
+  return [
+    locateEntryCss,
+    stylexProxiedDevCssPlugin(devCss),
+    ...plugins,
+    verifyEntryCss,
+  ] as PluginOption;
 }
 
 /**
