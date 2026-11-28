@@ -9,6 +9,7 @@ import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime';
 import { createRouterRuntime } from '../../core/RouterRuntime';
 import { buildDeepSeekAnthropicPayload, buildDeepSeekOpenAIPayload } from './chatPayload';
+import { resolveDeepSeekInlineToolChanges } from './deferredTools';
 import {
   buildDeepSeekGenerateObjectPayload,
   createDeepSeekAnthropicGenerateObject,
@@ -50,6 +51,7 @@ export const anthropicParams = createAnthropicCompatibleParams({
   baseURL: DEFAULT_DEEPSEEK_ANTHROPIC_BASE_URL,
   chatCompletion: {
     handlePayload: buildDeepSeekAnthropicPayload,
+    inlineToolChanges: resolveDeepSeekInlineToolChanges,
   },
   customClient: {},
   debug: {
