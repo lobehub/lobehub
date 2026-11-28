@@ -464,6 +464,11 @@ export interface SystemStatus {
    */
   showAgentBuilderPanel?: boolean;
   showCommandMenu?: boolean;
+  /**
+   * Visibility of the device gateway status icon in the desktop title bar.
+   * Off by default; the icon still appears while the connection is failing.
+   */
+  showDeviceGatewayIndicator?: boolean;
   showFilePanel?: boolean;
   showHomePortrait?: boolean;
   /**
@@ -744,6 +749,7 @@ export const INITIAL_STATUS = {
   readNotificationSlugs: [],
   resourceManagerColumnWidths: DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
   showCommandMenu: false,
+  showDeviceGatewayIndicator: false,
   showFilePanel: true,
   showHomePortrait: true,
   showHotkeyHelper: false,

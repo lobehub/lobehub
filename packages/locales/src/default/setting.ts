@@ -51,6 +51,9 @@ export default {
     'Prevent automatic sleep while this computer is connected as a device, so it stays reachable. The display can still turn off; closing a laptop lid without an external display still puts it to sleep.',
   'devices.keepAwake.title': 'Keep Awake While Connected',
   'devices.thisComputer': 'This Computer',
+  'devices.titleBarIndicator.desc':
+    "Show this computer's connection status and on/off switch in the top-right corner. It always appears while the connection is failing.",
+  'devices.titleBarIndicator.title': 'Show Device Gateway in Title Bar',
   'marketSubmission.entry': 'Publish',
   'marketSubmission.title': 'Publish to Market',
   'marketSubmission.submit': 'Publish',
@@ -977,9 +980,9 @@ export default {
   'devices.connectWizard.desktop.step1': 'Download the desktop app',
   'devices.connectWizard.desktop.step1Desc':
     'Visit the LobeHub downloads page and get the app for your operating system.',
-  'devices.connectWizard.desktop.step2': 'Sign in and open the device gateway',
+  'devices.connectWizard.desktop.step2': 'Sign in',
   'devices.connectWizard.desktop.step2Desc':
-    "After signing in, click the device gateway icon in the top-right corner and confirm it's turned on.",
+    'After you sign in, the desktop app connects to the device gateway automatically. To see its status or turn it off, enable Show Device Gateway in Title Bar under Settings → Devices.',
   'devices.connectWizard.desktop.step3': 'Your device appears automatically',
   'devices.connectWizard.desktop.step3Desc':
     "The desktop app registers itself as a device on launch — you'll see it in the list once connected.",

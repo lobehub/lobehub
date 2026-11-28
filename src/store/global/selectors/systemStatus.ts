@@ -563,6 +563,7 @@ const showLeftPanel = (s: GlobalState) => s.status.showLeftPanel;
 const showPageAgentPanel = (s: GlobalState) => s.status.showPageAgentPanel;
 const showTaskAgentPanel = (s: GlobalState) => s.status.showTaskAgentPanel;
 const showTerminalPanel = (s: GlobalState) => s.status.showTerminalPanel;
+const showDeviceGatewayIndicator = (s: GlobalState) => s.status.showDeviceGatewayIndicator ?? false;
 const terminalPanelHeight = (s: GlobalState) => s.status.terminalPanelHeight || 320;
 const showFilePanel = (s: GlobalState) => s.status.showFilePanel;
 const showVerifyReportPanel = (s: GlobalState) => s.status.showVerifyReportPanel ?? true;
@@ -731,6 +732,7 @@ export const systemStatusSelectors = {
   sidebarItems,
   sessionGroupKeys,
   showAgentBuilderPanel,
+  showDeviceGatewayIndicator,
   showFilePanel,
   showHomePortrait,
   showHomeRail,
