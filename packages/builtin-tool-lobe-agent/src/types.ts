@@ -156,8 +156,18 @@ export interface CallSubAgentParams {
    * keeps its previous history, instead of starting a fresh one.
    */
   subAgentId?: string;
+  /** Stop the sub-agent after this many ms. Defaults to {@link DEFAULT_SUB_AGENT_TIMEOUT_MS}. */
   timeout?: number;
 }
+
+/** `callSubAgent` deadline when the call sets no `timeout` (the manifest documents it as 30 min). */
+export const DEFAULT_SUB_AGENT_TIMEOUT_MS = 30 * 60 * 1000;
+
+/**
+ * Shortest `callSubAgent` timeout accepted. Anything below reads as seconds or
+ * minutes passed for milliseconds and would stop the sub-agent at once.
+ */
+export const MIN_SUB_AGENT_TIMEOUT_MS = 60 * 1000;
 
 /**
  * Parameters for cancelSubAgent API
@@ -245,6 +255,8 @@ export interface CallSubAgentState extends SubAgentRunStats {
    */
   steered?: boolean;
   threadId: string;
+  /** The run hit its `timeout` and was stopped; the result says so instead of an answer. */
+  timedOut?: boolean;
 }
 
 // ==================== Todo Item ====================

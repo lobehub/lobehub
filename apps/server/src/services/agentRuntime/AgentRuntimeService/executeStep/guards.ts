@@ -22,6 +22,7 @@ export type StepGuardsDeps = Pick<
   | 'determineCompletionReason'
   | 'expireClientLlmWait'
   | 'handleGroupMemberTimeout'
+  | 'handleSubAgentTimeout'
   | 'queueService'
   | 'recordInterventionLifecycleCompletion'
   | 'shouldReplayPendingInterventionLifecycle'
@@ -31,7 +32,7 @@ export type StepGuardsDeps = Pick<
 
 /**
  * Deliveries that execute nothing and never claim the step lock: a group
- * member's deadline, a client wait's expiry, a terminal durable operation and
+ * member's or sub-agent's deadline, a client wait's expiry, a terminal durable operation and
  * the async-tool barrier watchdog. Returns the delivery's result, or
  * `undefined` when the step has to run.
  */
@@ -45,6 +46,7 @@ export async function runLockFreeDelivery(
     groupMemberTimeout,
     operationId,
     stepIndex,
+    subAgentTimeout,
     verifyAsyncToolBarrier,
   } = params;
 
@@ -53,6 +55,12 @@ export async function runLockFreeDelivery(
   // and bridge a `timeout` completion so the parked supervisor resumes/finishes.
   if (groupMemberTimeout) {
     return deps.handleGroupMemberTimeout(groupMemberTimeout);
+  }
+
+  // Same watchdog for a `callSubAgent` child's deadline: no-op once it finished,
+  // otherwise interrupt it and report the timeout to its parent.
+  if (subAgentTimeout) {
+    return deps.handleSubAgentTimeout(subAgentTimeout);
   }
 
   // Expiry check of a `waiting_for_client` park. It executes nothing: the CAS

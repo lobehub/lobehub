@@ -10,6 +10,7 @@ import {
   type GroupActionMemberBridgeParams,
   type GroupMemberTimeoutParams,
 } from '../types';
+import { scheduleRunWatchdog } from './runWatchdog';
 import type { AgentRuntimeServiceContext } from './types';
 import { formatErrorForMetadata, formatSubAgentErrorReason } from './utils';
 
@@ -351,32 +352,11 @@ export async function scheduleGroupMemberTimeout(
   params: GroupMemberTimeoutParams,
   delayMs: number,
 ): Promise<void> {
-  if (!deps.queueService || !(delayMs > 0)) return;
-  try {
-    await deps.queueService.scheduleMessage({
-      context: undefined,
-      delay: delayMs,
-      endpoint: `${deps.baseURL}/run`,
-      // Keyed on the member op so the /run worker can resolve userId from its
-      // metadata, same trust chain as every other scheduled step.
-      operationId: params.memberOperationId,
-      payload: { groupMemberTimeout: params },
-      priority: 'normal',
-      stepIndex: 0,
-    });
-    log(
-      '[%s] scheduled group-member timeout in %dms (parent %s)',
-      params.memberOperationId,
-      delayMs,
-      params.parentOperationId,
-    );
-  } catch (error) {
-    log(
-      '[%s] failed to schedule group-member timeout (non-fatal): %O',
-      params.memberOperationId,
-      error,
-    );
-  }
+  await scheduleRunWatchdog(deps, {
+    delayMs,
+    operationId: params.memberOperationId,
+    payload: { groupMemberTimeout: params },
+  });
 }
 
 /**

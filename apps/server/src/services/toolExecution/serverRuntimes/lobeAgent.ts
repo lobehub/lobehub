@@ -14,9 +14,11 @@ import {
   buildSteeredSubAgentReceipt,
   createMediaFileItemsFromMessage,
   createUrlMediaFileItems,
+  DEFAULT_SUB_AGENT_TIMEOUT_MS,
   formatMediaUrlValidationError,
   hasAnalyzableMediaFiles,
   LobeAgentIdentifier,
+  MIN_SUB_AGENT_TIMEOUT_MS,
   normalizeAnalyzeMediaInput,
   selectMediaFileItems,
   validateMediaUrls,
@@ -320,7 +322,20 @@ class LobeAgentExecutionRuntime {
       );
     }
 
-    const { description, instruction, timeout } = params;
+    const { description, instruction } = params;
+    // The manifest promises a 30-minute default. Without it a sub-agent ran
+    // until its step cap — hours, with the user waiting on it the whole time.
+    // A non-positive value counts as unset: strict-schema models fill every field.
+    const timeout =
+      typeof params.timeout === 'number' && params.timeout > 0
+        ? params.timeout
+        : DEFAULT_SUB_AGENT_TIMEOUT_MS;
+    if (timeout < MIN_SUB_AGENT_TIMEOUT_MS) {
+      return buildError(
+        `timeout is in milliseconds and must be at least ${MIN_SUB_AGENT_TIMEOUT_MS} (1 minute); omit it for the 30-minute default.`,
+        'INVALID_ARGUMENTS',
+      );
+    }
     if (!instruction || typeof instruction !== 'string') {
       return buildError('instruction is required.', 'INVALID_ARGUMENTS');
     }

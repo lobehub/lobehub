@@ -8,7 +8,12 @@ import {
   findLastAssistantMessage,
   normalizeCompletionMessages,
 } from '../CompletionLifecycle';
-import { type SubAgentBridgeParams } from '../types';
+import {
+  type AgentExecutionResult,
+  type SubAgentBridgeParams,
+  type SubAgentTimeoutParams,
+} from '../types';
+import { scheduleRunWatchdog } from './runWatchdog';
 import type { AgentRuntimeServiceContext } from './types';
 import { formatErrorForMetadata, formatSubAgentErrorReason } from './utils';
 
@@ -17,11 +22,15 @@ const log = debug('lobe-server:agent-runtime-service');
 /** What this module reads off the service. */
 export type SubAgentBridgeDeps = Pick<
   AgentRuntimeServiceContext,
+  | 'baseURL'
+  | 'completeSubAgentBridge'
   | 'controlCompletedToolResult'
   | 'coordinator'
   | 'delegate'
+  | 'interruptOperation'
   | 'isCallSubAgentToolMessage'
   | 'messageModel'
+  | 'queueService'
   | 'resolveLastAssistantContentFromThread'
   | 'resolveLastAssistantMessageFromDB'
   | 'streamManager'
@@ -103,7 +112,8 @@ export async function completeSubAgentBridge(
   params: SubAgentBridgeParams,
 ): Promise<boolean> {
   const { operationId, parentOperationId, reason, threadId, toolMessageId } = params;
-  const failed = reason === 'error' || reason === 'interrupted';
+  const timedOut = reason === 'timeout';
+  const failed = timedOut || reason === 'error' || reason === 'interrupted';
 
   // Infra errors propagate; a null state (expired) degrades to a stub note.
   const finalState =
@@ -170,16 +180,38 @@ export async function completeSubAgentBridge(
   const errorReason = failed
     ? formatSubAgentErrorReason(finalState?.error ?? params.errorMessage)
     : undefined;
-  const resultContent = failed
-    ? errorReason
-      ? `Sub-agent did not complete (${reason}): ${errorReason}`
-      : `Sub-agent did not complete (${reason}).`
-    : lastAssistantContent || 'Sub-agent completed without a textual answer.';
+  // A timed-out child is stopped mid-task, so what it said last is the only
+  // progress the parent can read without a follow-up. Best-effort: the thread
+  // read is the same fallback the success path uses for a state without messages.
+  let partialAnswer: string | undefined;
+  if (timedOut && threadId) {
+    try {
+      partialAnswer = await deps.resolveLastAssistantContentFromThread(threadId);
+    } catch (error) {
+      log('[%s] sub-agent bridge: failed to read progress before timeout: %O', operationId, error);
+    }
+  }
+  const resultContent = timedOut
+    ? formatSubAgentTimeoutResult(params.errorMessage, partialAnswer)
+    : failed
+      ? errorReason
+        ? `Sub-agent did not complete (${reason}): ${errorReason}`
+        : `Sub-agent did not complete (${reason}).`
+      : lastAssistantContent || 'Sub-agent completed without a textual answer.';
 
   // A background sub-agent's parent never parked on it: the placeholder holds
   // the start receipt the parent already read, so the answer is kept for a
   // delivery of its own instead of a backfill + resume.
-  if (await isBackgroundSubAgentPlaceholder(deps, toolMessageId)) {
+  const placeholderState = await readSubAgentPlaceholderState(deps, toolMessageId);
+  if (placeholderState?.background === true) {
+    // The timeout watchdog records its result first and interrupts the child,
+    // whose own completion then lands here as `interrupted`. Unlike the
+    // foreground backfill (`onlyIfEmpty`), nothing else stops that second
+    // write from replacing the timeout result before it is delivered.
+    if (reason === 'interrupted' && placeholderState.timedOut) {
+      log('[%s] sub-agent bridge: background result already recorded as timed out', operationId);
+      return false;
+    }
     // The answer is published into the parent's conversation on a later turn,
     // so the result controls must run here too: otherwise an `afterToolCall`
     // policy sees the start receipt and never the finished output it could
@@ -214,6 +246,7 @@ export async function completeSubAgentBridge(
       result: controlled.result.content,
       status: failed || controlled.blocked || controlled.cancelled ? 'error' : 'completed',
       threadId,
+      timedOut,
       toolMessageId,
     });
     return false;
@@ -238,6 +271,7 @@ export async function completeSubAgentBridge(
         model: finalState?.modelRuntimeConfig?.model,
         status: failed ? 'error' : 'completed',
         threadId,
+        ...(timedOut && { timedOut: true }),
         // The child's spend rides on this anchor row so the parent's usage tray can
         // account for it. The tray sums per-MESSAGE usage, and the child's own
         // assistant messages live in an isolation thread the parent never loads —
@@ -274,15 +308,16 @@ export async function completeSubAgentBridge(
 }
 
 /**
- * Whether the bridged placeholder was started with `runInBackground`
- * (`callSubAgent` or `callAgent` — only their runner writes the flag).
+ * The bridged placeholder's plugin state. `background` is set when the call
+ * was started with `runInBackground` (`callSubAgent` or `callAgent` — only
+ * their runner writes the flag).
  */
-async function isBackgroundSubAgentPlaceholder(
+async function readSubAgentPlaceholderState(
   deps: SubAgentBridgeDeps,
   toolMessageId: string,
-): Promise<boolean> {
+): Promise<CallSubAgentState | undefined> {
   const plugin = await deps.messageModel.findMessagePlugin(toolMessageId);
-  return (plugin?.state as CallSubAgentState | undefined)?.background === true;
+  return plugin?.state as CallSubAgentState | undefined;
 }
 
 /**
@@ -302,15 +337,17 @@ async function recordBackgroundSubAgentResult(
     result: string;
     status: 'completed' | 'error';
     threadId: string;
+    timedOut?: boolean;
     toolMessageId: string;
   },
 ): Promise<void> {
-  const { error, finalState, result, status, threadId, toolMessageId } = params;
+  const { error, finalState, result, status, threadId, timedOut, toolMessageId } = params;
   const state: Partial<CallSubAgentState> = {
     model: finalState?.modelRuntimeConfig?.model,
     result,
     status,
     threadId,
+    ...(timedOut && { timedOut: true }),
     totalCost: finalState?.cost?.total,
     totalInputTokens: finalState?.usage?.llm?.tokens?.input,
     totalOutputTokens: finalState?.usage?.llm?.tokens?.output,
@@ -361,4 +398,87 @@ export async function isCallSubAgentToolMessage(
     log('[%s] sub-agent bridge: failed to read tool plugin: %O', toolMessageId, error);
     return false;
   }
+}
+
+const formatTimeoutDuration = (timeoutMs: number): string => {
+  const minutes = Math.round(timeoutMs / 60_000);
+  if (minutes >= 1) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  const seconds = Math.max(1, Math.round(timeoutMs / 1000));
+  return `${seconds} second${seconds === 1 ? '' : 's'}`;
+};
+
+/**
+ * The parent's tool result for a timed-out sub-agent: that it was stopped,
+ * its last reply as partial progress, and that its work is kept — the
+ * `<sub_agent id>` trailer the bridge appends lets the parent continue it.
+ */
+const formatSubAgentTimeoutResult = (
+  timeoutNote: string | undefined,
+  partialAnswer: string | undefined,
+): string => {
+  const head = `${timeoutNote ?? 'Sub-agent timed out'} and was stopped before it finished. Anything it already did is kept in its thread.`;
+  return partialAnswer ? `${head}\n\nIts last reply before the timeout:\n\n${partialAnswer}` : head;
+};
+
+/**
+ * Schedule the deadline of a `callSubAgent` child — the sub-agent counterpart
+ * of `scheduleGroupMemberTimeout`, on the same delayed `/run` watchdog.
+ */
+export async function scheduleSubAgentTimeout(
+  deps: SubAgentBridgeDeps,
+  params: SubAgentTimeoutParams,
+): Promise<void> {
+  await scheduleRunWatchdog(deps, {
+    delayMs: params.timeoutMs,
+    operationId: params.operationId,
+    payload: { subAgentTimeout: params },
+  });
+}
+
+/**
+ * Enforce a `callSubAgent` child's timeout. No-op once the child reached a
+ * terminal state (its own completion bridge reports it). Otherwise interrupt
+ * it — the run stops at its next step boundary — and report the timeout right
+ * away instead of waiting for that boundary, so a waiting parent resumes now
+ * and a background result is delivered now. The child's own `interrupted`
+ * completion that follows changes nothing: the foreground backfill only fills
+ * an empty placeholder and the resume is CAS-guarded; a background result
+ * recorded as timed out is skipped.
+ */
+export async function handleSubAgentTimeout(
+  deps: SubAgentBridgeDeps,
+  params: SubAgentTimeoutParams,
+): Promise<AgentExecutionResult> {
+  // Narrow status read first: most watchdogs fire after the child already
+  // finished, so the full state blob is loaded only when the bridge needs it.
+  const status = (await deps.coordinator.loadAgentStatus(params.operationId)) as
+    string | null | undefined;
+  const state =
+    !status || status === 'done' || status === 'error' || status === 'interrupted'
+      ? null
+      : await deps.coordinator.loadAgentState(params.operationId);
+  if (!state) {
+    log('[%s] sub-agent timeout: child already terminal (%s), no-op', params.operationId, status);
+    return { nextStepScheduled: false, state: {}, success: true };
+  }
+
+  log(
+    '[%s] sub-agent timeout fired after %dms, interrupting + bridging timeout to parent %s',
+    params.operationId,
+    params.timeoutMs,
+    params.parentOperationId,
+  );
+  await deps.interruptOperation(params.operationId);
+
+  const resumed = await deps.completeSubAgentBridge({
+    errorMessage: `Sub-agent timed out after ${formatTimeoutDuration(params.timeoutMs)}`,
+    finalState: state,
+    operationId: params.operationId,
+    parentOperationId: params.parentOperationId,
+    reason: 'timeout',
+    threadId: params.threadId,
+    toolMessageId: params.toolMessageId,
+  });
+
+  return { nextStepScheduled: resumed, state: {}, success: true };
 }

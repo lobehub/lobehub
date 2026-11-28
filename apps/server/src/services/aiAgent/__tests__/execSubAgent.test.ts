@@ -101,6 +101,8 @@ vi.mock('@/server/services/agent', () => ({
   }),
 }));
 
+const mockScheduleSubAgentTimeout = vi.fn();
+
 // Mock AgentRuntimeService
 vi.mock('@/server/services/agentRuntime', () => ({
   AgentRuntimeService: vi.fn().mockImplementation(function () {
@@ -111,6 +113,7 @@ vi.mock('@/server/services/agentRuntime', () => ({
         operationId: 'op-123',
         success: true,
       }),
+      scheduleSubAgentTimeout: mockScheduleSubAgentTimeout,
     };
   }),
 }));
@@ -990,6 +993,83 @@ describe('AiAgentService.execSubAgent', () => {
         success: false,
       });
       expect(mockStreamManager.closeLlmRelayChannel).not.toHaveBeenCalled();
+    });
+  });
+
+  // Only isolated group members used to arm a deadline, so a callSubAgent child
+  // ignored its `timeout` and ran for hours while the user waited.
+  describe('callSubAgent timeout', () => {
+    const virtualParams = {
+      agentId: 'agent-1',
+      instruction: 'Research the topic',
+      parentMessageId: 'tool-msg-1',
+      parentOperationId: 'parent-op-1',
+      topicId: 'topic-1',
+    };
+
+    it('arms the deadline of a started child with its timeout', async () => {
+      vi.spyOn(service, 'execAgent').mockResolvedValue(createSuccessfulExecAgentResult());
+
+      await service.execVirtualSubAgent({ ...virtualParams, timeout: 60_000 });
+
+      expect(mockScheduleSubAgentTimeout).toHaveBeenCalledWith({
+        operationId: 'op-123',
+        parentOperationId: 'parent-op-1',
+        threadId: 'thread-123',
+        timeoutMs: 60_000,
+        toolMessageId: 'tool-msg-1',
+      });
+    });
+
+    it('arms the deadline of a background child too', async () => {
+      vi.spyOn(service, 'execAgent').mockResolvedValue(createSuccessfulExecAgentResult());
+
+      await service.execVirtualSubAgent({ ...virtualParams, background: true, timeout: 60_000 });
+
+      expect(mockScheduleSubAgentTimeout).toHaveBeenCalledWith(
+        expect.objectContaining({ operationId: 'op-123', timeoutMs: 60_000 }),
+      );
+    });
+
+    it('arms nothing without a timeout or when the child did not start', async () => {
+      const execAgentSpy = vi
+        .spyOn(service, 'execAgent')
+        .mockResolvedValue(createSuccessfulExecAgentResult());
+      await service.execVirtualSubAgent(virtualParams);
+
+      execAgentSpy.mockResolvedValue(createFailedExecAgentResult('no budget'));
+      await service.execVirtualSubAgent({ ...virtualParams, timeout: 60_000 });
+
+      expect(mockScheduleSubAgentTimeout).not.toHaveBeenCalled();
+    });
+
+    it('keeps the running child deadline when the instruction only steers it', async () => {
+      mockThreadModel.findById.mockResolvedValue({
+        agentId: 'agent-1',
+        id: 'thread-old',
+        metadata: { operationId: 'op-old' },
+        sourceMessageId: 'tool-msg-0',
+        status: ThreadStatus.Processing,
+        topicId: 'topic-1',
+        type: ThreadType.Isolation,
+      });
+      mockFindMessagePlugin.mockResolvedValue({
+        apiName: 'callSubAgent',
+        identifier: 'lobe-agent',
+      });
+      mockOperationFindById.mockImplementation(async (id: string) =>
+        id === 'op-old' ? { status: 'running' } : { trigger: 'cli' },
+      );
+      mockQueueSubAgentSteer.mockResolvedValue({ queued: true });
+
+      const result = await service.execVirtualSubAgent({
+        ...virtualParams,
+        threadId: 'thread-old',
+        timeout: 60_000,
+      });
+
+      expect(result).toMatchObject({ steered: true });
+      expect(mockScheduleSubAgentTimeout).not.toHaveBeenCalled();
     });
   });
 });

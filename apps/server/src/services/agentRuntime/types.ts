@@ -248,6 +248,13 @@ export interface AgentExecutionParams {
    * re-enters the same lock.
    */
   stepLockOwner?: string;
+  /**
+   * Watchdog payload that enforces a `callSubAgent` child's `timeout`: when the
+   * child has not reached a terminal state by its deadline, interrupt it and
+   * bridge a `timeout` result to the parent. Scheduled by
+   * `scheduleSubAgentTimeout` once the child op is started.
+   */
+  subAgentTimeout?: SubAgentTimeoutParams;
   /** ID of the pending tool message targeted by the intervention. */
   toolMessageId?: string;
   /**
@@ -393,6 +400,23 @@ export interface GroupMemberTimeoutParams {
   mode: GroupActionMemberMode;
   onComplete: GroupActionOnComplete;
   parentOperationId: string;
+}
+
+/**
+ * Watchdog payload that enforces a `callSubAgent` child's deadline. Carries the
+ * same ids as the child's `sub-agent-bridge` hook, so a fired watchdog can
+ * report the timeout through `completeSubAgentBridge` exactly as the child's
+ * own completion would.
+ */
+export interface SubAgentTimeoutParams {
+  /** The child (sub-agent) operation whose deadline this enforces. */
+  operationId: string;
+  parentOperationId: string;
+  threadId: string;
+  /** The timeout the child ran under, in ms — named in the parent's result. */
+  timeoutMs: number;
+  /** The parent's placeholder tool message the bridge backfills. */
+  toolMessageId: string;
 }
 
 /**

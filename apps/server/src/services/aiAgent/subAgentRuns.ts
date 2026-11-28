@@ -794,6 +794,38 @@ export const execAgentThreadRun = async (
 };
 
 /**
+ * Arm the deadline of a `callSubAgent` child that just started — the
+ * sub-agent counterpart of the isolated group member's
+ * `scheduleGroupMemberTimeout`, on the same delayed watchdog. When the child
+ * is still running at `params.timeout`, the watchdog interrupts it and reports
+ * the timeout to the parent, whether the parent waits on it or runs it in the
+ * background.
+ *
+ * Nothing is armed when the call set no positive timeout (the `callSubAgent`
+ * runtime fills in its default; `callAgent` has none), when no run started, or
+ * when the instruction only steered a run that is already going — that run
+ * keeps the deadline it was started with.
+ */
+export const armSubAgentTimeout = async (
+  deps: Pick<SubAgentRunDeps, 'agentRuntimeService'>,
+  params: ExecVirtualSubAgentParams,
+  result: ExecSubAgentResult,
+): Promise<void> => {
+  const { parentMessageId, parentOperationId, timeout } = params;
+  if (!(typeof timeout === 'number' && timeout > 0)) return;
+  if (!result.success || result.steered || !result.operationId || !result.threadId) return;
+  if (!parentOperationId) return;
+
+  await deps.agentRuntimeService.scheduleSubAgentTimeout({
+    operationId: result.operationId,
+    parentOperationId,
+    threadId: result.threadId,
+    timeoutMs: timeout,
+    toolMessageId: parentMessageId,
+  });
+};
+
+/**
  * Run a group member in the shared group session (non-isolated). The member's
  * turns land directly in the group conversation; the supervisor's instruction
  * is injected as a `<speaker name="Supervisor" />`-tagged prompt. Registers the

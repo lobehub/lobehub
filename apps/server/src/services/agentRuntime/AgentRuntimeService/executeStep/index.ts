@@ -61,6 +61,7 @@ export type ExecuteStepDeps = Pick<
   | 'determineCompletionReason'
   | 'expireClientLlmWait'
   | 'handleGroupMemberTimeout'
+  | 'handleSubAgentTimeout'
   | 'humanIntervention'
   | 'injectQueuedFollowUp'
   | 'parkForClientLlm'
