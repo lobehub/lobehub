@@ -1,0 +1,23 @@
+---
+title: 在 LobeHub 中使用 LiveKit Inference
+description: 配置 LiveKit Cloud 凭证，使用内置的语言模型。
+tags:
+  - LiveKit
+---
+
+# 在 LobeHub 中使用 LiveKit Inference
+
+[LiveKit Inference](https://docs.livekit.io/agents/models/inference/) 通过 LiveKit Cloud 项目提供模型推理服务。此集成支持其语言模型网关。用量由 LiveKit Cloud 计费；请查看[最新价格](https://livekit.com/pricing)和项目可用的模型。
+
+1. 登录 [LiveKit Cloud](https://cloud.livekit.io)，获取项目的 API Key 和配套的 API Secret。
+2. 打开 **应用设置 → AI 服务商 → LiveKit**，填写 **API Key** 和 **API Secret**，再启用服务商。凭证会自动保存。
+3. 在内置模型列表中启用所需模型。点击 **检查** 验证语言模型请求。
+4. 在模型选择器中选择 LiveKit 语言模型。添加服务商会保留现有的模型选择。
+
+模型目录随 LobeHub 提供，不会从 LiveKit 获取模型定义。目录包含 Gemma 和 OpenAI 的部分语言模型。模型 ID 保留网关前缀，例如 `google/gemma-4-31b-it`。
+
+## 排查问题
+
+自托管部署可以通过 `LIVEKIT_INFERENCE_API_KEY` 和 `LIVEKIT_INFERENCE_API_SECRET` 提供共享默认凭证，两项值必须来自同一个项目。用户配置的凭证对优先使用；两种方式都使用内置模型目录。详见[服务商环境变量说明](/zh/docs/self-hosting/environment-variables/model-provider#livekit-inference)。
+
+认证失败时，请确认两项凭证来自同一个 LiveKit Cloud 项目，并且项目已开通 Inference。OpenAI 的 API Key 不能用于 LiveKit Inference 认证。

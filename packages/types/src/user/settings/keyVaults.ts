@@ -102,3 +102,9 @@ export interface SearchEngineKeyVaults {
 export interface UserKeyVaults extends SearchEngineKeyVaults {
   search1api?: OpenAICompatibleKeyVault;
 }
+
+/** LiveKit Cloud project credentials for LiveKit Inference. */
+export interface LiveKitKeyVault {
+  apiKey?: string;
+  apiSecret?: string;
+}

@@ -6,6 +6,8 @@ import { ProviderCombine, ProviderIcon } from './providerIcon';
 
 describe('provider artwork', () => {
   it.each([
+    { provider: 'livekit', title: 'LiveKit' },
+    { provider: 'LiveKit', title: 'LiveKit' },
     { provider: 'unsloth', title: 'Unsloth' },
     { provider: 'Unsloth', title: 'Unsloth' },
     { provider: 'typesafe', title: 'TypeSafe AI' },

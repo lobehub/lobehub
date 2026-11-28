@@ -150,6 +150,13 @@ export default {
   'list.title.custom': 'Custom provider not enabled',
   'list.title.disabled': 'Disabled',
   'list.title.enabled': 'Enabled',
+  'livekit.apiKey.title': 'API Key',
+  'livekit.apiKey.placeholder': 'LiveKit Cloud API key',
+  'livekit.apiKey.desc': 'Enter the API key from your LiveKit Cloud project settings.',
+  'livekit.apiSecret.title': 'API Secret',
+  'livekit.apiSecret.placeholder': 'LiveKit Cloud API secret',
+  'livekit.apiSecret.desc':
+    'Enter the matching project API secret. Both credentials are required for LiveKit Inference.',
   'menu.addCustomProvider': 'Add Custom Provider',
   'menu.all': 'All',
   'menu.list.custom': 'Custom not enabled',

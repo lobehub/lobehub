@@ -1001,4 +1001,12 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 默认值：未设置，使用内置示例模型列表，示例默认不启用；不保证这些模型已在本地安装，也不会改变已有的模型选择。
 - 示例：`-all,+your-local-model-id=Local Model`
 
+## LiveKit Inference
+
+### `LIVEKIT_INFERENCE_API_KEY` / `LIVEKIT_INFERENCE_API_SECRET`
+
+- 类型：可选，必须成对设置。
+- 描述：用于共享模型推理的 LiveKit Cloud 项目凭证，两项都设置后会在服务端配置中启用服务商。用户自己的凭证对优先使用；用户仅配置其中一项时会返回认证错误，不会借用部署密钥。模型列表使用内置定义，不进行远程发现。
+- 默认值：未设置，由用户在应用设置中配置服务商。
+
 [model-list]: /zh/docs/self-hosting/advanced/model-list

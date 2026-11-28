@@ -3,6 +3,8 @@ export interface ClientSecretPayload {
    * Represents the user's API key
    */
   apiKey?: string;
+  /** LiveKit Inference project secret. Kept in the encrypted provider vault. */
+  apiSecret?: string;
   /**
    * ComfyUI specific authentication fields
    */
