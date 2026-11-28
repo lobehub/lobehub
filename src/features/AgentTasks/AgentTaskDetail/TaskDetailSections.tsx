@@ -6,6 +6,7 @@ import TaskActivities from './TaskActivities';
 import TaskArtifacts from './TaskArtifacts';
 import { taskDetailLayoutStyles as styles } from './taskDetailLayoutStyles';
 import TaskDetailTitleInput from './TaskDetailTitleInput';
+import { TaskFusePauseNotice } from './TaskFusePauseNotice';
 import TaskGoalBar from './TaskGoalBar';
 import TaskInstruction from './TaskInstruction';
 import TaskParentBar from './TaskParentBar';
@@ -30,6 +31,7 @@ const TaskDetailSections = memo(() => {
           </div>
           <TaskDetailTitleInput />
           <TaskStatusStrip />
+          <TaskFusePauseNotice />
         </Flexbox>
         <div className={styles.side}>
           <TaskProperties />

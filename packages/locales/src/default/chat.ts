@@ -2322,6 +2322,16 @@ export default {
   'taskDetail.acceptanceState.verifying': 'Verifying',
   'taskDetail.acceptanceWait.title': 'Waiting on acceptance',
   'taskDetail.assignee': 'Assignee',
+  'taskDetail.fusePause.desc':
+    'The schedule won’t run again until a run succeeds. Check the latest run’s error, then run the task now.',
+  'taskDetail.fusePause.insufficientBudget.desc':
+    'Your account is out of usage for these runs. Upgrade your plan or top up, or wait for your usage to reset, then run the task now.',
+  'taskDetail.fusePause.insufficientBudget.title': 'Paused: out of usage',
+  'taskDetail.fusePause.paidModelRequired.desc':
+    'This task’s model is available on paid plans only. Upgrade your plan, or switch the task to an available model, then run it now.',
+  'taskDetail.fusePause.paidModelRequired.title': 'Paused: model needs a paid plan',
+  'taskDetail.fusePause.title_one': 'Paused after {{count}} failed run',
+  'taskDetail.fusePause.title_other': 'Paused after {{count}} failed runs in a row',
   'taskDetail.goalTimeline.hover.cost': 'Cost',
   'taskDetail.goalTimeline.hover.duration': 'Duration',
   'taskDetail.goalTimeline.hover.status': 'Status',
@@ -3599,6 +3609,10 @@ export default {
   'taskList.scheduled.state.stopped_other': 'Stopped after {{count}} failed runs',
   'taskList.scheduled.state.stopped.hint':
     'It won’t run again until a run succeeds. Open the task to see the error, then run it now',
+  'taskList.scheduled.state.stopped.insufficientBudget.hint':
+    'Out of usage. Upgrade or top up, or wait for your usage to reset, then run it now',
+  'taskList.scheduled.state.stopped.paidModelRequired.hint':
+    'Its model is available on paid plans only. Upgrade, or switch to an available model, then run it now',
   'taskList.scheduled.title': 'Scheduled tasks',
   'taskList.subtaskProgress.loadFailed':
     "Couldn't load sub-tasks. Click the progress badge to retry.",

@@ -148,6 +148,15 @@ const activeTaskWorkspaceId = (s: TaskStoreState) => activeTaskDetail(s)?.worksp
 
 const activeTaskError = (s: TaskStoreState) => activeTaskDetail(s)?.error;
 
+/**
+ * The failure-fuse pause of the active task, gated on the live status too: a resume updates the
+ * status optimistically before the detail refetch clears the server projection.
+ */
+const activeTaskFusePause = (s: TaskStoreState) => {
+  const detail = activeTaskDetail(s);
+  return detail?.status === 'paused' ? (detail.fusePause ?? null) : null;
+};
+
 const activeTaskTopicCount = (s: TaskStoreState) => activeTaskDetail(s)?.topicCount ?? 0;
 
 const canRunActiveTask = (s: TaskStoreState): boolean => {
@@ -202,6 +211,7 @@ export const taskDetailSelectors = {
   activeTaskEditorData,
   activeTaskError,
   activeTaskFiles,
+  activeTaskFusePause,
   activeTaskId,
   activeTaskInstruction,
   activeTaskInstructionRevision,

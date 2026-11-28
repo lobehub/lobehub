@@ -37,6 +37,7 @@ export const createTaskRunHooks = (params: TaskRunHookParams): AgentHook[] => {
     {
       handler: async (event) => {
         await new TaskLifecycleService(db, userId, workspaceId).onTopicComplete({
+          errorCategory: event.errorCategory,
           errorCode: event.errorType,
           errorMessage: event.errorMessage,
           lastAssistantContent: event.lastAssistantContent,

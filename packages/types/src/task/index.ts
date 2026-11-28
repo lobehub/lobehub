@@ -263,12 +263,29 @@ export interface TaskTopicHandoff {
  */
 export const TASK_AUTOMATION_FAILURE_FUSE = 3;
 
+/**
+ * Why the failure fuse stopped a scheduled task, when the failure that blew it
+ * is one only the account owner can clear:
+ * - `insufficientBudget`: the account has no usage left to pay for the run.
+ * - `paidModelRequired`: the task's model is limited to paid plans.
+ *
+ * Any other failure leaves the cause unset, and the pause reads as plain
+ * consecutive failures.
+ */
+export type TaskAutomationPauseCause = 'insufficientBudget' | 'paidModelRequired';
+
 export interface TaskSchedulerContext {
   // Count of consecutive automation-tick 'error' reasons since the last 'done'.
   // When it hits `TASK_AUTOMATION_FAILURE_FUSE` we pause the task / stop
   // re-arming until the user resolves the urgent brief. Manual "run now"
-  // failures do NOT touch this counter.
+  // failures do NOT touch this counter. A user restart resets it.
   consecutiveFailures?: number;
+  /**
+   * Cause of the failure that blew the schedule fuse, set when the fuse pauses
+   * the task and cleared when the counter resets (a clean run or a user
+   * restart). `null` once cleared.
+   */
+  pauseCause?: TaskAutomationPauseCause | null;
   // ISO timestamp when the latest tick was scheduled. Informational only.
   scheduledAt?: string;
   // ISO timestamp opening the current schedule window: `maxExecutions` counts
@@ -698,6 +715,11 @@ export interface TaskDetailData {
   error?: string | null;
   /** Files attached to the task instruction (persistent context for every run). */
   files?: ChatFileItem[];
+  /**
+   * Set while the failure fuse holds a scheduled task paused: how many runs failed in a row and,
+   * when the account owner has to act, why. Absent for any other pause.
+   */
+  fusePause?: { cause: TaskAutomationPauseCause | null; consecutiveFailures: number } | null;
   /** The goal this task (or its nearest goal-bound ancestor) belongs to; null when none. */
   goal?: { id: string; title: string } | null;
   // heartbeat.interval: periodic execution interval | heartbeat.timeout+lastAt: watchdog monitoring (detects stuck tasks)

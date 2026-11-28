@@ -7,6 +7,7 @@ import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TaskRunClaimRepo } from '@/database/repositories/taskRunClaim';
 import type { LobeChatDatabase } from '@/database/type';
+import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
 import { resolveFailedRunStatus } from '@/server/services/goal/recoveryPolicy';
 
 import { TaskLifecycleService } from './index';
@@ -125,6 +126,11 @@ const settleOrphanedRun = async (
     await new TaskLifecycleService(db, row.userId, row.workspaceId ?? undefined).onTopicComplete({
       // The structured type picks the error brief's remedy (a budget failure
       // leads with "Upgrade plan"), exactly as the lost hook would have.
+      // The category tells a plan-gated model apart from other refusals, so a
+      // lost hook still pauses the task with its cause.
+      errorCategory: row.operationError
+        ? formatErrorForState(row.operationError).category
+        : undefined,
       errorCode: resolveOrphanedRunErrorType(row),
       errorMessage,
       operationId: row.operationId,
@@ -222,6 +228,9 @@ const resolveOrphanedRunErrorType = (row: OrphanedRunningTopic): string | undefi
   const error = row.operationError;
   if (!error) return undefined;
   const type = error.errorType ?? error.type;
+  // A gateway refusal carries a numeric type (`403`); the lifecycle event
+  // stringifies it the same way.
+  if (typeof type === 'number') return String(type);
   return typeof type === 'string' && type ? type : undefined;
 };
 

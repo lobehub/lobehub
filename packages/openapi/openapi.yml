@@ -8271,6 +8271,26 @@ components:
               - size
               - url
             additionalProperties: false
+        fusePause:
+          anyOf:
+            - type: object
+              properties:
+                cause:
+                  anyOf:
+                    - type: string
+                      enum:
+                        - insufficientBudget
+                        - paidModelRequired
+                    - type: "null"
+                consecutiveFailures:
+                  type: integer
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+              required:
+                - cause
+                - consecutiveFailures
+              additionalProperties: false
+            - type: "null"
         goal:
           anyOf:
             - type: object

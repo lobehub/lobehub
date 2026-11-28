@@ -1617,24 +1617,6 @@ describe('TaskService', () => {
       ...overrides,
     });
 
-    it('stamps scheduleStartedAt when a user starts a schedule (backlog → scheduled)', async () => {
-      const prev = baseTask({ status: 'backlog', automationMode: 'schedule' });
-      const next = baseTask({ status: 'scheduled', automationMode: 'schedule' });
-      mockTaskModel.findById.mockResolvedValue(prev);
-      mockTaskModel.updateStatus.mockResolvedValue(next);
-
-      const service = new TaskService(db, userId);
-      await service.updateStatus({ id: 'T-1', status: 'scheduled' as any });
-
-      expect(mockTaskModel.updateContext).toHaveBeenCalledTimes(1);
-      expect(mockTaskModel.updateContext).toHaveBeenCalledWith('task-1', {
-        scheduler: { scheduleStartedAt: expect.any(String) },
-      });
-      const stamped = (mockTaskModel.updateContext.mock.calls[0]![1] as any).scheduler
-        .scheduleStartedAt as string;
-      expect(() => new Date(stamped).toISOString()).not.toThrow();
-    });
-
     it('does NOT stamp on the cron loop natural cycle (running → scheduled)', async () => {
       // taskLifecycle parks finished ticks at 'scheduled' via taskModel.updateStatus,
       // bypassing the service layer; the only way it reaches the service is when a

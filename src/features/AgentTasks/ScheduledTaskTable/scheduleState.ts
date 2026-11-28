@@ -3,7 +3,7 @@ import {
   QUOTA_LIMITED_RUN_STATUS,
   TRANSIENT_FAILED_RUN_STATUS,
 } from '@lobechat/const/goal';
-import type { TaskContext, TaskRecentRun } from '@lobechat/types';
+import type { TaskAutomationPauseCause, TaskContext, TaskRecentRun } from '@lobechat/types';
 import { TASK_AUTOMATION_FAILURE_FUSE } from '@lobechat/types';
 import { DEFAULT_SCHEDULE_GRACE_MINUTES, validateCronPattern } from '@lobechat/utils/cronEval';
 
@@ -59,6 +59,8 @@ export interface ScheduleState {
   health: ScheduleHealth;
   /** When the task fires next; null whenever it will not fire on its own. */
   nextRunAt: Date | null;
+  /** Why the fuse stopped the task, when the account owner has to act; null otherwise. */
+  pauseCause: TaskAutomationPauseCause | null;
   /** Start of the run in flight; null unless the task is running. */
   runningSince: Date | null;
 }
@@ -140,6 +142,7 @@ export const resolveScheduleState = (task: ScheduleTaskInput, now: Date): Schedu
     group: GROUP_BY_HEALTH[health],
     health,
     nextRunAt: null,
+    pauseCause: health === 'stopped' ? (context?.scheduler?.pauseCause ?? null) : null,
     runningSince: null,
     ...extra,
   });

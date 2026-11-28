@@ -87,6 +87,12 @@ export interface AgentHookEvent {
    * billed allowance, which is not necessarily the recipient's own.
    */
   errorBudget?: ChatErrorBudgetContext;
+  /**
+   * Error category from the model-runtime error taxonomy (`quota`, `network`, …).
+   * Together with `errorType` it tells apart refusals that share one type, such as
+   * a plan that does not include the model and other `Forbidden` admission gates.
+   */
+  errorCategory?: string;
   // Content
   errorDetail?: string;
   /**

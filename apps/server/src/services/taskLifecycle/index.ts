@@ -19,6 +19,7 @@ import {
 import type {
   BriefArtifacts,
   BriefDecision,
+  TaskAutomationPauseCause,
   TaskItem,
   TaskLifecycleAudit,
   TaskRunTrigger,
@@ -54,6 +55,7 @@ import { postTaskRunToChannel } from '@/server/services/task/channelDelivery';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 import { createTaskSchedulerModule } from '@/server/services/taskScheduler';
 
+import { resolveAutomationPauseCause } from './pauseCause';
 import { RUN_REPORT_LOOKBACK, selectEarlierRunReport } from './runReport';
 import {
   isTrivialAssistantContent,
@@ -83,6 +85,9 @@ const isTerminal = (status: string) => TERMINAL_STATUSES.has(status);
 const AUTOMATION_FAILURE_FUSE = TASK_AUTOMATION_FAILURE_FUSE;
 
 export interface TopicCompleteParams {
+  /** Normalized error category (e.g. `quota`) of a failed run, read with `errorCode`
+   *  to tell apart refusals that share one type. */
+  errorCategory?: string;
   /** Structured terminal error type (e.g. `InsufficientBudgetForModel`) from the
    *  completion lifecycle event, forwarded to the failure notification. */
   errorCode?: string;
@@ -141,6 +146,7 @@ export class TaskLifecycleService {
       lastAssistantContent,
       errorMessage,
       errorCode,
+      errorCategory,
     } = params;
 
     log('onTopicComplete: task=%s topic=%s reason=%s', taskIdentifier, topicId, reason);
@@ -432,6 +438,10 @@ export class TaskLifecycleService {
       // and auto-paused the task.
       let scheduleConsecutiveFailures: number | undefined;
       let pausedByFuse = false;
+      // A failure only the account owner can clear (no usage left, a paid-only
+      // model) — named in the notification and kept on a fuse pause so the
+      // task says why it stopped and what to do.
+      const failureCause = resolveAutomationPauseCause({ errorCategory, errorCode });
 
       if (!currentTask) {
         // Task vanished mid-run — nothing to transition.
@@ -446,8 +456,28 @@ export class TaskLifecycleService {
         // flipped it to 'running') so the next scheduled tick still fires, and
         // record the error for visibility — but do NOT pause and do NOT touch
         // the consecutive-failure fuse (only automation ticks count).
-        await this.recordAutomationError(currentTask, errorText, runTrigger);
-        await this.taskModel.updateStatus(taskId, 'scheduled', { error: errorText });
+        // A fuse-paused task stays paused with the latest cause: its counter
+        // still sits at the fuse, so 'scheduled' would re-pause on the next tick.
+        const fuseCount =
+          (currentTask.context as { scheduler?: TaskSchedulerContext } | null)?.scheduler
+            ?.consecutiveFailures ?? 0;
+        const fuseHeld =
+          currentTask.automationMode === 'schedule' && fuseCount >= AUTOMATION_FAILURE_FUSE;
+        await this.recordAutomationError(
+          currentTask,
+          errorText,
+          runTrigger,
+          fuseHeld
+            ? {
+                consecutiveFailures: fuseCount,
+                pauseCause: failureCause ?? null,
+                pauseReason: `${fuseCount} consecutive scheduled-run failures`,
+              }
+            : undefined,
+        );
+        await this.taskModel.updateStatus(taskId, fuseHeld ? 'paused' : 'scheduled', {
+          error: errorText,
+        });
       } else if (currentTask.automationMode === 'schedule') {
         // a scheduled tick failed. A single transient error must not
         // permanently pause a recurring task. Count consecutive failures and
@@ -467,6 +497,7 @@ export class TaskLifecycleService {
           );
           await this.recordAutomationError(currentTask, errorText, runTrigger, {
             consecutiveFailures,
+            pauseCause: failureCause ?? null,
             pauseReason: `${consecutiveFailures} consecutive scheduled-run failures`,
           });
           await this.taskModel.updateStatus(taskId, 'paused', { error: errorText });
@@ -515,10 +546,13 @@ export class TaskLifecycleService {
         // task deleted mid-run has no page left to link to.
       } else if (currentTask.automationMode && isAutomationTick) {
         if (runTrigger === 'schedule' || pausedByFuse) {
+          // Spread from a variable so an override slot without `failureCause` still type-checks.
+          const cause = { failureCause };
           void notifyScheduledTaskFailed({
             agentId: currentTask.assigneeAgentId ?? undefined,
             consecutiveFailures: scheduleConsecutiveFailures,
             errorCode,
+            ...cause,
             operationId: params.operationId,
             paused: pausedByFuse,
             runTrigger: runTrigger === 'schedule' ? 'schedule' : 'heartbeat',
@@ -729,7 +763,12 @@ export class TaskLifecycleService {
     task: TaskItem,
     errorText: string,
     trigger: TaskRunTrigger,
-    extra?: { consecutiveFailures?: number; pauseReason?: string },
+    extra?: {
+      consecutiveFailures?: number;
+      /** Why the fuse paused the task; only written together with `pauseReason`. */
+      pauseCause?: TaskAutomationPauseCause | null;
+      pauseReason?: string;
+    },
   ): Promise<void> {
     const ctx = (task.context as { lifecycle?: TaskLifecycleAudit } | null) ?? {};
     const now = new Date().toISOString();
@@ -745,7 +784,9 @@ export class TaskLifecycleService {
 
     const patch: Record<string, unknown> = { lifecycle };
     if (extra?.consecutiveFailures !== undefined) {
-      patch.scheduler = { consecutiveFailures: extra.consecutiveFailures };
+      const scheduler: TaskSchedulerContext = { consecutiveFailures: extra.consecutiveFailures };
+      if (extra.pauseReason) scheduler.pauseCause = extra.pauseCause ?? null;
+      patch.scheduler = scheduler;
     }
 
     await this.taskModel.updateContext(task.id, patch);
@@ -766,7 +807,7 @@ export class TaskLifecycleService {
     const patch: Record<string, unknown> = {
       lifecycle: { lastRecoveredAt: new Date().toISOString() },
     };
-    if (consecutiveFailures > 0) patch.scheduler = { consecutiveFailures: 0 };
+    if (consecutiveFailures > 0) patch.scheduler = { consecutiveFailures: 0, pauseCause: null };
 
     await this.taskModel.updateContext(task.id, patch);
   }
