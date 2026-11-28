@@ -33,7 +33,11 @@ const Home: FC = () => {
         // Keep in sync with NavHeader's height so the track starts at its bottom edge.
         scrollbarProps={{ style: { marginBlockStart: density.headerHeight } }}
         style={{ height: '100%', overflow: 'hidden', width: '100%' }}
-        viewportProps={{ tabIndex: -1 }}
+        // The page only scrolls vertically. A collapsed rail (features/Home) stays laid
+        // out while hidden, offset by its exit slide; in Compact density that offset
+        // outruns the page padding, and a sideways swipe used to shift the whole page.
+        // Clipping here keeps the rail's shadows and slide animation intact.
+        viewportProps={{ style: { overflowX: 'hidden' }, tabIndex: -1 }}
         contentProps={{
           style: {
             boxSizing: 'border-box',
