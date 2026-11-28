@@ -115,6 +115,18 @@ export interface ExternalSignalContext {
   /** Tool name for UI labelling, e.g. `Monitor`. */
   sourceToolName: string;
   /**
+   * How the background task ended, from CC's `task_notification.status`
+   * (`killed` normalized to `stopped`). Only on `task-completion`; absent on
+   * messages persisted before it was recorded.
+   */
+  taskStatus?: 'completed' | 'failed' | 'stopped';
+  /**
+   * CC's one-line `task_notification.summary`, e.g. `Agent "Review" finished`
+   * or `Background command "Run tests" failed with exit code 1`. Only on
+   * `task-completion`.
+   */
+  taskSummary?: string;
+  /**
    * Discriminator for the trigger source — wire-stable.
    *
    * - `tool-stdout`: Monitor / long-running-tool stdout push pattern —

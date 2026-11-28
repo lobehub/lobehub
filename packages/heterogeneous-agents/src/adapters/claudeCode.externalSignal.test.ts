@@ -258,6 +258,86 @@ describe('ClaudeCodeAdapter', () => {
     });
 
     /**
+     * Regression: a subagent resumed through `SendMessage` has no title in its
+     * call arguments (`{ to, message }`), so the wake-up notice read
+     * "Send Message finished". CC's notification still names it in `summary`.
+     */
+    it('records the ending status and summary of a SendMessage-resumed subagent', () => {
+      const adapter = new ClaudeCodeSdkAdapter();
+      init(adapter);
+
+      adapter.adapt({
+        message: {
+          content: [
+            {
+              id: 'toolu_send',
+              input: { message: 'Publish the report', summary: 'Publish', to: 'a1b2c3' },
+              name: 'SendMessage',
+              type: 'tool_use',
+            },
+          ],
+          id: 'msg_01',
+        },
+        type: 'assistant',
+      });
+      adapter.adapt(ccTaskStarted('task_1', 'toolu_send'));
+      adapter.adapt(ccUser('toolu_send', '{"success":true}'));
+      adapter.adapt(ccMessageStart('msg_02')); // "waiting for the runner" reply
+      adapter.adapt({ is_error: false, result: 'waiting', type: 'result' });
+
+      adapter.adapt({
+        ...ccTaskNotification('task_1'),
+        status: 'completed',
+        summary: 'Agent "Acceptance runner" finished',
+      });
+
+      const completion = adapter.adapt(ccMessageStart('msg_03'));
+      expect(
+        completion.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
+      ).toEqual({
+        sourceToolCallId: 'toolu_send',
+        sourceToolName: 'SendMessage',
+        taskStatus: 'completed',
+        taskSummary: 'Agent "Acceptance runner" finished',
+        type: 'task-completion',
+      });
+    });
+
+    it('normalizes a killed background command to the stopped status', () => {
+      const adapter = new ClaudeCodeSdkAdapter();
+      init(adapter);
+
+      adapter.adapt({
+        message: {
+          content: [
+            {
+              id: 'toolu_bash',
+              input: { command: 'tail -f build.log', run_in_background: true },
+              name: 'Bash',
+              type: 'tool_use',
+            },
+          ],
+          id: 'msg_01',
+        },
+        type: 'assistant',
+      });
+      adapter.adapt(ccTaskStarted('task_1', 'toolu_bash'));
+      adapter.adapt(ccUser('toolu_bash', 'Background command started'));
+      adapter.adapt({ is_error: false, result: 'started', type: 'result' });
+
+      adapter.adapt({
+        ...ccTaskNotification('task_1'),
+        status: 'killed',
+        summary: 'Background command "Tail the build" was stopped',
+      });
+
+      const completion = adapter.adapt(ccMessageStart('msg_02'));
+      expect(
+        completion.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
+      ).toMatchObject({ taskStatus: 'stopped', type: 'task-completion' });
+    });
+
+    /**
      * Real-world regression (a production topic): two background subagents ran at
      * once. `Agent` runs in the background by default, so neither call carried
      * `run_in_background`. When the first finished, its wake-up turn was tagged

@@ -241,6 +241,8 @@ export const MessageSignalSchema = z.object({
   sequence: z.number().optional(),
   sourceToolCallId: z.string(),
   sourceToolName: z.string(),
+  taskStatus: z.enum(['completed', 'failed', 'stopped']).optional(),
+  taskSummary: z.string().optional(),
   type: z.enum(['tool-stdout', 'tool-callback', 'task-completion']),
 });
 
@@ -941,6 +943,9 @@ export interface MessageTaskCallback {
  * promotes to a dedicated `messages.signal` column with the same
  * shape (plus `rootSourceId` / `scopeKey` for agent-signal alignment).
  */
+/** How a background task ended, as recorded on its `task-completion` signal. */
+export type MessageTaskStatus = 'completed' | 'failed' | 'stopped';
+
 export interface MessageSignal {
   /** Nth push from the same source (1 = first repeat result). */
   sequence?: number;
@@ -948,6 +953,18 @@ export interface MessageSignal {
   sourceToolCallId: string;
   /** Tool name for UI labelling, e.g. `Monitor`. */
   sourceToolName: string;
+  /**
+   * How the background task ended, from CC's `task_notification.status`
+   * (`killed` normalized to `stopped`). Only on `task-completion`; absent on
+   * messages persisted before it was recorded.
+   */
+  taskStatus?: MessageTaskStatus;
+  /**
+   * CC's one-line `task_notification.summary`, e.g. `Agent "Review" finished`
+   * or `Background command "Run tests" failed with exit code 1`. Only on
+   * `task-completion`.
+   */
+  taskSummary?: string;
   /**
    * Discriminator for the trigger source.
    *

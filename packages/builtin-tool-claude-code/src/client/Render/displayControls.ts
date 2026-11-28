@@ -18,7 +18,9 @@ import {
  */
 const FixedClaudeCodeRenderDisplayControls: Record<string, RenderDisplayControl> = {
   [ClaudeCodeApiName.Edit]: 'collapsed',
-  [ClaudeCodeApiName.SendMessage]: 'expand',
+  // A message to a subagent is internal coordination, often a long English
+  // prompt; the one-line "Message subagent <summary>" row is enough by default.
+  [ClaudeCodeApiName.SendMessage]: 'collapsed',
   [ClaudeCodeApiName.TaskList]: 'expand',
   [ClaudeCodeApiName.TaskUpdate]: 'expand',
   [ClaudeCodeApiName.TodoWrite]: 'expand',

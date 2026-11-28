@@ -87,4 +87,22 @@ describe('extractToolKeyword', () => {
   it('falls back to name-like args', () => {
     expect(extractToolKeyword({ skill: 'local-testing' })).toBe('local-testing');
   });
+
+  describe('summary args', () => {
+    // Regression: a collapsed Claude Code SendMessage row read only "Send message",
+    // because `{ to, message, summary }` carried no key the row recognized.
+    it('falls back to the recap of a message sent to a subagent', () => {
+      expect(
+        extractToolKeyword({
+          message: 'Please re-run the checkout case and publish the report.',
+          summary: 'Re-run the checkout case',
+          to: 'a1b2c3',
+        }),
+      ).toBe('Re-run the checkout case');
+    });
+
+    it('keeps a sharper keyword when the tool also carries one', () => {
+      expect(extractToolKeyword({ file_path: '/repo/a.ts', summary: 'Fix the bug' })).toBe('a.ts');
+    });
+  });
 });

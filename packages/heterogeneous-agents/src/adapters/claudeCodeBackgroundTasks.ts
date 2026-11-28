@@ -110,7 +110,7 @@ export class ClaudeCodeBackgroundTasks {
         return this.progress(taskId, raw);
       }
       case 'task_notification': {
-        ctx.taskSignals.end(taskId);
+        ctx.taskSignals.end(taskId, { status: raw.status, summary: raw.summary });
         return this.end(taskId, raw);
       }
       default: {

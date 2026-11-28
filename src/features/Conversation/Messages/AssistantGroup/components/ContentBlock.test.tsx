@@ -182,7 +182,7 @@ describe('AssistantGroup ContentBlock', () => {
       />,
     );
 
-    expect(screen.getByText('taskCompletion.title')).toBeInTheDocument();
+    expect(screen.getByText('taskCompletion.notice')).toBeInTheDocument();
 
     rerender(
       <ContentBlock
@@ -193,7 +193,7 @@ describe('AssistantGroup ContentBlock', () => {
       />,
     );
 
-    expect(screen.queryByText('taskCompletion.title')).not.toBeInTheDocument();
+    expect(screen.queryByText('taskCompletion.notice')).not.toBeInTheDocument();
   });
 
   it('reads the persisted finish reason when the grouped block projection is stale', () => {
