@@ -32,6 +32,7 @@ import {
   EMPTY_ARGS_TOOL_REASON,
   partitionEmptyArgumentsCalls,
 } from '../utils/emptyArgumentsCalls';
+import { buildInactiveToolContent, findInactiveToolIdentifier } from '../utils/inactiveToolCalls';
 import {
   selectEffectiveToolManifestMap,
   selectOperationToolSet,
@@ -860,10 +861,39 @@ export class GeneralChatAgent implements Agent {
             name.split(PLUGIN_SCHEMA_SEPARATOR)[0] === REMOTE_DEVICE_IDENTIFIER;
           const allNames = namedToolCalls.map((toolCall) => toolCall.function.name);
           const pickerNames = lockedPickerNote ? allNames.filter(isPickerCall) : [];
-          const otherNames = allNames.filter((name) => !pickerNames.includes(name));
+          const manifestMap = selectEffectiveToolManifestMap(state);
+          const offeredToolNames = new Set<string>(
+            (this.getTools(state) ?? [])
+              .map((tool: { function?: { name?: string } }) => tool?.function?.name)
+              .filter((toolName): toolName is string => !!toolName),
+          );
+          const activatedToolIds = new Set(
+            (state.activatedStepTools ?? []).map((activation) => activation.id),
+          );
+          const inactive = allNames
+            .filter((name) => !pickerNames.includes(name))
+            .map((name) => ({
+              identifier: findInactiveToolIdentifier(
+                name,
+                manifestMap,
+                offeredToolNames,
+                activatedToolIds,
+              ),
+              name,
+            }))
+            .filter((call): call is { identifier: string; name: string } => !!call.identifier);
+          const inactiveNames = inactive.map((call) => call.name);
+          const otherNames = allNames.filter(
+            (name) => !pickerNames.includes(name) && !inactiveNames.includes(name),
+          );
           const blockedContent = [
             pickerNames.length > 0 &&
               `Tool call rejected: ${pickerNames.join(', ')} is not available in this run. ${lockedPickerNote}`,
+            inactive.length > 0 &&
+              buildInactiveToolContent(
+                inactiveNames,
+                inactive.map((call) => call.identifier),
+              ),
             otherNames.length > 0 && unresolvedToolContent(otherNames.join(', ')),
           ]
             .filter(Boolean)
