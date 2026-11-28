@@ -66,6 +66,7 @@ export interface AiHubMixModelCard {
  */
 const TYPE_MAP: Record<string, string> = {
   // Current type identifiers
+  decision: 'decision',
   embedding: 'embedding',
   image_generation: 'image',
   llm: 'chat',
@@ -80,10 +81,55 @@ const TYPE_MAP: Record<string, string> = {
 
 /**
  * AiHubMix `types` values that have no corresponding LobeHub AiModelType.
- * Models with these types are filtered out before processing to prevent them
- * from incorrectly appearing as chat models in the UI.
+ * Models whose declared types are exclusively unsupported are filtered out
+ * before processing to prevent them from incorrectly appearing as chat models.
  */
 const UNSUPPORTED_AIHUBMIX_TYPES = new Set(['rerank', 'reranking']);
+
+const parseAiHubMixTypes = (rawTypes: unknown): string[] => {
+  if (typeof rawTypes !== 'string') return [];
+  return rawTypes
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+};
+
+const isUnsupportedAiHubMixModel = (m: any): boolean => {
+  const rawTypes = parseAiHubMixTypes(m.types);
+  return rawTypes.length > 0 && rawTypes.every((t) => UNSUPPORTED_AIHUBMIX_TYPES.has(t));
+};
+
+const resolveAiHubMixTypeInfo = (
+  rawTypes: string[],
+): { imageOutput?: boolean; search?: boolean; type?: string } => {
+  if (rawTypes.length === 0) return {};
+
+  const mappedTypes = Array.from(
+    new Set(rawTypes.map((t) => TYPE_MAP[t]).filter((t): t is string => Boolean(t))),
+  );
+  const hasSearchType = rawTypes.includes('search');
+
+  if (mappedTypes.length === 1) {
+    return {
+      ...(hasSearchType && { search: true }),
+      type: mappedTypes[0],
+    };
+  }
+
+  if (mappedTypes.includes('chat')) {
+    return {
+      ...(mappedTypes.includes('image') && { imageOutput: true }),
+      ...(hasSearchType && { search: true }),
+      type: 'chat',
+    };
+  }
+
+  // Ambiguous multi-type entries without chat (e.g. `stt,tts` / `tts,stt`) are left
+  // without an explicit type so knownModel lookup in processMultiProviderModelList resolves them.
+  return {
+    ...(hasSearchType && { search: true }),
+  };
+};
 
 /**
  * Map AiHubMix full-catalog API response fields to LobeHub model card fields.
@@ -92,6 +138,9 @@ const UNSUPPORTED_AIHUBMIX_TYPES = new Set(['rerank', 'reranking']);
  */
 const mapAiHubMixModel = (m: any): { [key: string]: any; id: string } => {
   const id: string = m.id ?? m.model_id;
+
+  const rawTypes = parseAiHubMixTypes(m.types);
+  const typeInfo = resolveAiHubMixTypeInfo(rawTypes);
 
   // Parse features into a Set only when the field is present and non-empty
   const featureList =
@@ -119,14 +168,24 @@ const mapAiHubMixModel = (m: any): { [key: string]: any; id: string } => {
       }
     : null;
 
+  // Treat non-positive context_length / max_output (e.g. 0 on image_generation models)
+  // as unspecified so the UI does not display 0 as an infinite context window (∞) and
+  // knownModel defaults can apply where available.
+  const contextWindowTokens =
+    typeof m.context_length === 'number' && m.context_length > 0 ? m.context_length : undefined;
+  const maxOutput = typeof m.max_output === 'number' && m.max_output > 0 ? m.max_output : undefined;
+
+  const search = featureSet ? featureSet.has('web') || Boolean(typeInfo.search) : typeInfo.search;
+
   return {
     ...m,
     id,
     ...(m.desc !== undefined && { description: m.desc }),
     ...(m.model_name !== undefined && { displayName: m.model_name }),
-    ...(m.context_length !== undefined && { contextWindowTokens: m.context_length }),
-    ...(m.max_output !== undefined && { maxOutput: m.max_output }),
-    ...(m.types !== undefined && { type: TYPE_MAP[m.types] }),
+    ...(contextWindowTokens !== undefined && { contextWindowTokens }),
+    ...(maxOutput !== undefined && { maxOutput }),
+    ...(typeInfo.type !== undefined && { type: typeInfo.type }),
+    ...(typeInfo.imageOutput !== undefined && { imageOutput: typeInfo.imageOutput }),
     ...(pricing !== null && { pricing }),
     // Map `features` capabilities only when the field is present; when absent,
     // processMultiProviderModelList falls back to keyword-based detection.
@@ -135,8 +194,8 @@ const mapAiHubMixModel = (m: any): { [key: string]: any; id: string } => {
     ...(featureSet && {
       functionCall: featureSet.has('tools') || featureSet.has('function_calling'),
       reasoning: featureSet.has('thinking'),
-      search: featureSet.has('web'),
     }),
+    ...(search !== undefined && { search }),
     ...(inputModalities && { vision: inputModalities.includes('image') }),
   };
 };
@@ -193,7 +252,7 @@ export const params: CreateRouterRuntimeOptions = {
 
       const json = (await response.json()) as { data?: any[] };
       const modelList = (json.data || [])
-        .filter((m: any) => !UNSUPPORTED_AIHUBMIX_TYPES.has(m.types ?? ''))
+        .filter((m: any) => !isUnsupportedAiHubMixModel(m))
         .map((m: any) => mapAiHubMixModel(m));
       return await processMultiProviderModelList(modelList, 'aihubmix');
     } finally {
