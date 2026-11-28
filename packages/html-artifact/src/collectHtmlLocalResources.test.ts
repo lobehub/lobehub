@@ -5,7 +5,7 @@ import {
   collectJsResourceHrefs,
   collectLocalResourceRefs,
 } from './collectHtmlLocalResources';
-import { extractHtmlTitle } from './htmlTagScanner';
+import { extractHtmlTitle, findOpeningTag, removeLocalBaseTag } from './htmlTagScanner';
 import {
   createWorkspaceHtmlArtifactIdentifier,
   isPathInsideWorkspace,
@@ -215,6 +215,203 @@ describe('collectLocalResourceRefs', () => {
       { absolutePath: '/project/pages/logo.png', href: './logo.png' },
     ]);
   });
+
+  it('ignores HTML comments with apostrophes and commented-out resource tags', () => {
+    const result = collectLocalResourceRefs({
+      content: `
+        <!-- Don't edit this section -->
+        <!--
+          <link rel="stylesheet" href="./old.css">
+          <img src="./deleted.png">
+          <div style="background: url('./dead-inline.png')"></div>
+          <style>.old { background: url('./dead-style.png'); }</style>
+        -->
+        <!--><!--->
+        <link rel="stylesheet" href="./app.css">
+        <img src="./hero.png">
+      `,
+      sourceKind: 'html',
+      sourcePath: htmlFilePath,
+      workingDirectory,
+    });
+
+    expect(result.refs.map((ref) => ref.absolutePath).sort()).toEqual([
+      '/project/pages/app.css',
+      '/project/pages/hero.png',
+    ]);
+  });
+
+  it('recognizes --!> as an HTML comment terminator', () => {
+    const result = collectLocalResourceRefs({
+      content: `
+        <!-- closed --!><img src="./first.png">
+        <!-- standard --><img src="./second.png">
+        <!-- trailing --!><img src="./third.png">
+      `,
+      sourceKind: 'html',
+      sourcePath: htmlFilePath,
+      workingDirectory,
+    });
+
+    expect(result.refs.map((ref) => ref.absolutePath).sort()).toEqual([
+      '/project/pages/first.png',
+      '/project/pages/second.png',
+      '/project/pages/third.png',
+    ]);
+    expect(findOpeningTag('<!-- closed --!><head></head>', 'head')?.text).toBe('<head>');
+    expect(extractHtmlTitle('<!-- closed --!><title>Live Title</title>')).toBe('Live Title');
+  });
+
+  it('consumes bogus comments and declarations before resuming tag scanning', () => {
+    const result = collectLocalResourceRefs({
+      content: `
+        <!foo <img src="./dead-bang.png">><img src="./live-bang.png">
+        <?xml <img src="./dead-pi.png"> ?><img src="./live-pi.png">
+        </123 <img src="./dead-end.png">><img src="./live-end.png">
+        <svg><desc><![CDATA[ a > <img src="./dead-cdata.png"> ]]></desc></svg>
+        <img src="./live-cdata.png">
+        <!unclosed <img src="./dead-eof.png"
+      `,
+      sourceKind: 'html',
+      sourcePath: htmlFilePath,
+      workingDirectory,
+    });
+
+    expect(result.refs.map((ref) => ref.absolutePath).sort()).toEqual([
+      '/project/pages/live-bang.png',
+      '/project/pages/live-cdata.png',
+      '/project/pages/live-end.png',
+      '/project/pages/live-pi.png',
+    ]);
+    expect(
+      findOpeningTag(
+        '<!foo <base href="https://dead.example.com/">><base href="../shared/">',
+        'base',
+      )?.text,
+    ).toBe('<base href="../shared/">');
+  });
+
+  it('keeps scanning after self-closing foreign raw-text tags while keeping HTML raw-text rules', () => {
+    const result = collectLocalResourceRefs({
+      content: `
+        <svg><title /></svg><img src="./after-svg-title.png">
+        <svg><style /></svg><img src="./after-svg-style.png">
+        <svg><script href="./svg-script.js" /></svg><img src="./after-svg-script.png">
+        <math><title /></math><img src="./after-math-title.png">
+        <svg><foreignObject><script />const s = '<img src="./dead-in-fo.png">';</script></foreignObject><title /></svg>
+        <img src="./after-fo.png">
+        <svg><p><script />const s = '<img src="./dead-after-breakout.png">';</script></p>
+        <img src="./after-breakout.png">
+        <svg /><script />const s = '<img src="./dead-html-script.png">';</script>
+        <img src="./after-html-script.png">
+        <title /><img src="./dead-html-title.png"></title>
+        <img src="./after-html-title.png">
+        <svg><script data-x=foo/>const s = '<img src="./dead-unquoted.png">';</script></svg>
+        <img src="./after-unquoted.png">
+      `,
+      sourceKind: 'html',
+      sourcePath: htmlFilePath,
+      workingDirectory,
+    });
+
+    expect(result.refs.map((ref) => ref.absolutePath).sort()).toEqual([
+      '/project/pages/after-breakout.png',
+      '/project/pages/after-fo.png',
+      '/project/pages/after-html-script.png',
+      '/project/pages/after-html-title.png',
+      '/project/pages/after-math-title.png',
+      '/project/pages/after-svg-script.png',
+      '/project/pages/after-svg-style.png',
+      '/project/pages/after-svg-title.png',
+      '/project/pages/after-unquoted.png',
+      '/project/pages/svg-script.js',
+    ]);
+    expect(
+      collectLocalResourceRefs({
+        content: '<script /><img src="./dead-unclosed-html-script.png">',
+        sourceKind: 'html',
+        sourcePath: htmlFilePath,
+        workingDirectory,
+      }).refs,
+    ).toEqual([]);
+    expect(findOpeningTag('<svg><title /></svg><base href="../shared/">', 'base')?.text).toBe(
+      '<base href="../shared/">',
+    );
+    expect(extractHtmlTitle('<svg><title /></svg><title>Real Page</title>')).toBe('Real Page');
+  });
+
+  it('does not scan inline script or style bodies as HTML tags', () => {
+    const result = collectLocalResourceRefs({
+      content: `
+        <script>
+          for (let i = 0; i < items.length; i++) {
+            // don't mutate in place
+            const tpl = '<img src="./fake.png"><div style="background: url(fake-bg.png)">';
+          }
+        </script>
+        <style>
+          /* a < b; don't break */
+          .hero { background: url("./bg.png"); }
+        </style>
+        <img src="./real.png">
+      `,
+      sourceKind: 'html',
+      sourcePath: htmlFilePath,
+      workingDirectory,
+    });
+
+    expect(result.refs.map((ref) => ref.absolutePath).sort()).toEqual([
+      '/project/pages/bg.png',
+      '/project/pages/real.png',
+    ]);
+  });
+
+  it('keeps scanning past bare < comparisons and apostrophes in text content', () => {
+    const result = collectLocalResourceRefs({
+      content: `
+        <p>İstanbul: when x < 10, it's small.</p>
+        <p>Also Map<string, number> and a<b work.</p>
+        <img alt="a > b" src="./chart.png">
+      `,
+      sourceKind: 'html',
+      sourcePath: htmlFilePath,
+      workingDirectory,
+    });
+
+    expect(result.refs).toEqual([
+      { absolutePath: '/project/pages/chart.png', href: './chart.png' },
+    ]);
+  });
+
+  it('ignores base tags inside HTML comments and scripts', () => {
+    const result = collectLocalResourceRefs({
+      content: `
+        <!-- <base href="https://old.example.com/"> -->
+        <script>const html = '<base href="https://script.example.com/">';</script>
+        <img src="./logo.png">
+      `,
+      sourceKind: 'html',
+      sourcePath: htmlFilePath,
+      workingDirectory,
+    });
+
+    expect(result.refs).toEqual([{ absolutePath: '/project/pages/logo.png', href: './logo.png' }]);
+    expect(result.skipped).toEqual([]);
+  });
+
+  it('stays linear on repeated unclosed comment openers', () => {
+    const pathological = `<img src="./ok.png">${'<!--'.repeat(40_000)}`;
+    const started = Date.now();
+    const result = collectLocalResourceRefs({
+      content: pathological,
+      sourceKind: 'html',
+      sourcePath: htmlFilePath,
+      workingDirectory,
+    });
+
+    expect(result.refs).toEqual([{ absolutePath: '/project/pages/ok.png', href: './ok.png' }]);
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
 });
 
 describe('collectJsResourceHrefs', () => {
@@ -312,7 +509,26 @@ describe('path helpers', () => {
 
   it('extracts a title and returns undefined when missing', () => {
     expect(extractHtmlTitle('<html><title> Demo Page </title></html>')).toBe('Demo Page');
+    expect(
+      extractHtmlTitle(
+        '<!-- <title>Old</title> --><html><title lang="en"> Real Page </title></html>',
+      ),
+    ).toBe('Real Page');
     expect(extractHtmlTitle('<html></html>')).toBeUndefined();
+  });
+
+  it('finds and removes real opening tags while skipping HTML comments and scripts', () => {
+    const html =
+      '<!-- <head><base href="../old/"></head> --><script>const x = "<base href=x>";</script><html><head><base href="../shared/"></head></html>';
+
+    expect(findOpeningTag(html, 'head')).toEqual({
+      end: html.indexOf('<base href="../shared/">'),
+      start: html.indexOf('<head><base href="../shared/">'),
+      text: '<head>',
+    });
+    expect(removeLocalBaseTag(html)).toBe(
+      '<!-- <head><base href="../old/"></head> --><script>const x = "<base href=x>";</script><html><head></head></html>',
+    );
   });
 
   it('resolves windows-style relative hrefs', () => {
