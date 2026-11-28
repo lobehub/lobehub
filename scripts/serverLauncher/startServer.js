@@ -18,6 +18,16 @@ const gatewayCheckDockerPath = '/app/scripts/_shared/checkGatewayConfig.js';
 const { checkGatewayConfig } = require(
   existsSync(gatewayCheckLocalPath) ? gatewayCheckLocalPath : gatewayCheckDockerPath,
 );
+const normalizeHostnameLocalPath = path.join(
+  __dirname,
+  '..',
+  '_shared',
+  'normalizeServerHostname.js',
+);
+const normalizeHostnameDockerPath = '/app/scripts/_shared/normalizeServerHostname.js';
+const { normalizeServerHostname } = require(
+  existsSync(normalizeHostnameLocalPath) ? normalizeHostnameLocalPath : normalizeHostnameDockerPath,
+);
 
 // Set file paths
 const DB_MIGRATION_SCRIPT_PATH = '/app/docker.cjs';
@@ -296,6 +306,9 @@ const runServer = async () => {
 
   // Create QStash schedule for workflow task dispatching
   createQstashSchedule();
+
+  // Normalize container-injected hostnames immediately before starting the server.
+  normalizeServerHostname();
 
   // Run the server in either database or non-database mode
   await runServer();
