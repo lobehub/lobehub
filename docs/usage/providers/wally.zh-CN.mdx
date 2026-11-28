@@ -1,0 +1,46 @@
+---
+title: 在 LobeHub 中使用 Wally
+description: 学习如何获取 Wally API 密钥，在 LobeHub 中配置 Wally 服务商，并通过其 OpenAI 兼容 API 使用开放权重模型。
+tags:
+  - LobeHub
+  - Wally
+  - RunAnywhere
+  - API密钥
+  - Web UI
+---
+
+# 在 LobeHub 中使用 Wally
+
+[Wally](https://www.runwally.com) 由 RunAnywhere 推出，通过 OpenAI 兼容 API（`https://inference.runanywhere.ai/v1`）提供 DeepSeek、GLM、Kimi、MiniMax 等开放权重模型。
+
+本文档将指导你如何在 LobeHub 中使用 Wally。
+
+<Steps>
+  ### 步骤一：获取 Wally API 密钥
+
+  - 登录 [RunAnywhere 控制台](https://console.runanywhere.ai)
+  - 创建一个 API 密钥并复制
+
+  <Callout type={'warning'}>
+    请妥善保管你的 API 密钥，不要与他人分享。
+  </Callout>
+
+  ### 步骤二：在 LobeHub 中配置 Wally
+
+  - 在 LobeHub 中打开 **设置 → AI 服务商**
+  - 在服务商列表中选择 **Wally**
+  - 粘贴 API 密钥并开启该服务商
+  - 可选：点击 **获取模型列表**，从 Wally 加载当前模型列表
+
+  ### 步骤三：选择模型
+
+  - 在助手的模型选择器中选择一个 Wally 模型，例如 `deepseek-v4.1-flash` 或 `glm-5.3-flash`，即可开始对话
+
+  <Callout type={'info'}>
+    支持图片输入的模型会标注视觉能力。当前模型目录及其上下文长度和价格请参阅 [runwally.com/pricing](https://www.runwally.com/pricing)。
+  </Callout>
+</Steps>
+
+Wally 按 token 计费。当前价格请参阅 [Wally 价格页面](https://www.runwally.com/pricing)，接口详情请参阅 [API 文档](https://docs.runanywhere.ai/wally-cloud/api)。
+
+私有化部署时，设置 `WALLY_API_KEY` 即可在服务端启用 Wally。详见 [模型服务商环境变量](/zh/docs/self-hosting/environment-variables/model-provider#wally)。
