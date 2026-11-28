@@ -31,8 +31,10 @@ export default {
   'claimResources.success': 'Successfully claimed {{count}} resource(s)',
   'claimResources.title': 'Claim Your Resources',
   'callback.messages.authFailed': 'Authorization failed: {{error}}',
+  'callback.messages.connectedAccount': 'Connected account',
   'callback.messages.missingParams': 'Missing authorization parameters',
   'callback.messages.processing': 'Processing authorization...',
+  'callback.messages.successDescription': 'LobeHub Connect authorization complete',
   'callback.messages.successWithCountdown':
     '{{message}} The window will close automatically in {{countdown}} seconds',
   'callback.messages.successWithRedirect': 'Authorization successful! Redirecting...',
