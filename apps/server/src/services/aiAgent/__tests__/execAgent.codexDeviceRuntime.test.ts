@@ -213,6 +213,19 @@ vi.mock('@/database/models/user', async (importOriginal) => {
   return { ...actual, UserModel };
 });
 
+// The agent's own device is offline in these runs (presence comes from the gateway + DB).
+vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({
+  getScopedOnlineDevices: vi.fn(async () => []),
+}));
+
+// The project lookup reads the database; the turn only needs its id.
+vi.mock('@/server/services/aiAgent/pipeline/topicProject', () => ({
+  resolveTurnProjectId: vi.fn(
+    async (_deps, input: { requestedProjectId?: string }) => input?.requestedProjectId ?? undefined,
+  ),
+  withProjectSandbox: vi.fn(async (_deps, input: { metadata?: unknown }) => input.metadata),
+}));
+
 vi.mock('@/server/services/heterogeneousAgent/sandboxRunner', () => ({
   spawnHeteroSandbox: mockSpawnHeteroSandbox,
 }));
@@ -319,6 +332,43 @@ describe('AiAgentService.execAgent - Codex device runtime', () => {
   afterEach(() => {
     recordStartSpy.mockRestore();
     vi.clearAllMocks();
+  });
+
+  // ROOT CAUSE (T-14984):
+  // A project conversation the composer left without a directory because the
+  // agent's own device was offline was routed to that device anyway.
+  /** @example A Codex agent's project conversation runs in the sandbox while its device is offline. */
+  it('runs a project conversation in the sandbox when its own device is offline', async () => {
+    Object.assign(heteroAgentConfig.agencyConfig, {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { type: 'codex' },
+    });
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { projectId: 'project-1' },
+      prompt: 'device is offline',
+      trigger: 'chat',
+    });
+    expect(mockSpawnHeteroSandbox).toHaveBeenCalled();
+    expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+  });
+
+  /** @example A project channel's run without a picked device stays on the agent's own device. */
+  it('keeps a project channel run on the agent device', async () => {
+    Object.assign(heteroAgentConfig.agencyConfig, {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { type: 'codex' },
+    });
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { projectId: 'project-1' },
+      prompt: 'channel message',
+      trigger: 'channel',
+    });
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+    expect(mockDispatchAgentRun).toHaveBeenCalled();
   });
 
   // ROOT CAUSE:

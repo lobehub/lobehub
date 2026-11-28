@@ -93,6 +93,8 @@ const I18N_DEAD_NS = new Set([
   'electron',
   'file',
   'modelProvider',
+  // Project conversations (the chat store's own-device notices) never start in workbench.
+  'project',
   'setting',
   'topic',
   'video',

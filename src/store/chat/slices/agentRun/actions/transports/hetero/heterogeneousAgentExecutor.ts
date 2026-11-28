@@ -91,7 +91,7 @@ import { preserveSkippedIntervention } from './interventionAck';
 import { applyLocalModeReport, registerLocalRunControls } from './localRunControls';
 import { claimLocalRunFee, type LocalRunFeeClaim, settleLocalRunFee } from './localRunFee';
 import { type LocalSteer, startLocalSteer } from './localSteer';
-import { buildLocalHeterogeneousSystemContext } from './localSystemContext';
+import { buildLocalHeterogeneousSystemContext, readUncommitted } from './localSystemContext';
 import { createMessageWriteBatcher, type ToolMessageUpdateOperation } from './messageWriteBatcher';
 import { createPendingCreateLedger } from './pendingCreateLedger';
 import { waitForPersistQueue } from './persistQueue';
@@ -2309,15 +2309,15 @@ export const executeHeterogeneousAgent = async (
       agentSystemContext: withHeteroContext(heterogeneousProvider.systemContext, message, context),
       contextSelections,
       pageSelections,
-      // Only a topic created by Codex edit-and-resend starts with copied
-      // history but no native session. Every other fresh session (a new
-      // topic, a cwd-change reset) keeps starting without replay.
+      // Only a Codex edit-and-resend topic starts with copied history but no native
+      // session; every other fresh session (new topic, cwd-change reset) starts without replay.
       previousConversation:
         !resumeSessionId &&
         !replayTranscript &&
         getTopicMetadataById(get(), context.topicId ?? undefined)?.editedFrom
           ? buildEditedTopicPreviousConversation(replaySource, assistantMessageId)
           : undefined,
+      uncommittedChanges: await readUncommitted(get(), params),
     });
 
     // When resuming, hand main the prior turns so it can rebuild a Claude Code

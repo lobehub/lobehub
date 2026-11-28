@@ -435,13 +435,10 @@ export class ConversationLifecycleActionImpl {
     let { agencyConfig } = topicBinding;
     const isGatewayMode =
       this.#get().isGatewayModeEnabled(agentId) || pageConversationNeedsGateway(context);
-    const boundTopic = context.topicId
-      ? topicSelectors.getTopicById(context.topicId)(this.#get())
-      : undefined;
     const pendingDirectory = this.#get().pendingNewTopicDirectory;
-    const { inheritedTopic, ...projectRun } = await resolveSendProjectRun({
+    const projectRun = await resolveSendProjectRun({
       agencyConfig,
-      boundDirectoryId: boundTopic?.projectWorkingDirectoryId,
+      boundTopic: topicSelectors.getTopicById(context.topicId ?? '')(this.#get()), // none: no id
       context,
       directMentionRoute: !!directMentionRoute && !(agentId === ownerAgentId && firstSendWorktree),
       isGatewayMode,
@@ -449,8 +446,9 @@ export class ConversationLifecycleActionImpl {
       pendingDirectory,
       sourceTopic,
     });
+    if (!projectRun) return void onPreflightFailure?.(); // own device refused it (toasted)
     ({ agencyConfig } = projectRun);
-    const { newTopicProject, stagedDirectory, stagedProjectId } = projectRun;
+    const { inheritedTopic, newTopicProject, stagedDirectory, stagedProjectId } = projectRun;
     if (stagedDirectory) consumePendingTopicRepos(ownerAgentId); // a cloud repo pick conflicts
 
     // Legacy agents may only carry `model: '<cli-type>'`. Keep gateway routing

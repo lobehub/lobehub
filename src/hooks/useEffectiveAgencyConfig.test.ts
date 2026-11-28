@@ -20,7 +20,12 @@ const topicState = vi.hoisted(() => ({
   topic: undefined as
     | {
         agentId?: string;
-        metadata?: { boundDeviceId?: string; workingDirectory?: string };
+        metadata?: {
+          boundDeviceId?: string;
+          projectSandboxFallback?: boolean;
+          workingDirectory?: string;
+        };
+        projectId?: string;
         projectWorkingDirectoryId?: string;
       }
     | undefined,
@@ -37,6 +42,14 @@ vi.mock('@/store/chat/selectors', () => ({
     getTopicById: (id: string) => (s: typeof topicState) =>
       id === s.activeTopicId ? s.topic : undefined,
   },
+}));
+
+const deviceState = vi.hoisted(() => ({
+  devices: [] as { deviceId: string; online: boolean }[],
+}));
+vi.mock('@/store/device', () => ({
+  deviceSelectors: { deviceList: (s: typeof deviceState) => s.devices },
+  useDeviceStore: (selector: (s: typeof deviceState) => unknown) => selector(deviceState),
 }));
 
 vi.mock('@/store/agent', () => ({ useAgentStore: vi.fn() }));
@@ -100,6 +113,7 @@ describe('useEffectiveAgencyConfig', () => {
     vi.clearAllMocks();
     chatSelectors.length = 0;
     topicState.topic = undefined;
+    deviceState.devices = [];
     managementAccess.canManageAgent = false;
     managementAccess.isAccessLoading = false;
   });
@@ -347,6 +361,52 @@ describe('useEffectiveAgencyConfig', () => {
     const defaults = renderHook(() => useEffectiveAgencyConfig('agent-1', { topicId: null }));
     expect(defaults.result.current.agencyConfig).toEqual(sharedConfig);
     expect(sharedConfig.boundDeviceId).toBe('creator-device');
+  });
+
+  // Regression (T-14984): a project conversation that fell back to the sandbox
+  // from the agent's offline device still showed that device as its target.
+  it("runs a fallen-back project conversation in the sandbox, not on the agent's device", () => {
+    const claudeCode = { ...sharedConfig, heterogeneousProvider: { type: 'claude-code' } };
+    setupStores({ agencyConfig: claudeCode });
+    topicState.topic = { agentId: 'agent-1', projectId: 'project-1' };
+    deviceState.devices = [{ deviceId: 'creator-device', online: false }];
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+    expect(result.current.agencyConfig?.executionTarget).toBe('sandbox');
+
+    // Lin (11-27): with its device online it runs there, in its own working directory.
+    deviceState.devices = [{ deviceId: 'creator-device', online: true }];
+    expect(
+      renderHook(() => useEffectiveAgencyConfig('agent-1')).result.current.agencyConfig
+        ?.executionTarget,
+    ).toBe('device');
+    // …unless its run already fell back to the sandbox.
+    topicState.topic = {
+      agentId: 'agent-1',
+      metadata: { projectSandboxFallback: true },
+      projectId: 'project-1',
+    };
+    expect(
+      renderHook(() => useEffectiveAgencyConfig('agent-1')).result.current.agencyConfig
+        ?.executionTarget,
+    ).toBe('sandbox');
+    deviceState.devices = [{ deviceId: 'creator-device', online: false }];
+
+    // One that already ran on a machine, and a regular agent, keep their target.
+    topicState.topic = {
+      agentId: 'agent-1',
+      metadata: { boundDeviceId: 'creator-device' },
+      projectId: 'project-1',
+    };
+    expect(
+      renderHook(() => useEffectiveAgencyConfig('agent-1')).result.current.agencyConfig
+        ?.executionTarget,
+    ).toBe('device');
+    setupStores();
+    topicState.topic = { agentId: 'agent-1', projectId: 'project-1' };
+    expect(
+      renderHook(() => useEffectiveAgencyConfig('agent-1')).result.current.agencyConfig
+        ?.executionTarget,
+    ).toBe('device');
   });
 
   // Regression: a cwd with no recorded machine fell back to the agent default

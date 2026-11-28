@@ -382,6 +382,13 @@ export interface ChatTopicMetadata {
    * cannot move the conversation under it. Server-only; cleared once applied.
    */
   pendingProjectWorkingDirectoryId?: string;
+  /**
+   * A project conversation of a heterogeneous agent with a device of its own
+   * (Claude Code, Codex) whose first run found that device offline, so it runs
+   * in the cloud sandbox — and keeps running there, where its session lives.
+   * Written by the server on that run (`withProjectSandboxFallback`).
+   */
+  projectSandboxFallback?: boolean;
   /** Measured dominant provider by token volume — see {@link ChatTopicMetadata.model}. */
   provider?: string;
   /**

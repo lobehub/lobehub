@@ -2,13 +2,15 @@
 
 import { useEffect } from 'react';
 
+import { resolveAgentProjectRunner } from '@/features/Projects/WorkingDirectories/agentProjectRunner';
 import { canStageDraftOn } from '@/features/Projects/WorkingDirectories/startProjectTopicDraft';
 import { useAgentFixedDeviceId } from '@/features/Projects/WorkingDirectories/useAgentFixedDeviceId';
+import { useAgentOwnDevice } from '@/features/Projects/WorkingDirectories/useAgentOwnDevice';
 import {
+  isDeviceOnline,
   isExecutionDirectoryAvailable,
   useProjectExecutionEnvironments,
 } from '@/features/Projects/WorkingDirectories/useProjectExecutionEnvironments';
-import { resolveProjectHomeEnvironment } from '@/features/Projects/Workspace/useProjectHomeEnvironment';
 import { useChatStore } from '@/store/chat';
 import { useDeviceList } from '@/store/device';
 
@@ -18,11 +20,17 @@ import { useDeviceList } from '@/store/device';
  * order that can take it now, and follows that order while nothing is picked
  * by hand — a device that goes offline hands the draft to the next runner.
  * Picking a runner by hand restages the draft without `auto`, which ends it.
+ *
+ * A heterogeneous agent with a device of its own starts on that device's
+ * directory instead (`resolveAgentProjectRunner`), or its own working
+ * directory there; `notice` says which, or that the device is offline and
+ * whether the send will be refused.
  */
 export const useBlankProjectAuto = (agentId: string, projectId: string | undefined) => {
   const { ordered } = useProjectExecutionEnvironments(projectId, !!projectId);
   const { data: devices } = useDeviceList();
   const fixedDeviceId = useAgentFixedDeviceId(agentId);
+  const { loading: ownDeviceLoading, ownDevice } = useAgentOwnDevice(agentId);
   // The staged draft is global; only this project's draft is this composer's
   // to drive, or split panes on two projects would restage each other.
   const pending = useChatStore((s) => s.pendingNewTopicDirectory);
@@ -36,16 +44,19 @@ export const useBlankProjectAuto = (agentId: string, projectId: string | undefin
   const active = !!own?.auto;
   const staged = own ? (own.projectWorkingDirectoryId ?? 'sandbox') : undefined;
 
-  const resolved =
-    projectId && ordered.length > 0
-      ? resolveProjectHomeEnvironment(
-          ordered,
-          undefined,
-          (directory) =>
+  // Until the member's device pick is known, Auto does not stage anything.
+  const choice =
+    projectId && ordered.length > 0 && !ownDeviceLoading
+      ? resolveAgentProjectRunner(ordered, undefined, {
+          isAvailable: (directory) =>
             canStageDraftOn(directory, fixedDeviceId) &&
             isExecutionDirectoryAvailable(directory, devices),
-        )
+          isDeviceOnline: (deviceId) => isDeviceOnline(devices, deviceId),
+          isRunnable: (directory) => canStageDraftOn(directory, fixedDeviceId),
+          ownDevice,
+        })
       : undefined;
+  const resolved = choice?.environment;
 
   const stage = () => {
     if (!projectId || !resolved) return;
@@ -64,5 +75,7 @@ export const useBlankProjectAuto = (agentId: string, projectId: string | undefin
     if (active && resolved && staged !== resolved.id) stage();
   }, [active, resolved?.id, staged]);
 
-  return projectId && resolved ? { active, onSelect: stage } : undefined;
+  const notice = choice?.notice;
+
+  return projectId && resolved ? { active, notice, onSelect: stage } : undefined;
 };

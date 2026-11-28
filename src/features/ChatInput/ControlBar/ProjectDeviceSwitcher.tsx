@@ -3,7 +3,13 @@
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ChevronDownIcon, PlusIcon, SettingsIcon, SparklesIcon } from 'lucide-react';
+import {
+  ChevronDownIcon,
+  PlusIcon,
+  SettingsIcon,
+  SparklesIcon,
+  TriangleAlertIcon,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,6 +23,7 @@ import { useCanManageProject } from '@/features/Projects/useCanManageProject';
 import { openAddDirectoryModal } from '@/features/Projects/WorkingDirectories/AddDirectoryModal';
 import { useProjectExecutionEnvironments } from '@/features/Projects/WorkingDirectories/useProjectExecutionEnvironments';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { type OwnDeviceNotice, ownDeviceNoticeKey } from '@/helpers/agentOwnDevice';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useDeviceList } from '@/store/device';
@@ -77,7 +84,16 @@ interface ProjectDeviceSwitcherProps {
    * whichever runner the project's order picks — the sandbox or `directoryId`
    * as passed — and the row names it, so the person still sees where.
    */
-  auto?: { active: boolean; onSelect: () => void };
+  auto?: {
+    active: boolean;
+    /**
+     * What Auto tells about the agent's own device: it starts there in the
+     * agent's own working directory, or the device is offline — so the send
+     * runs in the sandbox, or is refused (a device-only agent).
+     */
+    notice?: OwnDeviceNotice;
+    onSelect: () => void;
+  };
   directories: ProjectDirectory[];
   directoryId?: string;
   /** Picked another device's project directory; absent when folders can't be picked here. */
@@ -162,6 +178,22 @@ const ProjectDeviceSwitcher = ({
   // On the automatic choice, every runner row is a pick of its own, the one
   // it resolves to included: picking it pins the conversation there.
   const autoActive = !!auto?.active;
+  // Said only while Auto decides: a hand pick runs where it was picked.
+  const notice = autoActive ? auto?.notice : undefined;
+  const noticeDevice =
+    notice && 'deviceId' in notice
+      ? devices?.find((item) => item.deviceId === notice.deviceId)
+      : undefined;
+  const noticeText = notice
+    ? t(ownDeviceNoticeKey(notice), {
+        device:
+          noticeDevice?.friendlyName ||
+          noticeDevice?.hostname ||
+          ('deviceId' in notice ? notice.deviceId : ''),
+        ns: 'project',
+      })
+    : undefined;
+  const noticeBlocked = !!notice && 'blocked' in notice && notice.blocked;
   const handleSelect = (target: ProjectDeviceTarget) => {
     setOpen(false);
     if (!target.active || autoActive) onSelect?.(target);
@@ -257,7 +289,8 @@ const ProjectDeviceSwitcher = ({
           key="auto"
           label={t('runnerPicker.auto', { ns: 'project' })}
           desc={
-            auto.active
+            noticeText ??
+            (auto.active
               ? t('runnerPicker.autoResolved', {
                   ns: 'project',
                   runner:
@@ -265,7 +298,7 @@ const ProjectDeviceSwitcher = ({
                       ? sandboxName
                       : projectDirectoryDeviceName(directory, devices),
                 })
-              : t('runnerPicker.autoDesc', { ns: 'project' })
+              : t('runnerPicker.autoDesc', { ns: 'project' }))
           }
           onClick={() => {
             setOpen(false);
@@ -305,7 +338,9 @@ const ProjectDeviceSwitcher = ({
     <div {...stylex.props(workingDirectoryChipStyles.chip)}>
       {/* On the sandbox the chip names it as the menu does: its repositories
           and the first one's logo, once it has any. */}
-      {autoActive ? (
+      {noticeBlocked ? (
+        <Icon color={cssVar.colorWarning} icon={TriangleAlertIcon} size={14} />
+      ) : autoActive ? (
         <Icon icon={SparklesIcon} size={14} />
       ) : (
         <ExecutionTargetIcon
@@ -328,13 +363,15 @@ const ProjectDeviceSwitcher = ({
   );
 
   // The tooltip's body lays its children out in a row; stack the two lines.
+  // Auto's own-device notice comes first: it says why the chip is not on that device.
   const tooltip =
-    directory && !onSandbox ? (
+    noticeText ||
+    (directory && !onSandbox ? (
       <Flexbox gap={4}>
         <span>{t('directories.boundTip', { ns: 'project', path: directory.path })}</span>
         {load && <span>{load.summary}</span>}
       </Flexbox>
-    ) : undefined;
+    ) : undefined);
 
   return (
     <Popover

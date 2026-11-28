@@ -14,6 +14,15 @@ import {
 const executionOrderKey = (projectId?: string) =>
   projectId ? ['project-execution-order', projectId] : null;
 
+/** Whether a device is confirmed online now (a restored, unconfirmed row is not). */
+export const isDeviceOnline = (
+  devices: readonly DeviceListItem[] | undefined,
+  deviceId: string,
+) => {
+  const device = devices?.find((item) => item.deviceId === deviceId);
+  return !!device?.online && !device.onlineUnknown;
+};
+
 /**
  * Whether a folder can take a new conversation now: its device is online and
  * the folder is ready to run (linked to the project's environment, writable).

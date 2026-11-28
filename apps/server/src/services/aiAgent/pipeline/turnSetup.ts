@@ -45,6 +45,7 @@ import type { AgentShareGate } from '../shareGate';
 import { reserveShareVisitorTopic, reserveShareVisitorTurn } from '../shareVisitorAbuseGuards';
 import type { InternalExecAgentParams } from '../types';
 import { buildNewTopicMetadata, resolveTopicOpenedBy } from './newTopicMetadata';
+import { withProjectSandboxFallback } from './projectOwnDevice';
 import { createUserTurnAnchor } from './resolveUserMessageParentId';
 import { createStageTracer, openStageMark } from './sendTracing';
 import { assertShareHeteroAllowed } from './shareHeteroGate';
@@ -887,6 +888,9 @@ export const setupTurn = async (
   } finally {
     topicStage.end();
   }
+  // Its own device is offline for this project conversation: it runs in the sandbox.
+  const turn = { boundDeviceId: topicBoundDeviceId, projectId: turnProjectId, topicId };
+  agentConfig.agencyConfig = await withProjectSandboxFallback(deps, input, agentConfig, turn);
 
   if (heterogeneousProvider) {
     // A new topic has no pins, yet a native Task model still replaces the

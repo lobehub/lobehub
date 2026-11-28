@@ -60,4 +60,16 @@ describe('buildRemoteDeviceHeteroContext', () => {
     expect(result.indexOf('AGENT_CTX')).toBeLessThan(result.indexOf('<unanswered_user_messages>'));
     expect(result).toContain('Clone the repo');
   });
+
+  // Lin (11-27): a project conversation in the agent's own checkout tells the
+  // agent to take a worktree before touching someone's uncommitted work.
+  it('tells the agent to work in a worktree over uncommitted changes', () => {
+    const result = buildRemoteDeviceHeteroContext({
+      agentSystemContext: 'AGENT_CTX',
+      uncommittedChanges: { count: 1, path: '/repo' },
+    })!;
+    expect(result).toContain('<uncommitted_changes>');
+    expect(result).toContain('1 uncommitted change ');
+    expect(result).toContain('git worktree add');
+  });
 });
