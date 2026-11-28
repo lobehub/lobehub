@@ -16,6 +16,25 @@ export * from './attachmentTokenBuckets';
 
 export const DEFAULT_DRIFT_MULTIPLIER = 1.25;
 
+/**
+ * Drop an assistant message's recorded output usage, so {@link countContextTokens}
+ * estimates its content, tool calls and reasoning field by field instead of
+ * taking the provider count.
+ *
+ * Use when:
+ * - The counts must stay on one estimator, e.g. before scaling them with
+ *   `resolveInputTokenRatio`: a provider count is already in the model's tokens
+ *   and would be scaled twice.
+ */
+export const withoutRecordedOutputUsage = (message: UIChatMessage): UIChatMessage =>
+  message.usage || message.metadata?.usage
+    ? {
+        ...message,
+        metadata: message.metadata && { ...message.metadata, usage: undefined },
+        usage: undefined,
+      }
+    : message;
+
 const ZERO_BY_SOURCE = (): Record<TokenSourceType, number> => ({
   content: 0,
   fileContext: 0,
