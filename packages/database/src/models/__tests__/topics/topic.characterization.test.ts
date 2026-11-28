@@ -94,6 +94,7 @@ const PUBLIC_METHODS = [
   'removeRunningOperationChild',
   'repairAgentInterventionContinuation',
   'resetMemoryExtractStatus',
+  'resolveConversationMode',
   'restore',
   'retryWorktreeStart',
   'settleRunningOperation',

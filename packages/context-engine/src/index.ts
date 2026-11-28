@@ -49,6 +49,7 @@ export {
   tryCountRequestPayloadTokens,
 } from './tokenAccounting/requestPayload';
 // Processors
+export { isWithholdableContextSource } from './engine/messages/contextReplay/access';
 export type {
   DocumentRead,
   PlaceholderValue,
@@ -72,3 +73,10 @@ export {
   ToolCallProcessor,
   ToolMessageReorder,
 } from './processors';
+export {
+  contextReplayFileIds,
+  contextReplayMessageIds,
+  withContextReplays,
+} from './utils/contextReplayMessages';
+export { memoryPersonaRevision } from './utils/memorySources';
+export { replayToolActivationContext } from './utils/replayToolActivationContext';

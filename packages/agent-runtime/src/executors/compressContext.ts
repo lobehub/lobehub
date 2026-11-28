@@ -1,3 +1,5 @@
+import { contextReplayMessageIds } from '@lobechat/context-engine';
+
 import { UsageCounter } from '../core';
 import type { AgentRuntimeHost } from '../transport';
 import type {
@@ -42,7 +44,7 @@ export const compressContext =
   (host: AgentRuntimeHost): InstructionExecutor =>
   async (instruction, state) => {
     const { payload } = instruction as Extract<AgentInstruction, { type: 'compress_context' }>;
-    const { messages, currentTokenCount, existingSummary } = payload;
+    const { messages, currentTokenCount } = payload;
     const { operation, transports } = host;
     const { operationId, stepIndex, userId } = operation;
     const events: AgentEvent[] = [];
@@ -115,22 +117,30 @@ export const compressContext =
     let createdGroupId: string | undefined;
 
     try {
-      const dbMessages = await transports.messages.query(
-        {
-          agentId,
-          groupId,
-          threadId,
-          topicId,
-        },
-        { resolveAssetUrls: true },
+      const visibleIds = new Set(contextReplayMessageIds(messages));
+      const dbMessages = (
+        await transports.messages.query(
+          {
+            agentId,
+            groupId,
+            threadId,
+            topicId,
+          },
+          { resolveAssetUrls: true },
+        )
+      ).filter(
+        (message) =>
+          (message.role === 'compressedGroup' ||
+            message.threadId === undefined ||
+            (message.threadId ?? null) === (threadId ?? null)) &&
+          (visibleIds.has(message.id) ||
+            (message.role === 'tool' && !!message.parentId && visibleIds.has(message.parentId))),
       );
 
       // A thread page also shows the main-conversation rows it branched from (and
       // their summaries), read back with `threadId: null`. They belong to the main
       // conversation, so a thread compaction leaves them alone. A row without the
       // field is left to the server, which scopes the group by its stored thread.
-      const inConversation = (message: (typeof dbMessages)[number]) =>
-        !threadId || message.threadId === undefined || message.threadId === threadId;
       // Only a group whose members all sit in this conversation can be superseded: the
       // server refuses to merge any other (e.g. one an earlier thread compaction mixed
       // with main-conversation rows), so its summary must not enter the new one either.
@@ -144,20 +154,12 @@ export const compressContext =
       const sourceGroupIds = sourceCompressionGroups
         .map((message) => message.id)
         .filter((id): id is string => Boolean(id));
-      const hasPersistedSummaries = dbMessages.some(
-        (message) => message.role === 'compressedGroup',
-      );
-      const persistedExistingSummary = sourceCompressionGroups
-        .map((message) => (typeof message.content === 'string' ? message.content.trim() : ''))
-        .filter(Boolean)
-        .join('\n\n');
 
       const messageIds = dbMessages
         .filter(
           (message) =>
             message.role !== 'compressedGroup' &&
             Boolean(message.id) &&
-            inConversation(message) &&
             !preservedMessageIds.has(message.id),
         )
         .map((message) => message.id);
@@ -184,6 +186,7 @@ export const compressContext =
         agentId,
         groupId,
         messageIds,
+        sourceGroupIds,
         threadId,
         topicId,
         workspaceId,
@@ -191,13 +194,13 @@ export const compressContext =
       createdGroupId = compressionResult.messageGroupId;
 
       const compressionPayload = await compression.buildPrompt({
-        // The payload summary joins every summary on the page, out-of-scope ones included,
-        // so it only stands in when the page holds no persisted summary at all.
-        existingSummary: hasPersistedSummaries ? persistedExistingSummary : existingSummary,
+        existingSummary: compressionResult.existingSummary,
         messages: compressionResult.messagesToSummarize,
       });
 
       let streamedSummary = '';
+      if (compressionResult.signal?.aborted)
+        throw Object.assign(new Error('Context compression cancelled'), { name: 'AbortError' });
       const summaryResult = await llm.stream(
         {
           messages: compressionPayload.messages,
@@ -222,6 +225,8 @@ export const compressContext =
         abortError.name = 'AbortError';
         throw abortError;
       }
+      if (!summaryResult.content.trim())
+        throw new Error('Context compression returned an empty summary');
 
       const finalCompression = await compression.finalizeGroup({
         agentId,

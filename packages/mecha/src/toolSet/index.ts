@@ -3,6 +3,7 @@ export * from './connectorActivation';
 export * from './deferSkillsTool';
 export * from './deviceTools';
 export * from './discoveryPool';
+export { assertToolDispatchPolicy } from './dispatchPolicy';
 export * from './manifestPool';
 export { deviceToolWallParams, resolveToolRules } from './resolveToolRules';
 export * from './skillPool';

@@ -86,7 +86,12 @@ import {
 } from '../../providers';
 import { SelectedToolInjector } from '../../providers/SelectedToolInjector';
 import type { ContextProcessor } from '../../types';
+import { parseReferDocumentTags } from '../documentReference';
 import { ToolNameResolver } from '../tools';
+import { generateToolsFromManifest } from '../tools/utils';
+import { parseReferTopicTags } from '../topicReference';
+import { ContextReplayCoordinator } from './contextReplay';
+import { prepareContextReplay } from './contextReplay/access';
 import type { MessagesEngineParams, MessagesEngineResult } from './types';
 
 const log = debug('context-engine:MessagesEngine');
@@ -133,6 +138,7 @@ export class MessagesEngine {
    * Process messages and return OpenAI-compatible format
    */
   async process(): Promise<MessagesEngineResult> {
+    this.params = await prepareContextReplay(this.params);
     const pipeline = this.buildPipeline();
     const result = await pipeline.process({ messages: this.params.messages });
 
@@ -156,7 +162,22 @@ export class MessagesEngine {
    * Build the processing pipeline based on configuration
    */
   private buildPipeline(): ContextEngine {
-    const processors = this.buildProcessors();
+    let processors = this.buildProcessors();
+    if (this.params.contextReplay) {
+      const replay = new ContextReplayCoordinator(
+        this.params.contextReplay,
+        this.params.contextReplay.sessionKey ??
+          `${this.params.provider}:${this.params.model}:${this.params.contextReplay.actorId ?? this.params.agentGroup?.currentAgentId ?? 'default'}:${this.params.agentGroup?.currentAgentRole ?? 'agent'}`,
+        this.params.variableGenerators,
+        (this.params.toolsConfig?.manifests ?? []).flatMap(generateToolsFromManifest),
+      );
+      processors = processors.map((processor) => replay.wrap(processor));
+      processors.splice(
+        processors.findIndex((processor) => processor.name === 'MessageContentProcessor'),
+        0,
+        replay.materialize,
+      );
+    }
     log(`Built pipeline with ${processors.length} processors`);
     return new ContextEngine({ pipeline: processors });
   }
@@ -232,6 +253,21 @@ export class MessagesEngine {
     // agent-management context (<current_agent> + <available_agents>).
     // Anything else — system role, knowledge bases, memory, web-browsing tool
     // prompts — remains untouched.
+    const referenceMessages = this.params.contextReplay
+      ? [messages.findLast((message) => message.role === 'user')].filter((message) => !!message)
+      : messages;
+    const documentIds = new Set(
+      parseReferDocumentTags(referenceMessages).map((reference) => reference.documentId),
+    );
+    const topicIds = new Set(
+      parseReferTopicTags(referenceMessages).map((reference) => reference.topicId),
+    );
+    const scopedDocuments = this.params.contextReplay
+      ? documentReferences?.filter((reference) => documentIds.has(reference.documentId))
+      : documentReferences;
+    const scopedTopics = this.params.contextReplay
+      ? topicReferences?.filter((reference) => topicIds.has(reference.topicId))
+      : topicReferences;
     const isAgentMode = enableAgentMode !== false;
     const isAgentManagementEnabled = !!agentManagementContext && isAgentMode;
     const hasAgentDocuments = !!agentDocuments && agentDocuments.length > 0 && isAgentMode;
@@ -523,12 +559,12 @@ export class MessagesEngine {
       // Topic Reference context (referenced topic summaries to last user message)
       new TopicReferenceContextInjector({
         enabled: !!(topicReferences && topicReferences.length > 0),
-        topicReferences,
+        topicReferences: scopedTopics,
       }),
       // Document Reference context (dragged/referenced agent documents to last user message)
       new DocumentReferenceContextInjector({
         canReadDocuments,
-        documentReferences,
+        documentReferences: scopedDocuments,
         enabled: !!(documentReferences && documentReferences.length > 0),
       }),
 

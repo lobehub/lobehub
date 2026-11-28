@@ -113,7 +113,11 @@ export class MessageLookupQueries extends MessageScope {
 
   findByClientId = async (clientId: string) => {
     return this.db.query.messages.findFirst({
-      where: and(eq(messages.clientId, clientId), this.ownership()),
+      where: and(
+        eq(messages.clientId, clientId),
+        eq(messages.userId, this.userId),
+        this.ownership(),
+      ),
     });
   };
 

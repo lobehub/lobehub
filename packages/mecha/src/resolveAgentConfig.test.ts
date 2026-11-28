@@ -18,6 +18,31 @@ const snapshot = (overrides: Partial<AgentConfigSnapshot> = {}): AgentConfigSnap
 });
 
 describe('resolveAgentConfig without a host', () => {
+  it('keeps the topic mode over a shared workspace member preference', () => {
+    const resolved = resolveAgentConfig(
+      { agentId: 'agt_1' },
+      snapshot({
+        agent: { visibility: 'public', workspaceId: 'ws' },
+        canManage: false,
+        chatConfig: { enableAgentMode: true },
+        conversationMode: 'chat',
+        memberModeOverride: true,
+      }),
+    );
+    expect(resolved.chatConfig.enableAgentMode).toBe(false);
+    expect(resolved.chatConfig.toolMode).toBe('chat');
+  });
+
+  it('preserves a focused custom toolset when the parent topic is Agent', () => {
+    const resolved = resolveAgentConfig(
+      { agentId: 'agt_1', isSubAgent: true },
+      snapshot({
+        chatConfig: { toolMode: 'custom' },
+        conversationMode: 'agent',
+      }),
+    );
+    expect(resolved.chatConfig.toolMode).toBe('custom');
+  });
   it('resolves a regular agent from a hand-built snapshot', () => {
     const resolved = resolveAgentConfig({ agentId: 'agt_1' }, snapshot());
 

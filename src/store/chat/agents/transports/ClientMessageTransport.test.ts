@@ -39,6 +39,27 @@ describe('ClientMessageTransport', () => {
     vi.restoreAllMocks();
   });
 
+  it('awaits a durable assistant identity and reuses it after a recovered step', async () => {
+    const store = createStore();
+    vi.spyOn(messageService, 'createMessage').mockResolvedValue({
+      id: 'durable',
+      messages: [{ id: 'durable', role: 'assistant', content: '' } as never],
+    });
+    const first = new ClientMessageTransport(() => store, 'message-key', 'operation-1');
+    const second = new ClientMessageTransport(() => store, 'message-key', 'operation-1');
+    const params = { role: 'assistant', content: '' } as const;
+    expect((await first.createAssistantMessage(params, { idempotencyKey: 'step:1' })).id).toBe(
+      'durable',
+    );
+    expect((await second.createAssistantMessage(params, { idempotencyKey: 'step:1' })).id).toBe(
+      'durable',
+    );
+    expect(messageService.createMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ clientId: 'step:1' }),
+    );
+    expect(messageService.batchMutate).not.toHaveBeenCalled();
+  });
+
   it('persists the client origin without dropping shared intervention IDs', async () => {
     const store = createStore();
     const transport = new ClientMessageTransport(() => store, 'message-key', 'operation-1');

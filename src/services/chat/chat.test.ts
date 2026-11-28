@@ -282,8 +282,8 @@ describe('ChatService', () => {
 
     it('should keep the stored agent mode when the selected model lacks function calling', async () => {
       const contextEngineeringSpy = vi
-        .spyOn(mechaModule, 'contextEngineering')
-        .mockResolvedValue([]);
+        .spyOn(mechaModule, 'contextEngineeringDetailed')
+        .mockResolvedValue({ messages: [], metadata: {} } as any);
       vi.mocked(isCanUseFC).mockReturnValue(false);
       const messages = [{ content: 'Hello', role: 'user' }] as UIChatMessage[];
 
@@ -1404,8 +1404,8 @@ describe('ChatService', () => {
     describe('memory enablement priority', () => {
       it('should respect agent-level memory disabled even when user-level memory is enabled', async () => {
         const contextEngineeringSpy = vi
-          .spyOn(mechaModule, 'contextEngineering')
-          .mockResolvedValue([]);
+          .spyOn(mechaModule, 'contextEngineeringDetailed')
+          .mockResolvedValue({ messages: [], metadata: {} } as any);
         // user-level memory is enabled
         vi.spyOn(settingsSelectors, 'memoryEnabled').mockReturnValue(true);
 
@@ -1426,8 +1426,8 @@ describe('ChatService', () => {
 
       it('should enable memory when agent-level is on even if user-level memory is disabled', async () => {
         const contextEngineeringSpy = vi
-          .spyOn(mechaModule, 'contextEngineering')
-          .mockResolvedValue([]);
+          .spyOn(mechaModule, 'contextEngineeringDetailed')
+          .mockResolvedValue({ messages: [], metadata: {} } as any);
         // user-level memory is disabled
         vi.spyOn(settingsSelectors, 'memoryEnabled').mockReturnValue(false);
 
@@ -1448,8 +1448,8 @@ describe('ChatService', () => {
 
       it('should fall back to user-level setting when agent-level memory is not configured', async () => {
         const contextEngineeringSpy = vi
-          .spyOn(mechaModule, 'contextEngineering')
-          .mockResolvedValue([]);
+          .spyOn(mechaModule, 'contextEngineeringDetailed')
+          .mockResolvedValue({ messages: [], metadata: {} } as any);
         // user-level memory is disabled
         vi.spyOn(settingsSelectors, 'memoryEnabled').mockReturnValue(false);
 
@@ -1472,8 +1472,8 @@ describe('ChatService', () => {
     describe('agent documents readiness', () => {
       it('should hand the agent builder run to context engineering without prefetching documents', async () => {
         const contextEngineeringSpy = vi
-          .spyOn(mechaModule, 'contextEngineering')
-          .mockResolvedValue([]);
+          .spyOn(mechaModule, 'contextEngineeringDetailed')
+          .mockResolvedValue({ messages: [], metadata: {} } as any);
         vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
         const getContextDocuments = vi.spyOn(agentDocumentService, 'getContextDocuments');
 
@@ -1489,7 +1489,7 @@ describe('ChatService', () => {
 
         // Which agent's documents to read (the edited one while the builder is
         // active) is decided by the shared context rules inside
-        // contextEngineering; the service no longer resolves it up front.
+        // contextEngineeringDetailed; the service no longer resolves it up front.
         expect(getContextDocuments).not.toHaveBeenCalled();
         expect(contextEngineeringSpy).toHaveBeenCalledWith(
           expect.objectContaining({

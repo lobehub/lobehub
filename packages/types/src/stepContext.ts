@@ -292,6 +292,7 @@ export interface InitialGoalOverviewContext {
     status: string;
     title: string;
   };
+  goalId?: string;
   pendingDecisions: GoalOverviewDecision[];
   tasks: GoalOverviewTaskItem[];
 }

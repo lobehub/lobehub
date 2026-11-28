@@ -148,6 +148,11 @@ describe('MessageMetadataSchema', () => {
  * write it — a client must not be able to forge it through a message write.
  */
 describe('client-writable message metadata', () => {
+  it('drops a forged conversation mode from untyped client metadata', () => {
+    expect(omitServerOwnedMessageMetadata({ conversationMode: 'agent', custom: 1 })).toEqual({
+      custom: 1,
+    });
+  });
   const forged = { agentId: 'agt_victim', name: 'Victim Agent' };
 
   it('drops agentSender from client metadata and keeps the rest', () => {

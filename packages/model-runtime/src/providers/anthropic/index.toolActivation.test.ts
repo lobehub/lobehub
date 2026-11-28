@@ -1,5 +1,6 @@
 // @vitest-environment node
 import type { ToolActivationContext } from '@lobechat/types';
+import { stableJsonDigest } from '@lobechat/utils';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import type { ChatStreamPayload } from '../../types';
@@ -83,6 +84,24 @@ it('preserves tools and system across activation and sends the schema after the 
   expect(create.mock.calls[1][1]?.headers).toMatchObject({
     'anthropic-beta': expect.stringContaining('inline-tools-2026-09-15'),
   });
+});
+it('rejects a replay declaration when its final definition differs from the committed one', async () => {
+  const { runtime, create } = capture();
+  const revisions = { readDocument: await stableJsonDigest(tool('OLD definition')) };
+  await runtime.chat(next, {
+    getToolActivationContext: async () => ({
+      additions: [
+        {
+          afterToolCallId: 'act1',
+          instructions: '',
+          names: ['readDocument'],
+          definitionRevisions: revisions,
+        },
+      ],
+    }),
+  });
+  expect(create.mock.calls[0][0].tools).toHaveLength(2);
+  expect(create.mock.calls[0][0].messages.some((message) => message.role === 'system')).toBe(false);
 });
 it('keeps the ordinary payload on an unverified compatible endpoint', async () => {
   const { runtime, create } = capture('https://proxy.example');

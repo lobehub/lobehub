@@ -1,5 +1,10 @@
 import type { ResolvedToolSet } from '@lobechat/context-engine';
-import type { MessageContextAccounting, ResolveToolActivationContext } from '@lobechat/types';
+import type {
+  ContextReplayInput,
+  ContextReplaySnapshot,
+  MessageContextAccounting,
+  ResolveToolActivationContext,
+} from '@lobechat/types';
 
 import type { AgentState, CallLLMPayload } from '../types';
 
@@ -11,6 +16,7 @@ import type { AgentState, CallLLMPayload } from '../types';
  */
 export interface ContextBuildInput {
   [key: string]: unknown;
+  contextReplay?: ContextReplayInput;
   model: string;
   payload: CallLLMPayload;
   provider: string;
@@ -18,12 +24,15 @@ export interface ContextBuildInput {
 }
 
 export interface ContextBuildOutput {
+  /** Revalidate access on every network attempt, including automatic retries. */
+  beforeDispatch?: () => Promise<void>;
   /**
    * Estimated token accounting of the final request (processed messages plus
    * the resolved `tools` array). Persisted on the assistant message as
    * `metadata.contextAccounting` for the chat input's context breakdown.
    */
   contextAccounting?: MessageContextAccounting;
+  contextReplaySnapshot?: ContextReplaySnapshot;
   getToolActivationContext?: ResolveToolActivationContext;
   /** Adapter-native prepared messages; kept in-memory and out of serialized state. */
   messages: unknown[];

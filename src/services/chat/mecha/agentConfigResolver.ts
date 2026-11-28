@@ -4,6 +4,7 @@ import type {
   ResolvedAgentConfig,
 } from '@lobechat/mecha';
 import { resolveAgentConfig as resolveFromSnapshot } from '@lobechat/mecha';
+import type { ConversationMode } from '@lobechat/types';
 
 import { getRuntimeCanManageAgent } from '@/helpers/agentManagementAccess';
 import { getAgentStoreState } from '@/store/agent';
@@ -69,8 +70,10 @@ const collectSnapshot = (ctx: AgentConfigResolverContext): AgentConfigSnapshot =
   };
 };
 
-export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAgentConfig =>
-  resolveFromSnapshot(ctx, collectSnapshot(ctx));
+export const resolveAgentConfig = (
+  ctx: AgentConfigResolverContext,
+  conversationMode?: ConversationMode,
+): ResolvedAgentConfig => resolveFromSnapshot(ctx, { ...collectSnapshot(ctx), conversationMode });
 
 export const getTargetAgentId = (agentId?: string): string => {
   const agentStoreState = getAgentStoreState();

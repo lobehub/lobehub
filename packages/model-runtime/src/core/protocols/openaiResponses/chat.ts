@@ -71,7 +71,11 @@ export const chatViaResponses = async (
         options: runtime._options,
       });
   const inputMessages = toolAnchoringMode
-    ? prepareAnchoredMessages(messages as OpenAIChatMessage[], tools, options?.toolActivationPlan)
+    ? await prepareAnchoredMessages(
+        messages as OpenAIChatMessage[],
+        tools,
+        options?.toolActivationPlan,
+      )
     : (messages as OpenAIChatMessage[]);
   const { anchored, requestTools } = toolAnchoringMode
     ? splitAnchoredTools(inputMessages, tools, { strictToolPairing: true })

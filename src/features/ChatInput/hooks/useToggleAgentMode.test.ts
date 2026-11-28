@@ -12,6 +12,7 @@ const testState = vi.hoisted(() => ({
     current: undefined as { visibility?: 'private' | 'public'; workspaceId?: string } | undefined,
   },
   businessCanEnable: true,
+  modeLocked: false,
   updateAgentChatConfig: vi.fn(),
   updateWorkspaceUserPreference: vi.fn(),
 }));
@@ -42,6 +43,10 @@ vi.mock('@/store/user', () => ({
   ) => selector({ updateWorkspaceUserPreference: testState.updateWorkspaceUserPreference }),
 }));
 
+vi.mock('./useTopicConversationMode', () => ({
+  useTopicConversationMode: () => ({ isModeLocked: testState.modeLocked }),
+}));
+
 vi.mock('./useAgentId', () => ({
   useAgentId: () => 'agent-1',
 }));
@@ -51,11 +56,19 @@ vi.mock('./useUpdateAgentConfig', () => ({
 }));
 
 describe('useToggleAgentMode', () => {
+  it('does not change preferences from a started conversation', async () => {
+    testState.modeLocked = true;
+    const { result } = renderHook(() => useToggleAgentMode());
+    await act(() => result.current(false));
+    expect(testState.updateAgentChatConfig).not.toHaveBeenCalled();
+    expect(testState.updateWorkspaceUserPreference).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     testState.access.canManageAgent = false;
     testState.access.isAccessLoading = false;
     testState.agent.current = undefined;
     testState.businessCanEnable = true;
+    testState.modeLocked = false;
     testState.updateAgentChatConfig = vi.fn();
     testState.updateWorkspaceUserPreference = vi.fn();
   });

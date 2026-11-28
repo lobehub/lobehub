@@ -141,6 +141,7 @@
   "chatMode.agentUnsupported": "The current model does not support tool calling",
   "chatMode.chat": "Chat",
   "chatMode.chatDesc": "No runtime environment or autonomy; uses fewer tokens",
+  "chatMode.locked": "The mode is fixed after the first message. Start a new topic to choose another mode.",
   "chatMode.select": "Switch Mode",
   "claudeCodeInstallGuide.actions.openDocs": "Open Install Guide",
   "claudeCodeInstallGuide.actions.openSystemTools": "Open System Tools",

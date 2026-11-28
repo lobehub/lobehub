@@ -1,5 +1,6 @@
 import { vi } from 'vitest';
 
+import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import {
@@ -88,7 +89,10 @@ export const spyOnMessageService = () => {
     }));
   const createMessageSpy = vi
     .spyOn(messageService, 'createMessage')
-    .mockResolvedValue({ id: TEST_IDS.NEW_MESSAGE_ID, messages: [] });
+    .mockImplementation(async (params) => ({
+      id: TEST_IDS.NEW_MESSAGE_ID,
+      messages: [{ ...params, id: TEST_IDS.NEW_MESSAGE_ID } as any],
+    }));
   const updateMessageSpy = vi
     .spyOn(messageService, 'updateMessage')
     .mockResolvedValue({ messages: [], success: true });
@@ -130,6 +134,7 @@ export const spyOnChatService = () => {
  */
 export const resetTestEnvironment = () => {
   vi.clearAllMocks();
+  vi.spyOn(aiChatService, 'resolveConversationMode').mockResolvedValue('agent');
   useChatStore.setState(
     {
       activeAgentId: TEST_IDS.SESSION_ID,

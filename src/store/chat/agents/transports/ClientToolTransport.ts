@@ -133,6 +133,12 @@ export class ClientToolTransport implements ToolTransport {
                 discoverableToolIds: Object.keys(context.effectiveManifestMap),
               }
             : context.stepContext,
+          {
+            expectedDeviceId: context.state.binding?.device?.id,
+            assistantMessageId: context.reuseExistingMessage
+              ? (assistantMessage?.id ?? context.parentMessageId)
+              : context.parentMessageId,
+          },
         );
       } finally {
         // Drain the Work-registration intent stashed during tool execution in a

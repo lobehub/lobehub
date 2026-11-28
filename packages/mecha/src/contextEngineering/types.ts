@@ -27,6 +27,7 @@ import type {
 import type { AgentIdentityContext } from '@lobechat/prompts';
 import type {
   AgentAccountContext,
+  ContextReplayInput,
   ExpertiseContextSnapshot,
   RuntimeAdditionalContextFragment,
   RuntimeInitialContext,
@@ -80,6 +81,7 @@ export interface ContextModelSnapshot {
  */
 export interface ContextRunSnapshot {
   additionalContexts?: readonly RuntimeAdditionalContextFragment[];
+  contextReplay?: ContextReplayInput;
   /**
    * Runtime-resolved agent mode. `false` forces chat mode (skills and agent
    * documents are not injected) regardless of the stored chat config.

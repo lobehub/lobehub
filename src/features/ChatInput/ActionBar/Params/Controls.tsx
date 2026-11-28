@@ -414,7 +414,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
   const toggleAgentMode = useToggleAgentMode();
   const gatewayMode = useGatewayMode();
   const { canUseResource } = useChatInputResourceAccess();
-  const { canSelectAgentMode, currentMode, isAgentModeUnavailable } =
+  const { canSelectAgentMode, currentMode, isAgentMode, isAgentModeUnavailable, isModeLocked } =
     useEffectiveAgentMode(agentId);
   const { updateAgentConfig } = useUpdateAgentConfig();
   const { allowed: canCreate } = usePermission('create_content');
@@ -437,7 +437,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
   const hasReasoningExtendParams = useAiInfraStore(
     aiModelSelectors.isModelHasReasoningControls(model, provider),
   );
-  const enableAgentMode = useAgentStore(agentByIdSelectors.getAgentEnableModeById(agentId));
+  const enableAgentMode = isAgentMode;
   const form = useForm();
   const [advancedOpen, setAdvancedOpen] = useState(() => getStoredOpen(ADVANCED_OPEN_STORAGE_KEY));
   const [modelConfigOpen, setModelConfigOpen] = useState(() =>
@@ -726,7 +726,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
               title={t('settingModel.params.panel.chatMode')}
               action={
                 <Segmented
-                  disabled={!canCreate || !canUseResource}
+                  disabled={!canCreate || !canUseResource || isModeLocked}
                   size={'small'}
                   value={currentMode}
                   options={[
@@ -744,11 +744,13 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                 />
               }
               tooltip={
-                isAgentModeUnavailable
-                  ? t('chatMode.agentUnsupported', { ns: 'chat' })
-                  : t(currentMode === 'agent' ? 'chatMode.agentDesc' : 'chatMode.chatDesc', {
-                      ns: 'chat',
-                    })
+                isModeLocked
+                  ? t('chatMode.locked', { ns: 'chat' })
+                  : isAgentModeUnavailable
+                    ? t('chatMode.agentUnsupported', { ns: 'chat' })
+                    : t(currentMode === 'agent' ? 'chatMode.agentDesc' : 'chatMode.chatDesc', {
+                        ns: 'chat',
+                      })
               }
             />
             {gatewayMode.available && (

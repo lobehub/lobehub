@@ -15,6 +15,20 @@ import {
   resetBotMessageRouterMocks,
 } from './testUtils';
 
+const { committedModes } = vi.hoisted(() => ({ committedModes: new Map<string, string>() }));
+
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: class {
+    findById = async (id: string) =>
+      committedModes.has(id)
+        ? { id, metadata: { conversationMode: committedModes.get(id) } }
+        : undefined;
+    resolveConversationMode = async (id: string, fallback: string) => {
+      if (!committedModes.has(id)) committedModes.set(id, fallback);
+      return committedModes.get(id);
+    };
+  },
+}));
 vi.mock('@/database/core/db-adaptor', async () => (await import('./testUtils')).dbAdaptorModule());
 vi.mock('@/database/models/agentBotProvider', async () =>
   (await import('./testUtils')).agentBotProviderModule(),
@@ -48,6 +62,7 @@ describe('BotMessageRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetBotMessageRouterMocks();
+    committedModes.clear();
   });
 
   describe('/approve persistence failure', () => {

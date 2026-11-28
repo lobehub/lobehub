@@ -126,6 +126,7 @@ export class TopicModel {
   // **************** Read *************** //
 
   findById = this.withContext(find.findById);
+  resolveConversationMode = this.withContext(update.resolveConversationMode);
   findOwnTopicById = this.withContext(find.findOwnTopicById);
   findShareVisitorTopicIds = this.withContext(find.findShareVisitorTopicIds);
   findByIds = this.withContext(find.findByIds);

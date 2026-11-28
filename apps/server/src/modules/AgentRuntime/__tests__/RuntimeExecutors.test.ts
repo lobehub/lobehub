@@ -14,6 +14,11 @@ import * as ClientToolDispatch from '../dispatchClientTool';
 import { createRuntimeExecutors, type RuntimeExecutorContext } from '../RuntimeExecutors';
 import type { StreamEvent } from '../StreamEventManager';
 import { VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY } from '../visibleOutputEnd';
+import {
+  createRuntimeCost as createMockCost,
+  createRuntimeMessageModelMock,
+  withCompressionThread,
+} from './mocks/messageModelMock';
 
 type PublishedStreamEvent = Omit<StreamEvent, 'operationId' | 'timestamp'>;
 type PublishStreamEventCall = [string, PublishedStreamEvent];
@@ -52,7 +57,25 @@ const mockBuiltinModels = vi.hoisted(() => [
   },
 ]);
 
-// Mock dependencies
+// Snapshots outlive a test in the process-memory fallback; each test starts with none.
+vi.mock('@/server/services/redis/contextReplay', () => ({
+  contextReplay: {
+    commit: vi.fn(async (userId: string, snapshot: object) => ({ ...snapshot, createdBy: userId })),
+    getMany: vi.fn(async () => ({})),
+  },
+}));
+vi.mock('@/server/services/contextReplay', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  revokedContextSources: vi.fn(async () => []),
+}));
+// Authorization and device-binding rules have their own service integration tests.
+vi.mock('@/server/services/contextReplay/toolDispatch', () => ({
+  assertCurrentToolDispatch: vi.fn().mockResolvedValue(undefined),
+  getCurrentExecutionBinding: vi
+    .fn()
+    .mockResolvedValue({ agentDeviceId: null, topicDeviceId: null }),
+}));
+
 vi.mock('@/server/modules/ModelRuntime', async () => {
   const { createModelRuntimeMock } = await import('./mocks/modelRuntimeMock');
 
@@ -237,21 +260,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       }),
     } as any);
 
-    mockMessageModel = {
-      create: vi.fn().mockResolvedValue({ id: 'msg-123' }),
-      deleteMessage: vi.fn().mockResolvedValue({ success: true }),
-      // call_llm does a parent existence preflight; return a truthy row by
-      // default so existing tests don't have to stub it.
-      findById: vi.fn().mockResolvedValue({ id: 'msg-existing' }),
-      findMessagePlugin: vi.fn().mockResolvedValue(undefined),
-      // The abort settle asks whether a row already holds the call. Null by
-      // default: these tests exercise calls that never got one.
-      findToolMessageIdByToolCallId: vi.fn().mockResolvedValue(null),
-      query: vi.fn().mockResolvedValue([]),
-      update: vi.fn().mockResolvedValue({}),
-      updateMessagePlugin: vi.fn().mockResolvedValue({ success: true }),
-      updateToolMessage: vi.fn().mockResolvedValue({ success: true }),
-    };
+    mockMessageModel = createRuntimeMessageModelMock();
 
     mockStreamManager = {
       publishStreamChunk: vi.fn().mockResolvedValue('event-1'),
@@ -316,21 +325,6 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
   });
 
   // Helper to create a valid mock cost object
-  const createMockCost = () => ({
-    calculatedAt: new Date().toISOString(),
-    currency: 'USD',
-    llm: {
-      byModel: [],
-      currency: 'USD',
-      total: 0,
-    },
-    tools: {
-      byTool: [],
-      currency: 'USD',
-      total: 0,
-    },
-    total: 0,
-  });
 
   const createCompressContextInstruction = (messages: any[]) => ({
     payload: {
@@ -1586,10 +1580,12 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       });
       vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
 
-      mockMessageModel.query.mockResolvedValue([
-        { content: 'history', id: 'msg-history', role: 'user' },
-        { content: 'loading', id: 'assistant-existing', role: 'assistant' },
-      ]);
+      mockMessageModel.query.mockResolvedValue(
+        withCompressionThread([
+          { content: 'history', id: 'msg-history', role: 'user' },
+          { content: 'loading', id: 'assistant-existing', role: 'assistant' },
+        ]),
+      );
       mockCreateCompressionGroup.mockResolvedValue({
         messageGroupId: 'group-123',
         messagesToSummarize: [{ content: 'history', id: 'msg-history', role: 'user' }],
@@ -1605,12 +1601,10 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState({
-        messages: [{ content: 'x '.repeat(70000), role: 'user' }],
+        messages: [{ content: 'x '.repeat(70000), id: 'msg-history', role: 'user' }],
       });
 
-      const instruction = createCompressContextInstruction([
-        { content: 'x '.repeat(70000), role: 'user' },
-      ]);
+      const instruction = createCompressContextInstruction(state.messages);
 
       const result = await executors.compress_context!(instruction, state);
 
@@ -1624,10 +1618,10 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         role: 'compressedGroup',
       });
       expect((result.nextContext?.payload as any).compressedMessages).toBeUndefined();
-      expect((result.nextContext?.payload as any).parentMessageId).toBe('assistant-existing');
+      expect((result.nextContext?.payload as any).parentMessageId).toBeUndefined();
       expect(result.events).toContainEqual({
         groupId: 'group-123',
-        parentMessageId: 'assistant-existing',
+        parentMessageId: undefined,
         type: 'compression_complete',
       });
       expect(result.newState.usage.llm.tokens.total).toBe(15);
@@ -1638,13 +1632,13 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         ...ctx,
       });
       const state = createMockState({
-        messages: [{ content: 'history', role: 'user' }],
+        messages: [{ content: 'history', id: 'msg-history', role: 'user' }],
         origin: {
           agentId: 'agent-123',
         },
       });
 
-      const instruction = createCompressContextInstruction([{ content: 'history', role: 'user' }]);
+      const instruction = createCompressContextInstruction(state.messages);
 
       const result = await executors.compress_context!(instruction, state);
 
@@ -1658,10 +1652,10 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         userId: undefined,
       });
       const state = createMockState({
-        messages: [{ content: 'history', role: 'user' }],
+        messages: [{ content: 'history', id: 'msg-history', role: 'user' }],
       });
 
-      const instruction = createCompressContextInstruction([{ content: 'history', role: 'user' }]);
+      const instruction = createCompressContextInstruction(state.messages);
 
       const result = await executors.compress_context!(instruction, state);
 
@@ -1691,26 +1685,30 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
     });
 
     it('should skip compress_context when compression model config is missing', async () => {
-      mockMessageModel.query.mockResolvedValue([
-        { content: 'history', id: 'msg-history', role: 'user' },
-        { content: 'loading', id: 'assistant-existing', role: 'assistant' },
-      ]);
+      mockMessageModel.query.mockResolvedValue(
+        withCompressionThread([
+          { content: 'history', id: 'msg-history', role: 'user' },
+          { content: 'loading', id: 'assistant-existing', role: 'assistant' },
+        ]),
+      );
 
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState({
-        messages: [{ content: 'history', role: 'user' }],
+        messages: [{ content: 'history', id: 'msg-history', role: 'user' }],
         modelRuntimeConfig: undefined,
       });
 
-      const instruction = createCompressContextInstruction([{ content: 'history', role: 'user' }]);
+      const instruction = createCompressContextInstruction(state.messages);
 
       const result = await executors.compress_context!(instruction, state);
 
       expect(mockCreateCompressionGroup).not.toHaveBeenCalled();
       expect(mockFinalizeCompression).not.toHaveBeenCalled();
-      expect(result.newState.messages).toEqual([{ content: 'history', role: 'user' }]);
+      expect(result.newState.messages).toEqual([
+        { content: 'history', id: 'msg-history', role: 'user' },
+      ]);
       expect(result.nextContext?.payload as any).toMatchObject({
-        parentMessageId: 'assistant-existing',
+        parentMessageId: undefined,
         skipped: true,
       });
     });
@@ -1718,15 +1716,15 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
     it('should continue when compress_context fails', async () => {
       mockCreateCompressionGroup.mockRejectedValueOnce(new Error('compression failed'));
 
-      mockMessageModel.query.mockResolvedValue([
-        { content: 'history', id: 'msg-history', role: 'user' },
-      ]);
+      mockMessageModel.query.mockResolvedValue(
+        withCompressionThread([{ content: 'history', id: 'msg-history', role: 'user' }]),
+      );
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState({
-        messages: [{ content: 'history', role: 'user' }],
+        messages: [{ content: 'history', id: 'msg-history', role: 'user' }],
       });
 
-      const instruction = createCompressContextInstruction([{ content: 'history', role: 'user' }]);
+      const instruction = createCompressContextInstruction(state.messages);
 
       const result = await executors.compress_context!(instruction, state);
 
@@ -1744,10 +1742,12 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       });
       vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
 
-      mockMessageModel.query.mockResolvedValue([
-        { content: 'history', id: 'msg-history', role: 'user' },
-        { content: 'loading', id: 'assistant-existing', role: 'assistant' },
-      ]);
+      mockMessageModel.query.mockResolvedValue(
+        withCompressionThread([
+          { content: 'history', id: 'msg-history', role: 'user' },
+          { content: 'loading', id: 'assistant-existing', role: 'assistant' },
+        ]),
+      );
       mockCreateCompressionGroup.mockResolvedValue({
         messageGroupId: 'group-123',
         messagesToSummarize: [{ content: 'history', id: 'msg-history', role: 'user' }],
@@ -1772,7 +1772,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       expect(mockCreateCompressionGroup).toHaveBeenCalledWith(
         'topic-123',
-        ['msg-history', 'assistant-existing'],
+        ['msg-history'],
         expect.any(Object),
       );
       expect(result.newState.messages).toEqual([
@@ -1788,10 +1788,12 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       });
       vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
 
-      mockMessageModel.query.mockResolvedValue([
-        { content: 'history', id: 'msg-history', role: 'user' },
-        { content: 'loading', id: 'assistant-existing', role: 'assistant' },
-      ]);
+      mockMessageModel.query.mockResolvedValue(
+        withCompressionThread([
+          { content: 'history', id: 'msg-history', role: 'user' },
+          { content: 'loading', id: 'assistant-existing', role: 'assistant' },
+        ]),
+      );
       mockCreateCompressionGroup.mockResolvedValue({
         messageGroupId: 'group-123',
         messagesToSummarize: [{ content: 'history', id: 'msg-history', role: 'user' }],
@@ -1804,7 +1806,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState({
-        messages: [{ content: 'history', role: 'user' }],
+        messages: [{ content: 'history', id: 'msg-history', role: 'user' }],
       });
 
       const instruction = createCompressContextInstruction(state.messages);
@@ -1829,11 +1831,13 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       });
       vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
 
-      mockMessageModel.query.mockResolvedValue([
-        { content: 'history', id: 'msg-history', role: 'user' },
-        { content: 'loading', id: 'assistant-existing', role: 'assistant' },
-        preservedMessage,
-      ]);
+      mockMessageModel.query.mockResolvedValue(
+        withCompressionThread([
+          { content: 'history', id: 'msg-history', role: 'user' },
+          { content: 'loading', id: 'assistant-existing', role: 'assistant' },
+          preservedMessage,
+        ]),
+      );
       mockCreateCompressionGroup.mockResolvedValue({
         messageGroupId: 'group-123',
         messagesToSummarize: [{ content: 'history', id: 'msg-history', role: 'user' }],
@@ -1869,10 +1873,12 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       });
       vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
 
-      mockMessageModel.query.mockResolvedValue([
-        { content: 'history', id: 'msg-history', role: 'user' },
-        { content: 'loading', id: 'assistant-existing', role: 'assistant' },
-      ]);
+      mockMessageModel.query.mockResolvedValue(
+        withCompressionThread([
+          { content: 'history', id: 'msg-history', role: 'user' },
+          { content: 'loading', id: 'assistant-existing', role: 'assistant' },
+        ]),
+      );
       mockCreateCompressionGroup.mockResolvedValue({
         messageGroupId: 'group-123',
         messagesToSummarize: [{ content: 'history', id: 'msg-history', role: 'user' }],
@@ -1881,7 +1887,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState({
-        messages: [{ content: 'history', role: 'user' }],
+        messages: [{ content: 'history', id: 'msg-history', role: 'user' }],
       });
 
       const instruction = createCompressContextInstruction(state.messages);
@@ -1921,10 +1927,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
         await executors.call_llm!(instruction, state);
 
-        // Should NOT create a new assistant message
         expect(mockMessageModel.create).not.toHaveBeenCalled();
 
-        // Should publish stream_start event with existing assistant message ID
         expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
           'op-123',
           expect.objectContaining({
@@ -1978,7 +1982,6 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
         await executors.call_llm!(instruction, state);
 
-        // Should create a new assistant message
         expect(mockMessageModel.create).toHaveBeenCalledWith(
           expect.objectContaining({
             agentId: 'agent-123',
@@ -1990,7 +1993,6 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           }),
         );
 
-        // Should publish stream_start event with newly created message ID
         expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
           'op-123',
           expect.objectContaining({
@@ -2022,7 +2024,6 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
         await executors.call_llm!(instruction, state);
 
-        // Should NOT create a new message
         expect(mockMessageModel.create).not.toHaveBeenCalled();
 
         // Stream event should reference the existing message
@@ -2512,8 +2513,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             role: 'system',
           }),
         );
-        // Original user message should be preserved
-        expect(chatMessages.at(-1)).toEqual(
+        // Original user text stays intact before appended runtime context.
+        expect(chatMessages).toContainEqual(
           expect.objectContaining({ content: 'Hello', role: 'user' }),
         );
       });
@@ -4064,13 +4065,10 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       await executors.call_tools_batch!(instruction, state);
 
-      // Should execute both tools
       expect(mockToolExecutionService.executeTool).toHaveBeenCalledTimes(2);
 
-      // Should create two tool messages
       expect(mockMessageModel.create).toHaveBeenCalledTimes(2);
 
-      // Verify first tool message
       expect(mockMessageModel.create).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: 'agent-123',
@@ -4080,7 +4078,6 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         }),
       );
 
-      // Verify second tool message
       expect(mockMessageModel.create).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: 'agent-123',
@@ -4414,13 +4411,11 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       await executors.call_tools_batch!(instruction, state);
 
-      // Should publish tool_start for each tool
       expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
         'op-123',
         expect.objectContaining({ type: 'tool_start' }),
       );
 
-      // Should publish tool_end for each tool
       expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
         'op-123',
         expect.objectContaining({ type: 'tool_end' }),

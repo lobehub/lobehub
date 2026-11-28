@@ -24,15 +24,20 @@ import { AgentModel } from '@/database/models/agent';
 import { MessageModel } from '@/database/models/message';
 import { ProjectModel } from '@/database/models/project';
 import { ThreadModel } from '@/database/models/thread';
+import { TopicModel } from '@/database/models/topic';
 import { TopicRepository } from '@/database/repositories/topic';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { markSilentTRPCErrorLog } from '@/libs/trpc/utils/errorLogger';
 import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
-import { assertCanUseConversationTargets } from '@/server/routers/lambda/_helpers/conversationResourceGuard';
+import {
+  assertCanUseConversationTargets,
+  assertCanUseTopicTargets,
+} from '@/server/routers/lambda/_helpers/conversationResourceGuard';
 import { resolveContext } from '@/server/routers/lambda/_helpers/resolveContext';
 import { toRuntimeErrorCause } from '@/server/routers/lambda/_helpers/runtimeErrorCause';
 import { resolveAgentReference } from '@/server/services/agent/resolveReference';
+import { agentDefaultConversationMode } from '@/server/services/aiAgent/pipeline/agentDefaultConversationMode';
 import { AiChatService } from '@/server/services/aiChat';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 import { FileService } from '@/server/services/file';
@@ -59,6 +64,8 @@ const rethrowIdConflict = (error: unknown): never => {
       message: 'This message has already been created.',
     });
   }
+  const runtimeError = createRuntimeTRPCError(error);
+  if (runtimeError) throw runtimeError;
   throw error;
 };
 const { createPrefixedTimingContext, logTiming, runTimedStage } = createTimingHelpers(
@@ -157,6 +164,19 @@ const aiChatProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
 const aiChatWriteProcedure = aiChatProcedure.use(withScopedPermission('message:create'));
 
 export const aiChatRouter = router({
+  resolveConversationMode: aiChatWriteProcedure
+    .input(z.object({ topicId: z.string(), fallback: z.enum(['agent', 'chat']) }))
+    .mutation(async ({ ctx, input }) => {
+      await assertCanUseTopicTargets(
+        { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+        [input.topicId],
+      );
+      return new TopicModel(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ).resolveConversationMode(input.topicId, input.fallback);
+    }),
   /**
    * Asks a decision model (e.g. `lobehub/jev-1.14.0`) typed questions about one state and returns
    * its answers with probabilities: `lh generate decide`. The same `runtime.decide` call bot wake
@@ -372,6 +392,25 @@ export const aiChatRouter = router({
         }
       }
 
+      const requestedMode = input.conversationMode;
+      const conversationMode = await new TopicModel(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ).resolveConversationMode(
+        topicId,
+        requestedMode ??
+          (await agentDefaultConversationMode(
+            { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+            input.agentId,
+          )),
+      );
+      if (requestedMode && conversationMode !== requestedMode)
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'Conversation mode is locked. Reload the conversation before sending.',
+        });
+
       // create thread if there should be a new thread
       if (input.newThread) {
         log(
@@ -518,7 +557,7 @@ export const aiChatRouter = router({
             editorData: input.newUserMessage.editorData,
             files: input.newUserMessage.files,
             groupId: input.groupId,
-            metadata: userMessageMetadata,
+            metadata: { ...userMessageMetadata, conversationMode },
             parentId,
             role: 'user',
             sessionId,
@@ -605,6 +644,7 @@ export const aiChatRouter = router({
       });
 
       return {
+        conversationMode,
         assistantMessageId: assistantMessageItem.id,
         createdThreadId,
         isCreateNewTopic,

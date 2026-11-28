@@ -23,6 +23,7 @@ import { CompressionRepository } from '@/database/repositories/compression';
 import { TopicDoctorRepo } from '@/database/repositories/topicDoctor';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { assertCurrentToolDispatch } from '@/server/services/contextReplay/toolDispatch';
 import { FileService } from '@/server/services/file';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import { type MessageBatchOperation, MessageService } from '@/server/services/message';
@@ -132,6 +133,26 @@ const messageBatchOperationSchema = z.discriminatedUnion('type', [
 ]);
 
 export const messageRouter = router({
+  assertToolDispatch: messageProcedure
+    .use(withScopedPermission('message:read'))
+    .input(
+      z.object({
+        agentId: z.string(),
+        topicId: z.string().optional(),
+        identifier: z.string(),
+        apiName: z.string(),
+        expectedDeviceId: z.string().optional(),
+        assistantMessageId: z.string().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      await assertCurrentToolDispatch({
+        ...input,
+        ...guardCtx(ctx),
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      return true;
+    }),
   addFilesToMessage: messageProcedure
     .use(withScopedPermission('message:update'))
     .input(
@@ -233,7 +254,6 @@ export const messageRouter = router({
         agentId: z.string(),
         groupId: z.string().nullish(),
         messageGroupId: z.string(),
-        sourceGroupIds: z.array(z.string()).optional(),
         threadId: z.string().nullish(),
         topicId: z.string(),
       }),
@@ -313,12 +333,13 @@ export const messageRouter = router({
         agentId: z.string(),
         groupId: z.string().nullish(),
         messageIds: z.array(z.string()),
+        sourceGroupIds: z.array(z.string()).optional(),
         threadId: z.string().nullish(),
         topicId: z.string(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const { topicId, messageIds, agentId, groupId, threadId } = input;
+      const { topicId, messageIds, agentId, groupId, sourceGroupIds, threadId } = input;
       await assertCanUseTopicTargets(guardCtx(ctx), [topicId]);
       // Same visitor guard as `addFilesToMessage` above, plus the message ids
       // themselves — compression reads and rewrites their content.
@@ -328,6 +349,7 @@ export const messageRouter = router({
       return ctx.messageService.createCompressionGroup(topicId, messageIds, {
         agentId,
         groupId,
+        sourceGroupIds,
         threadId,
         topicId,
       });
@@ -375,6 +397,7 @@ export const messageRouter = router({
         content: z.string(),
         groupId: z.string().nullish(),
         messageGroupId: z.string(),
+        sourceGroupIds: z.array(z.string()).optional(),
         threadId: z.string().nullish(),
         topicId: z.string(),
       }),

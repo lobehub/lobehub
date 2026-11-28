@@ -98,11 +98,10 @@ describe('compressing a thread', () => {
     const scope = { agentId, threadId, topicId };
 
     // The thread page lists the parent turn it branched from before its own turns.
-    const created = await service.createCompressionGroup(
-      topicId,
-      ['main-user-1', 'main-assistant-1', ...threadMessageIds],
-      scope,
-    );
+    await expect(
+      service.createCompressionGroup(topicId, ['main-user-1', ...threadMessageIds], scope),
+    ).rejects.toThrow();
+    const created = await service.createCompressionGroup(topicId, threadMessageIds, scope);
 
     expect(created.messagesToSummarize.map((m) => m.id)).toEqual(threadMessageIds);
 
@@ -151,10 +150,12 @@ describe('compressing a thread', () => {
 
     const created = await service.createCompressionGroup(topicId, threadMessageIds, scope);
     // A stale client can still name the main summary as a group to supersede.
-    await service.finalizeCompression(created.messageGroupId, 'thread summary', {
-      ...scope,
-      sourceGroupIds: ['main-group'],
-    });
+    await expect(
+      service.finalizeCompression(created.messageGroupId, 'thread summary', {
+        ...scope,
+        sourceGroupIds: ['main-group'],
+      }),
+    ).rejects.toThrow();
 
     const [mainGroup] = await serverDB
       .select()

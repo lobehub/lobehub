@@ -5453,30 +5453,27 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         updateTopicMetadata: vi.fn().mockRejectedValue(new Error('metadata save boom')),
       });
       const get = vi.fn(() => store);
-
+      const realSendMessage = vi.spyOn(useChatStore.getState(), 'sendMessage');
+      realSendMessage.mockResolvedValue(undefined as any);
       let resolveSendPrompt: () => void;
       mockSendPrompt.mockReturnValue(
         new Promise<void>((r) => {
           resolveSendPrompt = r;
         }),
       );
-
       let threw = false;
       const executorPromise = executeHeterogeneousAgent(get, defaultParams).catch(() => {
         threw = true;
       });
       await flush();
-
       ipc.emitRawLine('ipc-sess-1', ccInit());
       ipc.emitRawLine('ipc-sess-1', ccText('msg_01', 'done'));
       ipc.emitRawLine('ipc-sess-1', ccResult());
       ipc.emitComplete('ipc-sess-1');
       await flush();
-
       resolveSendPrompt!();
       await executorPromise;
       await flush();
-
       // The metadata save was attempted (and rejected)...
       expect(store.updateTopicMetadata).toHaveBeenCalled();
       // ...and the rejection did NOT escape to the caller (executor resolved).
@@ -5485,6 +5482,9 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockSetBadgeCount).toHaveBeenCalledWith(1);
       // The guarded metadata save no longer bypasses the drain.
       expect(store.drainQueuedMessages).toHaveBeenCalled();
+      await new Promise((r) => setTimeout(r, 200));
+      expect(realSendMessage).toHaveBeenCalledTimes(1);
+      realSendMessage.mockRestore();
     });
 
     // ── 3. queue-drain gating ──

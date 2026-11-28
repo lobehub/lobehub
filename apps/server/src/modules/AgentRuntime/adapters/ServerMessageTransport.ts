@@ -9,9 +9,15 @@ import type {
 } from '@lobechat/agent-runtime';
 import { omitToolWorkRegistration } from '@lobechat/agent-runtime';
 import { parse } from '@lobechat/conversation-flow';
-import type { CreateMessageParams, UIChatMessage, UpdateMessageParams } from '@lobechat/types';
+import type {
+  ContextReplaySnapshot,
+  CreateMessageParams,
+  UIChatMessage,
+  UpdateMessageParams,
+} from '@lobechat/types';
 
 import { type MessageModel } from '@/database/models/message';
+import { redisService } from '@/server/services/redis';
 
 import {
   createConversationParentMissingError,
@@ -23,6 +29,10 @@ import { unwrapPgError } from '../pgError';
  * Server {@link MessageTransport} adapter — delegates to `MessageModel` (DB).
  */
 export class ServerMessageTransport implements MessageTransport {
+  commitContextReplay = async (id: string, snapshot: ContextReplaySnapshot) => {
+    if (!this.options.userId) throw new Error('Context snapshots require a user');
+    return redisService.contextReplay.commit(this.options.userId, snapshot, id);
+  };
   constructor(
     private readonly messageModel: MessageModel,
     private readonly options: {
@@ -30,6 +40,7 @@ export class ServerMessageTransport implements MessageTransport {
         path: string | null,
         file: { fileType: string; id?: string | null },
       ) => Promise<string>;
+      userId?: string;
     } = {},
   ) {}
 

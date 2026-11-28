@@ -139,6 +139,7 @@ vi.mock('@/database/models/plugin', () => ({
 }));
 
 const topicMock = {
+  resolveConversationMode: vi.fn(async (_topicId: string, fallback: string) => fallback),
   appendRunningOperationChild: vi.fn().mockResolvedValue(true),
   create: vi.fn().mockResolvedValue({ id: 'topic-1', metadata: undefined }),
   findById: vi.fn().mockResolvedValue(undefined),
@@ -256,6 +257,9 @@ describe('AiAgentService.execAgent - external agent run fee', () => {
     for (const fn of Object.values(fees)) fn.mockReset();
     mockSignHeteroOperationJWT.mockResolvedValue('op-jwt');
     topicMock.create.mockResolvedValue({ id: 'topic-1', metadata: undefined });
+    topicMock.resolveConversationMode.mockImplementation(
+      async (_topicId: string, fallback: string) => fallback,
+    );
     topicMock.findById.mockResolvedValue(undefined);
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
     mockMessageQuery.mockResolvedValue([]);

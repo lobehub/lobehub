@@ -5,7 +5,7 @@ import {
 } from '@lobechat/context-engine';
 import { initialToolSelection } from '@lobechat/mecha';
 import { pluginPrompts } from '@lobechat/prompts';
-import type { UIChatMessage } from '@lobechat/types';
+import { type UIChatMessage, withConversationMode } from '@lobechat/types';
 import { debounce } from 'es-toolkit/compat';
 import { startTransition, useEffect, useMemo, useState } from 'react';
 
@@ -26,6 +26,7 @@ import { settingsSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useEffectiveModel } from '../../hooks/useEffectiveModel';
+import { useTopicConversationMode } from '../../hooks/useTopicConversationMode';
 import { useTopicId } from '../../hooks/useTopicId';
 import { useStoreApi } from '../../store';
 import type { ContextWindow } from '../../store/initialState';
@@ -198,8 +199,8 @@ export const useTokenBreakdown = (): TokenBreakdown => {
   const [
     activeAgentId,
     systemRole,
-    enableAgentMode,
-    toolMode,
+    preferenceAgentMode,
+    preferenceToolMode,
     searchMode,
     useModelBuiltinSearch,
     agentMemoryEnabled,
@@ -222,6 +223,11 @@ export const useTokenBreakdown = (): TokenBreakdown => {
         .some((item) => item.enabled),
     ];
   });
+  const { conversationMode } = useTopicConversationMode();
+  const { enableAgentMode, toolMode } = withConversationMode(
+    { enableAgentMode: preferenceAgentMode, toolMode: preferenceToolMode },
+    conversationMode,
+  );
   const globalMemoryEnabled = useUserStore(settingsSelectors.memoryEnabled);
   const effectiveMemoryEnabled = agentMemoryEnabled ?? globalMemoryEnabled;
   const [isProviderHasBuiltinSearch, isModelHasBuiltinSearch, isModelBuiltinSearchInternal] =
@@ -257,7 +263,19 @@ export const useTokenBreakdown = (): TokenBreakdown => {
   const { toolsSchema, toolsSystemRole } = useMemo(() => {
     if (hasRequest) return { toolsSchema: '', toolsSystemRole: '' };
 
-    const toolsEngine = createAgentToolsEngine({ model, provider });
+    const toolsEngine = createAgentToolsEngine({ model, provider }, pluginIds, undefined, {
+      runAgent: {
+        id: agentId,
+        chatConfig: {
+          enableAgentMode,
+          toolMode,
+          searchMode,
+          useModelBuiltinSearch,
+          memory: { enabled: agentMemoryEnabled },
+        },
+        plugins: rawPlugins,
+      },
+    });
 
     const { tools, enabledManifests } = toolsEngine.generateToolsDetailed({
       model,
@@ -288,6 +306,11 @@ export const useTokenBreakdown = (): TokenBreakdown => {
     // agent/user/aiInfra config), so the engine only re-runs when they change
     // instead of on every render.
   }, [
+    agentId,
+    agentMemoryEnabled,
+    runtimeMode,
+    searchMode,
+    useModelBuiltinSearch,
     enableAgentMode,
     hasRequest,
     installedPlugins,

@@ -1,8 +1,18 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 
+import type { ConversationMode } from '../topic';
 import type { DeviceExecutionTarget, ExecutionPlan } from './agencyConfig';
 import type { RuntimeEnvMode } from './agentConfig';
 import type { LobeAgentChatConfig } from './chatConfig';
+
+export const withConversationMode = (
+  config: LobeAgentChatConfig,
+  mode?: ConversationMode,
+): LobeAgentChatConfig => {
+  if (!mode) return config;
+  if (mode === 'agent' && config.toolMode === 'custom') return { ...config, enableAgentMode: true };
+  return { ...config, enableAgentMode: mode === 'agent', toolMode: mode };
+};
 
 /**
  * Tool-resolution mode: an explicit `toolMode` wins; otherwise derive from

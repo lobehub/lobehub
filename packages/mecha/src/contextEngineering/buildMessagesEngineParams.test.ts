@@ -11,6 +11,13 @@ const baseSnapshot = (): ContextSnapshot => ({
 });
 
 describe('buildMessagesEngineParams', () => {
+  it('prepares activation proposals alongside durable context replay', () => {
+    const snapshot = baseSnapshot();
+    snapshot.run.contextReplay = { invocationId: 'assistant' };
+    expect(buildMessagesEngineParams(snapshot).toolsConfig?.anchorActivatedTools).toBe(true);
+    snapshot.model.provider = 'anthropic';
+    expect(buildMessagesEngineParams(snapshot).toolsConfig?.anchorActivatedTools).toBe(true);
+  });
   it('prepares activation proposals for Responses providers even with a logical model alias', () => {
     const forProvider = (provider: string) =>
       buildMessagesEngineParams({ ...baseSnapshot(), model: { model: 'my-model', provider } })

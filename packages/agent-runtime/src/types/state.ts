@@ -20,6 +20,7 @@ import type {
   AgentSignalOperationMarker,
   ChatToolPayload,
   ChatTopicBotContext,
+  ContextReplayExecutionBinding,
   EvalConnectorSnapshots,
   EvalToolForwardingConfig,
   ExecutionPlan,
@@ -375,6 +376,7 @@ export interface AgentRunBinding {
     platform?: string;
     systemInfo?: Record<string, string>;
   };
+  executionBinding?: ContextReplayExecutionBinding;
   /**
    * The skill-index snapshot (rows + change notes) this run renders from,
    * pinned on its first step so later steps send the same `<available_skills>`

@@ -224,6 +224,8 @@ export const RedisKeys = {
    * Run lease scope — see {@link RedisKeyNamespace.AGENT_RUN}.
    */
   agentRun: {
+    contextReplay: (userId: string, messageId: string): string =>
+      `context_replay:v1:${userId}:${messageId}`,
     /**
      * One user's in-flight run leases (field = holder id, value = expiry in ms).
      * Full key: agentRun:run_slots:v1:{userId}

@@ -64,7 +64,7 @@ vi.mock('@/database/models/message', () => ({
       getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
       getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
       query: mockMessageQuery,
-      update: vi.fn().mockResolvedValue({}),
+      update: vi.fn().mockResolvedValue({ success: true }),
     };
   }),
 }));
@@ -137,6 +137,7 @@ vi.mock('@/database/models/connectorTool', () => ({
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(function () {
     return {
+      resolveConversationMode: vi.fn(async (_topicId: string, fallback: string) => fallback),
       releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
       tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
       create: vi.fn().mockResolvedValue({ id: 'topic-1' }),

@@ -35,11 +35,13 @@ export class ServerCompressionTransport implements CompressionTransport {
     const result = await service.createCompressionGroup(input.topicId, input.messageIds, {
       agentId: input.agentId,
       groupId: input.groupId,
+      sourceGroupIds: input.sourceGroupIds,
       threadId: input.threadId,
       topicId: input.topicId,
     } as any);
 
     return {
+      existingSummary: result.existingSummary,
       messageGroupId: result.messageGroupId,
       messages: result.messages,
       messagesToSummarize: result.messagesToSummarize,

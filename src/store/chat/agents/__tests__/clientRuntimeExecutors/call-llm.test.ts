@@ -73,7 +73,7 @@ const createStore = (messages: UIChatMessage[]) => {
     internal_confirmClientMessages: vi.fn(),
     internal_dispatchMessage: vi.fn((action: any) => {
       if (action.type === 'createMessage') {
-        dbMessagesMap[messageKey].push(action.value);
+        dbMessagesMap[messageKey].push({ id: action.id, ...action.value });
         return;
       }
 
@@ -123,6 +123,10 @@ describe('createClientRuntimeExecutors call_llm', () => {
       })),
       success: true,
     }));
+    vi.spyOn(messageService, 'createMessage').mockImplementation(async (params) => {
+      const id = 'assistant-created';
+      return { id, messages: [{ ...params, id } as UIChatMessage] };
+    });
   });
 
   afterEach(() => {
@@ -157,14 +161,17 @@ describe('createClientRuntimeExecutors call_llm', () => {
       search: null,
       traceId: 'trace-1',
     });
+    expect(messageService.createMessage).toHaveBeenCalledTimes(1);
+    expect(messageService.createMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientId: expect.stringContaining(`agent-runtime:${operationId}:`),
+        content: '',
+        role: 'assistant',
+      }),
+    );
     expect(messageService.batchMutate).toHaveBeenNthCalledWith(1, [
       expect.objectContaining({
-        message: expect.objectContaining({ content: '', role: 'assistant' }),
-        type: 'createMessage',
-      }),
-    ]);
-    expect(messageService.batchMutate).toHaveBeenNthCalledWith(2, [
-      expect.objectContaining({
+        id: 'assistant-created',
         type: 'updateMessage',
         value: expect.objectContaining({ content: 'Answer', search: null }),
       }),
@@ -200,12 +207,9 @@ describe('createClientRuntimeExecutors call_llm', () => {
     );
 
     expect(result.nextContext?.phase).toBe('llm_result');
-    expect(messageService.batchMutate).toHaveBeenNthCalledWith(1, [
-      expect.objectContaining({
-        message: expect.objectContaining({ parentId: compressedAssistant.id }),
-        type: 'createMessage',
-      }),
-    ]);
+    expect(messageService.createMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ parentId: compressedAssistant.id, role: 'assistant' }),
+    );
   });
 
   it('treats image content parts as a non-empty completion', async () => {

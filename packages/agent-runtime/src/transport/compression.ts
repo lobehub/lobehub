@@ -4,12 +4,14 @@ export interface CompressionGroupCreateInput {
   agentId?: string;
   groupId?: string;
   messageIds: string[];
+  sourceGroupIds?: string[];
   threadId?: string;
   topicId: string;
   workspaceId?: string;
 }
 
 export interface CompressionGroupCreateResult {
+  existingSummary?: string;
   messageGroupId: string;
   messages?: UIChatMessage[];
   messagesToSummarize: UIChatMessage[];

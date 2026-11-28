@@ -1,15 +1,18 @@
 import {
   type AgentState,
   type CallLLMPayload,
+  type ContextBuildInput,
   selectEnableExpertise,
   selectExpertise,
 } from '@lobechat/agent-runtime';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import {
   cacheEconomicsForProvider,
+  contextReplayMessageIds,
   getSlicedMessages,
   skillChangesByMessage,
   skillsFromSnapshot,
+  withContextReplays,
 } from '@lobechat/context-engine';
 import { gatherContextFacts } from '@lobechat/mecha';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
@@ -19,7 +22,11 @@ import {
   CONTEXT_ENGINEERING_SPAN_NAME,
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
-import { type ResolveToolActivationContext, type UIChatMessage } from '@lobechat/types';
+import {
+  type ContextReplaySnapshot,
+  type ResolveToolActivationContext,
+  type UIChatMessage,
+} from '@lobechat/types';
 
 import { serverMessagesEngine } from '@/server/modules/Mecha/ContextEngineering';
 import {
@@ -27,6 +34,8 @@ import {
   resolveServerConnectorFeatures,
 } from '@/server/modules/Mecha/ContextEngineering/providers';
 import { resolveServerSkillIndex } from '@/server/modules/Mecha/ContextEngineering/providers/skillIndex';
+import { loadContextReplays, revokedContextSources } from '@/server/services/contextReplay';
+import { getCurrentExecutionBinding } from '@/server/services/contextReplay/toolDispatch';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 import { resolveBuilderGroupId } from '@/server/services/toolExecution/serverRuntimes/groupAgentBuilderTarget';
 
@@ -39,6 +48,7 @@ import type { ServerCallLlmTooling } from './serverCallLlmTooling';
 import { createToolActivationResolver } from './serverToolActivationContext';
 
 interface BuildServerCallLlmContextInput {
+  contextReplay?: ContextBuildInput['contextReplay'];
   ctx: RuntimeExecutorContext;
   llmPayload: CallLLMPayload;
   model: string;
@@ -67,6 +77,7 @@ const hasTrailingTodoMutation = (messages: UIChatMessage[]) => {
 };
 
 export interface ServerCallLlmContextBuildResult {
+  contextReplaySnapshot?: ContextReplaySnapshot;
   getToolActivationContext?: ResolveToolActivationContext;
   preserveThinkingForPayload?: boolean;
   processedMessages: ChatStreamPayload['messages'];
@@ -77,6 +88,7 @@ export interface ServerCallLlmContextBuildResult {
 }
 
 export const buildServerCallLlmContext = async ({
+  contextReplay,
   ctx,
   llmPayload,
   model,
@@ -125,7 +137,7 @@ export const buildServerCallLlmContext = async ({
           editingGroupId: state.origin?.editingGroupId,
           threadId: state.origin?.threadId,
           topicId,
-          userId: ctx.userId,
+          userId: ctx.userId!,
           workspaceId: state.origin?.workspaceId ?? ctx.workspaceId,
         })
       : state.origin?.editingGroupId;
@@ -192,7 +204,68 @@ export const buildServerCallLlmContext = async ({
     : liveSkills;
   const skillChanges = skillIndexSnapshot ? skillChangesByMessage(skillIndexSnapshot) : undefined;
 
+  const documentAgentId = state.origin?.editingAgentId ?? agentId;
+  const snapshots = contextReplay
+    ? await loadContextReplays(
+        {
+          db: ctx.serverDB,
+          userId: ctx.userId!,
+          workspaceId: ctx.workspaceId,
+          agentId: documentAgentId,
+          shareVisitor: state.principal?.actor?.shareVisitor ?? ctx.agentShareVisitor,
+          topicId,
+        },
+        [...contextReplayMessageIds(messagesForContext), contextReplay.invocationId],
+      )
+    : {};
+  const executionBinding =
+    contextReplay &&
+    (snapshots[contextReplay.invocationId]?.executionBinding ??
+      contextReplay.committedSnapshot?.executionBinding ??
+      state.binding?.executionBinding ??
+      (await getCurrentExecutionBinding({
+        db: ctx.serverDB,
+        userId: ctx.userId!,
+        workspaceId: ctx.workspaceId,
+        agentId: agentId!,
+        topicId,
+        includeShareVisitor: !!ctx.agentShareVisitor,
+      })));
+  if (executionBinding) state.binding = { ...state.binding, executionBinding };
   const contextEngineInput = {
+    ...(contextReplay && {
+      contextReplay: {
+        ...contextReplay,
+        actorId: agentId,
+        executionBinding: executionBinding || undefined,
+
+        sourceIdsByProvider: {
+          ProjectContextInjector: state.origin?.projectId
+            ? [`project:${state.origin.projectId}`]
+            : [],
+          TaskManagerContextInjector: state.origin?.taskId ? [`task:${state.origin.taskId}`] : [],
+        },
+        validateSources: (ids: string[]) =>
+          revokedContextSources(
+            {
+              db: ctx.serverDB,
+              userId: ctx.userId!,
+              workspaceId: ctx.workspaceId,
+              agentId: documentAgentId,
+              shareVisitor: state.principal?.actor?.shareVisitor ?? ctx.agentShareVisitor,
+              topicId,
+            },
+            ids,
+          ),
+        committedSnapshot: snapshots[contextReplay.invocationId],
+        runtimeContext: {
+          environment: executionTarget,
+          deviceId: activeDeviceId,
+          replyLanguage:
+            typeof facts.variables.language === 'string' ? facts.variables.language : undefined,
+        },
+      },
+    }),
     enableMcpAppContext: await isMcpAppsEnabled(ctx.userId),
     additionalContexts: llmPayload.additionalContexts,
     attachmentPreviewFileIds: llmPayload.attachmentPreviewFileIds,
@@ -255,7 +328,9 @@ export const buildServerCallLlmContext = async ({
           name: knowledgeBase.name ?? '',
         })),
     },
-    messages: messagesForContext,
+    messages: contextReplay
+      ? withContextReplays(messagesForContext, snapshots)
+      : messagesForContext,
     model,
     modelDisplayName,
     modelKnowledgeCutoff,
@@ -349,6 +424,7 @@ export const buildServerCallLlmContext = async ({
   );
 
   return {
+    contextReplaySnapshot: ceMetadata.contextReplaySnapshot,
     getToolActivationContext: createToolActivationResolver(
       state,
       resolved,

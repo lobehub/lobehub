@@ -8,6 +8,10 @@ import { takeWorkIntent } from '@/utils/clientWorkIntentStash';
 import type { ClientMessageTransport } from './ClientMessageTransport';
 import { ClientToolTransport } from './ClientToolTransport';
 
+vi.mock('@/services/message', () => ({
+  messageService: { assertToolDispatch: vi.fn(async () => true) },
+}));
+
 vi.mock('@/utils/clientWorkIntentStash', () => ({
   stashWorkIntent: vi.fn(),
   takeWorkIntent: vi.fn(),
@@ -250,6 +254,9 @@ describe('ClientToolTransport', () => {
       } as unknown as ToolRunContext,
     );
 
-    expect(invoke).toHaveBeenCalledWith('tool-message', expect.anything(), stepContext);
+    expect(invoke).toHaveBeenCalledWith('tool-message', expect.anything(), stepContext, {
+      assistantMessageId: 'assistant-message',
+      expectedDeviceId: undefined,
+    });
   });
 });

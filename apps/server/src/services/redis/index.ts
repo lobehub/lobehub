@@ -9,6 +9,7 @@ import { botReply } from './botReply';
 import { botWake } from './botWake';
 import { channelWatch } from './channelWatch';
 import { connectorOAuth } from './connectorOAuth';
+import { contextReplay } from './contextReplay';
 import { deviceSystemInfo } from './deviceSystemInfo';
 import { gitHubRefs } from './gitHubRefs';
 import { heteroControl } from './heteroControl';
@@ -38,6 +39,7 @@ export const redisService = {
   botWake,
   channelWatch,
   connectorOAuth,
+  contextReplay,
   deviceSystemInfo,
   gitHubRefs,
   heteroControl,

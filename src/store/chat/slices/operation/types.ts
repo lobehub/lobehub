@@ -618,6 +618,8 @@ export const INTERIM_LOADING_OPERATION_TYPES: OperationType[] = [
   'regenerate',
 ];
 
+const COMPRESSION_OPERATION_TYPES: OperationType[] = ['contextCompression', 'generateSummary'];
+
 /**
  * Operation types that should block input and show loading state
  * Superset of AI_RUNTIME_OPERATION_TYPES, also includes sendMessage
@@ -625,6 +627,7 @@ export const INTERIM_LOADING_OPERATION_TYPES: OperationType[] = [
  */
 export const INPUT_LOADING_OPERATION_TYPES: OperationType[] = [
   ...AI_RUNTIME_OPERATION_TYPES,
+  ...COMPRESSION_OPERATION_TYPES,
   'sendMessage',
   // The auto-retry waiting period is part of the same in-progress turn — keep
   // the input in loading state (and let Stop target it) across the countdown.
@@ -702,6 +705,7 @@ export const SETTLEABLE_TOPIC_RUN_OPERATION_TYPES: OperationType[] =
  */
 export const QUEUE_BLOCKING_OPERATION_TYPES: OperationType[] = [
   ...AI_RUNTIME_OPERATION_TYPES,
+  ...COMPRESSION_OPERATION_TYPES,
   'sendMessage',
   // A voice turn becomes visible before its binary upload finishes. Keep later composer sends in
   // the normal queue so the model observes the same order as the optimistic transcript. This is

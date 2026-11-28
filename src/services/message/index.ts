@@ -116,6 +116,14 @@ const getBatchMutationAbortKey = (operations: MessageBatchOperation[]) => {
 const TOOL_PAYLOAD_BATCH_SIZE = 500;
 
 export class MessageService {
+  assertToolDispatch = (input: {
+    agentId: string;
+    topicId?: string;
+    identifier: string;
+    apiName: string;
+    expectedDeviceId?: string;
+    assistantMessageId?: string;
+  }) => lambdaClient.message.assertToolDispatch.query(input);
   batchMutate = async (operations: MessageBatchOperation[], signal?: AbortSignal) => {
     const input = {
       operations: operations.map((operation) => {
@@ -496,15 +504,18 @@ export class MessageService {
     agentId: string;
     groupId?: string | null;
     messageIds: string[];
+    sourceGroupIds?: string[];
     threadId?: string | null;
     topicId: string;
   }): Promise<{
+    existingSummary?: string;
     messageGroupId: string;
     messages: UIChatMessage[];
     messagesToSummarize: UIChatMessage[];
   }> => {
     const result = await lambdaClient.message.createCompressionGroup.mutate(params);
     return {
+      existingSummary: result.existingSummary,
       messageGroupId: result.messageGroupId,
       messages: (result.messages || []) as unknown as UIChatMessage[],
       messagesToSummarize: (result.messagesToSummarize || []) as unknown as UIChatMessage[],

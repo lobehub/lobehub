@@ -18,9 +18,11 @@ import {
   messageQueryChunks,
   messages,
   messagesFiles,
+  topics,
 } from '../../schemas';
 import type { Transaction } from '../../type';
-import { buildWorkspacePayload } from '../../utils/workspace';
+import { notShareVisitorTopic } from '../../utils/shareVisitor';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../../utils/workspace';
 import { recomputeTopicUsage } from '../topicUsage';
 import { MessageScope } from './scope';
 import type { ModelTimingContext } from './types';
@@ -83,6 +85,30 @@ interface SplitCreateMessageParams {
 }
 
 export class MessageWriteMutations extends MessageScope {
+  private commitConversationMode = async (trx: Transaction, message: CreateMessageParams) => {
+    const mode = message.metadata?.conversationMode;
+    if (message.role !== 'user' || !message.topicId || !mode) return;
+    const scope = and(
+      eq(topics.id, message.topicId),
+      buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics),
+      this.includeShareVisitor ? undefined : notShareVisitorTopic(),
+    );
+    const [topic] = await trx
+      .select({ metadata: topics.metadata })
+      .from(topics)
+      .where(scope)
+      .for('update');
+    if (!topic) throw new Error('Conversation topic is unavailable');
+    const lockedMode = topic.metadata?.conversationMode;
+    if (lockedMode && lockedMode !== mode)
+      throw Object.assign(new Error('Conversation mode is locked'), { status: 409 });
+    if (!lockedMode) {
+      await trx
+        .update(topics)
+        .set({ metadata: { ...topic.metadata, conversationMode: mode } })
+        .where(scope);
+    }
+  };
   /**
    * Row-lock message roots in id order (`SELECT … FOR UPDATE`) and return
    * their content. Only meaningful on a transaction-bound instance; used by the
@@ -248,6 +274,7 @@ export class MessageWriteMutations extends MessageScope {
     timing?: ModelTimingContext,
     timingPrefix: string = 'db.message.create',
   ): Promise<DBMessageItem> => {
+    await this.commitConversationMode(trx, params);
     const { insert, relations } = this.splitCreateMessageParams(params);
 
     const [item] = (await runTimedStage(
@@ -328,6 +355,7 @@ export class MessageWriteMutations extends MessageScope {
       'db.message.createUserAndAssistant.transaction',
       () =>
         this.db.transaction(async (trx) => {
+          await this.commitConversationMode(trx, userMessage);
           const userPayload = this.splitCreateMessageParams(userMessageWithTimestamp);
           const assistantPayload = this.splitCreateMessageParams(assistantMessageWithParent);
           const insertedMessages = (await runTimedStage(

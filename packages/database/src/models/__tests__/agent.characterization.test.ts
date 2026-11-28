@@ -76,6 +76,7 @@ const PUBLIC_METHODS = [
   'getAgentDisplayFields',
   'getAgentModelConfig',
   'getAgentSnapshotForTaskCreate',
+  'getAgentToolPolicy',
   'getAgentVisibility',
   'getAgentVisibilityMeta',
   'getAssignableSessionGroupVisibility',

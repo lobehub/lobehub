@@ -5,6 +5,7 @@ import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import { useEffectiveAgentModePreference } from './effectiveAgentModePreference';
 import { useEffectiveModel } from './useEffectiveModel';
+import { useTopicConversationMode } from './useTopicConversationMode';
 
 export type ChatInputMode = 'agent' | 'chat';
 
@@ -32,9 +33,9 @@ export const resolveEffectiveAgentMode = ({
   // capability re-evaluates once the list loads.
   const effectiveSupportToolUse = isModelListReady ? supportToolUse : true;
 
-  const currentMode: ChatInputMode = enableAgentMode && effectiveSupportToolUse ? 'agent' : 'chat';
-  // Example: stored Agent mode + a model without tool calling should render chat-only runtime UI.
-  const isAgentRuntimeMode = currentMode === 'agent';
+  const currentMode: ChatInputMode = enableAgentMode ? 'agent' : 'chat';
+  // Capability limits execution without changing the conversation mode.
+  const isAgentRuntimeMode = currentMode === 'agent' && effectiveSupportToolUse;
 
   return {
     canSelectAgentMode: effectiveSupportToolUse,
@@ -55,14 +56,22 @@ interface ModelAndProvider {
  * Not exported on purpose — callers must pick which model applies by using
  * `useEffectiveAgentMode` or `useAgentDefaultModelAgentMode`.
  */
-const useAgentModeForModel = (agentId: string, { model, provider }: ModelAndProvider) => {
+const useAgentModeForModel = (
+  agentId: string,
+  { model, provider }: ModelAndProvider,
+  conversationMode?: ChatInputMode,
+) => {
   const { enableAgentMode, isPreferenceLoading, usesWorkspaceMemberMode } =
     useEffectiveAgentModePreference(agentId);
   const supportToolUse = useModelSupportToolUse(model, provider);
   const isModelListReady = useAiInfraStore(aiProviderSelectors.isInitAiProviderRuntimeState);
 
   return {
-    ...resolveEffectiveAgentMode({ enableAgentMode, isModelListReady, supportToolUse }),
+    ...resolveEffectiveAgentMode({
+      enableAgentMode: conversationMode ? conversationMode === 'agent' : enableAgentMode,
+      isModelListReady,
+      supportToolUse,
+    }),
     isPreferenceLoading,
     usesWorkspaceMemberMode,
   };
@@ -73,8 +82,15 @@ const useAgentModeForModel = (agentId: string, { model, provider }: ModelAndProv
  * the active topic's pinned model, otherwise the agent default
  * (see `useEffectiveModel`).
  */
-export const useEffectiveAgentMode = (agentId: string) =>
-  useAgentModeForModel(agentId, useEffectiveModel(agentId));
+export const useEffectiveAgentMode = (agentId: string) => {
+  const { conversationMode, isModeLocked } = useTopicConversationMode();
+  const mode = useAgentModeForModel(agentId, useEffectiveModel(agentId), conversationMode);
+  return {
+    ...mode,
+    isAgentMode: mode.currentMode === 'agent',
+    isModeLocked,
+  };
+};
 
 /**
  * Agent mode judged by the agent's own default model only. For surfaces that

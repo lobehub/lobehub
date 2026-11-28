@@ -91,6 +91,7 @@ vi.mock('@/database/models/plugin', () => ({
 }));
 
 const topicMock = {
+  resolveConversationMode: vi.fn(async (_topicId: string, fallback: string) => fallback),
   create: vi.fn().mockResolvedValue({ id: 'topic-1', metadata: undefined }),
   findById: vi.fn().mockResolvedValue(undefined),
   releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
@@ -198,6 +199,9 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     topicMock.create.mockResolvedValue({ id: 'topic-1', metadata: undefined });
+    topicMock.resolveConversationMode.mockImplementation(
+      async (_topicId: string, fallback: string) => fallback,
+    );
     topicMock.findById.mockResolvedValue(undefined);
     topicMock.updateMetadata.mockResolvedValue(undefined);
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });

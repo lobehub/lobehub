@@ -1,3 +1,4 @@
+import { contextReplayMessageIds } from '@lobechat/context-engine';
 import { chainCompressContext } from '@lobechat/prompts';
 import { RequestTrigger } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
@@ -9,10 +10,12 @@ import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { dbMessageSelectors, topicSelectors } from '@/store/chat/selectors';
+import { scheduleQueuedFollowUp } from '@/store/chat/slices/agentRun/actions/lifecycle/queuedFollowUp';
 import { type ChatStore } from '@/store/chat/store';
 import {
   createPendingCompressedGroup,
-  getCompressionCandidateMessageIds,
+  getCompressionCandidateMessages,
+  withPendingCompressedGroup,
 } from '@/store/chat/utils/compression';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
@@ -58,11 +61,29 @@ export const executeContextCompression = async (
 
   const contextKey = messageMapKey(context as any);
   const dbMessages = dbMessageSelectors.getDbMessagesByKey(contextKey)(get()) || [];
-  const messageIds = getCompressionCandidateMessageIds(dbMessages, {
+  const visible = getCompressionCandidateMessages(get().messagesMap[contextKey] ?? dbMessages, {
     ...options,
     threadId: context.threadId,
   });
-  if (messageIds.length === 0) return false;
+  const visibleIds = new Set(contextReplayMessageIds(visible));
+  const selected = dbMessages.filter(
+    (message) =>
+      (message.role === 'compressedGroup' ||
+        (message.threadId ?? null) === (context.threadId ?? null)) &&
+      (visibleIds.has(message.id) ||
+        (message.role === 'tool' && !!message.parentId && visibleIds.has(message.parentId))),
+  );
+  const sourceGroups = selected.filter(
+    (message) =>
+      message.role === 'compressedGroup' &&
+      message.threadId !== undefined &&
+      (message.threadId ?? null) === (context.threadId ?? null),
+  );
+  const sourceGroupIds = sourceGroups.map((message) => message.id);
+  const messageIds = selected
+    .filter((message) => message.role !== 'compressedGroup')
+    .map((message) => message.id);
+  if (messageIds.length === 0 && sourceGroupIds.length === 0) return false;
 
   const tempId = 'tmp_compress_' + nanoid();
   const { abortController, operationId } = get().startOperation({
@@ -97,6 +118,7 @@ export const executeContextCompression = async (
       agentId,
       groupId: context.groupId,
       messageIds,
+      sourceGroupIds,
       threadId: context.threadId,
       topicId,
     });
@@ -105,8 +127,19 @@ export const executeContextCompression = async (
     const groupId = messageGroupId;
 
     // Replace local pending group with server compression group
-    get().replaceMessages(serverMessages, { context: context as any });
+    get().replaceMessages(
+      withPendingCompressedGroup(serverMessages, {
+        agentId,
+        groupId: context.groupId,
+        id: messageGroupId,
+        keepPosition: !options.beforeMessageId,
+        threadId: context.threadId,
+        topicId,
+      }),
+      { context: context as any },
+    );
     get().associateMessageWithOperation(messageGroupId, operationId);
+    if (abortController.signal.aborted) throw createAbortError();
 
     // 2. Generate summary via LLM. Match the runtime's auto-compression model resolution: a model
     // pinned to the topic wins over the agent default (see streamingExecutor).
@@ -120,7 +153,7 @@ export const executeContextCompression = async (
     const { model, provider } = topicModel?.provider
       ? topicModel
       : agentSelectors.getAgentConfigById(agentId)(agentState);
-    const compressionPayload = chainCompressContext(messagesToSummarize);
+    const compressionPayload = chainCompressContext(messagesToSummarize, result.existingSummary);
     let summaryContent = '';
     let summaryError: Error | undefined;
 
@@ -155,6 +188,7 @@ export const executeContextCompression = async (
       content: summaryContent,
       groupId: context.groupId,
       messageGroupId: groupId,
+      sourceGroupIds,
       threadId: context.threadId,
       topicId,
     });
@@ -164,14 +198,11 @@ export const executeContextCompression = async (
     }
 
     get().completeOperation(operationId);
+    if (!parentOperationId) scheduleQueuedFollowUp(get, context as any, operationId);
     return true;
   } catch (error) {
-    if (isAbortError(error, abortController)) {
-      get().internal_dispatchMessage({ type: 'deleteMessages', ids: [tempId] }, { operationId });
-      return false;
-    }
-
-    console.error('[/compact] Compression failed:', error);
+    const cancelled = isAbortError(error, abortController);
+    if (!cancelled) console.error('[/compact] Compression failed:', error);
     get().internal_dispatchMessage({ type: 'deleteMessages', ids: [tempId] }, { operationId });
 
     // Roll the server group back so the original messages are restored instead of being
@@ -189,6 +220,11 @@ export const executeContextCompression = async (
       } catch (rollbackError) {
         console.error('[/compact] Failed to rollback compression:', rollbackError);
       }
+    }
+    if (cancelled) {
+      if (get().operations[operationId]?.status === 'running')
+        await get().cancelOperation(operationId, 'compression_cancelled');
+      return false;
     }
 
     const reason = error instanceof Error ? error.message : String(error);

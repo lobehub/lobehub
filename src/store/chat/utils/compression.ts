@@ -1,3 +1,4 @@
+import { contextReplayMessageIds } from '@lobechat/context-engine';
 import {
   type CompressionGroupMetadata,
   type ConversationContext,
@@ -16,25 +17,32 @@ export const isCompressionOperationType = (type?: string) =>
  * @param options.threadId Compacting a thread: leave out the main-conversation messages it
  * branched from (read back with `threadId: null`); those belong to the main conversation.
  */
-export const getCompressionCandidateMessageIds = (
+export const getCompressionCandidateMessages = (
   messages: UIChatMessage[],
   options?: { beforeMessageId?: string; threadId?: string | null },
 ) => {
   const keepFrom = options?.beforeMessageId
-    ? messages.findIndex((message) => message.id === options.beforeMessageId)
+    ? messages.findIndex((message) =>
+        contextReplayMessageIds([message]).includes(options.beforeMessageId!),
+      )
     : -1;
 
-  return (keepFrom === -1 ? messages : messages.slice(0, keepFrom))
-    .filter((message) => message.role !== 'compressedGroup')
-    .filter(
-      (message) =>
-        !options?.threadId ||
-        message.threadId === undefined ||
-        message.threadId === options.threadId,
-    )
-    .map((message) => message.id)
-    .filter(Boolean);
+  if (options?.beforeMessageId && keepFrom === -1) return [];
+  return (keepFrom === -1 ? messages : messages.slice(0, keepFrom)).filter(
+    (message) =>
+      !options?.threadId || message.threadId === undefined || message.threadId === options.threadId,
+  );
 };
+
+export const getCompressionCandidateMessageIds = (
+  messages: UIChatMessage[],
+  options?: { beforeMessageId?: string; threadId?: string | null },
+) =>
+  contextReplayMessageIds(
+    getCompressionCandidateMessages(messages, options).filter(
+      (message) => message.role !== 'compressedGroup',
+    ),
+  );
 
 export const createPendingCompressedGroup = ({
   agentId,
@@ -73,6 +81,15 @@ export const createPendingCompressedGroup = ({
     updatedAt: now,
   };
 };
+
+/** A recompression can have no new members, so the server list has no placeholder yet. */
+export const withPendingCompressedGroup = (
+  messages: UIChatMessage[],
+  pending: Parameters<typeof createPendingCompressedGroup>[0],
+) =>
+  messages.some((message) => message.id === pending.id)
+    ? messages
+    : [...messages, createPendingCompressedGroup(pending)];
 
 export const hasRunningCompressionOperation = (
   operations: Operation[],

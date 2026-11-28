@@ -1,13 +1,43 @@
-import type { ChatTopicMetadata } from '@lobechat/types';
+import type { ChatTopicMetadata, ConversationMode } from '@lobechat/types';
 import { and, eq, or, sql } from 'drizzle-orm';
 import { translateLegacyReasoningConfig } from 'model-bank/aiModel';
 
-import { type TopicItem, topics } from '../../schemas';
+import { messages, type TopicItem, topics } from '../../schemas';
 import { joinTopicAgentsToProjects } from '../../utils/projectTopicAgents';
 import { recomputeTopicUsage } from '../topicUsage';
 import type { TopicModelContext } from './context';
 import { carriedOwnedWorktrees, withOwnedWorktreeClaim } from './ownedWorktree';
 import type { TopicMetadataPatch } from './types';
+
+/** Empty topics stay selectable; legacy transcripts snapshot their mode once under the topic lock. */
+export const resolveConversationMode = async (
+  ctx: TopicModelContext,
+  id: string,
+  fallback: ConversationMode,
+): Promise<ConversationMode> =>
+  ctx.db.transaction(async (tx) => {
+    const scope = and(eq(topics.id, id), ctx.ownership());
+    const [topic] = await tx
+      .select({ metadata: topics.metadata })
+      .from(topics)
+      .where(scope)
+      .for('update');
+    if (!topic) throw new Error('Conversation topic is unavailable');
+    if (topic.metadata?.conversationMode) return topic.metadata.conversationMode;
+    const [firstUser] = await tx
+      .select({ metadata: messages.metadata })
+      .from(messages)
+      .where(and(eq(messages.topicId, id), eq(messages.role, 'user'), ctx.messageOwnership()))
+      .orderBy(messages.createdAt, messages.id)
+      .limit(1);
+    if (!firstUser) return fallback;
+    const mode = firstUser.metadata?.conversationMode ?? fallback;
+    await tx
+      .update(topics)
+      .set({ metadata: { ...topic.metadata, conversationMode: mode } })
+      .where(scope);
+    return mode;
+  });
 
 /**
  * An explicit metadata snapshot replaces the row's metadata, except for
@@ -20,10 +50,11 @@ const replaceMetadataKeepingOwnedWorktrees = (
   next: ChatTopicMetadata | null | undefined,
   existing: ChatTopicMetadata | null | undefined,
 ) => {
-  if (!next) return next;
+  if (!next && !existing?.conversationMode) return next;
+  const { conversationMode: _ignoredMode, ...writable } = next ?? {};
   // A legacy topic's claim lives only in the markers this snapshot replaces.
-  const claimed = withOwnedWorktreeClaim({ ...next, ...carriedOwnedWorktrees(existing) });
-  return sql`${JSON.stringify(claimed)}::jsonb || case when coalesce(jsonb_exists(${topics.metadata}, 'ownedWorktrees'), false) then jsonb_build_object('ownedWorktrees', ${topics.metadata} -> 'ownedWorktrees') else '{}'::jsonb end`;
+  const claimed = withOwnedWorktreeClaim({ ...writable, ...carriedOwnedWorktrees(existing) });
+  return sql`${JSON.stringify(claimed)}::jsonb || case when coalesce(jsonb_exists(${topics.metadata}, 'ownedWorktrees'), false) then jsonb_build_object('ownedWorktrees', ${topics.metadata} -> 'ownedWorktrees') else '{}'::jsonb end || case when coalesce(jsonb_exists(${topics.metadata}, 'conversationMode'), false) then jsonb_build_object('conversationMode', ${topics.metadata} -> 'conversationMode') else '{}'::jsonb end`;
 };
 
 const readMetadata = async (ctx: TopicModelContext, id: string) => {
@@ -205,9 +236,10 @@ export const updateMetadata = async (
           }
         : metadata.onboardingSession;
 
+    const { conversationMode: _ignoredMode, ...writable } = metadata;
     const mergedMetadata = withOwnedWorktreeClaim({
       ...existing.metadata,
-      ...metadata,
+      ...writable,
       ...(mergedOnboardingSession && { onboardingSession: mergedOnboardingSession }),
       // Server-owned: a patch never replaces it (see `./ownedWorktree`), and a
       // legacy topic's claim is resolved from its old markers first.

@@ -48,6 +48,7 @@ import { isWorkspaceCacheFresh, upsertWorkspaceScan } from '../workspaceInitCach
 import { buildArtboardCommentsPrompt } from './artboardContext';
 import { deferUnusedSkillsTool, type DeferUnusedSkillsToolParams } from './deferUnusedSkillsTool';
 import { buildOperationSkillSet, collectSelectedSkillIds } from './operationSkillSet';
+import { persistSelectedContext } from './persistSelectedContext';
 import { buildRunProjectContextPrompt } from './projectContext';
 import type { ToolDiscoveryResult } from './toolDiscovery';
 import type { RunAttachments } from './turnSetup';
@@ -187,6 +188,7 @@ export interface OperationPrepDeps {
   agentModel: AgentModel;
   bindTopicWorkingDirectory: (params: BindTopicWorkingDirectoryParams) => Promise<void>;
   db: LobeChatDatabase;
+  messageModel: MessageModel;
   topicModel: TopicModel;
   userId: string;
   workspaceId?: string;
@@ -875,6 +877,13 @@ export const prepareOperation = async (
     shareGate,
     taskId: input.taskId,
     workspaceInit,
+  });
+
+  await persistSelectedContext({
+    message: !runFromHistory ? userMessage : undefined,
+    skills: operationSkillSet?.skills,
+    manifests: Object.values(discovery.toolManifestMap),
+    update: deps.messageModel.update,
   });
 
   // 18b. A run with no skill to offer starts without the skill APIs of

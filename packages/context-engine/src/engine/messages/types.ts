@@ -2,6 +2,7 @@
 import type { AgentIdentityContext, FileContent, KnowledgeBaseInfo } from '@lobechat/prompts';
 import type {
   AgentAccountContext,
+  ContextReplayInput,
   ExpertiseContextSnapshot,
   RuntimeAdditionalContextFragment,
   RuntimeInitialContext,
@@ -230,6 +231,7 @@ export interface PlanTodoConfig {
  * MessagesEngine main parameters
  */
 export interface MessagesEngineParams {
+  contextReplay?: ContextReplayInput;
   enableMcpAppContext?: boolean;
   // ========== Required parameters ==========
   /** Original message list */

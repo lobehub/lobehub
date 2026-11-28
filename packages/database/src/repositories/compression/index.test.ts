@@ -245,12 +245,14 @@ describe('CompressionRepository', () => {
         topicId,
       });
 
-      await compressionRepo.finalizeCompressionGroup({
-        content: 'Target summary',
-        groupId: targetGroupId,
-        sourceGroupIds: [otherGroupId],
-        topicId,
-      });
+      await expect(
+        compressionRepo.finalizeCompressionGroup({
+          content: 'Target summary',
+          groupId: targetGroupId,
+          sourceGroupIds: [otherGroupId],
+          topicId,
+        }),
+      ).rejects.toThrow();
 
       expect(await compressionRepo.getCompressionGroups('other-topic')).toHaveLength(1);
       expect(await compressionRepo.getCompressedMessages(otherGroupId)).toHaveLength(1);

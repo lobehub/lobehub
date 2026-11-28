@@ -74,6 +74,7 @@ vi.mock('@/database/models/plugin', () => ({
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(function () {
     return {
+      resolveConversationMode: vi.fn(async (_topicId: string, fallback: string) => fallback),
       appendRunningOperationChild: mockAppendRunningOperationChild,
       armScheduledRun: mockArmScheduledRun,
       create: mockTopicCreate,

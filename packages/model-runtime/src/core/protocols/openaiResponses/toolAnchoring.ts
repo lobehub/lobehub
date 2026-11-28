@@ -1,4 +1,5 @@
 import type { ToolActivationPlan } from '@lobechat/types';
+import { stableJsonDigest } from '@lobechat/utils';
 import type OpenAI from 'openai';
 
 import type { ChatCompletionTool, OpenAIChatMessage } from '../../../types';
@@ -106,7 +107,7 @@ export const splitAnchoredTools = <T>(
  * endpoint and tool set. Revalidate the system span and every target because
  * callers can filter messages/tools between context assembly and dispatch.
  */
-export const prepareAnchoredMessages = <T>(
+export const prepareAnchoredMessages = async <T>(
   messages: OpenAIChatMessage[],
   tools: T[] | undefined,
   plan: ToolActivationPlan | undefined = messages.find(
@@ -143,6 +144,12 @@ export const prepareAnchoredMessages = <T>(
       !result.toolNames.every((name) => available.has(name))
     )
       return messages;
+    if (result.definitionRevisions) {
+      for (const name of result.toolNames) {
+        const tool = tools.find((candidate) => getFunctionName(candidate) === name);
+        if (result.definitionRevisions[name] !== (await stableJsonDigest(tool))) return messages;
+      }
+    }
   }
   return messages.flatMap((message, index): OpenAIChatMessage[] => {
     if (index === systemIndex && editedSystem !== undefined)

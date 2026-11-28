@@ -36,6 +36,7 @@ import {
   isDeviceToolIdentifier,
   logDeviceToolAudit,
 } from '@/server/services/aiAgent/deviceToolAudit';
+import { assertCurrentToolDispatch } from '@/server/services/contextReplay/toolDispatch';
 import { resolveRunWorkAccessScope } from '@/server/services/workRegistration';
 
 import { parkAsyncShell } from '../asyncShellPark';
@@ -181,6 +182,25 @@ export class ServerToolTransport implements ToolTransport {
         context.abortSignal?.aborted
       )
         return this.abortedBeforeLaunch();
+      if (
+        !hookResult?.isMocked &&
+        chatToolPayload.executor === 'client' &&
+        userId &&
+        serverDB &&
+        context.state.origin?.agentId
+      )
+        await assertCurrentToolDispatch({
+          db: serverDB,
+          userId,
+          workspaceId: this.ctx.workspaceId,
+          agentId: context.state.origin.agentId,
+          topicId: this.ctx.topicId ?? context.state.origin.topicId,
+          identifier: chatToolPayload.identifier,
+          apiName: chatToolPayload.apiName,
+          expectedDeviceId: resolveRunActiveDeviceId(context.state),
+          expectedBinding: context.state.binding?.executionBinding,
+          includeShareVisitor: !!this.ctx.agentShareVisitor,
+        });
       let toolCallMocked = false;
 
       if (isDeviceToolIdentifier(chatToolPayload.identifier) && !hookResult?.isMocked) {

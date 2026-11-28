@@ -15,6 +15,8 @@ import { AgentRuntimeError } from '@lobechat/model-runtime/utils/createError';
 import {
   ChatErrorType,
   type ChatMessageError,
+  type ContextReplayInput,
+  type ContextReplaySnapshot,
   getAutoPluginIds,
   getBuiltinOverrides,
   getOptedInPluginIds,
@@ -53,7 +55,7 @@ import { API_ENDPOINTS } from '../_url';
 import { findDeploymentName, isEnableFetchOnClient, resolveRuntimeProvider } from './helper';
 import { type ResolvedAgentConfig } from './mecha';
 import {
-  contextEngineering,
+  contextEngineeringDetailed,
   getTargetAgentId,
   initializeWithClientStore,
   resolveBrowserModelParams,
@@ -77,6 +79,7 @@ export interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload
    * budget is spent (planned by `shouldCompress`).
    */
   attachmentPreviewFileIds?: string[];
+  contextReplay?: ContextReplayInput;
   discoveryExcludedToolIds?: string[];
   discoveryManifests?: Record<string, LobeToolManifest>;
   groupId?: string;
@@ -90,6 +93,7 @@ export interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload
 }
 
 export interface PreparedAssistantMessageContext {
+  contextReplaySnapshot?: ContextReplaySnapshot;
   options: FetchOptions;
   params: Partial<ChatStreamPayload>;
   /** Forced or configured `preserveThinking` for the payload, when the model supports it. */
@@ -156,6 +160,7 @@ class ChatService {
   buildAssistantMessageContext = async (
     {
       messages,
+      contextReplay,
       agentId,
       groupId,
       additionalContexts,
@@ -236,7 +241,8 @@ class ChatService {
 
     // Apply context engineering with preprocessing configuration
     // Note: agentConfig.systemRole is already resolved by resolveAgentConfig for builtin agents
-    const modelMessages = await contextEngineering({
+    const contextResult = await contextEngineeringDetailed({
+      contextReplay,
       agentId: targetAgentId,
       // `agentConfig.plugins` is the raw (pre-filter) field — `plugins` below
       // is already pinned-only (resolved upstream in agentConfigResolver).
@@ -288,13 +294,14 @@ class ChatService {
     });
 
     return {
+      contextReplaySnapshot: contextResult.metadata.contextReplaySnapshot,
       options: { ...options, agentId: targetAgentId, topicId },
       params: {
         ...params,
         ...modelParams.resolvedExtendParams,
         // Always present on the browser payload, even when unset.
         enabledSearch: modelParams.resolvedExtendParams?.enabledSearch,
-        messages: modelMessages,
+        messages: contextResult.messages,
         stream: modelParams.stream,
         tools,
       },

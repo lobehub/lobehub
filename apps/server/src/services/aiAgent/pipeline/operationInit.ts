@@ -209,6 +209,7 @@ export const runOperationInit = async (
         agentModel: deps.agentModel,
         bindTopicWorkingDirectory: deps.bindTopicWorkingDirectory,
         db: deps.db,
+        messageModel: deps.messageModel,
         topicModel: deps.topicModel,
         userId: deps.userId,
         workspaceId: deps.workspaceId,

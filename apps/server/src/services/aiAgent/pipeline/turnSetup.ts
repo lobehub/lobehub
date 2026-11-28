@@ -50,6 +50,7 @@ import { createStageTracer, openStageMark } from './sendTracing';
 import { assertShareHeteroAllowed } from './shareHeteroGate';
 import { pickTopicModelPin } from './topicModelPin';
 import { resolveTurnProjectId, withProjectSandbox } from './topicProject';
+import { withUserTurnConversationMode } from './userTurnConversationMode';
 import { buildUserTurnMetadata } from './userTurnMetadata';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -78,9 +79,8 @@ export interface RunAttachments {
  * Build the reasoning snapshot for a topic being created — see
  * `ChatTopicMetadata.reasoningConfig` / `heteroEffort` / `heteroSpeed`. Returns
  * undefined when there is nothing to pin (non-reasoning model, hetero agent
- * without effort or speed)
- * so the caller leaves metadata untouched. Never throws: a failed lookup just
- * means the topic follows the user-level config until the user pins one.
+ * without effort or speed), leaving metadata untouched. Never throws: a failed
+ * lookup means the topic follows the user-level config until the user pins one.
  */
 const resolveTopicReasoningSnapshot = async ({
   deps,
@@ -948,6 +948,7 @@ export const setupTurn = async (
     steer,
     trigger,
   });
+  let persistedTurnMetadata = requestTriggerMetadata;
 
   // Attachment ingestion: raw bot/IM `files` → S3, pre-uploaded
   // `attachedFileIds` → signed URLs + classification.
@@ -997,6 +998,12 @@ export const setupTurn = async (
         return anchor.resolveParentId();
       };
       const userMessageParentId = await resolveParentId();
+      persistedTurnMetadata = await withUserTurnConversationMode(requestTriggerMetadata, {
+        ...deps,
+        topicId,
+        threadId: appContext?.threadId,
+        chatConfig: agentConfig.chatConfig,
+      });
       const userMessageParams = {
         agentId: conversationAgentId,
         content: prompt,
@@ -1007,7 +1014,7 @@ export const setupTurn = async (
         // branch), so a group turn must stamp groupId or the message never
         // shows when the topic is reopened (group topic sidebar + ownership fix).
         groupId: appContext?.groupId ?? undefined,
-        metadata: requestTriggerMetadata,
+        metadata: persistedTurnMetadata,
         parentId: userMessageParentId,
         role: 'user' as const,
         threadId: appContext?.threadId ?? undefined,
@@ -1181,7 +1188,7 @@ export const setupTurn = async (
     projectId: turnProjectId,
     provider,
     requestedDeviceId: resolvedRequestedDeviceId,
-    requestTriggerMetadata,
+    requestTriggerMetadata: persistedTurnMetadata,
     runAttachments,
     selfMessageIds,
     topicBoundDeviceId,

@@ -1,4 +1,5 @@
 import type {
+  CreateAssistantMessageOptions,
   MessageTransport,
   QueryMessagesInput,
   QueryMessagesOptions,
@@ -35,7 +36,10 @@ export class ClientMessageTransport implements MessageTransport {
     private readonly operationId: string,
   ) {}
 
-  createAssistantMessage(params: CreateMessageParams): Promise<RuntimeMessageRef> {
+  async createAssistantMessage(
+    params: CreateMessageParams,
+    options?: CreateAssistantMessageOptions,
+  ): Promise<RuntimeMessageRef> {
     const operation = this.get().operations[this.operationId];
     if (!operation) throw new Error(`Operation not found: ${this.operationId}`);
 
@@ -48,14 +52,38 @@ export class ClientMessageTransport implements MessageTransport {
       ...(scope === 'sub_agent' && subAgentId && { scope, subAgentId }),
     };
 
-    return this.createMessage({
+    const message = {
       ...params,
       ...(effectiveAgentId && { agentId: effectiveAgentId }),
       ...(groupId && { groupId }),
       ...(Object.keys(metadata).length > 0 && { metadata }),
       ...(threadId && { threadId }),
       ...(topicId && { topicId }),
+    };
+    if (!options?.idempotencyKey) return this.createMessage(message);
+    const result = await messageService.createMessage({
+      ...message,
+      clientId: options.idempotencyKey,
     });
+    const saved = result.messages.find((row) => row.id === result.id);
+    if (!saved) throw new Error('Persisted assistant is unavailable');
+    if (!this.getMessages().some((row) => row.id === result.id))
+      this.get().internal_dispatchMessage(
+        {
+          id: result.id,
+          type: 'createMessage',
+          value: {
+            ...message,
+            content: saved.content ?? '',
+            metadata: saved.metadata,
+            tools: saved.tools,
+            reasoning: saved.reasoning,
+          },
+        },
+        { operationId: this.operationId },
+      );
+    this.get().internal_confirmClientMessages([result.id]);
+    return saved;
   }
 
   createToolMessage(params: CreateMessageParams): Promise<RuntimeMessageRef> {

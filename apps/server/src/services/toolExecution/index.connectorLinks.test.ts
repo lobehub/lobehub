@@ -14,6 +14,10 @@ const mocks = vi.hoisted(() => ({
   toolModelOptions: vi.fn(),
   tools: vi.fn(),
 }));
+vi.mock('@/server/services/contextReplay/toolDispatch', () => ({
+  assertCurrentToolDispatch: vi.fn(async () => undefined),
+}));
+
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn(function () {
     return {

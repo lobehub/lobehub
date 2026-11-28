@@ -14,7 +14,7 @@ import { ensureOwnedWorktreeForRun } from './ownedWorktreeRestore';
  * CLI session with no history — no error anywhere.
  *
  * Store row wins when present (it may carry fresher optimistic edits). On a
- * miss for a hetero run, fall back to the server row. Fetch failures degrade
+ * miss, fall back to the server row for the committed mode. Fetch failures degrade
  * to the old behavior rather than blocking the turn.
  */
 export const resolveExistingTopicForRun = async (params: {
@@ -24,7 +24,7 @@ export const resolveExistingTopicForRun = async (params: {
    */
   ensureWorktree?: (topic: ChatTopic | undefined) => Promise<ChatTopic | undefined>;
   fetchTopicDetail: (id: string) => Promise<ChatTopic | null>;
-  /** Only hetero runs consume topic-bound cwd/session metadata — skip the round-trip otherwise. */
+  /** Only hetero runs restore a topic-owned worktree. All runs consume the mode. */
   isHetero: boolean;
   storeTopic: ChatTopic | undefined;
   topicId: string | null | undefined;
@@ -36,10 +36,12 @@ export const resolveExistingTopicForRun = async (params: {
     storeTopic,
     topicId,
   } = params;
-  if (storeTopic) return ensureWorktree(storeTopic);
-  if (!topicId || !isHetero) return undefined;
+  const resolve = (topic: ChatTopic | undefined) =>
+    isHetero ? ensureWorktree(topic) : Promise.resolve(topic);
+  if (storeTopic) return resolve(storeTopic);
+  if (!topicId) return undefined;
   try {
-    return await ensureWorktree((await fetchTopicDetail(topicId)) ?? undefined);
+    return await resolve((await fetchTopicDetail(topicId)) ?? undefined);
   } catch (error) {
     console.error('[resolveExistingTopicForRun] Failed to fetch topic detail:', error);
     return undefined;

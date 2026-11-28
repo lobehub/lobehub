@@ -43,7 +43,7 @@ const activation = (
 ];
 
 describe('prepareAnchoredMessages', () => {
-  it('keeps the canonical prompt when one schema in an activation batch is filtered out', () => {
+  it('keeps the canonical prompt when one schema in an activation batch is filtered out', async () => {
     const messages: OpenAIChatMessage[] = [
       { role: 'system', content: 'Tool guidance' },
       ...activation('call', []),
@@ -58,7 +58,7 @@ describe('prepareAnchoredMessages', () => {
       ],
       system: { start: 0, original: 'Tool guidance', replacement: '' },
     };
-    expect(prepareAnchoredMessages(messages, [search])).toBe(messages);
+    expect(await prepareAnchoredMessages(messages, [search])).toBe(messages);
   });
 });
 

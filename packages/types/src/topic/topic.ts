@@ -174,6 +174,8 @@ export interface TopicOpenedBy {
   topicId: string;
 }
 
+export type ConversationMode = 'agent' | 'chat';
+
 export interface ChatTopicMetadata {
   /** Watermark written by the background topic-summary workflow. */
   autoSummary?: {
@@ -191,11 +193,13 @@ export interface ChatTopicMetadata {
     version: number;
   };
   bot?: ChatTopicBotContext;
-
   botCreator?: BotSenderMetadata | null;
+
   boundDeviceId?: string;
   /** The Execute plan / Keep discussing buttons under the latest Codex plan. */
   codexPlanDecision?: CodexPlanDecision | null;
+  /** Committed with the first user turn; later turns inherit this intent. */
+  conversationMode?: ConversationMode;
   cronJobId?: string;
   /**
    * The conversation's device was chosen explicitly for it (the composer's
