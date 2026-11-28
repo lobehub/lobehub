@@ -270,6 +270,13 @@ export const agentInterventions = pgTable(
     ),
     index('agent_interventions_activity_key_idx').on(table.userId, table.activityKey),
     index('agent_interventions_status_deadline_idx').on(table.status, table.deadline),
+    /**
+     * Every resolution transition (claim, publish, producer ACK, rollback)
+     * locks and updates the items of one resolution by this column. Without
+     * it each statement scanned the whole table inside the transaction, so a
+     * device ACK queued behind a slow publish of the same approval.
+     */
+    index('agent_interventions_resolution_id_idx').on(table.resolutionId),
     check(
       'agent_interventions_review_token_hash_check',
       sql`${table.reviewTokenHash} ~ '^[a-f0-9]{64}$'`,

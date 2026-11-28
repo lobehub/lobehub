@@ -1631,6 +1631,13 @@
       "when": 1795768777251,
       "tag": "0232_bot_provider_last_active_at",
       "breakpoints": true
+    },
+    {
+      "idx": 233,
+      "version": "7",
+      "when": 1795900453676,
+      "tag": "0233_agent_interventions_resolution_id_index",
+      "breakpoints": true
     }
   ],
   "version": "6"
