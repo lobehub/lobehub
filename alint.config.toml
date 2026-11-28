@@ -638,3 +638,104 @@ files = [ "packages/alint/fixtures/no-benchmark-in-tests/**" ]
 lobehub = "./packages/alint/rules"
 [config.group.rules]
 "lobehub/no-benchmark-in-tests" = "warn"
+
+# Cost: bytes paid per repeated read or write (database egress, Redis
+# bandwidth, function invocations, prompt-cache writes). Sourced from
+# lobehub#23142, #23144, #23148, #23160, #23169, #23170, #23210, #23745,
+# #23860, #22965, #22989. All start at `warn`.
+[[config.group]]
+files = [ "apps/server/src/**/*.ts", "packages/database/src/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/__tests__/**", "**/__mocks__/**", "**/migrations/**", "**/*TestUtils.ts" ]
+
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+
+[config.group.rules]
+"lobehub/no-hot-path-full-read" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-hot-path-full-read/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-hot-path-full-read" = "warn"
+
+[[config.group]]
+files = [ "apps/server/src/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/__tests__/**", "**/__mocks__/**", "**/*TestUtils.ts" ]
+
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+
+[config.group.rules]
+"lobehub/no-redis-blob-for-field" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-redis-blob-for-field/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-redis-blob-for-field" = "warn"
+
+[[config.group]]
+files = [ "src/**/*.ts", "src/**/*.tsx", "apps/desktop/src/main/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__mocks__/**", "**/*.stories.tsx" ]
+
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+
+[config.group.rules]
+"lobehub/no-unbounded-refetch" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-unbounded-refetch/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unbounded-refetch" = "warn"
+
+[[config.group]]
+files = [
+  "packages/builtin-tool-*/src/**/*.ts",
+  "packages/builtin-tools/src/**/*.ts",
+  "packages/tool-runtime/src/**/*.ts",
+  "packages/heterogeneous-agents/src/adapters/**/*.ts",
+  "packages/agent-runtime/src/**/*.ts",
+  "apps/server/src/services/toolExecution/**/*.ts",
+  "apps/server/src/modules/AgentRuntime/**/*.ts",
+]
+ignores = [ "**/*.test.ts", "**/__tests__/**", "**/__mocks__/**", "**/client/**", "**/*.d.ts" ]
+
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+
+[config.group.rules]
+"lobehub/no-duplicate-persisted-payload" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-duplicate-persisted-payload/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-duplicate-persisted-payload" = "warn"
+
+[[config.group]]
+files = [
+  "packages/context-engine/src/**/*.ts",
+  "packages/prompts/src/**/*.ts",
+  "apps/server/src/modules/Mecha/**/*.ts",
+]
+ignores = [ "**/*.test.ts", "**/__tests__/**", "**/__mocks__/**", "**/__snapshots__/**" ]
+
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+
+[config.group.rules]
+"lobehub/no-volatile-prompt-prefix" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-volatile-prompt-prefix/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-volatile-prompt-prefix" = "warn"
