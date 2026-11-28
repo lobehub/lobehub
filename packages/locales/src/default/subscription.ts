@@ -145,15 +145,15 @@ export default {
   'limitation.insufficientBudget.rescue.upgrade.benefitMultiple':
     '{{multiple}}× the usage of your current plan',
   'limitation.insufficientBudget.rescue.upgrade.benefitRolling': 'Higher usage limits',
-  'limitation.insufficientBudget.rescue.upgrade.benefitUltra': 'Higher Pro model weekly limit',
+  'limitation.insufficientBudget.rescue.upgrade.benefitUltra': 'Higher flagship model weekly limit',
   'limitation.insufficientBudget.rescue.upgrade.benefitUltraMultiple':
-    '{{multiple}}× the Pro model weekly limit of your current plan',
+    '{{multiple}}× the flagship model weekly limit of your current plan',
   'limitation.insufficientBudget.rescue.switchToAuto.cta': 'Switch to Auto Model and continue',
   'limitation.insufficientBudget.rescue.switchModel.hint':
-    'Or switch to a Plus model to keep chatting.',
+    'Or switch to a non-flagship model to keep chatting.',
   'limitation.insufficientBudget.rescue.wait.hint': "Or wait for the reset and retry, it's free.",
   'limitation.insufficientBudget.rescue.wait.hintUltra':
-    "Or switch to a Plus model to keep chatting, or wait for the reset. It's free.",
+    "Or switch to a non-flagship model to keep chatting, or wait for the reset. It's free.",
   'limitation.insufficientBudget.window.desc': "You've reached your {{rules}}.",
   'limitation.insufficientBudget.window.duration.days': '{{count}} d',
   'limitation.insufficientBudget.window.duration.hours': '{{count}} h',
@@ -170,12 +170,13 @@ export default {
   'limitation.insufficientBudget.window.rule.plan5h': '5-hour limit',
   'limitation.insufficientBudget.window.rule.plan7d': 'weekly limit',
   'limitation.insufficientBudget.window.rule.planMonth': 'monthly limit',
-  'limitation.insufficientBudget.window.rule.planUltraWeek': 'Pro model weekly limit',
+  'limitation.insufficientBudget.window.rule.planUltraWeek': 'flagship model weekly limit',
   'limitation.insufficientBudget.window.sentenceSeparator': ' ',
   'limitation.insufficientBudget.window.title': 'Usage limit reached',
   'limitation.insufficientBudget.window.titleRules': '{{rules}} reached',
   'limitation.modelAccess.switchHint': 'Or switch to another model to keep chatting.',
-  'limitation.modelAccess.switchHintUltra': 'Or switch to a Plus model to keep chatting.',
+  'limitation.modelAccess.switchHintUltra':
+    'Or switch to a model your plan includes to keep chatting.',
   'modelSelection.confirm.continue': 'Continue using',
   'modelSelection.confirm.description':
     '{{model}} can incur higher usage costs. Review its current rates before continuing.',
@@ -630,7 +631,7 @@ export default {
   'plans.compare.trialCredit': 'Trial credits',
   'plans.compare.trialCredit.desc': 'Granted once',
   'plans.compare.trialCredit.runs': 'About {{runs}} agent tasks',
-  'plans.compare.ultraWeeklySpend': 'Pro model weekly limit',
+  'plans.compare.ultraWeeklySpend': 'Flagship model weekly limit',
   'plans.compare.ultraWeeklySpend.desc': 'Counts toward the weekly limit and has its own limit',
   'plans.compare.unlimited': 'Unlimited',
   'plans.compare.usageBase': 'Standard',
@@ -726,15 +727,15 @@ export default {
   'plans.limits.support': '{{value}}',
   'plans.limits.topUpRate': 'Top-up discount',
   'plans.limits.topUpRate.tooltip': 'Cheaper top-ups than on Free',
-  'plans.limits.ultraWeeklySpend': 'Pro model weekly limit',
-  'plans.limits.ultraWeeklySpend.multiple': '{{multiple}}× the Pro model weekly limit',
+  'plans.limits.ultraWeeklySpend': 'Flagship model weekly limit',
+  'plans.limits.ultraWeeklySpend.multiple': '{{multiple}}× the flagship model weekly limit',
   'plans.limits.ultraWeeklySpend.tooltip':
-    'Pro models are the most capable and most expensive ones. Their usage counts toward your weekly limit and also has a limit of its own; both reset together.',
-  'plans.limits.ultraWeeklySpend.unavailable': 'Pro models',
-  'plans.message.advancedLLM': 'Plus models',
+    'Flagship models are the most capable and most expensive ones. Their usage counts toward your weekly limit and also has a limit of its own; both reset together.',
+  'plans.limits.ultraWeeklySpend.unavailable': 'Flagship models',
+  'plans.message.advancedLLM': 'Advanced models',
   'plans.message.autoLLM': 'Auto Model',
   'plans.message.normalLLM': 'Standard models',
-  'plans.message.plusLLM': 'Plus models',
+  'plans.message.plusLLM': 'Standard and advanced models',
   'plans.plan.max.desc': 'For power users running agents at scale',
   'plans.plan.plus.desc': 'For everyday AI use',
   'plans.plan.pro.desc': 'For professionals who rely on AI every day',
@@ -856,6 +857,9 @@ export default {
   'plansModal.persistentSandbox.desc':
     'Files your agent writes in the cloud sandbox are discarded when the session ends. Upgrade to keep a persistent working directory that survives sessions and is shared across your topics.',
   'plansModal.persistentSandbox.title': 'Keep your sandbox files',
+  'plansModal.plusModelAccess.desc':
+    'Upgrade to Plus to use more models. Flagship models need the Pro plan or above.',
+  'plansModal.plusModelAccess.title': 'This model needs the Plus plan or above',
   'plansModal.preciseSchedule.desc':
     'Run scheduled tasks at any exact minute, not only on the hour or half hour. Upgrade to a paid plan to pick your own time.',
   'plansModal.preciseSchedule.title': 'Schedule tasks at an exact time',
@@ -880,8 +884,8 @@ export default {
     'This model is available on paid plans. Upgrade to use the full model lineup.',
   'plansModal.modelAccess.title': 'Unlock all models',
   'plansModal.ultraModelAccess.desc':
-    'Pro models are the most capable and most expensive ones, available on the Pro plan and above. Upgrade to use them.',
-  'plansModal.ultraModelAccess.title': 'Pro models need the Pro plan or above',
+    'Flagship models are the most capable and most expensive ones, available on the Pro plan and above. Upgrade to use them.',
+  'plansModal.ultraModelAccess.title': 'Flagship models need the Pro plan or above',
   'qa.desc':
     'If your question is not answered, check <1>Product Documentation</1> for more FAQs, or contact us.',
   'qa.detail': 'View details',
@@ -1086,7 +1090,7 @@ export default {
   'usage.storage.embeddings.used': 'Vector storage',
   'usage.storage.file.used': 'File usage',
   'usage.storage.sandboxStorage.used': 'Sandbox storage',
-  'usage.window.rule.planUltraWeek': 'Pro model weekly limit',
+  'usage.window.rule.planUltraWeek': 'Flagship model weekly limit',
   'usage.storage.sandboxStorage.pool': 'Sandbox drives (workspace pool)',
   'usage.window.credits': 'Balance',
   'usage.window.overflow.desc': 'When a limit runs out, keep going on your balance.',
@@ -1154,6 +1158,10 @@ export default {
   'modelSwitch.auto.badge': 'Own quota',
   'modelSwitch.auto.description':
     'Balanced quality and speed with generous usage quota, ideal for daily tasks',
+  'modelSwitch.restricted.advanced': 'Advanced model · available on Plus and above',
+  'modelSwitch.restricted.plus': 'Available on Plus and above',
+  'modelSwitch.restricted.ultra': 'Flagship model · available on Pro and above',
+  'modelSwitch.restricted.workspace': 'Available after upgrading the workspace plan',
   'creditUsageReminder.window.used': '{{rule}}: {{percent}} used',
   'credits.agentShareBudget.saveFailed':
     "Couldn't save the Agent Share budget. Check your connection and try again.",
@@ -1224,7 +1232,7 @@ export default {
   'limitation.insufficientBudget.rescue.autoTopUp.success.title': 'Auto top-up is on',
   'limitation.insufficientBudget.rescue.autoTopUp.title': 'Turn on auto top-up',
   'limitation.insufficientBudget.rescue.upgrade.short': '{{multiple}}× usage',
-  'limitation.insufficientBudget.rescue.upgrade.shortUltra': '{{multiple}}× Pro model usage',
+  'limitation.insufficientBudget.rescue.upgrade.shortUltra': '{{multiple}}× flagship model usage',
   'usage.overview.records': 'Top-up history',
   'usage.overview.topUpOnce': 'Top up once',
   'usage.tabs.detail': 'Details',

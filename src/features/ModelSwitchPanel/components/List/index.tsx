@@ -58,6 +58,7 @@ export const List: FC<ListProps> = ({
     onBeforeModelSelect,
     onRestrictedModelClick,
     restrictedBadgeLabel,
+    restrictedBadgeTooltip,
     sortModelLast,
   } = useBusinessModelListGuard();
   const proLabel = tCommon('pro');
@@ -187,6 +188,7 @@ export const List: FC<ListProps> = ({
                 activeKey={activeKey}
                 activeSecondaryText={activeSecondaryText}
                 getRestrictedLabel={getRestrictedLabel}
+                getRestrictedTooltip={restrictedBadgeTooltip}
                 isModelRestricted={isModelRestricted}
                 item={item}
                 key={key}

@@ -80,16 +80,27 @@ vi.mock('@/components/ModelSelect', () => ({
   ModelItemRender: ({
     displayName,
     proBadgeLabel,
+    proBadgeTooltip,
   }: {
     displayName: string;
     proBadgeLabel?: string;
+    proBadgeTooltip?: string;
   }) => (
     <div>
       {displayName}
-      {proBadgeLabel && <span data-testid="model-pro-badge">{proBadgeLabel}</span>}
+      {proBadgeLabel && (
+        <span data-testid="model-pro-badge" title={proBadgeTooltip}>
+          {proBadgeLabel}
+        </span>
+      )}
     </div>
   ),
   ProviderItemRender: ({ name }: { name: string }) => <div>{name}</div>,
+  RestrictedModelBadge: ({ label, tooltip }: { label: string; tooltip?: string }) => (
+    <span data-testid="provider-pro-badge" title={tooltip}>
+      {label}
+    </span>
+  ),
 }));
 
 vi.mock('../../ModelDetailPanel', () => ({
@@ -109,6 +120,24 @@ describe('MultipleProvidersModelItem', () => {
     render(<ModelItemRender audio id="gemini-audio" />);
 
     expect(screen.getByTestId('tooltip-ModelSelect.featureTag.audio')).toBeInTheDocument();
+  });
+
+  it('explains a restricted model badge on hover', async () => {
+    const { ModelItemRender } = await vi.importActual<typeof ModelSelectModule>(
+      '@/components/ModelSelect',
+    );
+
+    render(
+      <ModelItemRender
+        id="claude-opus-4-7"
+        proBadgeLabel="Pro"
+        proBadgeTooltip="Flagship model · available on Pro and above"
+      />,
+    );
+
+    expect(
+      screen.getByTestId('tooltip-Flagship model · available on Pro and above'),
+    ).toHaveTextContent('Pro');
   });
 
   it('keeps spread model card fields off the DOM', async () => {
@@ -165,6 +194,7 @@ describe('MultipleProvidersModelItem', () => {
       <MultipleProvidersModelItem
         activeKey="anthropic/claude-opus-4-7"
         getRestrictedLabel={() => 'pro'}
+        getRestrictedTooltip={() => 'Available on Pro and above'}
         newLabel="new"
         data={{
           displayName: 'Claude Opus 4.7',
@@ -194,6 +224,15 @@ describe('MultipleProvidersModelItem', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onModelChange).not.toHaveBeenCalled();
     expect(screen.getByTestId('model-pro-badge')).toHaveTextContent('pro');
+    expect(screen.getByTestId('model-pro-badge')).toHaveAttribute(
+      'title',
+      'Available on Pro and above',
+    );
+    // The provider submenu badges the restricted provider only, with the same hover text
+    expect(screen.getByTestId('provider-pro-badge')).toHaveAttribute(
+      'title',
+      'Available on Pro and above',
+    );
   });
 
   it('should only change the model when the before-select guard approves', async () => {
