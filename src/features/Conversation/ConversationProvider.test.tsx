@@ -68,7 +68,10 @@ vi.mock('@/features/WideScreenContainer', () => ({
 
 vi.mock('@/hooks/useFetchAvailableAgents', () => ({ useFetchAvailableAgents: vi.fn() }));
 vi.mock('@/hooks/useFetchMemoryForTopic', () => ({ useFetchTopicMemories: vi.fn() }));
-vi.mock('@/hooks/useFetchNotebookDocuments', () => ({ useFetchNotebookDocuments: vi.fn() }));
+vi.mock('@/store/notebook', () => ({
+  useNotebookStore: (selector: (state: { useFetchDocuments: () => void }) => unknown) =>
+    selector({ useFetchDocuments: vi.fn() }),
+}));
 
 vi.mock('@/libs/swr', () => ({
   mutate: vi.fn(),
