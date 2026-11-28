@@ -780,6 +780,8 @@ export default {
   'plans.llm.messageRequest': 'Unlimited message requests',
   'plans.llm.title': 'Model service',
   'plans.llm.tooltip': 'Add private model Provider API while enjoying cloud sync',
+  'plans.locked.belowCurrent': 'Below your {{plan}}',
+  'plans.locked.upgradeTarget': 'Upgrade to {{plan}} instead',
   'plans.message.count': 'Approximately {{number}} messages',
   'plans.message.more': 'More models in plan comparison',
   'plans.message.tooltip': 'Estimated based on average {{number}} tokens per message',
