@@ -22,7 +22,9 @@ export default memo(() => {
   // page; the settings sheet only renders the tabs below it.
   const [tab, setTab] = useState(
     () =>
-      (cateItems?.find((item) => item?.key !== ChatSettingsTabs.Prompt)?.key ??
+      (cateItems
+        ?.flatMap((item) => (item && typeof item === 'object' ? [item] : []))
+        .find((item) => item.key !== ChatSettingsTabs.Prompt)?.key ??
         ChatSettingsTabs.Opening) as ChatSettingsTabs,
   );
   const id = useAgentStore((s) => s.activeAgentId);
