@@ -689,11 +689,14 @@ export const registerWorksForOperation = async (
         if (!exported.success) {
           // console, not the debug logger: production does not enable this
           // namespace, and a silent failure here only shows up as a missing card.
+          // Log only structured error fields: the file path and the raw upstream
+          // message can carry user file names into production logs.
           console.warn(
-            '[work-registration] [%s] Skipping file %s: sandbox export failed: %s',
+            '[work-registration] [%s] Skipping a file: sandbox export failed (code=%s, name=%s, status=%s)',
             operationId,
-            entry.path,
-            exported.error?.message ?? 'unknown error',
+            exported.error?.code ?? 'unknown',
+            exported.error?.name ?? 'unknown',
+            exported.error?.status ?? 'unknown',
           );
           // A failed export leaves nothing to register — count it so the caller
           // withholds the marker and a later call retries this file.

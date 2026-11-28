@@ -407,7 +407,11 @@ describe('registerWorksForOperation', () => {
     mockExportAndUploadFile.mockImplementation(async (path: string) => {
       const filename = base(path);
       if (filename === 'broken.pptx') {
-        return { error: { message: 'export boom' }, filename, success: false };
+        return {
+          error: { code: 'EXPORT_FAILED', message: 'export boom for broken.pptx' },
+          filename,
+          success: false,
+        };
       }
       return {
         fileId: `file-${filename}`,
@@ -418,8 +422,16 @@ describe('registerWorksForOperation', () => {
         url: `s3://exports/${filename}`,
       };
     });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const outcome = await registerWorksForOperation(baseParams);
+
+    // The production warning must not leak user file names (path or raw message).
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    const logged = warnSpy.mock.calls[0].map(String).join(' ');
+    expect(logged).toContain('EXPORT_FAILED');
+    expect(logged).not.toContain('broken.pptx');
+    warnSpy.mockRestore();
 
     expect(mockRegisterFile).toHaveBeenCalledTimes(1);
     expect(mockRegisterFile.mock.calls[0][0].filePath).toBe('/mnt/data/ok.xlsx');
