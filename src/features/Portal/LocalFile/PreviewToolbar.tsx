@@ -15,7 +15,7 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 6px;
     align-items: center;
 
-    height: 28px;
+    height: ${densityVars.smallControlHeight};
     padding-inline: 8px;
     border: none;
     border-radius: ${cssVar.borderRadius};

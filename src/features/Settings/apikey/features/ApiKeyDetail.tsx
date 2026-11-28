@@ -31,7 +31,7 @@ const styles = stylex.create({
     display: 'flex',
     gap: densityTokens['--lobe-density-section-gap'],
     alignItems: 'center',
-    minHeight: '28px',
+    minHeight: densityTokens['--lobe-density-small-control-height'],
   },
   sectionTitle: { fontSize: '13px', fontWeight: 500, color: cssVar.colorTextSecondary },
   value: { overflow: 'hidden', display: 'flex', alignItems: 'center', fontSize: '13px' },

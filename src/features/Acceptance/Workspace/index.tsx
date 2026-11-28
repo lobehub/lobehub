@@ -13,6 +13,7 @@ import { RouteMetaBridge } from '@/features/RouteMeta';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { useAcceptanceList } from '../hooks';
 import { acceptanceHomePath } from '../Viewer/routes';
@@ -32,8 +33,8 @@ const styles = stylex.create({
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '28px',
-    height: '28px',
+    width: densityTokens['--lobe-density-icon-box'],
+    height: densityTokens['--lobe-density-icon-box'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },

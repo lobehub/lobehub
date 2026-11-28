@@ -10,6 +10,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { useDensityTokens } from '@/styles/density';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chevron: css`
@@ -38,6 +39,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const CopilotModelSelect = memo(() => {
   const { allowed: canEdit } = usePermission('edit_own_content');
+  const { headerActionSmallSize, smallControlHeight } = useDensityTokens();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const agentId = useConversationStore(conversationSelectors.agentId);
 
@@ -76,7 +78,7 @@ const CopilotModelSelect = memo(() => {
         <Center
           horizontal
           className={styles.trigger}
-          height={28}
+          height={smallControlHeight}
           paddingInline={6}
           style={
             canEdit ? undefined : { cursor: 'not-allowed', opacity: 0.5, pointerEvents: 'none' }
@@ -104,7 +106,7 @@ const CopilotModelSelect = memo(() => {
           <ActionIcon
             disabled={!canEdit}
             icon={Settings2Icon}
-            size={{ blockSize: 28, size: 16 }}
+            size={headerActionSmallSize}
             onClick={() => {
               if (!canEdit) return;
 

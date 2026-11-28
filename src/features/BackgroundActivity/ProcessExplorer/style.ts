@@ -147,7 +147,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   status: css`
     flex: none;
 
-    height: 28px;
+    height: ${densityVars.smallControlHeight};
     padding-inline: ${densityVars.cardPadding};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 

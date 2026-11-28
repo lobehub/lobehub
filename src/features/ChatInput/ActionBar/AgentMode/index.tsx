@@ -20,6 +20,7 @@ import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatIn
 import { useEffectiveAgentMode } from '@/features/ChatInput/hooks/useEffectiveAgentMode';
 import { useToggleAgentMode } from '@/features/ChatInput/hooks/useToggleAgentMode';
 import { usePermission } from '@/hooks/usePermission';
+import { useDensityTokens } from '@/styles/density';
 import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
@@ -48,7 +49,7 @@ const styles = stylex.create({
     display: 'flex',
     gap: '6px',
     alignItems: 'center',
-    height: '28px',
+    height: densityTokens['--lobe-density-small-control-height'],
     paddingInline: '8px',
     borderRadius: '999px',
     fontSize: '12px',
@@ -115,6 +116,7 @@ const AGENT_CAPS = [
 
 const AgentMode = memo(() => {
   const { t } = useTranslation('chat');
+  const { smallControlHeight } = useDensityTokens();
   const agentId = useAgentId();
   const toggleAgentMode = useToggleAgentMode();
   useBusinessAgentModeSync(agentId);
@@ -235,9 +237,9 @@ const AgentMode = memo(() => {
     </div>
   );
 
-  // Hold the 28px pill's footprint so the action bar does not shift when it resolves.
+  // Hold the pill's footprint so the action bar does not shift when it resolves.
   if (isAccessLoading || isPreferenceLoading)
-    return <SkeletonBar height={28} radius={999} width={84} />;
+    return <SkeletonBar height={smallControlHeight} radius={999} width={84} />;
 
   if (disabled)
     return (

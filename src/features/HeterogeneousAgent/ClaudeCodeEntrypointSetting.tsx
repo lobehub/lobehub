@@ -11,6 +11,8 @@ import * as stylex from '@stylexjs/stylex';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 const styles = stylex.create({
   hint: {
     color: cssVar.colorTextSecondary,
@@ -27,7 +29,7 @@ const styles = stylex.create({
     lineHeight: '18px',
   },
   switchLine: {
-    minHeight: 28,
+    minHeight: densityTokens['--lobe-density-small-control-height'],
   },
 });
 

@@ -1,4 +1,5 @@
 import { EMPTY_ARRAY } from '@lobechat/const';
+import type { InterfaceDensity } from '@lobechat/types';
 import { createStaticStyles, cx, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { ChevronRightIcon, FileIcon, FolderIcon } from 'lucide-react';
@@ -7,6 +8,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 
 import { useDensityTokens } from '@/styles/density';
 import { sidebarRow } from '@/styles/density.stylex';
+import { densityVars } from '@/styles/densityVars';
 
 export interface SkillListItem {
   description?: string;
@@ -38,6 +40,18 @@ interface SkillsListProps {
 }
 
 const COMPACT_CHEVRON_SLOT = 16;
+
+const SKILL_CHEVRON_ICON_SIZE = {
+  compact: 12,
+  loose: 14,
+} as const satisfies Record<InterfaceDensity, number>;
+
+const SKILL_LIST_GAP = {
+  compact: 1,
+  loose: 2,
+} as const satisfies Record<InterfaceDensity, number>;
+
+const toRowDensity = (compact?: boolean): InterfaceDensity => (compact ? 'compact' : 'loose');
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chevron: css`
@@ -76,7 +90,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   item: css`
     cursor: pointer;
 
-    height: 28px;
+    height: ${densityVars.smallControlHeight};
     padding-inline: 4px 8px;
     border-radius: 6px;
 
@@ -368,7 +382,7 @@ const SkillRow = memo<SkillRowProps>(
             <Icon
               className={`${styles.chevron} ${expanded ? styles.chevronExpanded : ''}`}
               icon={ChevronRightIcon}
-              size={compact ? 12 : 14}
+              size={SKILL_CHEVRON_ICON_SIZE[toRowDensity(compact)]}
             />
           </Flexbox>
         ) : !onSelectSkill && reserveChevronSlot ? (
@@ -437,7 +451,7 @@ const SkillsList = memo<SkillsListProps>(
     );
 
     return (
-      <Flexbox gap={compact ? 1 : 2}>
+      <Flexbox gap={SKILL_LIST_GAP[toRowDensity(compact)]}>
         {items.map((item) => (
           <SkillRow
             compact={compact}

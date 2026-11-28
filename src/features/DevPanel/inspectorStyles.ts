@@ -105,7 +105,7 @@ export const inspectorStyles = createStaticStyles(({ css }) => ({
   detailValue: css`
     overflow: auto;
 
-    min-height: 28px;
+    min-height: ${densityVars.smallControlHeight};
     max-height: 180px;
     margin: 0;
     padding-block: 4px;
@@ -158,7 +158,7 @@ export const inspectorStyles = createStaticStyles(({ css }) => ({
     text-align: center;
   `,
   listItemNested: css`
-    height: 28px;
+    height: ${densityVars.smallControlHeight};
     padding-inline-start: 34px;
   `,
   rowActive: css`

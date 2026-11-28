@@ -5,13 +5,20 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useHomeStore } from '@/store/home';
+import { useDensityTokens } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 import type { SessionGroupItemBase } from '@/types/session';
 
 import { useSidebarGroupVisibility } from '../../useSidebarGroupVisibility';
 
 const styles = stylex.create({
   hiddenTitle: { opacity: 0.45 },
-  title: { flex: '1', height: '28px', lineHeight: '28px', textAlign: 'start' },
+  title: {
+    flex: '1',
+    height: densityTokens['--lobe-density-small-control-height'],
+    lineHeight: densityTokens['--lobe-density-small-control-height'],
+    textAlign: 'start',
+  },
 });
 
 interface GroupItemProps extends SessionGroupItemBase {
@@ -20,6 +27,7 @@ interface GroupItemProps extends SessionGroupItemBase {
 
 const GroupItem = memo<GroupItemProps>(({ id, name, disabled }) => {
   const { t } = useTranslation(['chat', 'common']);
+  const { smallControlHeight } = useDensityTokens();
 
   const [editing, setEditing] = useState(false);
   const [updateGroupName, removeGroup] = useHomeStore((s) => [s.updateGroupName, s.removeGroup]);
@@ -83,7 +91,7 @@ const GroupItem = memo<GroupItemProps>(({ id, name, disabled }) => {
         <EditableText
           editing={editing}
           showEditIcon={false}
-          style={{ height: 28 }}
+          style={{ height: smallControlHeight }}
           value={name}
           onEditingChange={(e) => setEditing(e)}
           onChangeEnd={async (input) => {

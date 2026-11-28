@@ -24,6 +24,7 @@ import { useDragActive } from '@/features/ResourceManager/DndContextWrapper';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/library';
+import { useHeaderActionSize } from '@/styles/density';
 
 import type { LibraryMenuEntry } from './libraryMenuItems';
 import { buildLibraryMenuItems } from './libraryMenuItems';
@@ -52,6 +53,7 @@ const Head = memo<{ id: string }>(({ id }) => {
   const name = useKnowledgeBaseStore(knowledgeBaseSelectors.getKnowledgeBaseNameById(id));
   const [setMode, setLibraryId] = useResourceManagerStore((s) => [s.setMode, s.setLibraryId]);
   const isDragActive = useDragActive();
+  const switcherActionSize = useHeaderActionSize(true);
   const [isDropZoneActive, setIsDropZoneActive] = useState(false);
 
   const useFetchKnowledgeBaseList = useKnowledgeBaseStore((s) => s.useFetchKnowledgeBaseList);
@@ -165,14 +167,7 @@ const Head = memo<{ id: string }>(({ id }) => {
             <Text ellipsis style={{ flex: 1 }} weight={500}>
               {name}
             </Text>
-            <ActionIcon
-              icon={ChevronsUpDownIcon}
-              style={{ width: 24 }}
-              size={{
-                blockSize: 28,
-                size: 16,
-              }}
-            />
+            <ActionIcon icon={ChevronsUpDownIcon} size={switcherActionSize} style={{ width: 24 }} />
           </Center>
         </DropdownMenu>
       )}

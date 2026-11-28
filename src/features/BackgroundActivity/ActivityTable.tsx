@@ -93,7 +93,7 @@ const tableStyles = createStaticStyles(({ css }) => ({
     gap: 8px;
     align-items: center;
 
-    height: 28px;
+    height: ${densityVars.smallControlHeight};
     padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 

@@ -15,6 +15,8 @@ export interface ActionSize {
 export interface DensityTokens {
   badgeHeight: number;
   badgeMinWidth: number;
+  blockGap: number;
+  cardHeaderPaddingBlock: number;
   cardPadding: number;
   contentGap: number;
   controlHeight: number;
@@ -27,9 +29,11 @@ export interface DensityTokens {
   headerHeight: number;
   iconBox: number;
   iconSize: number;
+  inlineRowPaddingBlock: number;
   largeIconSize: number;
   lineHeight: number;
   listRowHeight: number;
+  mediaIconBox: number;
   modalPadding: number;
   paddingInline: number;
   pagePaddingBlockEnd: number;
@@ -41,6 +45,7 @@ export interface DensityTokens {
   rowHeight: number;
   sectionGap: number;
   sectionHeaderHeight: number;
+  smallControlHeight: number;
   toolbarHeight: number;
   treeItemHeight: number;
 }

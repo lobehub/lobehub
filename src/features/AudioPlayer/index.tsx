@@ -75,8 +75,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 28px;
-    height: 28px;
+    width: ${densityVars.iconBox};
+    height: ${densityVars.iconBox};
     border: none;
     border-radius: 6px;
 
@@ -98,8 +98,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 28px;
-    height: 28px;
+    width: ${densityVars.iconBox};
+    height: ${densityVars.iconBox};
     padding: 0;
     border: 0;
     border-radius: 8px;

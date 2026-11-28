@@ -19,6 +19,8 @@ import type { InterfaceDensity } from '@lobechat/types';
 export interface DensityScale {
   badgeHeight: number;
   badgeMinWidth: number;
+  blockGap: number;
+  cardHeaderPaddingBlock: number;
   cardPadding: number;
   contentGap: number;
   controlHeight: number;
@@ -30,9 +32,11 @@ export interface DensityScale {
   headerSmallIconSize: number;
   iconBox: number;
   iconSize: number;
+  inlineRowPaddingBlock: number;
   largeIconSize: number;
   lineHeight: number;
   listRowHeight: number;
+  mediaIconBox: number;
   modalPadding: number;
   paddingInline: number;
   pagePaddingBlockEnd: number;
@@ -43,6 +47,7 @@ export interface DensityScale {
   radius: number;
   rowHeight: number;
   sectionGap: number;
+  smallControlHeight: number;
   toolbarHeight: number;
 }
 
@@ -50,6 +55,8 @@ export const DENSITY_SCALE: Record<InterfaceDensity, DensityScale> = {
   compact: {
     badgeHeight: 16,
     badgeMinWidth: 18,
+    blockGap: 6,
+    cardHeaderPaddingBlock: 6,
     cardPadding: 12,
     contentGap: 8,
     controlHeight: 28,
@@ -61,9 +68,11 @@ export const DENSITY_SCALE: Record<InterfaceDensity, DensityScale> = {
     headerSmallIconSize: 14,
     iconBox: 24,
     iconSize: 16,
+    inlineRowPaddingBlock: 2,
     largeIconSize: 20,
     lineHeight: 20,
     listRowHeight: 40,
+    mediaIconBox: 32,
     modalPadding: 16,
     paddingInline: 4,
     pagePaddingBlockEnd: 16,
@@ -74,11 +83,14 @@ export const DENSITY_SCALE: Record<InterfaceDensity, DensityScale> = {
     radius: 6,
     rowHeight: 32,
     sectionGap: 12,
+    smallControlHeight: 24,
     toolbarHeight: 36,
   },
   loose: {
     badgeHeight: 18,
     badgeMinWidth: 20,
+    blockGap: 8,
+    cardHeaderPaddingBlock: 8,
     cardPadding: 16,
     contentGap: 12,
     controlHeight: 32,
@@ -90,9 +102,11 @@ export const DENSITY_SCALE: Record<InterfaceDensity, DensityScale> = {
     headerSmallIconSize: 16,
     iconBox: 28,
     iconSize: 18,
+    inlineRowPaddingBlock: 4,
     largeIconSize: 22,
     lineHeight: 22,
     listRowHeight: 48,
+    mediaIconBox: 40,
     modalPadding: 20,
     paddingInline: 4,
     pagePaddingBlockEnd: 24,
@@ -103,6 +117,7 @@ export const DENSITY_SCALE: Record<InterfaceDensity, DensityScale> = {
     radius: 8,
     rowHeight: 36,
     sectionGap: 16,
+    smallControlHeight: 28,
     toolbarHeight: 40,
   },
 };

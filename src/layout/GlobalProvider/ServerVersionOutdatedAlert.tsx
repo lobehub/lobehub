@@ -12,6 +12,7 @@ import { CURRENT_VERSION } from '@/const/version';
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 import { useGlobalStore } from '@/store/global';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   closeButton: {
@@ -22,8 +23,8 @@ const styles = stylex.create({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '28px',
-    height: '28px',
+    width: densityTokens['--lobe-density-icon-box'],
+    height: densityTokens['--lobe-density-icon-box'],
     borderRadius: cssVar.borderRadius,
     color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
     transition: 'all 0.2s',

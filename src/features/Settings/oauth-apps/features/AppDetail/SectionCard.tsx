@@ -17,6 +17,7 @@ const styles = stylex.create({
     backgroundColor: cssVar.colorBgContainer,
     backgroundImage: 'none',
   },
+  header: { minHeight: densityTokens['--lobe-density-small-control-height'] },
 });
 
 interface SectionCardProps {
@@ -26,7 +27,12 @@ interface SectionCardProps {
 
 const SectionCard: FC<PropsWithChildren<SectionCardProps>> = ({ children, extra, title }) => (
   <Flexbox className={stylex.props(styles.card).className} gap={16}>
-    <Flexbox horizontal align={'center'} justify={'space-between'} style={{ minHeight: 28 }}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={stylex.props(styles.header).className}
+      justify={'space-between'}
+    >
       <Text weight={500}>{title}</Text>
       {extra}
     </Flexbox>

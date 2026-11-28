@@ -12,6 +12,8 @@ import {
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { useBoard } from '../BoardContext';
 import { artboardActions, useArtboardStore } from '../store';
 import { floatStyles } from '../Viewport/floatStyles';
@@ -93,9 +95,21 @@ const styles = stylex.create({
     paddingInline: 5,
     paddingBlockEnd: 6,
   },
-  row: { width: '100%', paddingInline: 7, paddingBlock: 5, gap: 6, minHeight: 28 },
+  row: {
+    width: '100%',
+    paddingInline: 7,
+    paddingBlock: 5,
+    gap: 6,
+    minHeight: densityTokens['--lobe-density-small-control-height'],
+  },
   groupRow: { display: 'flex', alignItems: 'center' },
-  caret: { width: 22, padding: 0, minHeight: 28, flexShrink: 0, justifyContent: 'center' },
+  caret: {
+    width: 22,
+    padding: 0,
+    minHeight: densityTokens['--lobe-density-small-control-height'],
+    flexShrink: 0,
+    justifyContent: 'center',
+  },
   groupTitle: { overflowWrap: 'anywhere', fontWeight: 600, flex: '1' },
   children: {
     borderInlineStartWidth: 1,

@@ -35,7 +35,7 @@ const styles = createStaticStyles(({ css }) => ({
     flex-shrink: 0;
     align-items: center;
 
-    height: 28px;
+    height: ${densityVars.smallControlHeight};
     padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 

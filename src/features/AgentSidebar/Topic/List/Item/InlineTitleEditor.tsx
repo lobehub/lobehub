@@ -4,6 +4,8 @@ import type { KeyboardEvent, ReactNode } from 'react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useDensityTokens } from '@/styles/density';
+
 interface InlineTitleEditorProps {
   /** The row's leading icon, kept in place so the row doesn't shift while editing. */
   icon?: ReactNode;
@@ -22,6 +24,7 @@ interface InlineTitleEditorProps {
 const InlineTitleEditor = memo<InlineTitleEditorProps>(
   ({ icon, onAutoRename, onClose, onSave, title }) => {
     const { t } = useTranslation('topic');
+    const { iconBox, rowHeight } = useDensityTokens();
     const inputRef = useRef<HTMLInputElement>(null);
     // Enter and the auto-rename button both end editing, and the unmount that
     // follows blurs the input once more — finish only once.
@@ -60,12 +63,12 @@ const InlineTitleEditor = memo<InlineTitleEditorProps>(
         align={'center'}
         data-testid="topic-title-editor"
         gap={8}
-        height={36}
+        height={rowHeight}
         paddingInline={4}
         style={{ background: cssVar.colorFillTertiary, borderRadius: cssVar.borderRadius }}
       >
         {icon && (
-          <Center flex={'none'} height={28} width={28}>
+          <Center flex={'none'} height={iconBox} width={iconBox}>
             {icon}
           </Center>
         )}

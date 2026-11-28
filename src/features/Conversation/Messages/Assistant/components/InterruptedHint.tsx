@@ -5,11 +5,16 @@ import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { contextSelectors, useConversationStore } from '../../../store';
 
 const styles = stylex.create({
-  container: { paddingBlock: '4px', fontSize: '12px', color: cssVar.colorTextTertiary },
+  container: {
+    paddingBlock: densityTokens['--lobe-density-inline-row-padding-block'],
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
 });
 
 const InterruptedHint = memo(() => {

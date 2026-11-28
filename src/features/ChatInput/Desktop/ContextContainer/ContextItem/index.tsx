@@ -9,6 +9,7 @@ import { FileUploadErrorActions } from '@/business/client/features/FileUploadErr
 import { useChatInputUploadKey } from '@/features/ChatInput/hooks/useChatInputUpload';
 import { useEventCallback } from '@/hooks/useEventCallback';
 import { useFileStore } from '@/store/file';
+import { densityTokens } from '@/styles/density.stylex';
 import { type UploadFileItem } from '@/types/files/upload';
 
 import Content from './Content';
@@ -19,7 +20,7 @@ import { useUploadCompletion } from './useUploadCompletion';
 import { getFileBasename, getUploadChipSize, getUploadChipState } from './utils';
 
 const styles = stylex.create({
-  chip: { maxWidth: '100%', height: '28px' },
+  chip: { maxWidth: '100%', height: densityTokens['--lobe-density-small-control-height'] },
   content: { display: 'flex', gap: '4px', alignItems: 'center', minWidth: '0', maxWidth: '380px' },
   size: {
     flexShrink: 0,

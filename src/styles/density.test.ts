@@ -18,6 +18,22 @@ describe('DENSITY_TOKENS', () => {
     expect(DENSITY_TOKENS.loose.headerActionSmallSize).toEqual({ blockSize: 28, size: 16 });
   });
 
+  it('shrinks small controls from 28px to 24px in compact', () => {
+    expect(DENSITY_TOKENS.loose.smallControlHeight).toBe(28);
+    expect(DENSITY_TOKENS.compact.smallControlHeight).toBe(24);
+  });
+
+  it('tightens conversation rhythm tokens in compact', () => {
+    expect(DENSITY_TOKENS.loose.blockGap).toBe(8);
+    expect(DENSITY_TOKENS.compact.blockGap).toBe(6);
+    expect(DENSITY_TOKENS.loose.inlineRowPaddingBlock).toBe(4);
+    expect(DENSITY_TOKENS.compact.inlineRowPaddingBlock).toBe(2);
+    expect(DENSITY_TOKENS.loose.cardHeaderPaddingBlock).toBe(8);
+    expect(DENSITY_TOKENS.compact.cardHeaderPaddingBlock).toBe(6);
+    expect(DENSITY_TOKENS.loose.mediaIconBox).toBe(40);
+    expect(DENSITY_TOKENS.compact.mediaIconBox).toBe(32);
+  });
+
   it('sizes tree rows from the control height', () => {
     expect(DENSITY_TOKENS.compact.treeItemHeight).toBe(28);
     expect(DENSITY_TOKENS.loose.treeItemHeight).toBe(32);

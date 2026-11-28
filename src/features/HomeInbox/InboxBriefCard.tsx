@@ -52,7 +52,7 @@ interface InboxBriefCardProps {
  */
 const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
   const { t } = useTranslation('common');
-  const { compact } = useDensity();
+  const { tokens } = useDensity();
   const navigate = useWorkspaceAwareNavigate();
 
   const agent = brief.agent;
@@ -142,7 +142,7 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
             avatar={isInbox ? agent.avatar || DEFAULT_INBOX_AVATAR : agent.avatar}
             background={agent.backgroundColor || cssVar.colorBgContainer}
             shape={'circle'}
-            size={compact ? 24 : 28}
+            size={tokens.headerAvatarSize}
             style={{ flex: 'none' }}
             title={agentName}
           />

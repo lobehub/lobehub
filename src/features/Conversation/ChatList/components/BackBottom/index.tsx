@@ -5,6 +5,7 @@ import { lazy, memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDevDockMounted } from '@/hooks/useDevDockMounted';
+import { useDensity } from '@/styles/density';
 
 import { styles } from './style';
 
@@ -29,6 +30,7 @@ const BackBottom = memo<BackBottomProps>(
   ({ visible, atBottom, bottomOffset = 0, onScrollToBottom }) => {
     const { t } = useTranslation('chat');
     const devDockMounted = useDevDockMounted();
+    const { tokens } = useDensity();
 
     return (
       <>
@@ -46,9 +48,9 @@ const BackBottom = memo<BackBottomProps>(
           title={t('backToBottom')}
           variant={'outlined'}
           size={{
-            blockSize: 36,
-            borderRadius: 36,
-            size: 18,
+            blockSize: tokens.rowHeight,
+            borderRadius: tokens.rowHeight,
+            size: tokens.iconSize,
           }}
           onClick={onScrollToBottom}
         />

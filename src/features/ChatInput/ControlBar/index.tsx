@@ -7,6 +7,7 @@ import { useBusinessAgentModeSync } from '@/business/client/hooks/useBusinessAge
 import { SkeletonBar } from '@/components/Skeleton';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import ContextWindow from '../ActionBar/Token';
 import { useAgentId } from '../hooks/useAgentId';
@@ -18,9 +19,14 @@ import { resolveControlBarView } from './resolveControlBarView';
 import WorkspaceControls from './WorkspaceControls';
 
 const styles = stylex.create({
-  // `flex: none` keeps the row at 28px inside the column-flex composer; without
+  // `flex: none` keeps the row at its fixed height inside the column-flex composer; without
   // it the bar shrinks to the compact chips' min-content height.
-  bar: { flex: 'none', height: '28px', paddingBlock: '0', paddingInline: '4px' },
+  bar: {
+    flex: 'none',
+    height: densityTokens['--lobe-density-small-control-height'],
+    paddingBlock: '0',
+    paddingInline: '4px',
+  },
   // Left cluster (device + working directory + git) is the variable-width
   // part. It shrinks first and, once its long labels have truncated as far as
   // they can, scrolls horizontally instead of wrapping each chip's text. The
@@ -43,7 +49,7 @@ interface ControlBarSkeletonProps {
 }
 
 /**
- * Same-height stand-in for the control bar: the 28px row with, when configured,
+ * Same-height stand-in for the control bar: the fixed-height row with, when configured,
  * the context-window pill pinned right. The pill size follows the settled DOM
  * (context-window tag ~89x24), so the composer does not move when the real
  * controls replace it.

@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type AcceptanceBundle, verifyService } from '@/services/verify';
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 import { AttachmentThumbs } from '../Evidence/attachments';
@@ -82,7 +83,7 @@ const styles = stylex.create({
   },
   attemptTab: {
     cursor: 'pointer',
-    height: '28px',
+    height: densityTokens['--lobe-density-small-control-height'],
     margin: 0,
     paddingBlock: 0,
     paddingInline: '12px',

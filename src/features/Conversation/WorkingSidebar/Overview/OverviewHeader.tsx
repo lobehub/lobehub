@@ -6,7 +6,7 @@ import { ChevronRightIcon, FolderGit2Icon, FolderIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { sidebarRow } from '@/styles/density.stylex';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   dot: {
@@ -71,8 +71,8 @@ const styles = stylex.create({
     display: 'grid',
     flexShrink: 0,
     placeItems: 'center',
-    width: '28px',
-    height: '28px',
+    width: densityTokens['--lobe-density-icon-box'],
+    height: densityTokens['--lobe-density-icon-box'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,

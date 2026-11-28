@@ -15,8 +15,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 28px;
-    height: 28px;
+    width: ${densityVars.iconBox};
+    height: ${densityVars.iconBox};
     border-radius: 6px;
 
     color: ${cssVar.colorTextQuaternary};

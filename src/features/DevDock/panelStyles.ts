@@ -60,7 +60,7 @@ export const devDockPanelStyles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: space-between;
 
-    height: 28px;
+    height: ${densityVars.smallControlHeight};
     padding-inline: ${densityVars.contentGap};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 

@@ -10,6 +10,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 import {
@@ -69,7 +70,7 @@ const styles = stylex.create({
     backgroundImage: 'none',
   },
   zoomBox: {
-    height: '28px',
+    height: densityTokens['--lobe-density-small-control-height'],
     paddingInline: '2px',
     borderRadius: '6px',
     backgroundColor: cssVar.colorFillTertiary,

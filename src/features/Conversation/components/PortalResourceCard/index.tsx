@@ -36,7 +36,7 @@ const styles = stylex.create({
   openLabel: {
     display: 'flex',
     alignItems: 'center',
-    height: '28px',
+    height: densityTokens['--lobe-density-small-control-height'],
     paddingInline: densityTokens['--lobe-density-content-gap'],
     borderWidth: '1px',
     borderStyle: 'solid',
@@ -51,7 +51,7 @@ const styles = stylex.create({
   },
   actionButton: {
     cursor: 'pointer',
-    height: '28px',
+    height: densityTokens['--lobe-density-small-control-height'],
     paddingInline: densityTokens['--lobe-density-content-gap'],
     borderWidth: '1px',
     borderStyle: 'solid',
