@@ -7,6 +7,7 @@ import type { BranchResolver } from '../BranchResolver';
 import type { MessageCollector } from '../MessageCollector';
 import { isToollessSignalTurn } from '../MessageCollector';
 import type { MessageTransformer } from '../MessageTransformer';
+import { resolveBlockMetadata, toAssistantContentBlock } from './contentBlock';
 
 /**
  * Metadata that describes one step rather than the whole group: a finish
@@ -1210,70 +1211,13 @@ export class FlatListBuilder {
           return tool;
         }) || [];
 
-      // Prefer top-level usage/performance fields, fall back to metadata
-      const { usage: metaUsage, performance: metaPerformance } =
-        this.messageTransformer.splitMetadata(assistant.metadata);
-      const msgUsage = assistant.usage || metaUsage;
-      const msgPerformance = assistant.performance || metaPerformance;
-
-      // Extract non-usage/performance metadata fields
-      const otherMetadata: Record<string, any> = {};
-      if (assistant.metadata) {
-        const usagePerformanceFields = new Set([
-          'acceptedPredictionTokens',
-          'cost',
-          'duration',
-          'inputAudioTokens',
-          'inputCacheMissTokens',
-          'inputCachedTokens',
-          'inputCitationTokens',
-          'inputImageTokens',
-          'inputTextTokens',
-          'inputVideoTokens',
-          'inputToolTokens',
-          'inputWriteCacheTokens',
-          'latency',
-          'outputAudioTokens',
-          'outputImageTokens',
-          'outputReasoningTokens',
-          'outputTextTokens',
-          // Nested canonical shape — see splitMetadata
-          'performance',
-          'rejectedPredictionTokens',
-          'totalInputTokens',
-          'totalOutputTokens',
-          'totalTokens',
-          'tps',
-          'ttft',
-          'usage',
-        ]);
-
-        Object.entries(assistant.metadata).forEach(([key, value]) => {
-          if (!usagePerformanceFields.has(key)) {
-            otherMetadata[key] = value;
-          }
-        });
-      }
-
-      const childBlock: AssistantContentBlock = {
-        content: assistant.content || '',
-        id: assistant.id,
-      } as AssistantContentBlock;
-
-      if (assistant.error) childBlock.error = assistant.error;
-      if (assistant.fileList && assistant.fileList.length > 0)
-        childBlock.fileList = assistant.fileList;
-      if (assistant.imageList && assistant.imageList.length > 0)
-        childBlock.imageList = assistant.imageList;
-      if (msgPerformance) childBlock.performance = msgPerformance;
-      if (assistant.reasoning) childBlock.reasoning = assistant.reasoning;
-      if (toolsWithResults.length > 0) childBlock.tools = toolsWithResults;
-      if (msgUsage) childBlock.usage = msgUsage;
-      if (Object.keys(otherMetadata).length > 0) {
-        childBlock.metadata = otherMetadata;
-      }
-
-      children.push(childBlock);
+      children.push(
+        toAssistantContentBlock(
+          assistant,
+          resolveBlockMetadata(assistant, this.messageTransformer),
+          toolsWithResults,
+        ),
+      );
     }
 
     // Broadcast members render as one in-bubble AgentCouncil block (parallel
@@ -1407,66 +1351,9 @@ export class FlatListBuilder {
    * Moves content to children array similar to assistantGroup
    */
   private createSupervisorContentMessage(message: Message): Message {
-    // Prefer top-level usage/performance fields, fall back to metadata
-    const { usage: metaUsage, performance: metaPerformance } =
-      this.messageTransformer.splitMetadata(message.metadata);
-    const msgUsage = message.usage || metaUsage;
-    const msgPerformance = message.performance || metaPerformance;
-
-    // Extract non-usage/performance metadata fields
-    const otherMetadata: Record<string, any> = {};
-    if (message.metadata) {
-      const usagePerformanceFields = new Set([
-        'acceptedPredictionTokens',
-        'cost',
-        'duration',
-        'inputAudioTokens',
-        'inputCacheMissTokens',
-        'inputCachedTokens',
-        'inputCitationTokens',
-        'inputImageTokens',
-        'inputTextTokens',
-        'inputVideoTokens',
-        'inputToolTokens',
-        'inputWriteCacheTokens',
-        'latency',
-        'outputAudioTokens',
-        'outputImageTokens',
-        'outputReasoningTokens',
-        'outputTextTokens',
-        // Nested canonical shape — see splitMetadata
-        'performance',
-        'rejectedPredictionTokens',
-        'totalInputTokens',
-        'totalOutputTokens',
-        'totalTokens',
-        'tps',
-        'ttft',
-        'usage',
-      ]);
-
-      Object.entries(message.metadata).forEach(([key, value]) => {
-        if (!usagePerformanceFields.has(key)) {
-          otherMetadata[key] = value;
-        }
-      });
-    }
-
-    // Create the child content block
-    const childBlock: any = {
-      content: message.content || '',
-      id: message.id,
-    };
-
-    if (message.error) childBlock.error = message.error;
-    if (message.fileList && message.fileList.length > 0) childBlock.fileList = message.fileList;
-    if (message.imageList && message.imageList.length > 0) childBlock.imageList = message.imageList;
-    if (msgPerformance) childBlock.performance = msgPerformance;
-    if (message.reasoning) childBlock.reasoning = message.reasoning;
-    if (msgUsage) childBlock.usage = msgUsage;
-    if (Object.keys(otherMetadata).length > 0) {
-      childBlock.metadata = otherMetadata;
-    }
+    const blockMetadata = resolveBlockMetadata(message, this.messageTransformer);
+    const { otherMetadata, performance: msgPerformance, usage: msgUsage } = blockMetadata;
+    const childBlock = toAssistantContentBlock(message, blockMetadata);
 
     const result: Message = {
       ...message,
