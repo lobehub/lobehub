@@ -36,9 +36,11 @@ const Header = memo<HeaderProps>(({ type }) => {
   // Only use skill connect hook for non-builtin types
   const isBuiltin = type === 'builtin';
   const {
+    canManage,
     handleConnect,
     isConnecting,
     isConnected: hookIsConnected,
+    manageReason,
   } = useSkillConnect({
     identifier,
     serverName,
@@ -54,7 +56,7 @@ const Header = memo<HeaderProps>(({ type }) => {
   }, [hookIsConnected, close, isBuiltin]);
 
   const handleConnectWithTracking = async () => {
-    if (!canCreate || !canEdit) return;
+    if (!canCreate || !canEdit || !canManage) return;
 
     hasTriggeredConnectRef.current = true;
     await handleConnect();
@@ -89,9 +91,9 @@ const Header = memo<HeaderProps>(({ type }) => {
     }
 
     return (
-      <Tooltip title={!canCreate ? createReason : editReason}>
+      <Tooltip title={!canCreate ? createReason : !canEdit ? editReason : manageReason}>
         <Button
-          disabled={!canCreate || !canEdit}
+          disabled={!canCreate || !canEdit || !canManage}
           icon={<Icon icon={SquareArrowOutUpRight} />}
           type="primary"
           onClick={handleConnectWithTracking}

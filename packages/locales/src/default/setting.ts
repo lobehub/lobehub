@@ -4761,11 +4761,25 @@ When I am ___, I need ___
   'tools.lobehubSkill.disconnectConfirm.desc':
     "You can still continue previous chats that reference {{name}} content. However, the assistant won't be able to access new content or perform new tasks.",
 
+  'tools.lobehubSkill.disconnectConfirm.sharedWorkspaces':
+    'These workspaces use this authorization too and will lose {{provider}}: {{workspaces}}.',
+
   'tools.lobehubSkill.disconnectConfirm.title': 'Disconnect {{name}}?',
 
   'tools.lobehubSkill.disconnected': 'Disconnected',
 
   'tools.lobehubSkill.error': 'Error',
+
+  'tools.lobehubSkill.reference.disconnectDesc':
+    "This workspace will stop using {{name}}'s personal {{provider}} authorization. Their own connection stays as it is.",
+
+  'tools.lobehubSkill.reference.listSeparator': ', ',
+
+  'tools.lobehubSkill.reference.note': "Using {{name}}'s personal authorization",
+
+  'tools.lobehubSkill.reference.replace': 'Authorize for this workspace',
+
+  'tools.lobehubSkill.reference.unknownMember': 'a member',
   // LobeHub Skill Providers i18n
   'tools.lobehubSkill.providers.github.description':
     'GitHub is a platform for version control and collaboration, enabling developers to host, review, and manage code repositories.',

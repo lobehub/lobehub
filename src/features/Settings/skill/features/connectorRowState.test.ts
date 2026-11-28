@@ -1,7 +1,13 @@
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { isSettledByConnection, useConnectorManageGate } from './connectorRowState';
+import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
+
+import {
+  isAuthorizedForScope,
+  isSettledByConnection,
+  useConnectorManageGate,
+} from './connectorRowState';
 
 const mocks = vi.hoisted(() => ({
   connectors: [] as Array<{ identifier: string; userId?: string }>,
@@ -64,5 +70,30 @@ describe('isSettledByConnection', () => {
 
   it('keeps any failure while not connected', () => {
     expect(isSettledByConnection(false, { action: 'connect', code: 'FORBIDDEN' })).toBe(false);
+  });
+});
+
+describe('isAuthorizedForScope', () => {
+  const server = { identifier: 'github', isConnected: true, name: 'GitHub' };
+
+  it('should count a row connected by its own authorization', () => {
+    expect(isAuthorizedForScope({ ...server, status: LobehubSkillStatus.CONNECTED })).toBe(true);
+  });
+
+  it('should keep waiting while the workspace still borrows a personal authorization', () => {
+    expect(
+      isAuthorizedForScope({
+        ...server,
+        reference: { sourceUserId: 'user_owner' },
+        status: LobehubSkillStatus.CONNECTED,
+      }),
+    ).toBe(false);
+  });
+
+  it('should not count a missing or unconnected row', () => {
+    expect(isAuthorizedForScope(undefined)).toBe(false);
+    expect(isAuthorizedForScope({ ...server, status: LobehubSkillStatus.NOT_CONNECTED })).toBe(
+      false,
+    );
   });
 });

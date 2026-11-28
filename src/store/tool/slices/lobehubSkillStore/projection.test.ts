@@ -4,6 +4,8 @@ import {
   createLobehubSkillLocalIntent,
   type LobehubSkillLocalIntent,
   mergeLobehubSkillServers,
+  toConnectionReference,
+  toReferencedByWorkspaceIds,
 } from './projection';
 import { type LobehubSkillServer, LobehubSkillStatus } from './types';
 
@@ -84,5 +86,65 @@ describe('mergeLobehubSkillServers', () => {
     mergeLobehubSkillServers([server('linear'), server('github')], settled, []);
 
     expect(settled.added.size).toBe(0);
+  });
+});
+
+describe('connection scope fields', () => {
+  it('should read the member a workspace borrows an authorization from', () => {
+    expect(
+      toConnectionReference({
+        reference: { sourceAccountId: 7, sourceDisplayName: 'Owner', sourceUserId: 'user_1' },
+      }),
+    ).toEqual({ sourceDisplayName: 'Owner', sourceUserId: 'user_1' });
+    expect(toConnectionReference({ reference: { sourceUserId: 'user_1' } })).toEqual({
+      sourceDisplayName: null,
+      sourceUserId: 'user_1',
+    });
+  });
+
+  it('should treat connections from an older market as the scope own', () => {
+    expect(toConnectionReference({ providerId: 'github' })).toBeUndefined();
+    expect(toConnectionReference({ reference: null })).toBeUndefined();
+    expect(toConnectionReference(undefined)).toBeUndefined();
+    expect(toReferencedByWorkspaceIds({ providerId: 'github' })).toBeUndefined();
+  });
+
+  it('should list the workspaces using a personal authorization only when there are some', () => {
+    expect(toReferencedByWorkspaceIds({ referencedByWorkspaceIds: ['wks_1', 'wks_2'] })).toEqual([
+      'wks_1',
+      'wks_2',
+    ]);
+    expect(toReferencedByWorkspaceIds({ referencedByWorkspaceIds: [] })).toBeUndefined();
+  });
+});
+
+describe('mergeLobehubSkillServers with a replaced borrowed authorization', () => {
+  const borrowed: LobehubSkillServer = {
+    identifier: 'github',
+    isConnected: true,
+    name: 'GitHub',
+    reference: { sourceDisplayName: 'Owner', sourceUserId: 'user_owner' },
+    status: LobehubSkillStatus.CONNECTED,
+  };
+  const own: LobehubSkillServer = { ...borrowed, reference: undefined };
+
+  it('should not let a stale borrowed row settle the workspace own authorization', () => {
+    const intent = createLobehubSkillLocalIntent();
+    intent.added.set('github', own);
+
+    const merged = mergeLobehubSkillServers([borrowed], intent);
+
+    expect(merged).toEqual([own]);
+    expect(intent.added.has('github')).toBe(true);
+  });
+
+  it('should settle once the response reflects the replacement', () => {
+    const intent = createLobehubSkillLocalIntent();
+    intent.added.set('github', own);
+
+    const merged = mergeLobehubSkillServers([own], intent);
+
+    expect(merged).toEqual([own]);
+    expect(intent.added.size).toBe(0);
   });
 });

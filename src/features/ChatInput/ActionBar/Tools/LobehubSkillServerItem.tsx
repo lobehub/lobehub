@@ -9,6 +9,7 @@ import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useLobehubSkillScope } from '@/features/Settings/skill/features/useLobehubSkillScope';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -58,6 +59,10 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(
     const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const server = useToolStore(lobehubSkillStoreSelectors.getServerByIdentifier(provider));
+    // Connecting a workspace's LobeHub Skill is for its admins; members still
+    // enable a connected one for their agent.
+    const { canManage } = useLobehubSkillScope(server, label);
+    const canConnect = canCreate && canEdit && canManage;
     const checkStatus = useToolStore((s) => s.checkLobehubSkillStatus);
     const getAuthorizeUrl = useToolStore((s) => s.getLobehubSkillAuthorizeUrl);
 
@@ -224,7 +229,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(
     }, [canEdit, provider, cleanup, checkStatus, setPluginEnabled, effectiveAgentId]);
 
     const handleConnect = async () => {
-      if (!canCreate || !canEdit) return;
+      if (!canConnect) return;
       // Only block reconnection when already connected
       if (server?.isConnected) return;
 
@@ -266,10 +271,10 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(
             horizontal
             align="center"
             gap={4}
-            style={{ cursor: canCreate && canEdit ? 'pointer' : 'not-allowed', opacity: 0.65 }}
+            style={{ cursor: canConnect ? 'pointer' : 'not-allowed', opacity: 0.65 }}
             onClick={(e) => {
               e.stopPropagation();
-              if (!canCreate || !canEdit) return;
+              if (!canConnect) return;
               handleConnect();
             }}
           >
@@ -309,10 +314,10 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(
               horizontal
               align="center"
               gap={4}
-              style={{ cursor: canEdit ? 'pointer' : 'not-allowed', opacity: 0.65 }}
+              style={{ cursor: canConnect ? 'pointer' : 'not-allowed', opacity: 0.65 }}
               onClick={async (e) => {
                 e.stopPropagation();
-                if (!canEdit) return;
+                if (!canConnect) return;
                 try {
                   const redirectUri = window.location.protocol.startsWith('http')
                     ? `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(provider)}`
@@ -335,10 +340,10 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(
               horizontal
               align="center"
               gap={4}
-              style={{ cursor: canCreate && canEdit ? 'pointer' : 'not-allowed', opacity: 0.65 }}
+              style={{ cursor: canConnect ? 'pointer' : 'not-allowed', opacity: 0.65 }}
               onClick={(e) => {
                 e.stopPropagation();
-                if (!canCreate || !canEdit) return;
+                if (!canConnect) return;
                 handleConnect();
               }}
             >

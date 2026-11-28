@@ -46,6 +46,17 @@ export interface LobehubSkillProvider {
 }
 
 /**
+ * The member whose personal authorization a workspace uses for a provider,
+ * instead of an authorization of its own.
+ */
+export interface LobehubSkillConnectionReference {
+  /** The member's display name on the market, when known */
+  sourceDisplayName?: string | null;
+  /** The member's user id, to look up their workspace profile */
+  sourceUserId?: string | null;
+}
+
+/**
  * LobeHub Skill Server instance (user-connected provider)
  */
 export interface LobehubSkillServer {
@@ -63,6 +74,16 @@ export interface LobehubSkillServer {
   name: string;
   /** Provider username (e.g., GitHub username) */
   providerUsername?: string;
+  /**
+   * Workspace only: the connection is a member's personal authorization the
+   * workspace keeps using, not one the workspace granted itself.
+   */
+  reference?: LobehubSkillConnectionReference;
+  /**
+   * Personal space only: ids of the workspaces that use this authorization, so
+   * disconnecting it can say which workspaces lose it.
+   */
+  referencedByWorkspaceIds?: string[];
   /** Authorized scopes */
   scopes?: string[];
   /** Connection status */

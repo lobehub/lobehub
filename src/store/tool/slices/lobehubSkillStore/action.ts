@@ -28,6 +28,8 @@ import {
   lobehubSkillServersResource,
   mapProviderTools,
   mergeLobehubSkillServers,
+  toConnectionReference,
+  toReferencedByWorkspaceIds,
 } from './projection';
 import {
   type CallLobehubSkillToolParams,
@@ -230,6 +232,8 @@ export class LobehubSkillStoreActionImpl {
         // Use local config label (e.g., "Linear") instead of API's providerName
         name: providerConfig?.label || provider,
         providerUsername: response.connection?.providerUsername,
+        reference: toConnectionReference(response.connection),
+        referencedByWorkspaceIds: toReferencedByWorkspaceIds(response.connection),
         scopes: response.connection?.scopes,
         status: response.connected
           ? LobehubSkillStatus.CONNECTED
@@ -468,6 +472,8 @@ export class LobehubSkillStoreActionImpl {
         // Use local config label (e.g., "Linear") instead of API's providerName (which is user's name on that service)
         name: providerConfig?.label || conn.providerId,
         providerUsername: conn.providerUsername,
+        reference: toConnectionReference(conn),
+        referencedByWorkspaceIds: toReferencedByWorkspaceIds(conn),
         scopes: conn.scopes,
         status: LobehubSkillStatus.CONNECTED,
         tokenExpiresAt: conn.tokenExpiresAt,

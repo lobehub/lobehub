@@ -6,8 +6,12 @@ import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { ConnectorSourceType, ConnectorStatus } from '@/database/schemas';
+import { useLobehubSkillScope } from '@/features/Settings/skill/features/useLobehubSkillScope';
+import { useToolStore } from '@/store/tool';
 import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
+import { lobehubSkillStoreSelectors } from '@/store/tool/slices/lobehubSkillStore/selectors';
 import { densityTokens } from '@/styles/density.stylex';
 
 // A quiet key–value list: labels in a fixed column, no boxes or row rules.
@@ -52,6 +56,34 @@ const Row = ({ children, label }: { children: ReactNode; label: string }) => (
   </Flexbox>
 );
 
+/**
+ * Who authorized the connector, as the overview names it. A LobeHub Skill
+ * connection is held on Market, not by the connector row: inside a workspace it
+ * is the workspace's own grant or a member's personal authorization it
+ * borrows, so the row's creator (often the viewer) would be wrong. Name the
+ * borrowed member, and nobody for the workspace's own grant.
+ */
+const useConnectorAuthorizer = (
+  connector: ConnectorWithTools,
+): { avatar?: string | null; name?: string | null } => {
+  const isLobehubSkill = !!getLobehubSkillProviderById(connector.identifier);
+  const server = useToolStore(
+    lobehubSkillStoreSelectors.getServerByIdentifier(connector.identifier),
+  );
+  const workspaceId = useActiveWorkspaceId();
+  const scope = useLobehubSkillScope(
+    isLobehubSkill ? server : undefined,
+    connector.name || connector.identifier,
+  );
+
+  if (!isLobehubSkill) {
+    return { avatar: connector.authorizedByAvatar, name: connector.authorizedByName };
+  }
+  if (scope.sourceName) return { name: scope.sourceName };
+  if (workspaceId) return {};
+  return { avatar: connector.authorizedByAvatar, name: connector.authorizedByName };
+};
+
 interface ConnectorOverviewInfoProps {
   connector: ConnectorWithTools;
 }
@@ -64,6 +96,7 @@ interface ConnectorOverviewInfoProps {
 const ConnectorOverviewInfo = memo<ConnectorOverviewInfoProps>(({ connector }) => {
   const { t } = useTranslation('tool');
 
+  const authorizer = useConnectorAuthorizer(connector);
   const kind = getConnectorKind(connector);
   const isBuiltin = kind === 'builtin';
   // Bundled tools have no library authorization or installation status.
@@ -83,7 +116,7 @@ const ConnectorOverviewInfo = memo<ConnectorOverviewInfoProps>(({ connector }) =
   // own authorizer under Accounts. A connector-wide "Authorized by" would name
   // only the creator — even before anyone has authorized an account.
   const showAuthorizer =
-    !!connector.authorizedByName && connector.authKind !== 'oauth2' && !connector.links?.length;
+    !!authorizer.name && connector.authKind !== 'oauth2' && !connector.links?.length;
 
   return (
     <div {...stylex.props(styles.list)}>
@@ -92,10 +125,8 @@ const ConnectorOverviewInfo = memo<ConnectorOverviewInfoProps>(({ connector }) =
       </Row>
       {showAuthorizer && (
         <Row label={t('connector.overview.authorizedBy')}>
-          {connector.authorizedByAvatar && (
-            <Avatar avatar={connector.authorizedByAvatar} shape={'circle'} size={20} />
-          )}
-          <Text ellipsis>{connector.authorizedByName}</Text>
+          {authorizer.avatar && <Avatar avatar={authorizer.avatar} shape={'circle'} size={20} />}
+          <Text ellipsis>{authorizer.name}</Text>
         </Row>
       )}
     </div>

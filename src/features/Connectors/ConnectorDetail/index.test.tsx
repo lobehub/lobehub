@@ -83,6 +83,12 @@ vi.mock('@/store/tool', () => ({
   },
 }));
 
+// The overview reads a LobeHub Skill row; the real selectors drag in the
+// replica / user store chain, and these connectors are not LobeHub Skills.
+vi.mock('@/store/tool/slices/lobehubSkillStore/selectors', () => ({
+  lobehubSkillStoreSelectors: { getServerByIdentifier: () => () => undefined },
+}));
+
 vi.mock('@/store/tool/selectors', () => ({
   builtinToolSelectors: {
     isBuiltinToolInstalled: (identifier: string) => (state: typeof mocks.toolState) =>

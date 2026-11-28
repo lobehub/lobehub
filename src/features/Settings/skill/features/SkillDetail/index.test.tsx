@@ -68,6 +68,7 @@ const mocks = vi.hoisted(() => {
     permissions: {
       create_content: true,
       edit_own_content: true,
+      manage_settings: true,
     },
     toolState,
     useToolStore: useToolStoreWithState,
@@ -151,7 +152,7 @@ vi.mock('@/features/Connectors', () => ({
 }));
 
 vi.mock('@/hooks/usePermission', () => ({
-  usePermission: (action: 'create_content' | 'edit_own_content') => ({
+  usePermission: (action: 'create_content' | 'edit_own_content' | 'manage_settings') => ({
     allowed: mocks.permissions[action],
     reason: '',
   }),
@@ -236,6 +237,7 @@ describe('SkillDetail', () => {
     vi.clearAllMocks();
     mocks.permissions.create_content = true;
     mocks.permissions.edit_own_content = true;
+    mocks.permissions.manage_settings = true;
     mocks.toolState.composioServers = [];
     mocks.toolState.connectors = [];
     mocks.toolState.installedBuiltinIds = [];
@@ -326,6 +328,30 @@ describe('SkillDetail', () => {
     expect(screen.getByText('Notion')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Disconnect' })).toBeEnabled();
     expect(mocks.toolState.syncToolsFromClient).not.toHaveBeenCalled();
+  });
+
+  it('keeps a workspace member read-only on a LobeHub connector the workspace shares', async () => {
+    mocks.permissions.manage_settings = false;
+    mocks.toolState.lobehubSkillServers = [connectedNotionServer()];
+
+    render(<SkillDetail identifier="notion" type="lobehub-connector" />);
+
+    expect(await screen.findByRole('button', { name: 'Disconnect' })).toBeDisabled();
+  });
+
+  it('names the member a workspace borrows the authorization from and offers to replace it', async () => {
+    mocks.toolState.lobehubSkillServers = [
+      { ...connectedNotionServer(), reference: { sourceDisplayName: 'Ada', sourceUserId: 'u1' } },
+    ];
+
+    render(<SkillDetail identifier="notion" type="lobehub-connector" />);
+
+    expect(
+      await screen.findByText('tools.lobehubSkill.reference.note', { exact: false }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /tools\.lobehubSkill\.reference\.replace/ }),
+    ).toBeEnabled();
   });
 
   it('syncs LobeHub tools and passes the disconnect action into connector permissions detail', async () => {

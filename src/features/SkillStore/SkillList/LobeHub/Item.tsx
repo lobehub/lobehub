@@ -8,7 +8,10 @@ import { useTranslation } from 'react-i18next';
 
 import { RowAddAction, RowMoreMenu } from '@/features/Settings/skill/features/RowActions';
 import SkillListRow from '@/features/Settings/skill/features/SkillListRow';
+import { useLobehubSkillScope } from '@/features/Settings/skill/features/useLobehubSkillScope';
 import { usePermission } from '@/hooks/usePermission';
+import { useToolStore } from '@/store/tool';
+import { lobehubSkillStoreSelectors } from '@/store/tool/slices/lobehubSkillStore/selectors';
 
 import { useSkillConnect } from './useSkillConnect';
 
@@ -28,7 +31,13 @@ const Item = memo<ItemProps>(
   ({ description, icon, identifier, label, onOpenDetail, serverName, type }) => {
     const { t } = useTranslation('setting');
     const { allowed: canCreate } = usePermission('create_content');
-    const { allowed: canEdit } = usePermission('edit_own_content');
+    const { allowed: canEditContent } = usePermission('edit_own_content');
+    // Only workspace admins change a workspace's LobeHub Skill connection.
+    const lobehubServer = useToolStore(
+      lobehubSkillStoreSelectors.getServerByIdentifier(identifier),
+    );
+    const scope = useLobehubSkillScope(type === 'lobehub' ? lobehubServer : undefined, label);
+    const canEdit = canEditContent && (type !== 'lobehub' || scope.canManage);
 
     const { handleConnect, handleDisconnect, isConnected, isConnecting } = useSkillConnect({
       identifier,
@@ -48,7 +57,12 @@ const Item = memo<ItemProps>(
       if (!canEdit) return;
       confirmModal({
         cancelText: t('cancel', { ns: 'common' }),
-        content: t('tools.lobehubSkill.disconnectConfirm.desc', { name: label }),
+        content: [
+          scope.disconnectNote,
+          t('tools.lobehubSkill.disconnectConfirm.desc', { name: label }),
+        ]
+          .filter(Boolean)
+          .join(' '),
         okButtonProps: { danger: true },
         okText: t('tools.lobehubSkill.disconnect'),
         onOk: handleDisconnect,
@@ -58,6 +72,7 @@ const Item = memo<ItemProps>(
 
     return (
       <SkillListRow
+        description={isConnected ? scope.referenceNote : undefined}
         summary={localizedDescription}
         title={label}
         extra={
