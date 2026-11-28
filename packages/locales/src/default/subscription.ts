@@ -1047,6 +1047,13 @@ export default {
   'tab.spend': 'Usage details',
   'tab.usage': 'Usage',
   'upgrade': 'Upgrade',
+  'upgradeConfirm.chargeNow':
+    'Confirming charges your saved payment method right away. No payment page follows.',
+  'upgradeConfirm.estimateTip':
+    'Estimated from list prices. The exact amount is charged when you confirm.',
+  'upgradeConfirm.payAndSwitchYearly': 'Pay {{amount}} and switch to yearly',
+  'upgradeConfirm.payAndUpgrade': 'Pay {{amount}} and upgrade',
+  'upgradeConfirm.paymentMethod.change': 'Change',
   'upgradeNow': 'Upgrade now',
   'upgradePlan': 'Upgrade plan',
   'upgradePlans.desc':
