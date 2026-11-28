@@ -770,6 +770,8 @@
   "plans.llm.messageRequest": "Unlimited message requests",
   "plans.llm.title": "Model service",
   "plans.llm.tooltip": "Add private model Provider API while enjoying cloud sync",
+  "plans.locked.belowCurrent": "Below your {{plan}}",
+  "plans.locked.upgradeTarget": "Upgrade to {{plan}} instead",
   "plans.message.advancedLLM": "Plus models",
   "plans.message.autoLLM": "Auto Model",
   "plans.message.count": "Approximately {{number}} messages",

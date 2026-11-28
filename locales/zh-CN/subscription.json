@@ -770,6 +770,8 @@
   "plans.llm.messageRequest": "无限消息请求",
   "plans.llm.title": "模型服务",
   "plans.llm.tooltip": "在享受云同步的同时添加私有模型 API",
+  "plans.locked.belowCurrent": "低于你的 {{plan}}",
+  "plans.locked.upgradeTarget": "可升级到 {{plan}}",
   "plans.message.advancedLLM": "Plus 模型",
   "plans.message.autoLLM": "Auto Model",
   "plans.message.count": "约 {{number}} 条消息",
