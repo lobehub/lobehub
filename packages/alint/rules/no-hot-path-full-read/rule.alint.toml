@@ -17,7 +17,8 @@ Do not report:
 - A read that runs once when an operation completes, or a fallback such as `x ?? await query(...)` that runs only when the caller did not pass the rows.
 - Thin pass-through adapters and model methods that only forward their arguments to one query: report the repeated caller, not the method.
 - Cold or recovery paths that the file marks as rare: reconnect, revision gap, abort, stop, resume after crash, fallback, cold replica, migration or backfill scripts, admin tools, one-off repairs.
-- Reads that are already narrowed: an explicit column list, an index-only helper (`listToolCallIndexByTopic`, `getInterventionSnapshot`), `excludeProgressive`, `skipCompressedMembers: true`, `viewModelPluginState`, or a small explicit `limit` or `pageSize` (≤ 50).
+- Reads that are already narrowed: an explicit column list, an index-only helper (`listToolCallIndexByTopic`, `getInterventionSnapshot`), `excludeProgressive`, `viewModelPluginState`, or a small explicit `limit` or `pageSize` (≤ 50).
+- `skipCompressedMembers: true` drops compressed history but still returns full rows: it excludes a read only when the caller really uses the message bodies, not a repeated read that only takes ids, a status or a count.
 - Reads of small or bounded tables (settings, a user row, one operation row, a fixed enum of rows) and reads keyed by one primary key.
 - Reads in request handlers that run once per user request (a page load, one mutation), unless the file shows the handler is polled.
 - A read whose result must match what the client cache holds (a baseline for an incremental patch), when the file says so.
