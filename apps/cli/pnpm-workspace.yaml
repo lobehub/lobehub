@@ -20,6 +20,7 @@ packages:
   - '../../packages/business/const'
   - '../../packages/file-loaders'
   - '../../packages/html-artifact'
+  - '../../packages/token-estimator'
   - '../../packages/utils'
   - '.'
 

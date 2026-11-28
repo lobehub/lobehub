@@ -1,7 +1,7 @@
 // cspell:ignore tokenx
 import { filesPrompts } from '@lobechat/prompts';
+import { estimateSerializableTokens } from '@lobechat/token-estimator';
 import type { AssistantContentBlock, UIChatMessage } from '@lobechat/types';
-import { estimateTokenCount } from 'tokenx';
 
 import { DEFAULT_TEMPLATE, formatTaskMessage } from '../processors/TaskMessage';
 import type {
@@ -26,11 +26,7 @@ const ZERO_BY_SOURCE = (): Record<TokenSourceType, number> => ({
   toolDefinition: 0,
 });
 
-const estimate = (value: unknown): number => {
-  if (value == null) return 0;
-  const text = typeof value === 'string' ? value : JSON.stringify(value);
-  return text ? estimateTokenCount(text) : 0;
-};
+const estimate = estimateSerializableTokens;
 
 const bumpSource = (
   bySource: Partial<Record<TokenSourceType, number>>,

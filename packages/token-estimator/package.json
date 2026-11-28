@@ -1,0 +1,25 @@
+{
+  "name": "@lobechat/token-estimator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Provider-agnostic input-token estimates for chat requests",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./audio": {
+      "types": "./src/audio.ts",
+      "default": "./src/audio.ts"
+    }
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "vitest",
+    "test:coverage": "vitest --coverage --silent='passed-only'"
+  },
+  "dependencies": {
+    "tokenx": "^1.3.0"
+  }
+}

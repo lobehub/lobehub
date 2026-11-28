@@ -13,7 +13,7 @@ import type {
   ProviderResponseDiagnostics,
   PullModelParams,
 } from '@lobechat/model-runtime';
-import { createCallbacksTransformer } from '@lobechat/model-runtime';
+import { createCallbacksTransformer, estimateOpenAIChatInputTokens } from '@lobechat/model-runtime';
 import type { ModelUsage } from '@lobechat/types';
 import debug from 'debug';
 import type Redis from 'ioredis';
@@ -585,10 +585,14 @@ export class RelayModelRuntime implements Pick<
 /**
  * Usage for a client that reported none (U4f): some OpenAI-compatible local
  * servers ignore `stream_options.include_usage`. Rough token counts of the
- * request messages and the streamed text; flagged as estimated on the message.
+ * request (messages and tool definitions, media parts at a fixed estimate rather
+ * than their base64 URL text) and the streamed text; flagged as estimated on the
+ * message.
  */
 const estimateUsage = async (payload: ChatStreamPayload, output: string): Promise<ModelUsage> => {
-  const inputTokens = await encodeAsync(JSON.stringify(payload.messages ?? []));
+  const inputTokens = estimateOpenAIChatInputTokens(payload.messages ?? [], {
+    tools: payload.tools,
+  }).totalTokens;
   const outputTokens = await encodeAsync(output);
 
   return {

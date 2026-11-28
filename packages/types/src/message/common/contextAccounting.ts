@@ -32,6 +32,13 @@ export interface MessageContextAccounting {
   bySource: Record<MessageContextTokenSource, number>;
   /** Estimator behind the counts. */
   estimator: 'tokenx';
+  /**
+   * Media parts in the request. Their tokens are not in `total`: providers
+   * bill media by size or duration, which the payload text does not reveal.
+   * Recorded so the estimate can be compared with provider usage on text-only
+   * requests. Absent on records written before it existed.
+   */
+  media?: MessageContextMediaCounts;
   /** Number of messages in the request, system messages included. */
   messageCount: number;
   /**
@@ -41,6 +48,12 @@ export interface MessageContextAccounting {
   system: number;
   /** `system` plus every `bySource` value. */
   total: number;
+}
+
+export interface MessageContextMediaCounts {
+  audio: number;
+  image: number;
+  video: number;
 }
 
 // Lenient on purpose: client writes echo stored metadata back through this
@@ -69,6 +82,7 @@ export const MessageContextAccountingSchema = z.object({
       toolDefinition: 0,
     }),
   estimator: z.literal('tokenx').catch('tokenx'),
+  media: z.object({ audio: tokens, image: tokens, video: tokens }).optional().catch(undefined),
   messageCount: tokens,
   system: tokens,
   total: tokens,

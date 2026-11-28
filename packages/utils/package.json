@@ -16,6 +16,7 @@
   "dependencies": {
     "@lobechat/const": "workspace:*",
     "@lobechat/ssrf-safe-fetch": "workspace:*",
+    "@lobechat/token-estimator": "workspace:*",
     "@lobechat/types": "workspace:*",
     "@vercel/functions": "^3.7.4",
     "brotli-wasm": "^3.0.1",

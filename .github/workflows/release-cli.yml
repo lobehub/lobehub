@@ -35,6 +35,7 @@ on:
       - 'packages/model-bank/**'
       - 'packages/prompts/**'
       - 'packages/ssrf-safe-fetch/**'
+      - 'packages/token-estimator/**'
       - 'packages/tool-runtime/**'
       - 'packages/types/**'
       - 'packages/utils/**'

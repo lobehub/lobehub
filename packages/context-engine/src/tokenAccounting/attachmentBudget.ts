@@ -3,8 +3,8 @@ import {
   isOversizedFileContent,
   previewLongFileContent,
 } from '@lobechat/prompts';
+import { estimateTextTokens } from '@lobechat/token-estimator';
 import type { UIChatMessage } from '@lobechat/types';
-import { estimateTokenCount } from 'tokenx';
 
 import { countContextTokens, DEFAULT_DRIFT_MULTIPLIER } from './index';
 import type { ContextTokenAccounting } from './types';
@@ -53,7 +53,7 @@ const collectInlineCandidates = (messages: UIChatMessage[]): Candidate[] => {
       if (isOversizedFileContent(content.length, file.originalCharCount)) continue;
 
       const preview = previewLongFileContent(content, { fileId: file.id, forcePreview: true });
-      const savings = estimateTokenCount(content) - estimateTokenCount(preview.body);
+      const savings = estimateTextTokens(content) - estimateTextTokens(preview.body);
       if (savings <= 0) continue;
 
       const existing = candidates.get(file.id);

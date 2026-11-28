@@ -212,6 +212,45 @@ describe('RelayModelRuntime + llm-relay handlers', () => {
     expect(usage.totalTokens).toBe(usage.totalInputTokens + usage.totalOutputTokens);
   });
 
+  it('estimates an inline image by item, not by its base64 text', async () => {
+    const { events, manager } = createStreamManager();
+    const runtime = createRuntime(manager);
+    const onCompletion = vi.fn();
+    const imagePayload = {
+      ...payload,
+      messages: [
+        {
+          content: [
+            { text: 'What is in this picture?', type: 'text' as const },
+            {
+              image_url: { url: `data:image/png;base64,${'A'.repeat(200_000)}` },
+              type: 'image_url' as const,
+            },
+          ],
+          role: 'user' as const,
+        },
+      ],
+    };
+
+    const done = runtime
+      .chat(imagePayload, { callback: { onCompletion } })
+      .then((response) => consumeStreamUntilDone(response));
+    const { leaseToken } = await waitForExecute(events);
+
+    await post(leaseToken, {
+      chunks: [{ data: 'A cat.', type: 'text' }],
+      clientId: 'tab-a',
+      final: { reason: 'done' },
+      seq: 1,
+    });
+    await done;
+
+    const { usage } = onCompletion.mock.calls[0][0];
+    // One image at the fixed 1000-token estimate plus a short prompt.
+    expect(usage.totalInputTokens).toBeGreaterThan(1000);
+    expect(usage.totalInputTokens).toBeLessThan(1100);
+  });
+
   it('hands a device-side provider error to the pipeline as a stream error', async () => {
     const { events, manager } = createStreamManager();
     const onError = vi.fn();
