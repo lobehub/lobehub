@@ -1,4 +1,4 @@
-import  {
+import {
   type ArgumentMatcher,
   type HumanInterventionPolicy,
   type HumanInterventionRule,
@@ -7,6 +7,30 @@ import  {
 } from '@lobechat/types';
 
 import { DEFAULT_SECURITY_BLACKLIST } from '../audit/defaultSecurityBlacklist';
+
+/**
+ * Top-level argument keys that carry a single file path alongside `path`
+ * (e.g. `lobe-local-system/editFile` uses `file_path`, rename tools use `oldPath`/`newPath`).
+ */
+const SINGLE_PATH_PARAM_NAMES = [
+  'file_path',
+  'oldPath',
+  'newPath',
+  'source',
+  'destination',
+] as const;
+
+/**
+ * Array-of-object argument shapes that carry file paths in batch file tools
+ * (`lobe-local-system/moveFiles` uses `items`, `lobe-cloud-sandbox/moveFiles` uses `operations`).
+ */
+const BATCH_PATH_FIELDS: ReadonlyArray<{
+  arrayKey: string;
+  fields: readonly string[];
+}> = [
+  { arrayKey: 'items', fields: ['oldPath', 'newPath', 'path'] },
+  { arrayKey: 'operations', fields: ['source', 'destination', 'path'] },
+];
 
 /**
  * Result of security blacklist check
@@ -109,6 +133,15 @@ export class InterventionChecker {
 
     // All matchers must match (AND logic)
     for (const [paramName, matcher] of Object.entries(rule.match)) {
+      if (paramName === 'path') {
+        const pathValues = this.extractPathValues(toolArgs);
+        if (pathValues.length === 0) return false;
+        if (!pathValues.some((value) => this.matchesPathArgument(matcher, value))) {
+          return false;
+        }
+        continue;
+      }
+
       const paramValue = toolArgs[paramName];
 
       // Parameter not present in args - rule doesn't match
@@ -121,6 +154,65 @@ export class InterventionChecker {
     }
 
     return true;
+  }
+
+  /**
+   * Collect every file-path value present in `toolArgs` so `path` security rules
+   * cover tools that name their path parameter `file_path`, `paths`, `items[].oldPath/newPath`,
+   * or `operations[].source/destination`.
+   */
+  private static extractPathValues(toolArgs: Record<string, any>): unknown[] {
+    if (!toolArgs || typeof toolArgs !== 'object') return [];
+
+    const values: unknown[] = [];
+
+    if (toolArgs.path !== undefined) {
+      values.push(toolArgs.path);
+    }
+
+    for (const key of SINGLE_PATH_PARAM_NAMES) {
+      const value = toolArgs[key];
+      if (typeof value === 'string' && value.length > 0) {
+        values.push(value);
+      }
+    }
+
+    if (Array.isArray(toolArgs.paths)) {
+      for (const entry of toolArgs.paths) {
+        if (typeof entry === 'string' && entry.length > 0) {
+          values.push(entry);
+        }
+      }
+    }
+
+    for (const { arrayKey, fields } of BATCH_PATH_FIELDS) {
+      const entries = toolArgs[arrayKey];
+      if (!Array.isArray(entries)) continue;
+
+      for (const entry of entries) {
+        if (!entry || typeof entry !== 'object') continue;
+        const record = entry as Record<string, unknown>;
+        for (const field of fields) {
+          const value = record[field];
+          if (typeof value === 'string' && value.length > 0) {
+            values.push(value);
+          }
+        }
+      }
+    }
+
+    return values;
+  }
+
+  private static matchesPathArgument(matcher: ArgumentMatcher, value: unknown): boolean {
+    if (this.matchesArgument(matcher, value)) return true;
+
+    const strValue = String(value);
+    if (strValue.includes('\\')) {
+      return this.matchesArgument(matcher, strValue.replaceAll('\\', '/'));
+    }
+
+    return false;
   }
 
   /**

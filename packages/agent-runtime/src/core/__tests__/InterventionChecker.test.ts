@@ -422,6 +422,96 @@ describe('InterventionChecker', () => {
         expect(result.blocked).toBe(true);
         expect(result.reason).toBe('securityBlacklist.gcpCredentials');
       });
+
+      it('should block editFile file_path targeting sensitive files', () => {
+        expect(
+          InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
+            file_path: '/Users/alice/project/.env',
+            new_string: 'KEY=2',
+            old_string: 'KEY=1',
+          }),
+        ).toEqual({ blocked: true, reason: 'securityBlacklist.envFiles' });
+
+        expect(
+          InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
+            file_path: '/home/user/.ssh/id_rsa',
+            new_string: 'x',
+            old_string: 'y',
+          }),
+        ).toEqual({ blocked: true, reason: 'securityBlacklist.sshPrivateKeys' });
+
+        expect(
+          InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
+            file_path: '/Users/alice/project/src/index.ts',
+            new_string: 'b',
+            old_string: 'a',
+          }),
+        ).toEqual({ blocked: false });
+      });
+
+      it('should block moveFiles items targeting sensitive files in oldPath or newPath', () => {
+        expect(
+          InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
+            items: [{ newPath: '/project/env.txt', oldPath: '/project/.env' }],
+          }),
+        ).toEqual({ blocked: true, reason: 'securityBlacklist.envFiles' });
+
+        expect(
+          InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
+            items: [{ newPath: '/project/.npmrc', oldPath: '/project/tmp.txt' }],
+          }),
+        ).toEqual({ blocked: true, reason: 'securityBlacklist.npmrc' });
+
+        expect(
+          InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
+            items: [null, { newPath: '/project/b.ts', oldPath: '/project/a.ts' }],
+          }),
+        ).toEqual({ blocked: false });
+      });
+
+      it('should block cloud-sandbox moveFiles operations and deleteFiles paths', () => {
+        expect(
+          InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
+            operations: [{ destination: '/workspace/out.txt', source: '/workspace/.env.local' }],
+          }),
+        ).toEqual({ blocked: true, reason: 'securityBlacklist.envFiles' });
+
+        expect(
+          InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
+            operations: [
+              { destination: '/home/user/.aws/credentials', source: '/workspace/fake.ini' },
+            ],
+          }),
+        ).toEqual({ blocked: true, reason: 'securityBlacklist.awsCredentials' });
+
+        expect(
+          InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
+            paths: ['/workspace/README.md', '/home/user/.kube/config'],
+          }),
+        ).toEqual({ blocked: true, reason: 'securityBlacklist.kubeConfig' });
+
+        expect(
+          InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
+            paths: ['/workspace/dist', '/workspace/node_modules'],
+          }),
+        ).toEqual({ blocked: false });
+      });
+
+      it('should block Windows backslash paths targeting sensitive files', () => {
+        expect(
+          InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
+            file_path: 'C:\\Users\\alice\\.ssh\\id_ed25519',
+            new_string: 'x',
+            old_string: 'y',
+          }),
+        ).toEqual({ blocked: true, reason: 'securityBlacklist.sshPrivateKeys' });
+
+        expect(
+          InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
+            path: 'C:\\Users\\alice\\.aws\\credentials',
+          }),
+        ).toEqual({ blocked: true, reason: 'securityBlacklist.awsCredentials' });
+      });
     });
 
     describe('with custom blacklist', () => {
