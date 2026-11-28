@@ -1,5 +1,10 @@
 export { createWeComAdapter, extractWeComText, WeComAdapter } from './adapter';
-export type { WeComConnectionOptions, WeComDeliveryResult, WeComSocket } from './connection';
+export type {
+  WeComConnectionOptions,
+  WeComDeliveryResult,
+  WeComForwardResult,
+  WeComSocket,
+} from './connection';
 export {
   generateReqId,
   threadFromBody,

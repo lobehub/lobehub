@@ -9,6 +9,15 @@ import { QQ_INTENTS, QQ_WS_OP_CODES } from './types';
 
 export type GatewayLogger = (...args: any[]) => void;
 
+/** Outcome of one event forwarded to the webhook route. */
+export interface GatewayForwardResult {
+  /** Set when no answer came back (connection refused, DNS failure, timeout). */
+  error?: unknown;
+  ok: boolean;
+  /** HTTP status of the answer, when there was one. */
+  status?: number;
+}
+
 // Default no-op logger
 const noop: GatewayLogger = () => {};
 
@@ -39,6 +48,11 @@ export interface QQGatewayOptions {
   intents?: number;
   /** Optional logger function (defaults to no-op) */
   log?: GatewayLogger;
+  /**
+   * Outcome of each event POSTed to `webhookUrl`. A failure there drops the message while the
+   * gateway stays connected, so the host surfaces it.
+   */
+  onForwardResult?: (result: GatewayForwardResult) => void;
   /** Shard configuration [shard_id, total_shards] */
   shard?: [number, number];
   /** URL to forward dispatch events to (POST) */
@@ -55,6 +69,7 @@ export class QQGatewayConnection {
   private readonly api: QQApiClient;
   private readonly intents: number;
   private readonly log: GatewayLogger;
+  private readonly onForwardResult?: (result: GatewayForwardResult) => void;
   private readonly shard: [number, number];
   private readonly webhookUrl: string;
   private readonly abortSignal?: AbortSignal;
@@ -76,6 +91,7 @@ export class QQGatewayConnection {
     this.api = api;
     this.intents = options.intents ?? DEFAULT_INTENTS;
     this.log = options.log ?? noop;
+    this.onForwardResult = options.onForwardResult;
     this.shard = options.shard ?? [0, 1];
     this.webhookUrl = options.webhookUrl;
     this.abortSignal = options.abortSignal;
@@ -432,9 +448,26 @@ export class QQGatewayConnection {
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
       signal: AbortSignal.timeout(30_000),
-    }).catch((err) => {
-      this.log('Failed to forward event %s to webhook: %O', payload.t, err);
-    });
+    }).then(
+      (response) => {
+        if (!response.ok) {
+          this.log('Webhook answered %d to forwarded event %s', response.status, payload.t);
+        }
+        this.reportForward({ ok: response.ok, status: response.status });
+      },
+      (err) => {
+        this.log('Failed to forward event %s to webhook: %O', payload.t, err);
+        this.reportForward({ error: err, ok: false });
+      },
+    );
+  }
+
+  private reportForward(result: GatewayForwardResult): void {
+    try {
+      this.onForwardResult?.(result);
+    } catch (err) {
+      this.log('onForwardResult threw: %O', err);
+    }
   }
 
   // ---------- Reconnection ----------

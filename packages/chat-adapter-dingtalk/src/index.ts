@@ -10,7 +10,7 @@ export {
 } from './api';
 export { signCallback, verifyCallbackSignature } from './crypto';
 export { DingTalkFormatConverter } from './format-converter';
-export type { DingTalkGatewayOptions, GatewayLogger } from './gateway';
+export type { DingTalkGatewayOptions, GatewayForwardResult, GatewayLogger } from './gateway';
 export { DEFAULT_STREAM_SUBSCRIPTIONS, DingTalkStreamConnection } from './gateway';
 export type {
   DingTalkAccessTokenResponse,

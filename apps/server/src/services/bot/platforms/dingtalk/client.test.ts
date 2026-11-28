@@ -36,6 +36,10 @@ vi.mock('chat', async (importOriginal) => {
   return { ...actual, Chat: FakeChat };
 });
 
+// The loopback prefers INTERNAL_APP_URL (see ../selfWebhook); leave it unset so
+// the client falls back to the app URL in its runtime context.
+vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: undefined, INTERNAL_APP_URL: undefined } }));
+
 vi.mock('@/server/services/redis', () => ({ redisService: { botReply: mocks.botReply } }));
 
 vi.mock('@/server/services/gateway/runtimeStatus', () => ({
@@ -208,7 +212,7 @@ describe('DingTalkClientFactory.createClient', () => {
     await client.start({ durationMs: 60_000 });
 
     expect(mocks.adapter.startGatewayListener).toHaveBeenCalledWith(
-      { waitUntil: expect.any(Function) },
+      { onForwardResult: expect.any(Function), waitUntil: expect.any(Function) },
       60_000,
       expect.any(AbortSignal),
       'https://app.example.com/api/agent/webhooks/dingtalk/dingapp',

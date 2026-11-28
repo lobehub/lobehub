@@ -2,6 +2,7 @@ import { createHmac } from 'node:crypto';
 
 import debug from 'debug';
 
+import type { SelfWebhookForwardResult } from '../selfWebhook';
 import { SLACK_API_BASE } from './api';
 
 const log = debug('bot-platform:slack:gateway');
@@ -18,6 +19,11 @@ export interface SlackSocketModeOptions {
   appToken: string;
   /** Duration in ms before the connection auto-closes (caller restarts) */
   durationMs?: number;
+  /**
+   * Outcome of each event POSTed to `webhookUrl`. A failure there drops the message while the
+   * socket stays healthy, so the client reports it (error log + runtime status).
+   */
+  onForwardResult: (result: SelfWebhookForwardResult) => void;
   /** Signing secret used to synthesize Slack-compatible webhook signatures */
   signingSecret: string;
   /** URL to forward events to (POST) */
@@ -42,6 +48,7 @@ export class SlackSocketModeConnection {
   private readonly appToken: string;
   private readonly abortSignal?: AbortSignal;
   private readonly durationMs?: number;
+  private readonly onForwardResult: (result: SelfWebhookForwardResult) => void;
   private readonly signingSecret: string;
   private readonly webhookUrl: string;
 
@@ -53,6 +60,7 @@ export class SlackSocketModeConnection {
     this.appToken = options.appToken;
     this.abortSignal = options.abortSignal;
     this.durationMs = options.durationMs;
+    this.onForwardResult = options.onForwardResult;
     this.signingSecret = options.signingSecret;
     this.webhookUrl = options.webhookUrl;
   }
@@ -247,9 +255,18 @@ export class SlackSocketModeConnection {
       headers: forwardedRequest.headers,
       method: 'POST',
       signal: AbortSignal.timeout(30_000),
-    }).catch((err) => {
-      log('Failed to forward event to webhook: %O', err);
-    });
+    })
+      .then(
+        (response): SelfWebhookForwardResult => ({ ok: response.ok, status: response.status }),
+        (error): SelfWebhookForwardResult => ({ error, ok: false }),
+      )
+      .then((result) => {
+        if (!result.ok) log('Failed to forward %s event to webhook: %O', envelope.type, result);
+        this.onForwardResult(result);
+      })
+      .catch((err) => {
+        log('onForwardResult threw: %O', err);
+      });
   }
 
   private buildForwardedRequest(envelope: SlackSocketEnvelope) {

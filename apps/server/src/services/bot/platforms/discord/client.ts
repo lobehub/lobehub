@@ -11,6 +11,7 @@ import {
 } from '@/server/services/gateway/runtimeStatus';
 
 import { warnAttachmentFailures } from '../attachmentDelivery';
+import { buildSelfWebhookUrl, SelfWebhookForwardMonitor } from '../selfWebhook';
 import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
@@ -33,6 +34,7 @@ import {
 } from './mentions';
 import {
   patchDiscordForwardedInteractions,
+  patchDiscordGatewayForwarding,
   patchDiscordMentionThreads,
   patchDiscordMessageEdits,
 } from './patch';
@@ -58,7 +60,7 @@ export interface GatewayListenerOptions {
   waitUntil?: (task: Promise<any>) => void;
   /**
    * Override the URL the Gateway listener forwards events to. Defaults to
-   * `${appUrl}/api/agent/webhooks/discord/${applicationId}` (the per-agent
+   * `${INTERNAL_APP_URL || appUrl}/api/agent/webhooks/discord/${applicationId}` (the per-agent
    * bot path). Set when the same gateway connection should drive a different
    * surface — e.g. the LobeHub Messenger forwards to
    * `/api/agent/messenger/webhooks/discord`.
@@ -92,6 +94,7 @@ class DiscordGatewayClient implements PlatformClient {
   private config: BotProviderConfig;
   private context: BotPlatformRuntimeContext;
   private discord: DiscordApi;
+  private forwardMonitor: SelfWebhookForwardMonitor | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
 
@@ -152,7 +155,23 @@ class DiscordGatewayClient implements PlatformClient {
 
       const webhookUrl =
         options?.webhookUrl ??
-        `${(this.context.appUrl || '').trim()}/api/agent/webhooks/discord/${this.applicationId}`;
+        buildSelfWebhookUrl(this.id, this.applicationId, this.context.appUrl);
+
+      this.forwardMonitor?.dispose();
+      const forwardMonitor = new SelfWebhookForwardMonitor({
+        applicationId: this.applicationId,
+        platform: this.id,
+        redisClient: this.context.redisClient,
+        ttlMs: runtimeStatusTtlMs,
+        webhookUrl,
+      });
+      this.forwardMonitor = forwardMonitor;
+      if (!patchDiscordGatewayForwarding(discordAdapter, forwardMonitor.record)) {
+        log(
+          'DiscordBot appId=%s: adapter forwarding not patchable, drops are not tracked',
+          this.applicationId,
+        );
+      }
 
       await discordAdapter.startGatewayListener(
         { waitUntil },
@@ -185,14 +204,8 @@ class DiscordGatewayClient implements PlatformClient {
         }, durationMs);
       }
 
-      await updateBotRuntimeStatus(
-        {
-          applicationId: this.applicationId,
-          platform: this.id,
-          status: BOT_RUNTIME_STATUSES.connected,
-        },
-        { redisClient: this.context.redisClient as any, ttlMs: runtimeStatusTtlMs },
-      );
+      // Through the monitor: an event dropped while starting keeps the bot `failed`.
+      await forwardMonitor.markConnected();
 
       log('DiscordBot appId=%s started, webhookUrl=%s', this.applicationId, webhookUrl);
     } catch (error) {
@@ -217,6 +230,8 @@ class DiscordGatewayClient implements PlatformClient {
       this.refreshTimer = null;
     }
     this.abort.abort();
+    this.forwardMonitor?.dispose();
+    this.forwardMonitor = null;
     if (this.bot) {
       await this.bot.shutdown().catch(() => {});
       this.bot = null;

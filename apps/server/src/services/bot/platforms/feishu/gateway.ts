@@ -1,5 +1,7 @@
 import debug from 'debug';
 
+import type { SelfWebhookForwardResult } from '../selfWebhook';
+
 const log = debug('bot-platform:feishu:gateway');
 
 export interface FeishuWSOptions {
@@ -7,6 +9,11 @@ export interface FeishuWSOptions {
   appSecret: string;
   /** 'feishu' or 'lark' — determines the API domain */
   domain: 'feishu' | 'lark';
+  /**
+   * Outcome of each event POSTed to `webhookUrl`. A failure there drops the message while the
+   * WebSocket stays healthy, so the client reports it (error log + runtime status).
+   */
+  onForwardResult: (result: SelfWebhookForwardResult) => void;
   /**
    * Verification token configured by the user. When provided, it is injected
    * into the forwarded webhook payload's `header.token` so the downstream
@@ -97,15 +104,19 @@ export class FeishuWSConnection {
       schema: '2.0',
     };
 
+    let result: SelfWebhookForwardResult;
     try {
-      await fetch(this.options.webhookUrl, {
+      const response = await fetch(this.options.webhookUrl, {
         body: JSON.stringify(webhookPayload),
         headers: { 'Content-Type': 'application/json' },
         method: 'POST',
         signal: AbortSignal.timeout(30_000),
       });
-    } catch (err) {
-      log('Failed to forward event %s to webhook: %O', eventType, err);
+      result = { ok: response.ok, status: response.status };
+    } catch (error) {
+      result = { error, ok: false };
     }
+    if (!result.ok) log('Failed to forward event %s to webhook: %O', eventType, result);
+    this.options.onForwardResult(result);
   }
 }
