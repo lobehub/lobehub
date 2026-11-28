@@ -1,0 +1,27 @@
+name = "no-hot-path-full-read"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one TypeScript file from the LobeHub backend: server services, the agent runtime, tool execution, heterogeneous-agent persistence, Hono/TRPC handlers and database models.
+
+Team rule: a read that runs on every step, every event batch, every tool call or every poll tick reads only the rows and columns its caller uses. Hosted Postgres bills egress per byte, and a full `messages` row can decompress to many KB once it is joined with `message_plugins` (`content`, `state`, `arguments`, `metadata`, `editorData`, `reasoning`), so row width, not row count, is what the bill follows. Fixed cases: re-reading every tool's plugin row on each Claude Code / Codex event batch only to rebuild a `toolCallId -> id` map (lobehub#23142, megabytes per call on long topics), re-reading the whole topic after every tool batch and again at step entry (lobehub#23144), returning compression-group members the runtime never uses (lobehub#23148), and re-reading every agent document on each step (lobehub#23169).
+
+Report each of these, anchored on the line of the read call:
+1. A whole-scope read — the whole topic, thread, agent or operation, e.g. `messageModel.query({ topicId })` (its default `pageSize` is 1000), `listMessagePluginsByTopic`, `queryMessagesFromDB`, `findContextByAgent`, a `select()` without `limit` over one topic's rows — inside a function the file shows runs repeatedly within one operation (per step, per event or event batch, per tool call, per `tool_end`, per poll or interval tick, or inside a loop over steps/events), when the caller then uses only a few fields: ids for a map or index, a status, a count, an existence check, or a diff against what it already has. The message names the read, says how often it runs and which fields the caller actually uses; the suggestion names a narrower projection (an index query selecting only those columns, `skipCompressedMembers: true`, a revision/`updatedAt` probe, or reusing the result the operation already read).
+2. A second whole-scope read of the same topic inside the same function, where the first result (or an incremental patch) is still in scope, for example a post-tool re-read that only re-derives what an earlier read in that function already returned. Anchor on the second read. A comment that mentions a read in another file is not enough: use low confidence at most.
+3. A Drizzle `select()` or `.returning()` with no column list on a table with large text/jsonb columns (`messages`, `message_plugins`, `agent_documents`, `documents`, `topics`, operation logs) inside a repeatedly-run function, when the caller only reads `id`, `status` or a timestamp.
+
+Do not report:
+- A single read at operation entry, or a read whose full rows really feed the model context or a render that displays every field (the step's context build, an editor, a data export, the client message page).
+- A read whose rows the same handler returns to the client, whatever its `pageSize`, unless the file shows the client polls it only for a version, status or count.
+- Reads in one-shot user-action handlers: stop, cancel, approve, reject, compress, create, delete, rename.
+- A read that runs once when an operation completes, or a fallback such as `x ?? await query(...)` that runs only when the caller did not pass the rows.
+- Thin pass-through adapters and model methods that only forward their arguments to one query: report the repeated caller, not the method.
+- Cold or recovery paths that the file marks as rare: reconnect, revision gap, abort, stop, resume after crash, fallback, cold replica, migration or backfill scripts, admin tools, one-off repairs.
+- Reads that are already narrowed: an explicit column list, an index-only helper (`listToolCallIndexByTopic`, `getInterventionSnapshot`), `excludeProgressive`, or a small explicit `limit` or `pageSize` (≤ 50) when the caller uses the rows it gets. `viewModelPluginState` trims only plugin state: it does not exclude a repeated read whose caller takes only ids, a status or a count.
+- `skipCompressedMembers: true` drops compressed history but still returns full rows: it excludes a read only when the caller really uses the message bodies, not a repeated read that only takes ids, a status or a count.
+- Reads of small or bounded tables (settings, a user row, one operation row, a fixed enum of rows) and reads keyed by one primary key.
+- Reads in request handlers that run once per user request (a page load, one mutation), unless the file shows the handler is polled.
+- A read whose result must match what the client cache holds (a baseline for an incremental patch), when the file says so.
+
+Report only when this file itself shows the repetition: the read sits in a loop, an event or stream handler, a poll or interval callback, or a function whose name or comment says it runs per step, per tool call or per batch. If an exclusion applies, return no finding. If you cannot tell from this file whether the function runs repeatedly, return no finding. If uncertain, use low confidence rather than forcing a finding.
+"""

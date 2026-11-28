@@ -1,0 +1,23 @@
+name = "no-redis-blob-for-field"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one TypeScript file from the LobeHub backend: the agent runtime, its coordinator and state managers, operation control, step execution and Hono/TRPC handlers that touch Redis.
+
+Team rule: do not download a large Redis value to read one small field of it. Hosted Redis bills bandwidth, and the `agent_runtime_state:op_*` blob grows large on long runs; most reads of it only compared its `status`. lobehub#23210 added `loadAgentStatus` (one hash field written in the same MULTI as the blob), so status checks stop downloading the blob.
+
+Report this, anchored on the line of the load call: `loadAgentState(...)`, `stateManager.loadAgentState(...)`, `coordinator.loadAgentState(...)`, or `JSON.parse(await redis.get(<state key>))` inside a function whose whole body uses the loaded state for one thing and then returns or stops using it: only `status` (`?.status`, `.status === ...`, `isTerminal(state.status)`), only one other scalar such as `stepCount`, `interruption` or one `host.*` flag, or only presence (`!state`, `if (state)`) when the check runs in a loop, a poll or a per-event path. Report a load inside a loop over many operations (`for`, `map`, `pMap`, `Promise.all`) when the loop body reads only a few small scalars or a small metadata projection (`status`, `origin`, a few `clientLlmWait.*` fields) and discards the blob. The message names the field actually used and where the load runs (a poll, a save path, a per-step check, a handler); the suggestion names the narrow read: `loadAgentStatus(operationId)`, a metadata-hash `hget`, or a dedicated small key written beside the blob.
+
+Do not report:
+- Outside a loop over many operations, callers that read two or more distinct fields of the state (for example `status` plus `clientLlmWait.parkedAt`) or resume execution from it (building the next step, re-running a tool, serializing the state for a client snapshot).
+- A status check inside a larger flow that reads other fields of the same state later in the same function.
+- A load whose result is spread, merged or passed whole to another function (`{ ...state }`, `Object.assign(x, state)`, `dispatchHooks(op, state)`, `finishX(op, state)`).
+- The first load of an operation or a step, the start of a sync run, and a redrive from the state.
+- Load-modify-save sequences where the loaded state itself is modified and written back, including a read-then-save that adds `host.hooks` or `metadata`. Saving a different object (a step result, a new state) after reading only the old `status` is not load-modify-save.
+- Error, rollback, restore and lock-conflict paths.
+- A guarded rare fallback that loads the blob only when the narrow read cannot answer: the hash has no `status` field yet, `state.stepCount === undefined` from an old writer, an `if (!ctx.isInterrupted)` branch for older callers, a rolling-deploy legacy branch the file marks as such.
+- The in-memory state manager or tests' fakes: they hold objects, not Redis bytes.
+- One-off admin, repair and reaper sweeps that run on a schedule of minutes or longer, unless the file shows they load every operation's blob to read one field.
+- Reads of small Redis values (flags, counters, ids, sentinels, metadata hashes).
+
+If an exclusion applies, return no finding. If uncertain, use low confidence rather than forcing a finding.
+"""

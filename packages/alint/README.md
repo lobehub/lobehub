@@ -36,6 +36,11 @@ This is Phase 0: the rule set is a private workspace package (`@lobechat/alint`)
 | `no-redundant-test-cases`          | warn     | app/package/client test and spec files                        | a stronger same-file check already proves the same outcome and state    |
 | `no-redundant-api-copy`            | warn     | usage guides, builtin skills, CLI commands, public schemas    | keep ordinary instructions focused on supported actions                 |
 | `static-app-image-namespace`       | warn     | web client, image URL helpers and asset packaging             | fixed product images use `/static/app-images`                           |
+| `no-hot-path-full-read`            | warn     | `apps/server/src`, `packages/database`                        | per-step/event reads select only what they use (DB egress, #23144)      |
+| `no-redis-blob-for-field`          | warn     | `apps/server/src`                                             | read one state field without the whole blob (Redis bandwidth, #23210)   |
+| `no-unbounded-refetch`             | warn     | `src/`, Electron main                                         | client polls stop, dedupe and coalesce (invocations + DB, #23745)       |
+| `no-duplicate-persisted-payload`   | warn     | tool runtimes, builtin tools, hetero adapters, agent runtime  | persist each large tool payload once (#23860, #23170)                   |
+| `no-volatile-prompt-prefix`        | warn     | context engine, prompts, server Mecha                         | the cached prompt prefix stays byte-identical across steps (#22965)     |
 
 Package-level rules, kept next to the package they describe:
 
