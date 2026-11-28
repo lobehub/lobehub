@@ -102,6 +102,29 @@ describe('lobeAgentExecutor.callSubAgent', () => {
     expect(result).toEqual({ content: 'boom', success: false });
   });
 
+  // A parked child must NOT settle the parent's tool call: the deferred shape
+  // makes the runtime park the parent (`waiting_for_async_tool`) until the
+  // completion bridge backfills the tool message and resumes it. The earlier
+  // `success: false` intermediate settled the parent while the child was
+  // still live, so the parent never consumed the child's real result.
+  it('returns the deferred shape for a parked child instead of settling the call', async () => {
+    const run = vi.fn().mockResolvedValue({
+      error: undefined,
+      result: 'Sub-agent is still running: it paused for human approval or an async tool.',
+      success: false,
+      threadId: 'thd_parked',
+    });
+
+    const result = await lobeAgentExecutor.callSubAgent(params, createContext(run));
+
+    expect(result).toEqual({
+      content: 'Sub-agent is still running: it paused for human approval or an async tool.',
+      deferred: true,
+      state: { status: 'running', threadId: 'thd_parked' },
+      success: true,
+    });
+  });
+
   it('fails when the runtime provides no sub-agent runner', async () => {
     const result = await lobeAgentExecutor.callSubAgent(
       params,

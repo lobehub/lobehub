@@ -19,6 +19,23 @@ export interface GroupOrchestrationSupervisorConfig {
 }
 
 /**
+ * Serializable snapshot of the supervisor state machine's private counters.
+ * The orchestration loop parks when a member run awaits a human approval or an
+ * async tool; the client completion bridge re-enters the loop through a FRESH
+ * `internal_execGroupOrchestration`, which would otherwise mint a new
+ * supervisor with `round: 0` and `skipCallSupervisor: false` — replaying
+ * `call_supervisor` the original run had already consumed (and restarting the
+ * round budget). The snapshot travels on `AgentState.orchestration` so the
+ * re-entry can restore the machine to its exact pre-park decision point.
+ */
+export interface GroupOrchestrationSupervisorSnapshot {
+  /** Round counter reached before the park (next `call_supervisor` uses round+1). */
+  round: number;
+  /** Whether the original run's `supervisor_decided` set skip-call-supervisor. */
+  skipCallSupervisor: boolean;
+}
+
+/**
  * GroupOrchestrationSupervisor - State machine for Multi-Agent Group Orchestration
  *
  * This is the "Brain" for Multi-Agent Group Orchestration.
@@ -180,5 +197,27 @@ export class GroupOrchestrationSupervisor implements IGroupOrchestrationSupervis
         return { reason: 'unknown_result_type', type: 'finish' };
       }
     }
+  }
+
+  /**
+   * Capture the private state machine counters for a park. Called by the
+   * orchestration loop when a member run parks and the loop exits with the
+   * operation still running — the completion bridge re-entry restores them so
+   * the resumed loop continues from the original decision point instead of
+   * restarting the machine.
+   */
+  snapshot(): GroupOrchestrationSupervisorSnapshot {
+    return { round: this.round, skipCallSupervisor: this.skipCallSupervisor };
+  }
+
+  /**
+   * Restore the private state machine counters from a park-time snapshot.
+   * Mirrors {@link snapshot} exactly; unknown snapshots are tolerated (the
+   * fields default to a fresh supervisor's values).
+   */
+  restore(snapshot: GroupOrchestrationSupervisorSnapshot | undefined | null): void {
+    if (!snapshot) return;
+    this.round = snapshot.round ?? 0;
+    this.skipCallSupervisor = snapshot.skipCallSupervisor ?? false;
   }
 }

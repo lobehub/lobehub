@@ -60,7 +60,63 @@ const StartExecutionSchema = z.object({
   priority: z.enum(['high', 'normal', 'low']).optional().default('normal'),
 });
 
+const ControlClientSubAgentToolResultSchema = z.object({
+  /** The parked parent operation (hooks' owner context). */
+  operationId: z.string(),
+  result: z.object({
+    content: z.string(),
+    error: z.string().optional(),
+    state: z.record(z.string(), z.any()).optional(),
+    success: z.boolean(),
+  }),
+  toolMessageId: z.string(),
+});
+
 export const runControlRouter = router({
+  /**
+   * Result-control review for a CLIENT-executed sub-agent / group-member
+   * completion. The client completion bridge writes the child's final answer
+   * onto the parent's tool message and resumes the parent, but the runtime's
+   * deferred branch returns before the normal `afterToolCall` pipeline runs, so
+   * a hook configured to deny the result would be bypassed on this path. The
+   * client bridge submits the result BEFORE any backfill; the server runs the
+   * same `controlDeferredToolResult` pipeline the server-side bridges use and
+   * returns the (possibly replaced) result. Fail-closed on the client: an
+   * evaluation error denies the content (the placeholder stays running and the
+   * fire retry re-fires).
+   */
+  controlClientSubAgentToolResult: aiAgentWriteProcedure
+    .input(ControlClientSubAgentToolResultSchema)
+    .mutation(async ({ input, ctx }) => {
+      await assertCanUseOperationAgent({
+        db: ctx.serverDB,
+        operationId: input.operationId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+
+      const controlled = await ctx.agentRuntimeService.controlCompletedToolResult({
+        operationId: input.operationId,
+        // Keep the child's cost/tokens when a hook denies the result (same
+        // contract as the server sub-agent/group bridges).
+        preserveUsage: true,
+        result: {
+          content: input.result.content,
+          error: input.result.error,
+          state: input.result.state,
+          success: input.result.success,
+        },
+        toolMessageId: input.toolMessageId,
+      });
+
+      return {
+        blocked: controlled.blocked,
+        content: controlled.result.content,
+        error: typeof controlled.result.error === 'string' ? controlled.result.error : undefined,
+        state: controlled.result.state,
+      };
+    }),
+
   interruptTask: aiAgentWriteProcedure
     .input(InterruptTaskSchema)
     .mutation(async ({ input, ctx }): Promise<InterruptTaskResult> => {

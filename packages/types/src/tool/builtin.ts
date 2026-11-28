@@ -562,6 +562,16 @@ export interface BuiltinToolResult {
   content?: string;
 
   /**
+   * When true, the tool's real result is delivered out-of-band later (e.g. a
+   * sub-agent that parked on human approval). The client runtime parks the
+   * operation (`waiting_for_async_tool`) instead of settling the tool call,
+   * and a completion bridge backfills the tool message + resumes the parent —
+   * mirroring the server runtime's deferred-tool path. The `content` written
+   * here is the placeholder the parked parent shows while waiting.
+   */
+  deferred?: boolean;
+
+  /**
    * Error information if the tool execution failed
    */
   error?: {

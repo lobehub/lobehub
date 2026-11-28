@@ -134,6 +134,29 @@ export const threadRouter = router({
 
       return ctx.threadModel.update(input.id, input.value);
     }),
+
+  /**
+   * P2 (bridge round-18): atomic top-level metadata merge for the client
+   * completion bridge's coordinate persistence. A full-metadata replace
+   * raced thread settlement and clobbered the just-persisted terminal
+   * fields; this endpoint merges the patch server-side and only while the
+   * thread is still mid-run (`processing`), so a settled thread can never
+   * resurrect stale bridge coordinates.
+   */
+  mergeThreadMetadata: threadProcedure
+    .use(withScopedPermission('topic:update'))
+    .input(
+      z.object({
+        id: z.string(),
+        patch: z.record(z.string(), z.unknown()),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const thread = await ctx.threadModel.findById(input.id);
+      if (thread) assertWorkspaceRowManageable(ctx, thread.userId, 'thread');
+
+      return ctx.threadModel.mergeMetadata(input.id, input.patch as any);
+    }),
 });
 
 export type ThreadRouter = typeof threadRouter;
