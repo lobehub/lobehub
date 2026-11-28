@@ -101,12 +101,17 @@ export interface WorksRegistrationOutcome {
  */
 const FILE_WORK_EXPORT_CONCURRENCY = 5;
 
+const UUID_PREFIXED_SEGMENT = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}-(.+)$/;
+
 /**
- * An export object key whose last segment carries the random UUID prefix
- * `SandboxMiddlewareService.exportAndUploadFile` adds by default — the marker of
- * an object no later export can overwrite.
+ * Whether a file record's object key is the random-prefixed `<uuid>-<name>`
+ * key `SandboxMiddlewareService.exportAndUploadFile` assigns by default — the
+ * marker of an object no later export can overwrite. The remainder must equal
+ * the record's own name, so a legacy filename-only key whose name merely
+ * starts with a UUID is not mistaken for one.
  */
-const IMMUTABLE_EXPORT_KEY = /\/[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}-[^/]+$/;
+const isImmutableExportKey = (file: { name: string; url: string }) =>
+  UUID_PREFIXED_SEGMENT.exec(file.url.split('/').pop() ?? '')?.[1] === file.name;
 
 /**
  * Run `task` over `items` with at most `limit` tasks in flight, collecting
@@ -645,7 +650,7 @@ export const registerWorksForOperation = async (
     const fileId = exportedFileIdByPath.get(path);
     if (!fileId) return undefined;
     const file = await fileModel.findById(fileId);
-    if (!file || !IMMUTABLE_EXPORT_KEY.test(file.url)) return undefined;
+    if (!file || !isImmutableExportKey(file)) return undefined;
     return {
       fileId: file.id,
       mimeType: file.fileType,

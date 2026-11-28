@@ -662,6 +662,7 @@ describe('registerWorksForOperation', () => {
     const ownedFile = {
       fileType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       id: 'file-exported',
+      name: 'report.docx',
       size: 4096,
       url: 'code-interpreter-exports/2026-07-20/topic-1/0b6f2d8e-1c3a-4f5b-9d7e-2a4c6e8f0b1d-report.docx',
     };
@@ -726,6 +727,20 @@ describe('registerWorksForOperation', () => {
 
       expect(mockExportAndUploadFile).toHaveBeenCalledTimes(1);
       expect(mockRegisterFile.mock.calls[0][0].metadata.fileId).toBe('file-report.docx');
+    });
+
+    it('re-exports a legacy filename-only key whose name starts with a UUID', async () => {
+      const name = '0b6f2d8e-1c3a-4f5b-9d7e-2a4c6e8f0b1d-report.docx';
+      mockListPlugins.mockResolvedValue([skillsExportRow('bb', `/workspace/${name}`)]);
+      mockFindFileById.mockResolvedValue({
+        ...ownedFile,
+        name,
+        url: `code-interpreter-exports/2026-07-20/topic-1/${name}`,
+      });
+
+      await registerWorksForOperation(baseParams);
+
+      expect(mockExportAndUploadFile).toHaveBeenCalledTimes(1);
     });
 
     it('re-exports with share provenance for a share visitor run', async () => {
