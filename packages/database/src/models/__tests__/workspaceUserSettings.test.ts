@@ -283,6 +283,20 @@ describe('WorkspaceUserSettingsModel', () => {
       });
     });
 
+    it('seeds team pins into a member who has no pins of their own', async () => {
+      const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+
+      // `sidebarPinnedItemIds` is undefined on the lazily created row, so the
+      // team's pins are the member's first ones; the duplicate collapses.
+      const result = await model.initializeSidebar({ pinIds: ['team-1', 'team-2', 'team-1'] });
+
+      expect(result).toEqual({
+        sidebarInitialized: true,
+        sidebarPinnedItemIds: ['team-1', 'team-2'],
+      });
+      expect(await model.getPreference()).toEqual(result);
+    });
+
     it('leaves the member not set up while there is nothing to add', async () => {
       const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
 

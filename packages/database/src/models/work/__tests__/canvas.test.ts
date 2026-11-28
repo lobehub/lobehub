@@ -367,6 +367,12 @@ describe('WorkModel · canvas', () => {
       });
     });
 
+    it('resolves an empty id list without querying', async () => {
+      const owner = new WorkModel(serverDB, userId);
+
+      expect(await owner.findCanvasSourcesByVersionIds([])).toEqual({});
+    });
+
     it('hides a canvas in the trash and a canvas of another user', async () => {
       const owner = new WorkModel(serverDB, userId);
       const work = await owner.registerCanvas(params());

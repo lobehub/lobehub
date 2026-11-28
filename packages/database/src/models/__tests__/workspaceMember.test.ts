@@ -829,11 +829,12 @@ describe('WorkspaceMemberModel', () => {
       expect(second.token).not.toBe(first.token);
       expect(second.expiresAt?.getTime()).toBe(expiresAt.getTime());
 
-      // Both stay live: creating a link does not revoke the others.
-      expect((await model.listLinkInvitations(workspaceId)).map((row) => row.id)).toEqual([
-        second.id,
-        first.id,
-      ]);
+      // Both stay live: creating a link does not revoke the others. Order is not
+      // asserted: two links created in the same millisecond share a `createdAt`,
+      // so their relative order is up to the planner.
+      const liveLinkIds = (await model.listLinkInvitations(workspaceId)).map((row) => row.id);
+      expect(liveLinkIds).toHaveLength(2);
+      expect([...liveLinkIds].sort()).toEqual([first.id, second.id].sort());
       expect(await model.countLinkInvitations(workspaceId)).toBe(2);
     });
 

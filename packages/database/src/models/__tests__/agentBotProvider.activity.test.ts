@@ -124,6 +124,14 @@ describe('AgentBotProviderModel activity', () => {
       );
       expect((await readBot(bot.id)).lastActiveAt).toEqual(recent);
     });
+    it('falls back to the wall clock when the caller passes no clock', async () => {
+      const bot = await seedBot('app-5', { lastActiveAt: daysAgo(3) });
+
+      expect(await AgentBotProviderModel.touchActivity(serverDB, 'discord', 'app-5')).toBe(true);
+
+      const row = await readBot(bot.id);
+      expect(Math.abs(row.lastActiveAt.getTime() - Date.now())).toBeLessThan(60_000);
+    });
   });
 
   describe('wakeIdleByUser', () => {
@@ -170,6 +178,19 @@ describe('AgentBotProviderModel activity', () => {
         limit: 2,
       });
       expect(second.map((row) => row.id)).toEqual(ids.slice(2));
+    });
+
+    it('treats a missing idleAfter as an open-ended window', async () => {
+      const longAsleep = await seedBot('long-asleep-2', { lastActiveAt: daysAgo(30) });
+      await seedBot('fresh-2', { lastActiveAt: daysAgo(2) });
+
+      const rows = await AgentBotProviderModel.listIdleEnabled(serverDB, {
+        idleBefore: daysAgo(12),
+        limit: 10,
+      });
+
+      expect(rows.map((row) => row.id)).toEqual([longAsleep.id]);
+      expect(rows[0]).not.toHaveProperty('credentials');
     });
   });
 });

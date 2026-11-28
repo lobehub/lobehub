@@ -652,6 +652,14 @@ describe('DeviceModel', () => {
       expect(stored?.updatedAt).toEqual(registeredAt);
     });
 
+    it('does nothing when the gateway reports no row online', async () => {
+      const [row] = await insertRows([{ deviceId: 'p1', identitySource: 'machine-id', userId }]);
+
+      await deviceModel.markSeen([], seenAt, staleBefore(seenAt));
+
+      expect(await lastSeenOf(row.id)).toEqual(registeredAt);
+    });
+
     it('never moves lastSeenAt backwards', async () => {
       const [row] = await insertRows([{ deviceId: 'p1', identitySource: 'machine-id', userId }]);
       await deviceModel.markSeen([row.id], seenAt, staleBefore(seenAt));

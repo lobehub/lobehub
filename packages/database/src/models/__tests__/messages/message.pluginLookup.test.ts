@@ -351,6 +351,17 @@ describe('MessageModel.listToolCallIndexByTopic', () => {
 
     expect(rows.map((row) => row.id)).toEqual(['plug-index-in-scope']);
   });
+
+  it('leaves toolCallId undefined for a row stored without one', async () => {
+    await seedToolMessage({ id: 'plug-index-no-call', toolCallId: null });
+
+    const [row] = await messageModel.listToolCallIndexByTopic('plugin-topic', {
+      interventionStateKey,
+    });
+
+    expect(row.id).toBe('plug-index-no-call');
+    expect(row.toolCallId).toBeUndefined();
+  });
 });
 
 describe('MessageModel.listMessagePluginsByIds', () => {
@@ -489,6 +500,18 @@ describe('MessageModel.getInterventionSnapshot', () => {
 
     await seedAssistantMessage('snap-new-row');
     expect((await snapshot(['snap-card'])).revision).not.toBe(edited);
+  });
+
+  it('reports a bare revision for no cards and a topic that holds no message', async () => {
+    const { revision, statuses } = await messageModel.getInterventionSnapshot({
+      ids: [],
+      topicId: 'plugin-topic-without-messages',
+    });
+
+    expect(statuses).toEqual({});
+    // `max(updatedAt)` is NULL for a topic with no message; the probe must not
+    // leak `null` into the revision string.
+    expect(revision).toBe('0||');
   });
 });
 

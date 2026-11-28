@@ -83,4 +83,18 @@ describe('TopicModel - child topics (metadata.openedBy)', () => {
 
     expect(all.total).toBe(5);
   });
+
+  it('narrows the children to one agent when one is given', async () => {
+    const mine = await topicModel.query({ agentId: 'agent-mine', openedByTopicId: 'parent' });
+
+    expect(mine.items.map((item: any) => item.id).sort()).toEqual(['mine-1', 'mine-2']);
+  });
+
+  it('shows only agent-less children when the allowed set is empty', async () => {
+    // An empty allow-list is "no agents allowed", not "no restriction": no
+    // child here runs without an agent, so nothing shows.
+    const none = await topicModel.query({ openedByAgentIds: [], openedByTopicId: 'parent' });
+
+    expect(none.total).toBe(0);
+  });
 });

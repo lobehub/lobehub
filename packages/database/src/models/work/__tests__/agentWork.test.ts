@@ -94,6 +94,15 @@ describe('WorkModel · agent-created Works', () => {
     expect(await serverDB.select().from(works)).toEqual([]);
   });
 
+  it('keeps the raw path when it holds no file name to show', async () => {
+    const work = await workModel().createAgentWork(run, {
+      file: { ...reportFile, filePath: '/' },
+      type: 'file',
+    });
+
+    expect(work.title).toBe('/');
+  });
+
   it('registers a file with the file name as the default title', async () => {
     const work = await workModel().createAgentWork(run, { file: reportFile, type: 'file' });
 

@@ -1,5 +1,6 @@
 // @vitest-environment node
 import type { AgentWorkRunContext, CollectionWorkItem } from '@lobechat/types';
+import { COLLECTION_WORK_MAX_ITEMS } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -95,6 +96,16 @@ describe('WorkModel · agent collections', () => {
     expect(legacy).toEqual([]);
   });
 
+  it('uses the first image as the card cover when none is named', async () => {
+    const work = await workModel().createAgentWork(run, {
+      items: [image(1), image(2)],
+      title: 'No named cover',
+      type: 'collection',
+    });
+
+    expect(work.url).toBe(image(1).url);
+  });
+
   it('makes every create a new collection', async () => {
     const first = await createCollection();
     const second = await createCollection({ toolCallId: 'call-collection-2' });
@@ -113,6 +124,36 @@ describe('WorkModel · agent collections', () => {
       );
     }
     expect(await serverDB.select().from(works)).toEqual([]);
+  });
+
+  it('refuses a collection above the image cap', async () => {
+    const items = Array.from({ length: COLLECTION_WORK_MAX_ITEMS + 1 }, (_, index) =>
+      image(index + 1),
+    );
+
+    await expectAgentWorkError(
+      workModel().createAgentWork(run, { items, title: 'Too many', type: 'collection' }),
+      'BAD_REQUEST',
+    );
+    expect(await serverDB.select().from(works)).toEqual([]);
+  });
+
+  it('stores an image without a caption or a mime type untouched', async () => {
+    const work = await createCollection();
+    const bare = await workModel().createAgentWork(
+      { ...run, toolCallId: 'call-collection-bare' },
+      {
+        items: [{ fileId: 'file-cd-bare', url: 'https://app.example.com/f/file-cd-bare' }],
+        title: 'Bare image',
+        type: 'collection',
+      },
+    );
+
+    const [version] = await workModel().listVersions(bare.id);
+    expect(version.metadata?.collection).toEqual({
+      items: [{ fileId: 'file-cd-bare', url: 'https://app.example.com/f/file-cd-bare' }],
+    });
+    expect(work.id).not.toBe(bare.id);
   });
 
   it('caps the text a model writes and refuses an empty title on update', async () => {
@@ -296,5 +337,20 @@ describe('WorkModel · deleting agent Works', () => {
     ]);
     // A Work that already carries its own cost keeps it.
     expect(costs.find((row) => row.workId === scanned!.id)?.cost).toBe(0.01);
+  });
+
+  it('leaves versions untouched when the run reports no total', async () => {
+    const collection = await createCollection();
+
+    await expect(
+      workModel().fillAgentWorkCost({
+        cumulativeCost: null,
+        cumulativeUsage: null,
+        rootOperationId: run.operationId,
+      }),
+    ).resolves.toBe(0);
+
+    const [version] = await workModel().listVersions(collection.id);
+    expect(version.cumulativeCost).toBeNull();
   });
 });

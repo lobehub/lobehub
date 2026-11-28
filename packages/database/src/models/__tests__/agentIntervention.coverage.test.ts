@@ -219,6 +219,14 @@ describe('AgentInterventionModel coverage', () => {
       ).rejects.toThrow(AGENT_INTERVENTION_IDENTITY_CONFLICT);
     });
 
+    it('rejects a batch whose source does not match the model family', async () => {
+      // An agent-surface model must not seal an MCP-sourced batch; the check
+      // runs before the transaction so nothing is written.
+      await expect(createBatch({ source: 'mcp' })).rejects.toThrow(
+        AGENT_INTERVENTION_INVALID_BATCH,
+      );
+    });
+
     it('maps a review-token collision with another batch to an identity conflict', async () => {
       const [first] = await createBatch();
 

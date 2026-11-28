@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { gptImage2Schema } from '../../const/imageParameters';
 import { ModelParamsMetaSchema } from '../../standard-parameters';
-
 import { gptImage26Schema } from './gptImage26Parameters';
 
 describe('gptImage26Schema', () => {
