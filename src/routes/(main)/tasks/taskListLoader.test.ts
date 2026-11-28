@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { normalizeTaskListViewOptions } from '@/features/AgentTasks/AgentTaskList/listViewOptions';
-import { getMyTaskListOptions } from '@/features/AgentTasks/AgentTaskList/myTaskListOptions';
 import { useGlobalStore } from '@/store/global';
 import { INITIAL_STATUS } from '@/store/global/initialState';
 
@@ -92,13 +90,17 @@ describe('taskListLoader', () => {
     it('seeds the first page the landing tab syncs', async () => {
       await taskListLoader({ params: {}, request: request('/tasks') });
 
-      expect(preHydrateMyTaskList).toHaveBeenCalledWith(
-        getMyTaskListOptions({
-          page: 1,
-          scope: 'assigned',
-          viewOptions: normalizeTaskListViewOptions(INITIAL_STATUS.taskListViewOptions),
-        }),
-      );
+      // The landing tab: "Assigned to me", page 1, completed and canceled
+      // tasks hidden by default, archived tasks excluded, no stored filter.
+      expect(preHydrateMyTaskList).toHaveBeenCalledWith({
+        completedWithin: undefined,
+        filter: undefined,
+        includeArchived: false,
+        limit: 50,
+        offset: 0,
+        scope: 'assigned',
+        statuses: ['backlog', 'running', 'scheduled', 'paused', 'failed'],
+      });
     });
 
     it('reads the sub-tab, display options and stored filter the page reads', async () => {

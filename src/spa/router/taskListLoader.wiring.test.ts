@@ -17,12 +17,12 @@ vi.mock('@/routes/(main)/tasks/taskListLoader', () => {
 const flatten = (routes: RouteObject[]): RouteObject[] =>
   routes.flatMap((route) => [route, ...(route.children ? flatten(route.children) : [])]);
 
-describe('scheduled task list loader wiring', () => {
+describe('task list loader wiring', () => {
   it('does not load the store-backed loader while the route tables load', () => {
     expect(loaderModule.evaluated).toBe(false);
   });
 
-  it('pre-hydrates the scheduled page on the global, agent and project Tasks routes', () => {
+  it('pre-hydrates the task list on the global, agent and project Tasks routes', () => {
     const routes = flatten(desktopRoutes).filter((r) => r.loader === taskListLoader);
 
     // Global `/tasks` (its index route) plus `/agent/:aid/tasks` and
