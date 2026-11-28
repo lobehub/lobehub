@@ -27,19 +27,28 @@ Use this skill when the bug or feature lives in the external CLI agent pipeline,
 5. `createGatewayEventHandler` hydrates the UI
 6. Only after this path looks correct should you move on to `agent-tracing` or context-engine debugging
 
+## Package Layout
+
+`packages/heterogeneous-agents/src` is organized by capability first, then by agent. Each top-level directory belongs to one runtime layer, because the web app imports the browser layer and one Node module reaching it blanks the page.
+
+- Browser layer: root modules, `adapters/`, `input/`, `permissions/`, `client/`, `errors/`, `quota/`, both coordinators, `providerBinding/`.
+- Node layer: `spawn/`, `quotaSampler/`, `transcript/`, `models/`, `scan/`, `protocol/`, `askUser/`, `builtinMcp/`.
+- Inside a capability, an agent with several files gets a subdirectory with unprefixed names: `adapters/codex/appServer/index.ts`, `spawn/claudeCode/liveInput.ts`. ACP agents pair `adapters/acp/<agent>.ts` with `spawn/acp/<agent>Session.ts` (`grokBuild.ts` / `grokBuildSession.ts`), or with `spawn/acp/<agent>/session.ts` when the Node side has several files (`spawn/acp/antigravity/`).
+- `package.json` export keys are the public contract; moving a module changes only the target. `runtimeBoundary.test.ts` fails when a browser entry and a Node entry share a directory.
+
 ## Read These Files First
 
 - `apps/desktop/src/main/controllers/HeterogeneousAgentCtr.ts`
 - `apps/desktop/src/main/modules/heterogeneousAgent/drivers/claudeCode.ts`
 - `apps/desktop/src/main/modules/heterogeneousAgent/drivers/codex.ts`
-- `packages/heterogeneous-agents/src/adapters/claudeCode.ts`
+- `packages/heterogeneous-agents/src/adapters/claudeCode/index.ts`
 - `packages/heterogeneous-agents/src/adapters/codex/index.ts`
 - `src/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor.ts`
 - `src/store/chat/slices/agentRun/actions/__tests__/heterogeneousAgentExecutor.test.ts`
 
 ## Default Debug Order
 
-1. Prove whether the raw CLI output is correct before touching UI code. The app records every real session — read the most recent one via `cat .heerogeneous-tracing/.last-live-trace` rather than hand-rolling a `claude -p` repro (see references/debug-workflow\.md §2).
+1. Prove whether the raw CLI output is correct before touching UI code. The app records every real session — read the most recent one via `cat .heerogeneous-tracing/.last-live-trace` rather than hand-rolling a `claude -p` repro (see references/debug-workflow.md §2).
 2. If raw output is correct, compare it with adapter output. In dev, `executeHeterogeneousAgent` exposes `window.__HETERO_AGENT_TRACE`.
 3. If adapted events look correct, inspect `persistToolBatch`, `persistToolResult`, step transitions, and subagent routing.
 4. Turn the repro into a focused test before fixing.
@@ -100,7 +109,7 @@ Regression coverage must include a clean environment, conflicting ancestor ident
 - Wrong terminal-error guide (e.g. "usage limit reached" shown for a network drop):
   a classifier is branching on a structured field whose mere presence isn't its meaning.
   Grep the field across all event states in a real trace before trusting it — see
-  references/debug-workflow\.md §8 (CC `rate_limit_info` rides on `status: "allowed"` too).
+  references/debug-workflow.md §8 (CC `rate_limit_info` rides on `status: "allowed"` too).
 
 ## References
 

@@ -1,8 +1,8 @@
-// Fixture: adapters/grokBuild.ts — an adapter reading its CLI's usage log from disk.
+// Fixture: adapters/acp/grokBuild.ts — an adapter reading its CLI's usage log from disk.
 // alint-expect
 import { readFile } from 'node:fs/promises';
 
-import type { AgentEventAdapter, HeterogeneousAgentEvent } from '../types';
+import type { AgentEventAdapter, HeterogeneousAgentEvent } from '../../types';
 
 export class GrokBuildAdapter implements AgentEventAdapter {
   sessionId?: string;
