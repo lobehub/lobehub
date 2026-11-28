@@ -20,6 +20,7 @@ import CloudflareProvider from './cloudflare';
 import CohereProvider from './cohere';
 import CometAPIProvider from './cometapi';
 import ComfyUIProvider from './comfyui';
+import CrowLLMProvider from './crowllm';
 import DeepSeekProvider from './deepseek';
 import DoubaoSpeechProvider from './doubaospeech';
 import ElevenLabsProvider from './elevenlabs';
@@ -183,6 +184,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   VLLMProvider,
   UnslothProvider,
   ComfyUIProvider,
+  CrowLLMProvider,
   HuggingFaceProvider,
   CloudflareProvider,
   GithubProvider,
@@ -330,6 +332,7 @@ export { default as CloudflareProviderCard } from './cloudflare';
 export { default as CohereProviderCard } from './cohere';
 export { default as CometAPIProviderCard } from './cometapi';
 export { default as ComfyUIProviderCard } from './comfyui';
+export { default as CrowLLMProviderCard } from './crowllm';
 export { default as DeepSeekProviderCard } from './deepseek';
 export { default as DoubaoSpeechProviderCard } from './doubaospeech';
 export { default as ElevenLabsProviderCard } from './elevenlabs';

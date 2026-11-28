@@ -20,6 +20,7 @@ import { default as cloudflare } from './cloudflare';
 import { default as cohere } from './cohere';
 import { default as cometapi } from './cometapi';
 import { default as comfyui } from './comfyui';
+import { default as crowllm } from './crowllm';
 import { default as deepseek } from './deepseek';
 import { default as doubaospeech } from './doubaospeech';
 import { default as elevenlabs } from './elevenlabs';
@@ -137,6 +138,7 @@ const staticModelMap: ModelsMap = {
   cohere,
   cometapi,
   comfyui,
+  crowllm,
   deepseek,
   doubaospeech,
   elevenlabs,
@@ -280,6 +282,7 @@ export { default as cloudflare } from './cloudflare';
 export { default as cohere } from './cohere';
 export { default as cometapi } from './cometapi';
 export { default as comfyui } from './comfyui';
+export { default as crowllm } from './crowllm';
 export { default as deepseek } from './deepseek';
 export { default as doubaospeech } from './doubaospeech';
 export { default as elevenlabs } from './elevenlabs';
