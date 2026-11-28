@@ -252,7 +252,6 @@
   "providerModels.item.modelConfig.extendParams.title": "Erweiterte Parameter",
   "providerModels.item.modelConfig.files.extra": "Die aktuelle Datei-Upload-Implementierung ist nur eine vorläufige Lösung, beschränkt auf Selbsttests. Bitte warten Sie auf vollständige Upload-Funktionen in zukünftigen Versionen.",
   "providerModels.item.modelConfig.files.title": "Datei-Upload-Unterstützung",
-  "providerModels.item.modelConfig.functionCall.extra": "Diese Konfiguration aktiviert nur die Fähigkeit des Modells, Werkzeuge zu verwenden. Ob das Modell diese tatsächlich nutzen kann, hängt vom Modell selbst ab. Bitte testen Sie die Nutzbarkeit selbst.",
   "providerModels.item.modelConfig.functionCall.title": "Werkzeugnutzung unterstützen",
   "providerModels.item.modelConfig.id.duplicate": "Ein Modell mit dieser ID existiert bereits. Verwenden Sie eine andere Modell-ID.",
   "providerModels.item.modelConfig.id.extra": "Kann nach Erstellung nicht mehr geändert werden und wird als Modell-ID bei KI-Aufrufen verwendet",

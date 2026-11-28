@@ -859,7 +859,6 @@
   "transfer.confirm.botChannels": "Botkanaalverbindingen moeten mogelijk worden vernieuwd na overdracht",
   "transfer.confirm.chatGroups": "Associaties met multi-agentgroepen worden verwijderd",
   "transfer.confirm.desc": "Hiermee wordt de agent en alle bijbehorende gegevens (onderwerpen, berichten, bestanden, enz.) verplaatst naar de doelwerkruimte.",
-  "transfer.confirm.plugins": "Aangepaste plug-ins zijn mogelijk niet beschikbaar in de doelwerkruimte",
   "transfer.confirm.title": "Agent overdragen",
   "transfer.confirm.warning": "Sommige functies worden niet overgedragen:",
   "transfer.copyTo": "Kopiëren naar",

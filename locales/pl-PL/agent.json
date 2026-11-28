@@ -845,7 +845,6 @@
   "transfer.confirm.botChannels": "Połączenia kanałów botów mogą wymagać odświeżenia po przeniesieniu",
   "transfer.confirm.chatGroups": "Powiązania grup wieloagentowych zostaną usunięte",
   "transfer.confirm.desc": "To przeniesie agenta i wszystkie powiązane dane (tematy, wiadomości, pliki itp.) do docelowego obszaru roboczego.",
-  "transfer.confirm.plugins": "Niestandardowe wtyczki mogą nie być dostępne w docelowym obszarze roboczym",
   "transfer.confirm.title": "Przenieś agenta",
   "transfer.confirm.warning": "Niektóre funkcje nie zostaną przeniesione:",
   "transfer.copyTo": "Skopiuj do",

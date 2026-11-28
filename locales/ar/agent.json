@@ -859,7 +859,6 @@
   "transfer.confirm.botChannels": "قد تحتاج اتصالات قنوات الروبوت إلى التحديث بعد النقل",
   "transfer.confirm.chatGroups": "سيتم إزالة ارتباطات المجموعات متعددة الوكلاء",
   "transfer.confirm.desc": "سيتم نقل الوكيل وجميع البيانات المرتبطة به (المواضيع، الرسائل، الملفات، إلخ) إلى مساحة العمل المستهدفة.",
-  "transfer.confirm.plugins": "قد لا تكون الإضافات المخصصة متوفرة في مساحة العمل المستهدفة",
   "transfer.confirm.title": "نقل الوكيل",
   "transfer.confirm.warning": "بعض الميزات لا يتم نقلها:",
   "transfer.copyTo": "نسخ إلى",

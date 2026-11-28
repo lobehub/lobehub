@@ -252,7 +252,6 @@
   "providerModels.item.modelConfig.extendParams.title": "Gelişmiş Parametreler",
   "providerModels.item.modelConfig.files.extra": "Mevcut dosya yükleme uygulaması geçici bir çözümdür, yalnızca kişisel denemeler için uygundur. Gelecekteki sürümlerde tam dosya yükleme desteği gelecektir.",
   "providerModels.item.modelConfig.files.title": "Dosya Yükleme Desteği",
-  "providerModels.item.modelConfig.functionCall.extra": "Bu yapılandırma yalnızca modelin araç kullanma yeteneğini etkinleştirir. Ancak modelin araçları gerçekten kullanıp kullanamayacağı tamamen modele bağlıdır; lütfen kendiniz test edin.",
   "providerModels.item.modelConfig.functionCall.title": "Araç Kullanım Desteği",
   "providerModels.item.modelConfig.id.duplicate": "Bu kimliğe sahip bir model zaten mevcut. Farklı bir model kimliği kullanın.",
   "providerModels.item.modelConfig.id.extra": "Oluşturulduktan sonra değiştirilemez ve AI çağrılarında model kimliği olarak kullanılır",

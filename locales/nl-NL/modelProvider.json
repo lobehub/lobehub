@@ -252,7 +252,6 @@
   "providerModels.item.modelConfig.extendParams.title": "Uitgebreide parameters",
   "providerModels.item.modelConfig.files.extra": "De huidige bestandsupload is een tijdelijke oplossing, beperkt tot eigen experimenten. Wacht op volledige uploadfunctionaliteit in toekomstige versies.",
   "providerModels.item.modelConfig.files.title": "Ondersteuning voor bestandsupload",
-  "providerModels.item.modelConfig.functionCall.extra": "Deze configuratie stelt het model in staat om tools te gebruiken. Of het model dit daadwerkelijk kan, hangt volledig af van het model zelf. Test dit zelf.",
   "providerModels.item.modelConfig.functionCall.title": "Ondersteuning voor toolgebruik",
   "providerModels.item.modelConfig.id.duplicate": "Er bestaat al een model met deze ID. Gebruik een andere model-ID.",
   "providerModels.item.modelConfig.id.extra": "Kan na aanmaak niet worden gewijzigd en wordt gebruikt als model-ID bij AI-aanroepen",

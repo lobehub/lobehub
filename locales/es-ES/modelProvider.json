@@ -252,7 +252,6 @@
   "providerModels.item.modelConfig.extendParams.title": "Parámetros Extendidos",
   "providerModels.item.modelConfig.files.extra": "La implementación actual de carga de archivos es una solución temporal, limitada a pruebas personales. Espera capacidades completas de carga en futuras versiones.",
   "providerModels.item.modelConfig.files.title": "Soporte de carga de archivos",
-  "providerModels.item.modelConfig.functionCall.extra": "Esta configuración solo habilita la capacidad del modelo para usar herramientas, permitiendo agregar habilidades tipo herramienta. Sin embargo, si el modelo puede usarlas depende completamente de él; por favor, prueba su funcionalidad.",
   "providerModels.item.modelConfig.functionCall.title": "Soporte para uso de herramientas",
   "providerModels.item.modelConfig.id.duplicate": "Ya existe un modelo con este ID. Utiliza un ID de modelo diferente.",
   "providerModels.item.modelConfig.id.extra": "No se puede modificar después de la creación y se usará como ID del modelo al llamar a la IA",

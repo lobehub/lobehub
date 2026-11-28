@@ -15,8 +15,8 @@ export default {
     'Explore mainstream AI models OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek',
   'discover.models.title': 'Model Marketplace',
   'discover.plugins.description':
-    'Explore charts, academic tools, image/video/voice generation, and workflows—add Skills to your Agents.',
-  'discover.plugins.title': 'Skill Marketplace',
+    'Explore charts, academic tools, image/video/voice generation, and workflows—add connectors to your Agents.',
+  'discover.plugins.title': 'Connector Marketplace',
   'discover.providers.description':
     'Explore leading model providers OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter',
   'discover.providers.title': 'Provider Marketplace',
@@ -26,8 +26,8 @@ export default {
     '{{appName}} brings you the best experience with GPT Image, Flux, Midjourney, and Stable Diffusion',
   'image.title': 'AI Art',
   'plugins.description':
-    'Search, charts, academic tools, image/video/voice generation, workflows—add Skills to your Agents.',
-  'plugins.title': 'Skill Marketplace',
+    'Search, charts, academic tools, image/video/voice generation, workflows—add connectors to your Agents.',
+  'plugins.title': 'Connector Marketplace',
   'welcome.description':
     '{{appName}} brings you the best UI experience for ChatGPT, Claude, Gemini, and OLLaMA.',
   'welcome.title': 'Welcome to {{appName}} · Where Agents Collaborate',

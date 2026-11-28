@@ -252,7 +252,6 @@
   "providerModels.item.modelConfig.extendParams.title": "Разширени параметри",
   "providerModels.item.modelConfig.files.extra": "Текущата реализация на качване на файлове е временна и е предназначена само за експерименти. Очаквайте пълна поддръжка в бъдеще.",
   "providerModels.item.modelConfig.files.title": "Поддръжка на качване на файлове",
-  "providerModels.item.modelConfig.functionCall.extra": "Тази настройка активира възможността на модела да използва инструменти. Дали ще ги използва ефективно зависи от самия модел. Моля, тествайте.",
   "providerModels.item.modelConfig.functionCall.title": "Поддръжка на използване на инструменти",
   "providerModels.item.modelConfig.id.duplicate": "Модел с този ID вече съществува. Използвайте различен ID за модела.",
   "providerModels.item.modelConfig.id.extra": "Не може да се променя след създаване и ще се използва като ID на модела при извикване",

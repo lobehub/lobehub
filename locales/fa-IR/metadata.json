@@ -10,16 +10,12 @@
   "discover.mcp.title": "بازار سرور MCP",
   "discover.models.description": "مدل‌های اصلی هوش مصنوعی را کاوش کنید: OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek",
   "discover.models.title": "بازار مدل‌ها",
-  "discover.plugins.description": "نمودارها، ابزارهای علمی، تولید تصویر/ویدیو/صدا و جریان‌های کاری—مهارت‌ها را به عامل‌های خود اضافه کنید.",
-  "discover.plugins.title": "بازار مهارت‌ها",
   "discover.providers.description": "ارائه‌دهندگان برتر مدل‌ها را کاوش کنید: OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
   "discover.providers.title": "بازار ارائه‌دهندگان",
   "discover.search": "جستجو",
   "discover.title": "بازار",
   "image.description": "{{appName}} بهترین تجربه را با GPT Image، Flux، Midjourney و Stable Diffusion برای شما فراهم می‌کند.",
   "image.title": "هنر هوش مصنوعی",
-  "plugins.description": "جستجو، نمودارها، ابزارهای علمی، تولید تصویر/ویدیو/صدا، جریان‌های کاری—مهارت‌ها را به عامل‌های خود اضافه کنید.",
-  "plugins.title": "بازار مهارت‌ها",
   "welcome.description": "{{appName}} بهترین تجربه کاربری را برای ChatGPT، Claude، Gemini و OLLaMA به شما ارائه می‌دهد.",
   "welcome.title": "به {{appName}} خوش آمدید · برای عامل‌های همکار"
 }

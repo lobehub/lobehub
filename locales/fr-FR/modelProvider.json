@@ -252,7 +252,6 @@
   "providerModels.item.modelConfig.extendParams.title": "Paramètres étendus",
   "providerModels.item.modelConfig.files.extra": "L'implémentation actuelle du téléversement de fichiers est une solution temporaire, limitée à l'expérimentation personnelle. Veuillez attendre les fonctionnalités complètes dans les futures versions.",
   "providerModels.item.modelConfig.files.title": "Prise en charge du téléversement de fichiers",
-  "providerModels.item.modelConfig.functionCall.extra": "Cette configuration activera uniquement la capacité du modèle à utiliser des outils. L'utilisation effective dépend entièrement du modèle lui-même ; veuillez tester sa compatibilité.",
   "providerModels.item.modelConfig.functionCall.title": "Prise en charge de l'utilisation d'outils",
   "providerModels.item.modelConfig.id.duplicate": "Un modèle avec cet ID existe déjà. Utilisez un ID de modèle différent.",
   "providerModels.item.modelConfig.id.extra": "Ne peut pas être modifié après création et sera utilisé comme identifiant du modèle lors des appels IA",

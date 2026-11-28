@@ -859,7 +859,6 @@
   "transfer.confirm.botChannels": "轉移後可能需要重新刷新機器人頻道連接",
   "transfer.confirm.chatGroups": "多代理群組關聯將被移除",
   "transfer.confirm.desc": "這將把代理及所有相關數據（主題、訊息、文件等）移動到目標工作區。",
-  "transfer.confirm.plugins": "自定義插件可能無法在目標工作區使用",
   "transfer.confirm.title": "轉移代理",
   "transfer.confirm.warning": "部分功能無法轉移：",
   "transfer.copyTo": "複製到",

@@ -308,7 +308,7 @@ export default {
     'The current file upload implementation is just a hack solution, limited to self-experimentation. Please wait for complete file upload capabilities in future implementations.',
   'providerModels.item.modelConfig.files.title': 'File Upload Support',
   'providerModels.item.modelConfig.functionCall.extra':
-    "This configuration will only enable the model's ability to use tools, allowing for the addition of tool-type skills. However, whether the model can truly use the tools depends entirely on the model itself; please test for usability on your own.",
+    "This configuration will only enable the model's ability to use tools, allowing tools to be added to the model. However, whether the model can truly use the tools depends entirely on the model itself; please test for usability on your own.",
   'providerModels.item.modelConfig.functionCall.title': 'Support for Tool Calling',
   'providerModels.item.modelConfig.id.duplicate':
     'A model with this ID already exists. Use a different model ID.',
