@@ -884,6 +884,28 @@ describe('GenerationModel', () => {
       expect(result.task.error).toBeUndefined();
     });
 
+    it.each(['mp4', 'webm'])(
+      'retains the %s extension behind a file proxy URL',
+      async (extension) => {
+        const stored = await generationModel.create({
+          ...testGeneration,
+          asset: {
+            thumbnailUrl: 'video-cover.webp',
+            type: 'video',
+            url: `videos/raw.${extension}`,
+          },
+          fileId: testFile.id,
+        });
+
+        const result = await generationModel.findByIdAndTransform(stored.id);
+
+        expect(result?.asset).toMatchObject({
+          fileExtension: extension,
+          url: `https://example.com/f/${testFile.id}`,
+        });
+      },
+    );
+
     it('should convert coverUrl for video assets', async () => {
       const videoAsset = {
         url: 'video-url.mp4',

@@ -307,6 +307,13 @@ export class GenerationModel {
   async transformGeneration(generation: GenerationWithAsyncTask): Promise<Generation> {
     // Process asset URLs if they exist, following the same logic as in generationBatch.ts
     const asset = generation.asset as ImageGenerationAsset | VideoGenerationAsset | null;
+    if (asset?.type === 'video') {
+      // The file proxy URL does not retain the storage key's extension.
+      const extension = asset.url?.match(/\.(mp4|webm)$/i)?.[1].toLowerCase();
+      if (extension === 'mp4' || extension === 'webm') {
+        (asset as VideoGenerationAsset).fileExtension = extension;
+      }
+    }
     const musicAsset = asset?.type === 'audio' ? (asset as unknown as MusicGenerationAsset) : null;
     if (musicAsset?.url) {
       // Songs have no thumbnail: resolve the audio and the optional cover art
