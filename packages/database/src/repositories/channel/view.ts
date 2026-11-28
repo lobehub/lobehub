@@ -779,12 +779,16 @@ export const readChannelView = async (
     ...page,
     ...(rootMessage ? [rootMessage] : []),
   ]);
+  // A reply still at work carries a preview of the request it answers, so a profile card can say
+  // what the Agent is on even when that request sits in a Thread this view did not load.
+  const workingJobs = jobs.filter((job) => job.status === 'queued' || job.status === 'running');
   const quoteIds = [
-    ...new Set(
-      [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
+    ...new Set([
+      ...[...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
         message.replyToId ? [message.replyToId] : [],
       ),
-    ),
+      ...workingJobs.map((job) => job.messageId),
+    ]),
   ];
   const quoted = quoteIds.length
     ? await tx
@@ -838,7 +842,11 @@ export const readChannelView = async (
   return {
     attachments,
     hasMore: reversed.length > limit,
-    jobs,
+    jobs: jobs.map((job) =>
+      job.status === 'queued' || job.status === 'running'
+        ? { ...job, request: quotes.get(job.messageId) ?? null }
+        : job,
+    ),
     members: environments.map((row) => {
       const {
         agencyConfig: _agencyConfig,
