@@ -24,6 +24,7 @@ export default {
     'No new subscription was created. You can manage or cancel your current subscription below.',
   'billing.existingSubscription.title': 'You already have a subscription',
   'billing.history': 'Billing history',
+  'billing.item': 'Item',
   'billing.manage.openFailed': 'Failed to open the payment management page',
   'billing.manage.title': 'Manage payments',
   'billing.orderNumber': 'Order number',
