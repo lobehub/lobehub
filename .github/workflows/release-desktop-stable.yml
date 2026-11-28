@@ -589,6 +589,40 @@ jobs:
             release/*.tar.gz*
 
   # ============================================
+  # 通知 Homebrew tap 更新 cask
+  # Release 发布成功后 ping lobehub/homebrew-tap，
+  # 由 tap 的 bump workflow 重算 dmg SHA-256 并提交。
+  # tap 侧还有 6 小时定时 bump 兜底，所以这里失败不阻塞发版。
+  # ============================================
+  notify-homebrew-tap:
+    needs: [publish-github, check-stable]
+    name: Notify Homebrew Tap
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Create tap token
+        id: tap-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+          owner: lobehub
+          repositories: homebrew-tap
+          permission-contents: write
+
+      - name: Dispatch desktop-release to lobehub/homebrew-tap
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.tap-token.outputs.token }}
+          RELEASE_VERSION: ${{ needs.check-stable.outputs.version }}
+        run: |
+          payload=$(jq -nc --arg v "${RELEASE_VERSION}" \
+            '{event_type: "desktop-release", client_payload: {channel: "stable", version: $v}}')
+          echo "${payload}"
+          echo "${payload}" | gh api -X POST /repos/lobehub/homebrew-tap/dispatches --input -
+
+  # ============================================
   # 发布到 S3 更新服务器
   # ============================================
   publish-s3:
