@@ -62,11 +62,10 @@ import type { TaskListViewOptions } from './listViewOptions';
 import {
   dropMissingLabelGroupings,
   dropProjectGrouping,
-  getCompletedWithin,
-  getVisibleTaskStatuses,
   normalizeTaskListViewOptions,
   toStoredTaskListViewOptions,
 } from './listViewOptions';
+import { getMyTaskListOptions } from './myTaskListOptions';
 import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
 import TaskList from './TaskList';
 import TaskListVisibilityFilter from './TaskListVisibilityFilter';
@@ -380,14 +379,8 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   });
   const useFetchMyTaskList = useTaskStore((s) => s.useFetchMyTaskList);
   const mineSWR = useFetchMyTaskList({
-    completedWithin: getCompletedWithin(viewOptions),
+    ...getMyTaskListOptions({ filter, page: collectionPage, scope: myTaskScope, viewOptions }),
     enabled: isMineCollection && !isMineBoard,
-    filter,
-    limit: COLLECTION_PAGE_SIZE,
-    offset: (collectionPage - 1) * COLLECTION_PAGE_SIZE,
-    includeArchived: viewOptions.showArchived,
-    scope: myTaskScope,
-    statuses: getVisibleTaskStatuses(viewOptions),
   });
   // The scheduled and "My tasks" tabs share one paginated-list shape; pick the
   // active tab's SWR handle so the pagination/empty/error plumbing is written

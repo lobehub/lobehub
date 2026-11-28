@@ -3,15 +3,15 @@ import type { RouteObject } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import { desktopRoutes } from './desktopRouter.config';
-import { scheduledTaskListLoader } from './scheduledTaskListLoader';
+import { taskListLoader } from './taskListLoader';
 
 const loaderModule = vi.hoisted(() => ({ evaluated: false }));
 
 // Evaluating the real loader means the task store reached the entry chunk's
 // first-screen graph.
-vi.mock('@/routes/(main)/tasks/scheduledTaskListLoader', () => {
+vi.mock('@/routes/(main)/tasks/taskListLoader', () => {
   loaderModule.evaluated = true;
-  return { scheduledTaskListLoader: vi.fn(async () => null) };
+  return { taskListLoader: vi.fn(async () => null) };
 });
 
 const flatten = (routes: RouteObject[]): RouteObject[] =>
@@ -23,7 +23,7 @@ describe('scheduled task list loader wiring', () => {
   });
 
   it('pre-hydrates the scheduled page on the global, agent and project Tasks routes', () => {
-    const routes = flatten(desktopRoutes).filter((r) => r.loader === scheduledTaskListLoader);
+    const routes = flatten(desktopRoutes).filter((r) => r.loader === taskListLoader);
 
     // Global `/tasks` (its index route) plus `/agent/:aid/tasks` and
     // `/project/:projectId/tasks`, under both the personal and workspace trees.
@@ -32,11 +32,10 @@ describe('scheduled task list loader wiring', () => {
   });
 
   it('delegates to the real loader on first use', async () => {
-    const { scheduledTaskListLoader: realLoader } =
-      await import('@/routes/(main)/tasks/scheduledTaskListLoader');
+    const { taskListLoader: realLoader } = await import('@/routes/(main)/tasks/taskListLoader');
     const args = { params: {}, request: new Request('http://localhost/tasks') } as any;
 
-    await expect(scheduledTaskListLoader(args)).resolves.toBeNull();
+    await expect(taskListLoader(args)).resolves.toBeNull();
     expect(realLoader).toHaveBeenCalledWith(args);
   });
 });
