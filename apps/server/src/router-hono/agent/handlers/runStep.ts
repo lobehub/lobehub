@@ -210,6 +210,7 @@ export async function runStep(c: Context): Promise<Response> {
       resumeAsyncTool,
       finishAfterAsyncTool,
       groupMemberTimeout,
+      subAgentTimeout,
       toolMessageId,
       verifyAsyncToolBarrier,
       asyncToolVerifyAttempt,
@@ -315,7 +316,8 @@ export async function runStep(c: Context): Promise<Response> {
       !verifyAsyncToolBarrier &&
       !resumeClientLlm &&
       !clientLlmWaitExpired &&
-      !groupMemberTimeout;
+      !groupMemberTimeout &&
+      !subAgentTimeout;
 
     // A previous invocation may have died part-way through its own inline loop.
     // It parks the envelope for each step before running it, so an envelope
@@ -385,6 +387,7 @@ export async function runStep(c: Context): Promise<Response> {
                 retainStepLock: true,
                 stepIndex,
                 stepLockOwner,
+                subAgentTimeout,
                 toolMessageId,
                 verifyAsyncToolBarrier,
               });

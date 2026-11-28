@@ -100,6 +100,7 @@ import type { SubAgentLlmRelayRequest } from './subAgentLlmRelay';
 import { closeSubAgentLlmRelay, openSubAgentLlmRelay } from './subAgentLlmRelay';
 import type { SubAgentRunDeps } from './subAgentRuns';
 import {
+  armSubAgentTimeout,
   cancelSubAgentThreadRun,
   execAgentMember,
   execAgentThreadRun,
@@ -848,8 +849,8 @@ export class AiAgentService {
    * sub-agent so it cannot recursively spawn more sub-agents, and it registers
    * the bridge that backfills the parent's placeholder tool message.
    */
-  execVirtualSubAgent = async (params: ExecVirtualSubAgentParams): Promise<ExecSubAgentResult> =>
-    execAgentThreadRun(this.subAgentRunDeps, params, {
+  execVirtualSubAgent = async (params: ExecVirtualSubAgentParams): Promise<ExecSubAgentResult> => {
+    const result = await execAgentThreadRun(this.subAgentRunDeps, params, {
       background: params.background,
       chatConfig: params.chatConfig,
       deviceId: params.deviceId,
@@ -863,6 +864,9 @@ export class AiAgentService {
       provider: params.provider,
       resumeParentOnComplete: true,
     });
+    await armSubAgentTimeout(this.subAgentRunDeps, params, result);
+    return result;
+  };
 
   /**
    * Stop a running `lobe-agent.callSubAgent` child for the agent that

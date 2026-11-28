@@ -106,8 +106,10 @@ import {
 } from './stepPolicy';
 import {
   completeSubAgentBridge,
+  handleSubAgentTimeout,
   isCallSubAgentToolMessage,
   publishSubAgentProgress,
+  scheduleSubAgentTimeout,
 } from './subAgentBridge';
 import type {
   AgentRuntimeDelegate,
@@ -380,6 +382,7 @@ export class AgentRuntimeService {
       getOperationStatus: (...args) => self.getOperationStatus(...args),
       getPendingInterventions: (...args) => self.getPendingInterventions(...args),
       handleGroupMemberTimeout: (...args) => self.handleGroupMemberTimeout(...args),
+      handleSubAgentTimeout: (...args) => self.handleSubAgentTimeout(...args),
       interruptOperation: (...args) => self.interruptOperation(...args),
       isCallSubAgentToolMessage: (...args) => self.isCallSubAgentToolMessage(...args),
       isOperationInterrupted: (...args) => self.isOperationInterrupted(...args),
@@ -414,6 +417,7 @@ export class AgentRuntimeService {
       revertClientWaitResumeWithRetry: (...args) => self.revertClientWaitResumeWithRetry(...args),
       scheduleContinuation: (...args) => self.scheduleContinuation(...args),
       scheduleGroupMemberTimeout: (...args) => self.scheduleGroupMemberTimeout(...args),
+      scheduleSubAgentTimeout: (...args) => self.scheduleSubAgentTimeout(...args),
       setQueuedMessages: (...args) => self.setQueuedMessages(...args),
       setupLocalExecutionCallback: (...args) => self.setupLocalExecutionCallback(...args),
       shouldContinueExecution: (...args) => self.shouldContinueExecution(...args),
@@ -634,6 +638,14 @@ export class AgentRuntimeService {
 
   completeSubAgentBridge(...args: MethodArgs<typeof completeSubAgentBridge>) {
     return completeSubAgentBridge(this.context, ...args);
+  }
+
+  scheduleSubAgentTimeout(...args: MethodArgs<typeof scheduleSubAgentTimeout>) {
+    return scheduleSubAgentTimeout(this.context, ...args);
+  }
+
+  private handleSubAgentTimeout(...args: MethodArgs<typeof handleSubAgentTimeout>) {
+    return handleSubAgentTimeout(this.context, ...args);
   }
 
   private isCallSubAgentToolMessage(...args: MethodArgs<typeof isCallSubAgentToolMessage>) {

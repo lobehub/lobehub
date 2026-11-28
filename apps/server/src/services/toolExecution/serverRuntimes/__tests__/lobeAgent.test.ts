@@ -1,4 +1,8 @@
-import { LobeAgentIdentifier, MAX_MEDIA_URLS } from '@lobechat/builtin-tool-lobe-agent';
+import {
+  DEFAULT_SUB_AGENT_TIMEOUT_MS,
+  LobeAgentIdentifier,
+  MAX_MEDIA_URLS,
+} from '@lobechat/builtin-tool-lobe-agent';
 import { createMediaFileRef } from '@lobechat/const/mediaRef';
 import { RequestTrigger } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -949,7 +953,7 @@ describe('lobeAgentRuntime', () => {
         .mockResolvedValue({ started: true, subOperationId: 'sub-op-1', threadId: 'thread-1' });
 
       const result = await runtime.callSubAgent(
-        { description: 'Research', instruction: 'Find the answer', timeout: 1000 },
+        { description: 'Research', instruction: 'Find the answer', timeout: 120_000 },
         { ...baseContext, subAgent: { run } } as ToolExecutionContext,
       );
 
@@ -957,7 +961,7 @@ describe('lobeAgentRuntime', () => {
         background: false,
         description: 'Research',
         instruction: 'Find the answer',
-        timeout: 1000,
+        timeout: 120_000,
       });
       expect(result).toMatchObject({
         content: '',
@@ -1080,7 +1084,7 @@ describe('lobeAgentRuntime', () => {
         description: 'Research',
         instruction: 'Find the answer',
         subAgentId: undefined,
-        timeout: undefined,
+        timeout: DEFAULT_SUB_AGENT_TIMEOUT_MS,
       });
       expect(result).toMatchObject({ deferred: true, success: true });
     });

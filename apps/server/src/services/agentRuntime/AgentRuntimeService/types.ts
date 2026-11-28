@@ -105,8 +105,10 @@ import type {
 } from './stepPolicy';
 import type {
   completeSubAgentBridge,
+  handleSubAgentTimeout,
   isCallSubAgentToolMessage,
   publishSubAgentProgress,
+  scheduleSubAgentTimeout,
 } from './subAgentBridge';
 
 export interface InterventionLifecycleCheckpoint {
@@ -328,6 +330,7 @@ export interface AgentRuntimeServiceContext {
   getOperationStatus: Bound<typeof getOperationStatus>;
   getPendingInterventions: Bound<typeof getPendingInterventions>;
   handleGroupMemberTimeout: Bound<typeof handleGroupMemberTimeout>;
+  handleSubAgentTimeout: Bound<typeof handleSubAgentTimeout>;
   readonly humanIntervention: HumanInterventionHandler;
   injectQueuedFollowUp: Bound<typeof injectQueuedFollowUp>;
   interruptOperation: Bound<typeof interruptOperation>;
@@ -361,6 +364,7 @@ export interface AgentRuntimeServiceContext {
   revertClientWaitResumeWithRetry: Bound<typeof revertClientWaitResumeWithRetry>;
   scheduleContinuation: Bound<typeof scheduleContinuation>;
   scheduleGroupMemberTimeout: Bound<typeof scheduleGroupMemberTimeout>;
+  scheduleSubAgentTimeout: Bound<typeof scheduleSubAgentTimeout>;
   readonly serverDB: LobeChatDatabase;
   setQueuedMessages: Bound<typeof setQueuedMessages>;
   setupLocalExecutionCallback: Bound<typeof setupLocalExecutionCallback>;
