@@ -80,6 +80,30 @@ describe('extractTranslationUses', () => {
     ).toThrow('unbounded dynamic translation key');
   });
 
+  it('requires explicit registration when a template has no literal prefix', async () => {
+    const uses = await extract(
+      'declare const group: string; declare const id: string; t(`${group}.${id}`);',
+    );
+    expect(uses[0].patterns).toEqual(['.*\\..*']);
+    expect(() => assertBoundedTranslationUses(uses, [])).toThrow(
+      'unbounded dynamic translation key',
+    );
+    expect(() =>
+      assertBoundedTranslationUses(uses, [
+        { file: uses[0].file, namespace: 'chat', reason: 'Grouped keys are registered at runtime' },
+      ]),
+    ).not.toThrow();
+  });
+
+  it('requires explicit registration when a plural suffix follows an unbounded key', async () => {
+    const uses = await extract('declare const code: string; t(code, { count: 2 });', {
+      countOption: 'count',
+    });
+    expect(() => assertBoundedTranslationUses(uses, [])).toThrow(
+      'unbounded dynamic translation key',
+    );
+  });
+
   it('rejects opaque dynamic keys instead of silently omitting them', async () => {
     await expect(extract('declare const key: any; t(key);')).rejects.toThrow(
       'Cannot statically classify translation key',

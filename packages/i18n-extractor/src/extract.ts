@@ -39,13 +39,17 @@ export const i18nextPreset = {
 
 export const UNBOUNDED_PATTERN = '.*';
 
+// Patterns are concatenations of escaped literals and `.*`. Only a leading literal constrains which
+// keys of the namespace can match, so anything starting with `.*` selects an unbounded resource set.
+const isUnboundedPattern = (pattern: string) => pattern.startsWith(UNBOUNDED_PATTERN);
+
 export const assertBoundedTranslationUses = (
   uses: TranslationUse[],
   allowlist: DynamicKeyEntry[],
 ) => {
   for (const use of uses) {
     if (
-      use.patterns.includes(UNBOUNDED_PATTERN) &&
+      use.patterns.some(isUnboundedPattern) &&
       !allowlist.some((entry) => entry.file === use.file && entry.namespace === use.namespace)
     )
       throw new Error(
