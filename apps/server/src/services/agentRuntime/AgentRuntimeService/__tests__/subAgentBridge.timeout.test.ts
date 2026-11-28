@@ -156,7 +156,7 @@ describe('AgentRuntimeService sub-agent timeout', () => {
     });
 
     it('no-ops when the child already finished', async () => {
-      mockCoordinator.loadAgentState.mockResolvedValue({ status: 'done' });
+      mockCoordinator.loadAgentStatus.mockResolvedValue('done');
       const interruptSpy = vi.spyOn(service, 'interruptOperation');
       const bridgeSpy = vi.spyOn(service, 'completeSubAgentBridge');
 
@@ -169,9 +169,11 @@ describe('AgentRuntimeService sub-agent timeout', () => {
       expect(result).toMatchObject({ nextStepScheduled: false, success: true });
       expect(interruptSpy).not.toHaveBeenCalled();
       expect(bridgeSpy).not.toHaveBeenCalled();
+      expect(mockCoordinator.loadAgentState).not.toHaveBeenCalled();
     });
 
     it('interrupts a running child and reports the timeout to its parent', async () => {
+      mockCoordinator.loadAgentStatus.mockResolvedValue('running');
       mockCoordinator.loadAgentState.mockResolvedValue({ status: 'running' });
       const interruptSpy = vi.spyOn(service, 'interruptOperation').mockResolvedValue(true);
       const bridgeSpy = vi.spyOn(service, 'completeSubAgentBridge');

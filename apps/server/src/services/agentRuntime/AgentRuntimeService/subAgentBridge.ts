@@ -449,9 +449,15 @@ export async function handleSubAgentTimeout(
   deps: SubAgentBridgeDeps,
   params: SubAgentTimeoutParams,
 ): Promise<AgentExecutionResult> {
-  const state = await deps.coordinator.loadAgentState(params.operationId);
-  const status = state?.status as string | undefined;
-  if (!state || status === 'done' || status === 'error' || status === 'interrupted') {
+  // Narrow status read first: most watchdogs fire after the child already
+  // finished, so the full state blob is loaded only when the bridge needs it.
+  const status = (await deps.coordinator.loadAgentStatus(params.operationId)) as
+    string | null | undefined;
+  const state =
+    !status || status === 'done' || status === 'error' || status === 'interrupted'
+      ? null
+      : await deps.coordinator.loadAgentState(params.operationId);
+  if (!state) {
     log('[%s] sub-agent timeout: child already terminal (%s), no-op', params.operationId, status);
     return { nextStepScheduled: false, state: {}, success: true };
   }
