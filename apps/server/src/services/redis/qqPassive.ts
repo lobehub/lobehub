@@ -49,6 +49,24 @@ return text
 `;
 
 /**
+ * Puts a claimed reply back, unless a newer one was parked while it was in flight.
+ * KEYS[1] = pending key; ARGV = text, the reply this claim put back, ttl (s).
+ *
+ * `takePending()` can hand back the newer local reply while putting the older Redis one back. If
+ * delivering that newer reply then fails, a plain `SET NX` would refuse to write it over the older
+ * reply we just requeued, and the newer text is already gone from this instance. Replacing exactly
+ * that requeued reply keeps the claimed — newer — answer, while anything parked after the claim is
+ * a different value and still wins.
+ */
+const PENDING_RESTORE_SCRIPT = `
+-- restore unless a newer reply was parked after the claim
+local current = redis.call('GET', KEYS[1])
+if current and current ~= ARGV[2] then return 0 end
+redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[3])
+return 1
+`;
+
+/**
  * Takes the next reply slot of a window.
  * KEYS[1] = window hash; ARGV = now (ms), windowMs, maxReplies.
  * Returns `{eventId, msgId, seq}` or nil when the window is closed or out of replies.
@@ -139,6 +157,25 @@ const createLocalStore = (): LocalStore => {
 
 const local = createLocalStore();
 
+/**
+ * The older reply `takePending()` put back when it preferred the newer local one, together with the
+ * reply that claim handed out. `restorePending()` may replace exactly that value — the claimed
+ * reply is newer, so overwriting it loses nothing — while any other value means a newer reply was
+ * parked afterwards and must be kept.
+ *
+ * Bound to the claim rather than only to the conversation: two deferred deliveries can overlap for
+ * the same conversation, and letting one of them read the other's entry would overwrite a reply
+ * parked after its own claim.
+ */
+interface RequeuedOlder {
+  /** The reply this claim handed out, and so the only caller allowed to replace `older`. */
+  claimed: string;
+  /** The value this claim put back into the slot. */
+  older: string;
+}
+
+const requeuedOlder = new Map<string, RequeuedOlder>();
+
 const parseSlot = (raw: unknown, now: number): QQPassiveSlot | null => {
   if (!Array.isArray(raw) || raw.length < 3) return null;
 
@@ -210,6 +247,7 @@ export const qqPassive: QQPassiveStore = {
       await redis.set(RedisKeys.qqPassive.pending(key), text, { ex: PENDING_TTL_SECONDS });
       // Redis holds the slot again; anything parked here during the outage was superseded by it.
       local.dropPending(key);
+      requeuedOlder.delete(key);
     } catch {
       await local.savePending(key, text);
     }
@@ -229,8 +267,16 @@ export const qqPassive: QQPassiveStore = {
       const localText = await local.takePending(key);
       const redisText = typeof text === 'string' && text ? text : undefined;
 
-      if (!localText) return redisText;
-      if (!redisText || redisText === localText) return localText;
+      if (!localText) {
+        requeuedOlder.delete(key);
+
+        return redisText;
+      }
+      if (!redisText || redisText === localText) {
+        requeuedOlder.delete(key);
+
+        return localText;
+      }
 
       // The take script already removed the older reply, so put it back: newest first, and
       // neither answer is lost.
@@ -239,24 +285,53 @@ export const qqPassive: QQPassiveStore = {
           ex: PENDING_TTL_SECONDS,
           nx: true,
         });
+        // Remember which reply now sits in the slot: if the newer one fails to send, it may
+        // replace exactly this value rather than lose itself to `SET NX`. The claimed text is part
+        // of the record so another delivery's permission is never spent on this claim.
+        requeuedOlder.set(key, { claimed: localText, older: redisText });
       } catch {
         await local.restorePending(key, redisText);
+        requeuedOlder.delete(key);
       }
 
       return localText;
     } catch {
+      requeuedOlder.delete(key);
+
       return local.takePending(key);
     }
   },
 
   async restorePending(key, text) {
     const redis = await getClient();
+    const entry = requeuedOlder.get(key);
+    // Only the claim that recorded this entry may replace what it put back: a second delivery for
+    // the same conversation records its own entry, and that permission says nothing about what this
+    // claim parked.
+    const older = entry && entry.claimed === text ? entry.older : undefined;
+    if (older !== undefined) requeuedOlder.delete(key);
+
     if (!redis) {
       await local.restorePending(key, text);
       return;
     }
 
     try {
+      if (older) {
+        // Replace the reply this claim put back — the claimed text is newer — unless something
+        // else was parked since, which the script leaves untouched.
+        await redis.eval(
+          PENDING_RESTORE_SCRIPT,
+          1,
+          RedisKeys.qqPassive.pending(key),
+          text,
+          older,
+          String(PENDING_TTL_SECONDS),
+        );
+
+        return;
+      }
+
       // `nx`: a reply parked while this one was in flight is newer and must win.
       await redis.set(RedisKeys.qqPassive.pending(key), text, {
         ex: PENDING_TTL_SECONDS,
