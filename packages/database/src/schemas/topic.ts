@@ -1,6 +1,7 @@
 import type { ChatTopicMetadata, ThreadMetadata } from '@lobechat/types';
 import { isNotNull, sql } from 'drizzle-orm';
 import {
+  bigint,
   boolean,
   index,
   integer,
@@ -71,9 +72,11 @@ export const topics = pgTable(
     // Kept nullable: NULL means "not measured yet" so in-flight / legacy topics
     // don't pollute SUM/AVG aggregates as if they were $0 / 0-token topics.
     totalCost: amountNumeric('total_cost'),
-    totalInputTokens: integer('total_input_tokens'),
-    totalOutputTokens: integer('total_output_tokens'),
-    totalTokens: integer('total_tokens'),
+    // bigint: a long-running topic re-sends its context on every call, so the
+    // running sum passes the int4 limit (2,147,483,647) after enough replies.
+    totalInputTokens: bigint('total_input_tokens', { mode: 'number' }),
+    totalOutputTokens: bigint('total_output_tokens', { mode: 'number' }),
+    totalTokens: bigint('total_tokens', { mode: 'number' }),
     // Full per-model cost / usage breakdowns for slice-and-dice analytics.
     cost: jsonb('cost').$type<Record<string, unknown>>(),
     usage: jsonb('usage').$type<Record<string, unknown>>(),

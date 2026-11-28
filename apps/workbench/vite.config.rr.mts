@@ -9,7 +9,10 @@ import { lobeIconImports } from '../../plugins/vite/lobeIconImports';
 import { viteMarkdownImport } from '../../plugins/vite/markdownImport';
 import { viteNodeModuleStub } from '../../plugins/vite/nodeModuleStub';
 import { vitePlatformResolve } from '../../plugins/vite/platformResolve';
-import { sharedRendererDefine } from '../../plugins/vite/sharedRendererConfig';
+import {
+  sharedRendererClientBuild,
+  sharedRendererDefine,
+} from '../../plugins/vite/sharedRendererConfig';
 import { stylexPlugin, stylexTokenModules } from '../../plugins/vite/stylex';
 import { shikiCdnUrl } from './app/stubs/shikiCdn';
 import { isShikiSource } from './app/stubs/shikiSource';
@@ -273,7 +276,7 @@ const isDev = process.env.NODE_ENV !== 'production';
 export default defineConfig({
   base: isDev ? '/' : process.env.VITE_CDN_BASE || '/',
   environments: {
-    client: { define },
+    client: { build: sharedRendererClientBuild, define },
     ssr: { define: ssrDefine, optimizeDeps: { exclude: [...stylexTokenModules] } },
   },
   plugins: [

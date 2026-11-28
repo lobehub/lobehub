@@ -10,16 +10,12 @@
   "discover.mcp.title": "Торговая площадка MCP-серверов",
   "discover.models.description": "Изучайте популярные ИИ-модели OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek",
   "discover.models.title": "Торговая площадка моделей",
-  "discover.plugins.description": "Изучайте графики, академические инструменты, генерацию изображений/видео/голоса и рабочие процессы — добавляйте навыки своим агентам.",
-  "discover.plugins.title": "Торговая площадка навыков",
   "discover.providers.description": "Изучайте ведущих поставщиков моделей: OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
   "discover.providers.title": "Торговая площадка провайдеров",
   "discover.search": "Поиск",
   "discover.title": "Торговая площадка",
   "image.description": "{{appName}} предлагает лучший опыт работы с GPT Image, Flux, Midjourney и Stable Diffusion",
   "image.title": "ИИ-арт",
-  "plugins.description": "Поиск, графики, академические инструменты, генерация изображений/видео/голоса, рабочие процессы — добавляйте навыки своим агентам.",
-  "plugins.title": "Торговая площадка навыков",
   "welcome.description": "{{appName}} предлагает лучший пользовательский интерфейс для ChatGPT, Claude, Gemini и OLLaMA.",
   "welcome.title": "Добро пожаловать в {{appName}} · Для совместных агентов"
 }

@@ -9,6 +9,13 @@ export const CHAT_TEXTAREA_HEIGHT = 160;
 export const CHAT_TEXTAREA_HEIGHT_MOBILE = 108;
 export const CHAT_SIDEBAR_WIDTH = 280;
 export const CONVERSATION_MIN_WIDTH = 960;
+/**
+ * Column width of the agent share settings page (`/agent/:aid/share`). Its
+ * visitor-page tab sets an editor beside a live preview, and every tab plus the
+ * route skeleton share this one width so the link card never shifts on a tab
+ * switch or when the page finishes loading.
+ */
+export const AGENT_SHARE_SETTINGS_WIDTH = 1280;
 
 export const CHAT_PORTAL_WIDTH = 400;
 export const CHAT_PORTAL_MAX_WIDTH = 1280;

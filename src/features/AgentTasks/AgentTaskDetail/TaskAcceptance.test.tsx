@@ -64,6 +64,16 @@ vi.mock('antd', async (importOriginal) => ({
   App: { useApp: () => ({ message: { error: vi.fn() } }) },
 }));
 
+// The round timeline has its own data shape; here it only frames the checklist.
+vi.mock('./TaskAcceptanceRounds', () => ({
+  default: ({ children, latestExtra }: { children: ReactNode; latestExtra?: ReactNode }) => (
+    <>
+      {latestExtra}
+      {children}
+    </>
+  ),
+}));
+
 vi.mock('@/features/Acceptance', async () => ({
   // The real row/list primitives: the assertions cover the shared grammar.
   ...(await vi.importActual('@/features/Acceptance/CriterionList')),

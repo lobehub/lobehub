@@ -121,28 +121,42 @@ describe('resolveTerminalViews', () => {
     expect(plan.views[0]!.source).toEqual({ kind: 'url', url: 'https://x/payload' });
   });
 
-  it('splits a pipe capture into stdout and stderr, an empty stream needing no fetch', () => {
+  it('opens a pipe capture on Output before the original stream and transcript tabs', () => {
     const plan = resolveTerminalViews({
       ...base,
-      metadata: { terminal: record() },
-      terminalArtifacts: { stdout: link('https://x/stdout') },
+      fileUrl: 'https://x/payload',
+      metadata: { terminal: record({ artifacts: { stderr: artifact(5), stdout: artifact(12) } }) },
+      terminalArtifacts: { stderr: link('https://x/stderr', 5), stdout: link('https://x/stdout') },
     });
     expect(plan.views.map((view) => [view.key, view.source.kind])).toEqual([
+      ['output', 'pipe'],
       ['stdout', 'url'],
-      ['stderr', 'empty'],
+      ['stderr', 'url'],
       ['transcript', 'inline'],
     ]);
-    expect(plan.defaultView).toBe('stdout');
+    expect(plan.views[0]?.source).toEqual({
+      command: 'pnpm test',
+      kind: 'pipe',
+      stderr: { kind: 'url', url: 'https://x/stderr' },
+      stdout: { kind: 'url', url: 'https://x/stdout' },
+      transcriptUrl: 'https://x/payload',
+    });
+    expect(plan.defaultView).toBe('output');
     expect(plan.replayUrl).toBeUndefined();
   });
 
-  it('opens on stderr when stdout is empty', () => {
+  it('keeps Output as the default when stdout is empty', () => {
     const plan = resolveTerminalViews({
       ...base,
       metadata: { terminal: record({ artifacts: { stderr: artifact(30), stdout: null } }) },
       terminalArtifacts: { stderr: link('https://x/stderr', 30) },
     });
-    expect(plan.defaultView).toBe('stderr');
+    expect(plan.defaultView).toBe('output');
+    expect(plan.views[0]?.source).toMatchObject({
+      kind: 'pipe',
+      stderr: { kind: 'url', url: 'https://x/stderr' },
+      stdout: { kind: 'empty' },
+    });
   });
 
   it('reads an unlisted stream as empty — the capturer writes no file for one', () => {
@@ -151,19 +165,47 @@ describe('resolveTerminalViews', () => {
       metadata: { terminal: record({ artifacts: {} }) },
     });
     expect(plan.views.map((view) => [view.key, view.source.kind])).toEqual([
+      ['output', 'pipe'],
       ['stdout', 'empty'],
       ['stderr', 'empty'],
       ['transcript', 'inline'],
     ]);
+    expect(plan.views[0]?.source).toMatchObject({
+      kind: 'pipe',
+      stderr: { kind: 'empty' },
+      stdout: { kind: 'empty' },
+    });
   });
 
-  it('drops both streams for the transcript when one with bytes did not resolve', () => {
+  it.each(['stdout', 'stderr'] as const)(
+    'keeps Output and Transcript when the %s artifact with bytes did not resolve',
+    (missing) => {
+      const available = missing === 'stdout' ? 'stderr' : 'stdout';
+      const plan = resolveTerminalViews({
+        ...base,
+        metadata: { terminal: record({ artifacts: { stderr: artifact(5), stdout: artifact(5) } }) },
+        terminalArtifacts: { [available]: link(`https://x/${available}`), [missing]: link(null) },
+      });
+      expect(plan.views.map((view) => view.key)).toEqual(['output', 'transcript']);
+      expect(plan.defaultView).toBe('output');
+      expect(plan.views[0]?.source).toMatchObject({
+        [available]: { kind: 'url', url: `https://x/${available}` },
+        [missing]: undefined,
+        kind: 'pipe',
+      });
+    },
+  );
+
+  it('does not offer a transcript download for an inline-only payload', () => {
     const plan = resolveTerminalViews({
       ...base,
-      metadata: { terminal: record({ artifacts: { stderr: artifact(5), stdout: artifact(5) } }) },
-      terminalArtifacts: { stdout: link('https://x/stdout') },
+      metadata: { terminal: record({ execution: { command: null } }) },
     });
-    expect(plan.views.map((view) => view.key)).toEqual(['transcript']);
+    expect(plan.views[0]?.source).toMatchObject({
+      command: undefined,
+      kind: 'pipe',
+      transcriptUrl: undefined,
+    });
   });
 
   it('shows merged output from its own file, else from the recording', () => {
@@ -177,6 +219,8 @@ describe('resolveTerminalViews', () => {
       terminalArtifacts: { cast: link('https://x/cast'), output: link('https://x/output') },
     });
     expect(withOutput.views[0]).toMatchObject({ key: 'output', source: { kind: 'url' } });
+    expect(withOutput.views.map((view) => view.key)).toEqual(['output', 'transcript']);
+    expect(withOutput.defaultView).toBe('output');
     expect(withOutput.replayUrl).toBe('https://x/cast');
 
     const castOnly = resolveTerminalViews({
@@ -203,6 +247,7 @@ describe('resolveTerminalViews', () => {
       terminalArtifacts: { cast: link('https://x/cast'), output: link('https://x/output') },
     });
     expect(plan.replayUrl).toBeUndefined();
+    expect(plan.views[0]).toMatchObject({ key: 'output', source: { kind: 'url' } });
 
     const recorded = record({
       artifacts: { cast: artifact(900) },

@@ -10,9 +10,16 @@ import { buildGate, buildToolSet, toolName } from './testUtils';
 
 /**
  * A Channel runs another person's shared Agent for a visitor as its owner. The visitor's own
- * conversation history must stay readable, but nothing may list or post into the owner's
- * Channels.
+ * conversation history stays readable, and the Agent may list and post where it is itself a
+ * member (the services narrow both to those Channels); asking the owner's Agents stays blocked.
  */
+const ALLOWED = [
+  ChannelApiName.listChannels,
+  ChannelApiName.postMessage,
+  ChannelApiName.readMessage,
+  ChannelApiName.readMessages,
+] as const;
+
 describe('share gate: the Channel tool of a shared Agent run', () => {
   const channelTool = () =>
     buildToolSet([
@@ -22,33 +29,28 @@ describe('share gate: the Channel tool of a shared Agent run', () => {
       },
     ]);
 
-  it('keeps only the history reads, even with no tool granted', () => {
+  it('keeps the history reads and reaching people, even with no tool granted', () => {
     const toolSet = channelTool();
     applyShareGateToToolSet(toolSet, buildGate({ toolGrants: [] }));
 
     expect(toolSet.enabledToolIds).toEqual([ChannelIdentifier]);
-    expect(toolSet.manifestMap[ChannelIdentifier].api.map((api) => api.name).sort()).toEqual([
-      ChannelApiName.readMessage,
-      ChannelApiName.readMessages,
-    ]);
+    expect(toolSet.manifestMap[ChannelIdentifier].api.map((api) => api.name).sort()).toEqual(
+      [...ALLOWED].sort(),
+    );
     expect(toolSet.tools?.map((tool) => tool.function.name).sort()).toEqual(
-      [
-        toolName(ChannelIdentifier, ChannelApiName.readMessage),
-        toolName(ChannelIdentifier, ChannelApiName.readMessages),
-      ].sort(),
+      ALLOWED.map((apiName) => toolName(ChannelIdentifier, apiName)).sort(),
     );
   });
 
-  it.each([ChannelApiName.readMessage, ChannelApiName.readMessages])('dispatches %s', (apiName) => {
+  it.each(ALLOWED)('dispatches %s', (apiName) => {
     expect(isShareBlockedBuiltinDispatch({}, ChannelIdentifier, apiName)).toBe(false);
     expect(isShareBlockedDataToolCall({}, ChannelIdentifier, apiName)).toBe(false);
   });
 
-  it.each([ChannelApiName.listChannels, ChannelApiName.sendMessage])(
-    'refuses %s, which would act in the owner’s Channels',
-    (apiName) => {
-      expect(isShareBlockedBuiltinDispatch({}, ChannelIdentifier, apiName)).toBe(true);
-      expect(isShareBlockedDataToolCall({}, ChannelIdentifier, apiName)).toBe(true);
-    },
-  );
+  it.each(
+    Object.values(ChannelApiName).filter((name) => !(ALLOWED as readonly string[]).includes(name)),
+  )('refuses %s, which would act in the owner’s Channels', (apiName) => {
+    expect(isShareBlockedBuiltinDispatch({}, ChannelIdentifier, apiName)).toBe(true);
+    expect(isShareBlockedDataToolCall({}, ChannelIdentifier, apiName)).toBe(true);
+  });
 });

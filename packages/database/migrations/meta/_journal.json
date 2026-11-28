@@ -1617,6 +1617,20 @@
       "when": 1795541757594,
       "tag": "0230_custom_emoji_and_reactions",
       "breakpoints": true
+    },
+    {
+      "idx": 231,
+      "version": "7",
+      "when": 1795708868265,
+      "tag": "0231_widen_token_totals_to_bigint",
+      "breakpoints": true
+    },
+    {
+      "idx": 232,
+      "version": "7",
+      "when": 1795768777251,
+      "tag": "0232_bot_provider_last_active_at",
+      "breakpoints": true
     }
   ],
   "version": "6"

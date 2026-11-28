@@ -10,16 +10,12 @@
   "discover.mcp.title": "Mercato dei server MCP",
   "discover.models.description": "Esplora i modelli di IA più diffusi: OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek",
   "discover.models.title": "Mercato dei modelli",
-  "discover.plugins.description": "Esplora grafici, strumenti accademici, generazione di immagini/video/voce e flussi di lavoro—aggiungi Abilità ai tuoi Agenti.",
-  "discover.plugins.title": "Mercato delle abilità",
   "discover.providers.description": "Esplora i principali provider di modelli: OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
   "discover.providers.title": "Mercato dei provider",
   "discover.search": "Cerca",
   "discover.title": "Mercato",
   "image.description": "{{appName}} ti offre la migliore esperienza con GPT Image, Flux, Midjourney e Stable Diffusion",
   "image.title": "Arte con IA",
-  "plugins.description": "Cerca, grafici, strumenti accademici, generazione di immagini/video/voce, flussi di lavoro—aggiungi Abilità ai tuoi Agenti.",
-  "plugins.title": "Mercato delle abilità",
   "welcome.description": "{{appName}} ti offre la migliore esperienza utente con ChatGPT, Claude, Gemini e OLLaMA.",
   "welcome.title": "Benvenuto in {{appName}} · Per Agenti Collaborativi"
 }

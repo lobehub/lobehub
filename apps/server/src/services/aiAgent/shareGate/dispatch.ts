@@ -3,7 +3,7 @@ import type { AgentShareToolGrant } from '@lobechat/types';
 
 import {
   isGovernedByBuiltinAllowlist,
-  isShareVisitorChannelRead,
+  isShareVisitorChannelAllowed,
   isShareVisitorChannelTool,
   SHARE_VISITOR_ALLOWED_IDENTIFIERS,
 } from './allowlist';
@@ -45,7 +45,8 @@ export const isShareBlockedDataToolCall = (
   // Outside this gate's jurisdiction entirely — MCP/market/custom plugin
   // identifiers are governed by the toolGrants picker, not this allowlist.
   if (!isGovernedByBuiltinAllowlist(identifier)) return false;
-  if (isShareVisitorChannelTool(identifier)) return !isShareVisitorChannelRead(identifier, apiName);
+  if (isShareVisitorChannelTool(identifier))
+    return !isShareVisitorChannelAllowed(identifier, apiName);
   // Device builtins: granted by `shareConfig.deviceAccess` alone.
   if (isShareDeviceBuiltin(identifier)) return !permissions.canUseDevice;
 
@@ -95,8 +96,9 @@ export const isShareBlockedBuiltinDispatch = (
 ): boolean => {
   if (!isGovernedByBuiltinAllowlist(identifier)) return false;
 
-  // A Channel run's history reads only; see `isShareVisitorChannelRead`.
-  if (isShareVisitorChannelTool(identifier)) return !isShareVisitorChannelRead(identifier, apiName);
+  // A Channel run's history reads, and reaching people where the Agent is; see `isShareVisitorChannelAllowed`.
+  if (isShareVisitorChannelTool(identifier))
+    return !isShareVisitorChannelAllowed(identifier, apiName);
   // Device builtins are granted by `shareConfig.deviceAccess` alone, never by
   // `toolGrants`; the visitor's own approval mode still applies to them.
   if (isShareDeviceBuiltin(identifier)) return !agentShare.canUseDevice;

@@ -11,13 +11,13 @@
   "main": "./src/index.ts",
   "dependencies": {
     "@lobechat/shared-tool-ui": "workspace:*",
-    "@lobehub/a2ui": "^1.3.0"
+    "@lobehub/a2ui": "^1.4.0"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
-    "@lobehub/ui": "^6.23.0",
+    "@lobehub/ui": "^6.26.0",
     "react": "^19",
     "react-i18next": "*"
   }

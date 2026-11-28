@@ -383,6 +383,19 @@ describe('callConnectorToolById', () => {
     expect(mcpService.callTool).not.toHaveBeenCalled();
   });
 
+  // Only a view relayed to a device skips it (exec.deviceView.test.ts)
+  it("keeps the background tool-list refresh for an HTTP connector's view calls", async () => {
+    vi.mocked(mcpService.callTool).mockResolvedValue({ success: true });
+    const server = await getMcpServerFingerprint({ type: 'http', url: connector.mcpServerUrl! });
+
+    await callConnectorToolById(
+      { fromApp: true, identifier: 'my-conn', server, toolName: 'do_thing' },
+      makeCtx([connector], [tool()]),
+    );
+
+    expect(scheduleStaleConnectorToolsRefresh).toHaveBeenCalled();
+  });
+
   it('schedules a background tool-list refresh for the connector', async () => {
     vi.mocked(mcpService.callTool).mockResolvedValue({ success: true });
     const ctx = makeCtx([connector], [tool()]);

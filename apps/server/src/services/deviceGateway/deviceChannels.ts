@@ -1,6 +1,8 @@
 import type { DeviceClient } from '@lobechat/types';
 import debug from 'debug';
 
+import { redisService } from '@/server/services/redis';
+
 import { deviceGateway } from './index';
 
 const log = debug('lobe-server:device-channels');
@@ -85,4 +87,32 @@ export const resolveMcpClientKinds = async (
     cli.ok ? 'CLI predates MCP support' : cli.reason,
   );
   return undefined;
+};
+
+/**
+ * The MCP features (`supportedMcpFeatures`) of the client that runs a device's
+ * tunneled MCP calls (`clientKinds`, from {@link resolveMcpClientKinds}): with
+ * `'apps'` it runs a call with its MCP Apps options and serves a result's view
+ * (`readMcpUiResource`). An older client, or one that doesn't answer, reports
+ * none, so its results stay plain. Only answers are cached, for a minute.
+ */
+export const resolveMcpDeviceFeatures = async (
+  userId: string,
+  target: { clientKinds: DeviceClient[]; deviceId: string; workspaceId?: string },
+): Promise<string[]> => {
+  const { clientKinds, deviceId, workspaceId } = target;
+  const features = await redisService.mcpDeviceRelay.rememberFeatures(
+    { clientKinds, deviceId, userId, workspaceId },
+    async () => {
+      const read = await deviceGateway.readDeviceSystemInfo(userId, deviceId, workspaceId, {
+        clientKinds,
+      });
+      if (!read.ok) {
+        log('MCP features of device %s unanswered: %s', deviceId, read.reason);
+        return undefined;
+      }
+      return read.systemInfo.supportedMcpFeatures ?? [];
+    },
+  );
+  return features ?? [];
 };

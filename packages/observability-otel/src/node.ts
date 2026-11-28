@@ -10,6 +10,7 @@ import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
 import { PgInstrumentation } from '@opentelemetry/instrumentation-pg';
 import type { DetectedResourceAttributes } from '@opentelemetry/resources';
 import { resourceFromAttributes } from '@opentelemetry/resources';
+import type { ViewOptions } from '@opentelemetry/sdk-metrics';
 import { AggregationType, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import type { Sampler, SpanProcessor } from '@opentelemetry/sdk-trace-base';
@@ -121,6 +122,79 @@ export interface RegisterOptions {
   version?: string;
 }
 
+/**
+ * Parses `OTEL_METRICS_DROP`: a comma-separated list of instrument names whose measurements are
+ * dropped before export. Each entry is an exact instrument name or a prefix ending in one `*`
+ * (for example `fts_search_backend_*` or `http.client.*`). Entries use OpenTelemetry instrument
+ * names, not the Prometheus series names derived from them (`http.client.request.duration`, not
+ * `http_client_request_duration_seconds`).
+ *
+ * Other wildcard shapes are ignored: the SDK matcher only expands the first `*`, so `*foo*` would
+ * not mean what it looks like, and a bare `*` would silently stop every metric.
+ */
+export function parseMetricsDropPatterns(value?: string): string[] {
+  if (!value) return [];
+
+  const patterns: string[] = [];
+  for (const raw of value.split(',')) {
+    const pattern = raw.trim();
+    if (!pattern) continue;
+
+    const wildcardIndex = pattern.indexOf('*');
+    const isExact = wildcardIndex === -1;
+    const isPrefix = wildcardIndex === pattern.length - 1 && wildcardIndex > 0;
+    if (!isExact && !isPrefix) {
+      /**
+       * `console.warn`, not `diag.warn`: callers commonly raise the diag level to ERROR, which would
+       * hide the warning and leave the operator unaware that the metric is still exported.
+       */
+      console.warn(
+        `[observability-otel] ignoring unsupported OTEL_METRICS_DROP entry "${pattern}"`,
+      );
+      continue;
+    }
+    patterns.push(pattern);
+  }
+  return patterns;
+}
+
+const matchesDropPattern = (instrumentName: string, pattern: string) =>
+  pattern.endsWith('*')
+    ? instrumentName.startsWith(pattern.slice(0, -1))
+    : instrumentName === pattern;
+
+/**
+ * Builds SDK views from explicit histogram boundaries and drop patterns.
+ *
+ * A histogram view whose instrument is dropped is omitted: when several views match one
+ * instrument, the SDK keeps the stream of the first one, so a bucket view ordered before the drop
+ * view would silently export the histogram again.
+ */
+export function buildMetricViews(
+  histogramViews: RegisterOptions['histogramViews'] = [],
+  dropPatterns: readonly string[] = [],
+): ViewOptions[] {
+  const isDropped = (instrumentName: string) =>
+    dropPatterns.some((pattern) => matchesDropPattern(instrumentName, pattern));
+
+  return [
+    ...dropPatterns.map((instrumentName) => ({
+      aggregation: { type: AggregationType.DROP },
+      instrumentName,
+    })),
+    ...histogramViews
+      .filter(({ instrumentName }) => !isDropped(instrumentName))
+      .map(({ boundaries, instrumentName, meterName }) => ({
+        aggregation: {
+          options: { boundaries: [...boundaries] },
+          type: AggregationType.EXPLICIT_BUCKET_HISTOGRAM,
+        },
+        instrumentName,
+        meterName,
+      })),
+  ];
+}
+
 export function register(options?: RegisterOptions) {
   const attributes = attributesCommon();
 
@@ -170,14 +244,10 @@ export function register(options?: RegisterOptions) {
       new BatchSpanProcessor(new OTLPTraceExporter()),
     ],
     textMapPropagator: options?.textMapPropagator,
-    views: options?.histogramViews?.map(({ boundaries, instrumentName, meterName }) => ({
-      aggregation: {
-        options: { boundaries: [...boundaries] },
-        type: AggregationType.EXPLICIT_BUCKET_HISTOGRAM,
-      },
-      instrumentName,
-      meterName,
-    })),
+    views: buildMetricViews(
+      options?.histogramViews,
+      parseMetricsDropPatterns(env.OTEL_METRICS_DROP),
+    ),
   });
 
   sdk.start();

@@ -1,13 +1,13 @@
 import type { ModelTokensUsage } from '@lobechat/types';
+import type { Pricing, PricingUnitName } from 'model-bank';
+import { estimateTokenCount } from 'tokenx';
+
+import type { ChatCompletionTool, OpenAIChatMessage } from '../../../types/chat';
 import {
   type AudioTokenEstimateSource,
   estimateAudioInputTokens,
   normalizeAudioTokensPerSecond,
 } from '../../../utils/audio';
-import type { Pricing, PricingUnitName } from 'model-bank';
-import { estimateTokenCount } from 'tokenx';
-
-import type { ChatCompletionTool, OpenAIChatMessage } from '../../../types/chat';
 import type { ComputeChatCostOptions, PricingComputationResult } from './computeChatCost';
 import { computeChatCost } from './computeChatCost';
 
@@ -69,8 +69,27 @@ export interface EstimateChatCostFromTokensInput {
    * tokens.
    */
   outputTextTokens?: number;
+  /**
+   * Prompt-cache split of the text input. Omit it to price every input token at the plain input
+   * price, as a request that does not use the cache would be.
+   */
+  promptCache?: EstimatePromptCacheInput;
   textTokens: number;
   videoTokens?: number;
+}
+
+/**
+ * How a request is expected to use the provider prompt cache.
+ *
+ * `readTokens` of the text input are served from a warm cache at the cache-read price. The rest is
+ * new to the provider: with `writesUncached` (explicit caching such as Anthropic `cache_control`)
+ * it is written to the cache at the cache-write price, otherwise it bills as plain input. A cold
+ * cache is `readTokens: 0`. Models without a cache-read or cache-write price fall back to the
+ * plain input price for that part.
+ */
+export interface EstimatePromptCacheInput {
+  readTokens: number;
+  writesUncached: boolean;
 }
 
 /**
@@ -109,6 +128,33 @@ const estimateSerializableTokens = (value: unknown): number => {
 
 const hasPricingUnit = (pricing: Pricing | undefined, unitName: PricingUnitName) =>
   pricing?.units.some((unit) => unit.name === unitName) ?? false;
+
+/**
+ * Splits billable text tokens into the cache-read, cache-write and plain-input buckets that
+ * `computeChatCost` prices. A bucket the model has no price for folds into plain input, so a
+ * model without cache pricing is never priced below what it bills.
+ */
+const splitPromptCacheTokens = (
+  pricing: Pricing | undefined,
+  billableTextTokens: number,
+  { readTokens, writesUncached }: EstimatePromptCacheInput,
+): Pick<
+  ModelTokensUsage,
+  'inputCacheMissTokens' | 'inputCachedTokens' | 'inputWriteCacheTokens'
+> => {
+  const cachedTokens = hasPricingUnit(pricing, 'textInput_cacheRead')
+    ? Math.min(Math.max(0, readTokens), billableTextTokens)
+    : 0;
+  const uncachedTokens = billableTextTokens - cachedTokens;
+  const writeTokens =
+    writesUncached && hasPricingUnit(pricing, 'textInput_cacheWrite') ? uncachedTokens : 0;
+
+  return {
+    inputCacheMissTokens: uncachedTokens - writeTokens,
+    inputCachedTokens: cachedTokens,
+    inputWriteCacheTokens: writeTokens,
+  };
+};
 
 /**
  * Estimates output tokens for budget pre-checks and UI hints.
@@ -238,6 +284,9 @@ export function estimateChatCostFromTokens(
     totalOutputTokens: estimatedOutputTokens,
     totalTokens: totalInputTokens + estimatedOutputTokens,
   };
+
+  if (input.promptCache)
+    Object.assign(usage, splitPromptCacheTokens(pricing, billableTextTokens, input.promptCache));
 
   const result = computeChatCost(pricing, usage, options);
   if (!result) return;

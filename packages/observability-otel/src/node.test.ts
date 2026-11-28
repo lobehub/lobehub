@@ -1,6 +1,14 @@
+import type { ViewOptions } from '@opentelemetry/sdk-metrics';
+import { AggregationType, MeterProvider, MetricReader } from '@opentelemetry/sdk-metrics';
 import { describe, expect, it, vi } from 'vitest';
 
-import { attributesCommon, register, shutdownSafely } from './node';
+import {
+  attributesCommon,
+  buildMetricViews,
+  parseMetricsDropPatterns,
+  register,
+  shutdownSafely,
+} from './node';
 
 const mocks = vi.hoisted(() => ({
   nodeSdkOptions: undefined as Record<string, unknown> | undefined,
@@ -82,5 +90,103 @@ describe('Node observability resource attributes', () => {
 
     await expect(shutdownSafely({ shutdown })).resolves.toBeUndefined();
     expect(shutdown).toHaveBeenCalledOnce();
+  });
+});
+
+const collectInstrumentNames = async (views: ViewOptions[]) => {
+  const reader = new TestMetricReader();
+  const provider = new MeterProvider({ readers: [reader], views });
+  const meter = provider.getMeter('fts-search-backend');
+
+  meter.createHistogram('fts_search_backend_operation_duration').record(120);
+  meter.createHistogram('fts_search_sync_bulk_request_duration').record(80);
+  meter.createHistogram('http.client.request.duration').record(0.2);
+  meter.createCounter('rpc_server_requests').add(1);
+
+  const { resourceMetrics } = await reader.collect();
+  await provider.shutdown();
+  return resourceMetrics.scopeMetrics.flatMap((scope) =>
+    scope.metrics.map((metric) => metric.descriptor.name),
+  );
+};
+
+class TestMetricReader extends MetricReader {
+  protected async onForceFlush() {}
+  protected async onShutdown() {}
+}
+
+describe('OTEL_METRICS_DROP', () => {
+  it('accepts exact names and trailing-wildcard prefixes only', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(
+      parseMetricsDropPatterns(
+        ' fts_search_backend_*, http.client.*,,exact_metric , *, *mid*, a*b ',
+      ),
+    ).toEqual(['fts_search_backend_*', 'http.client.*', 'exact_metric']);
+    expect(parseMetricsDropPatterns(undefined)).toEqual([]);
+
+    /** Visible even when the caller set the OTEL diag level to ERROR, as Cloud does. */
+    expect(warn.mock.calls.map(([message]) => message)).toEqual([
+      expect.stringContaining('"*"'),
+      expect.stringContaining('"*mid*"'),
+      expect.stringContaining('"a*b"'),
+    ]);
+    warn.mockRestore();
+  });
+
+  it('stops exporting matched instruments and keeps the rest', async () => {
+    const names = await collectInstrumentNames(
+      buildMetricViews([], ['fts_search_backend_*', 'http.client.*']),
+    );
+
+    expect(names).toEqual(['fts_search_sync_bulk_request_duration', 'rpc_server_requests']);
+  });
+
+  it('drops a histogram even when an explicit bucket view targets it', async () => {
+    const histogramViews = [
+      {
+        boundaries: [100, 1000],
+        instrumentName: 'fts_search_backend_operation_duration',
+        meterName: 'fts-search-backend',
+      },
+      {
+        boundaries: [100, 1000],
+        instrumentName: 'fts_search_sync_bulk_request_duration',
+        meterName: 'fts-search-backend',
+      },
+    ];
+
+    const views = buildMetricViews(histogramViews, ['fts_search_backend_*']);
+
+    /**
+     * When several views match one instrument, the SDK keeps the stream of the first one, so a
+     * bucket view ordered before the drop view would re-enable the metric. Check both orders.
+     */
+    for (const ordered of [views, views.toReversed()]) {
+      const names = await collectInstrumentNames(ordered);
+
+      expect(names).not.toContain('fts_search_backend_operation_duration');
+      expect(names).toContain('fts_search_sync_bulk_request_duration');
+    }
+  });
+
+  it('reads the drop list from the environment when registering', () => {
+    vi.stubEnv('OTEL_METRICS_DROP', 'fts_search_backend_*');
+    register({
+      autoInstrumentations: false,
+      histogramViews: [
+        {
+          boundaries: [1000],
+          instrumentName: 'fts_search_backend_operation_duration',
+          meterName: 'fts-search-backend',
+        },
+      ],
+    });
+    vi.unstubAllEnvs();
+
+    expect(mocks.nodeSdkOptions?.views).toEqual([
+      { aggregation: { type: AggregationType.DROP }, instrumentName: 'fts_search_backend_*' },
+    ]);
   });
 });

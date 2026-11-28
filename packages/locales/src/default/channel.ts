@@ -12,6 +12,8 @@ export default {
     'A message to a shared Agent can carry up to 10 files of up to 32 MB each. Remove some attachments and send it again.',
   'receipt.errorShareFileStorage':
     'This shared Agent has no room for more attachments. Send your message without files, or ask its creator to raise the limit.',
+  'receipt.errorShareFundingExhausted':
+    'This shared Agent has used up its funds for visitor replies. Leave a tip to keep it running.',
   'receipt.errorShareHeteroDevice': "The creator's device is offline. Try again later.",
   'receipt.errorShareHeteroUnsupported':
     "This Agent can run for you only with its creator's permission. Ask its creator for access.",
@@ -291,6 +293,8 @@ export default {
   'reply.to': 'Replying to {{name}}',
   'reply.cancel': 'Cancel reply',
   'reply.attachment': 'Attachment',
+  'message.postedFor': "Sent at {{name}}'s request",
+  'message.postedForFrom': "Sent at {{name}}'s request in #{{channel}}",
   'message.relayReplyFrom': '{{name}} replied in #{{channel}}',
   'message.relayedBy': 'Relayed by {{name}}',
   'reply.viewOriginal': 'View original message',

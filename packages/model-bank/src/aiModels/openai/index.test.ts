@@ -14,7 +14,13 @@ describe('openai chat model cards', () => {
       knowledgeCutoff: '2026-06',
       maxOutput: 128_000,
       releasedAt: '2026-10-26',
-      settings: { extendParams: ['gpt5_6ReasoningEffort', 'textVerbosity'] },
+      settings: {
+        extendParams: ['textVerbosity'],
+        reasoningEffort: {
+          default: 'medium',
+          levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+        },
+      },
     });
     // [up to 272K input tokens, above] per million tokens
     expect(Object.fromEntries(units.map((u) => [u.name, u.tiers.map((t: any) => t.rate)]))).toEqual(

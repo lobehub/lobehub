@@ -1,4 +1,5 @@
 import type {
+  ChannelMessagePostedFor,
   ChannelMessageSurface,
   ChannelPostedMessage,
   ChannelPostMessageParams,
@@ -13,7 +14,8 @@ import {
   ChannelHistoryRepository,
   ChannelRepository,
 } from '@/database/repositories/channel';
-import { channelThreads } from '@/database/schemas';
+import { findChannelRunRequester } from '@/database/repositories/channel/runRequester';
+import { channels as channelsTable, channelThreads } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { notTrashed } from '@/database/utils/softDelete';
 
@@ -31,6 +33,11 @@ import { runSurfaces, unpostedRunSurfaces } from './runSurfaces';
  * archived, requester a member). The post carries the cards the run drew, answers no request and
  * wakes no one. The run itself (live, unrevoked, requester still a member) is checked first,
  * exactly as a history read checks it.
+ *
+ * Another person's shared Agent runs for a visitor as its owner, so the Channels it reaches are
+ * the owner's: it posts only where it is itself an active member, and a post outside the
+ * visitor's conversation names the visitor it was sent for (`metadata.postedFor`), linking back
+ * when they asked in a public Channel.
  */
 export class ChannelPostService {
   private readonly history: ChannelHistoryRepository;
@@ -58,7 +65,7 @@ export class ChannelPostService {
     requestId: string,
   ): Promise<ChannelPostedMessage> => {
     await assertChannelEnabled(this.userId);
-    const run = await this.history.currentRun(this.operationId);
+    const run = await this.history.currentRun(this.operationId, { allowShared: true });
     const channelId = params.channelId?.trim() || run.channelId;
     // Read before the Thread, so a Channel the requester is not in tells nothing about its Threads.
     const access = await this.channels.findAccess(channelId);
@@ -79,10 +86,16 @@ export class ChannelPostService {
         'Give content, or draw a card with lobe-a2ui renderUI in this run first (cards you already posted are not posted again unless you name them in surfaceIds)',
       );
 
+    const postedFor = channelId === run.channelId ? undefined : await this.visitorPostedFor(run);
+
     const message = await this.channels.postAgentMessage(channelId, {
       agentId: run.manifest.self.agentId,
       content,
-      metadata: { operationId: this.operationId, source: 'agent-post' },
+      metadata: {
+        operationId: this.operationId,
+        ...(postedFor && { postedFor }),
+        source: 'agent-post',
+      },
       requestKey: `agent-post:${this.operationId}:${requestId}`,
       ...(surfaces.length > 0 && { surfaces }),
       threadId,
@@ -102,6 +115,48 @@ export class ChannelPostService {
         channelId,
         access.channel.projectId,
       ),
+    };
+  };
+
+  /**
+   * Who a shared Agent's post is for, when the run answers a visitor rather than the Agent's owner
+   * (the execution identity); undefined for the owner's own runs. The link back is offered only
+   * from a public Channel, which the post's readers can open.
+   */
+  private visitorPostedFor = async (run: {
+    channelId: string;
+    manifest: { requesterMemberId: string };
+  }): Promise<ChannelMessagePostedFor | undefined> => {
+    const requester = await findChannelRunRequester(
+      this.db,
+      run.channelId,
+      run.manifest.requesterMemberId,
+    );
+    if (!requester || requester.userId === this.userId) return undefined;
+
+    const [source] = await this.db
+      .select({
+        projectId: channelsTable.projectId,
+        title: channelsTable.title,
+        visibility: channelsTable.visibility,
+        workspaceId: channelsTable.workspaceId,
+      })
+      .from(channelsTable)
+      .where(eq(channelsTable.id, run.channelId))
+      .limit(1);
+    if (source?.visibility !== 'public') return requester;
+    return {
+      ...requester,
+      source: {
+        channelId: run.channelId,
+        title: source.title ?? '',
+        url: await channelUrl(
+          this.db,
+          { userId: requester.userId, workspaceId: source.workspaceId ?? undefined },
+          run.channelId,
+          source.projectId,
+        ),
+      },
     };
   };
 

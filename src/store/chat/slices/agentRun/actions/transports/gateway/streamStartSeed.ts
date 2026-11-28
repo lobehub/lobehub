@@ -134,10 +134,34 @@ export const insertStreamStartSeeds = (
  * Operation metadata a `stream_start` sets: the step is loading again, and a
  * heterogeneous run whose producer delivers queued follow-ups into the live
  * session (`liveSteer`, Claude Code) no longer holds its queue to the run end.
+ * One whose producer reports its session takes no input (`liveSteer: false`)
+ * is known to be unable to steer (`steerUnsupported`).
  */
 export const streamStartOperationMetadata = (
   data: object | undefined,
-): Partial<OperationMetadata> => ({
-  visibleLoadingDone: false,
-  ...(data && 'liveSteer' in data && data.liveSteer === true ? { liveSteer: true } : {}),
-});
+): Partial<OperationMetadata> => {
+  const liveSteer = data && 'liveSteer' in data ? data.liveSteer : undefined;
+  return {
+    visibleLoadingDone: false,
+    ...(liveSteer === true && { liveSteer: true }),
+    ...(liveSteer === false && { steerUnsupported: true }),
+  };
+};
+
+/**
+ * Apply a `stream_start` to its operation. A run found unable to steer is
+ * watched, so "restart agents that can't steer" can stop it for a follow-up.
+ * The watch loads lazily: this module must not pull in the chat store.
+ */
+export const applyStreamStartMetadata = (
+  get: () => ChatStore,
+  { context, operationId }: { context: ConversationContext; operationId: string },
+  data: object | undefined,
+) => {
+  const metadata = streamStartOperationMetadata(data);
+  get().updateOperationMetadata(operationId, metadata);
+  if (!metadata.steerUnsupported) return;
+  import('../../lifecycle/steerRestart')
+    .then(({ watchSteerRestart }) => watchSteerRestart({ context, get, operationId }))
+    .catch((error) => console.error('[streamStart] watching for a steer restart failed:', error));
+};

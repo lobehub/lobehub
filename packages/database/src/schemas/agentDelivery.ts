@@ -7,7 +7,17 @@ import type {
 } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
-import { index, integer, jsonb, pgTable, real, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  bigint,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  real,
+  text,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 import { amountNumeric, timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
@@ -79,7 +89,7 @@ export const agentDeliveries = pgTable(
 
     /** Total spend in USD across the delivery's runs. */
     totalCost: amountNumeric('total_cost'),
-    totalTokens: integer('total_tokens'),
+    totalTokens: bigint('total_tokens', { mode: 'number' }),
     toolCalls: integer('tool_calls'),
     userMessages: integer('user_messages'),
     agentMessages: integer('agent_messages'),

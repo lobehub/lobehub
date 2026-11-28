@@ -108,6 +108,8 @@ export const agentShareConfigSchema = z
         message: 'Duplicate skill identifier in skillGrants',
       })
       .optional(),
+    /** Shows visitors the entry to tip the share; see `AgentShareConfig.tipsEnabled`. */
+    tipsEnabled: z.boolean().optional(),
     /**
      * At most one entry per identifier: two entries for the same tool would
      * make the effective grant depend on the merge rule in

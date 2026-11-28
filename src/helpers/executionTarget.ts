@@ -257,6 +257,45 @@ export const resolveExecutionTarget = (
 };
 
 /**
+ * Whether a hetero agent's `local` target was only inferred because nothing is
+ * stored — no target and no bound device. `resolveExecutionTarget` falls back
+ * to `local` on a desktop client, but that is a guess, not the user's pick:
+ * the chat input blocks sending until the user chooses where the agent runs,
+ * instead of writing this machine in as their selection.
+ */
+export const isExecutionTargetUnselected = (
+  agencyConfig: LobeAgentAgencyConfig | undefined,
+  resolvedTarget: DeviceExecutionTarget,
+): boolean =>
+  resolvedTarget === 'local' &&
+  agencyConfig?.executionTarget === undefined &&
+  !agencyConfig?.boundDeviceId;
+
+/**
+ * Whether a project-directory conversation already has its execution target
+ * decided by that directory, so an unset agent target is not an unmade choice.
+ *
+ * A conversation bound to a project directory — or a blank one a project
+ * group's "+" staged there (`pendingNewTopicDirectory`) — runs on the
+ * directory's device: `resolveProjectDirectoryRun` pins
+ * `executionTarget: 'device'` + `boundDeviceId` before dispatch. The composer
+ * must not demand a device selection it is about to override, otherwise the
+ * staged picker alone can never satisfy the guard.
+ *
+ * A workspace contract fixed to another device is the exception: that send is
+ * rejected rather than re-routed, so the directory cannot decide it.
+ */
+export const isProjectDirectoryTargetDecided = (
+  agencyConfig: LobeAgentAgencyConfig | undefined,
+  directoryDeviceId: string | undefined,
+): boolean =>
+  !!directoryDeviceId &&
+  !(
+    agencyConfig?.executionTargetSelectionPolicy === 'fixed' &&
+    agencyConfig.boundDeviceId !== directoryDeviceId
+  );
+
+/**
  * Whether this run's shell commands must go through the device sandbox.
  *
  * The stored flag alone is not the answer: `localSandbox` qualifies *local*

@@ -75,6 +75,14 @@ class AgentBotProviderService {
     return lambdaClient.agentBotProvider.connectBot.mutate(params);
   };
 
+  /** Restart the bot's idle clock and reconnect it when it was asleep. */
+  wakeBot = async (params: {
+    applicationId: string;
+    platform: string;
+  }): Promise<{ woke: boolean }> => {
+    return lambdaClient.agentBotProvider.wakeBot.mutate(params);
+  };
+
   testConnection = async (params: { applicationId: string; platform: string }) => {
     return lambdaClient.agentBotProvider.testConnection.mutate(params);
   };

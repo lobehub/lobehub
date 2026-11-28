@@ -4,7 +4,7 @@ import type {
   TaskDetailActivity,
   TaskDetailActivityAuthor,
 } from '@lobechat/types';
-import { Block, Button, Collapsible, cssVar, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, Collapsible, cssVar, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
 import type { TFunction } from 'i18next';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -29,7 +29,6 @@ import { useTaskStore } from '@/store/task';
 import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selectors';
 
 import { PRIORITY_META } from '../features/TaskPriorityTag';
-import AccordionArrowIcon from '../shared/AccordionArrowIcon';
 import { styles } from '../shared/style';
 import ActivityAuthorProfile from './ActivityAuthorProfile';
 import { resolveAssignmentActivityCopy } from './assignmentActivityCopy';
@@ -37,6 +36,7 @@ import CommentCard from './CommentCard';
 import CommentInput from './CommentInput';
 import TaskBriefCard from './TaskBriefCard';
 import TaskRunReport from './TaskRunReport';
+import TaskSectionHeader from './TaskSectionHeader';
 import TopicCard from './TopicCard';
 import { useActivityPaging } from './useActivityPaging';
 
@@ -510,7 +510,11 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
             if (variant === 'result' && key === firstTopicKey) {
               return <TaskRunReport activity={activity} key={key} />;
             }
-            return <TopicCard activity={activity} defaultExpanded={false} key={key} />;
+            // The newest run opens so its result reads without a click; older
+            // rounds stay folded under it.
+            return (
+              <TopicCard activity={activity} defaultExpanded={key === firstTopicKey} key={key} />
+            );
           }
           if (activity.type === 'comment') {
             return <CommentCard activity={activity} key={key} />;
@@ -570,23 +574,13 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
 
   return (
     <Flexbox gap={8}>
-      <Block
-        clickable
-        horizontal
-        align="center"
-        gap={8}
-        paddingBlock={4}
-        paddingInline={8}
-        style={{ cursor: 'pointer', marginInlineStart: -8, width: 'fit-content' }}
-        variant="borderless"
-        onClick={() => setIsExpanded((prev) => !prev)}
-      >
-        <Icon color={cssVar.colorTextDescription} icon={BotMessageSquare} size={16} />
-        <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
-          {t('taskDetail.activities')}
-        </Text>
-        <AccordionArrowIcon isOpen={isExpanded} style={{ color: cssVar.colorTextDescription }} />
-      </Block>
+      <TaskSectionHeader
+        count={activities.length || undefined}
+        icon={BotMessageSquare}
+        isOpen={isExpanded}
+        title={t('taskDetail.activities')}
+        onToggle={() => setIsExpanded((prev) => !prev)}
+      />
       <Collapsible open={isExpanded}>
         <Flexbox gap={12} paddingBlock={4}>
           {commentInput}

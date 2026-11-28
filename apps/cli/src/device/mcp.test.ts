@@ -5,14 +5,22 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { disposeDeviceMcp, executeDeviceMcpCall, listDeviceMcpTools } from './mcp';
+import {
+  disposeDeviceMcp,
+  executeDeviceMcpCall,
+  listDeviceMcpTools,
+  readDeviceMcpUiResource,
+} from './mcp';
 
-const { resolveUserSpawnPath } = vi.hoisted(() => ({
+const { resolveUserSpawnPath, uploadFileBuffer } = vi.hoisted(() => ({
   resolveUserSpawnPath: vi.fn(async () => process.env.PATH),
+  uploadFileBuffer: vi.fn(async () => ({ url: 'https://files.example/frame.png' })),
 }));
 
 // The login-shell probe spawns the user's shell; the inherited PATH is enough here.
 vi.mock('@lobechat/heterogeneous-agents/resolveCliCommand', () => ({ resolveUserSpawnPath }));
+// Media blocks are uploaded through the server's file API; record the uploads only.
+vi.mock('../utils/uploadLocalFile', () => ({ uploadFileBuffer }));
 
 /** A real stdio MCP server exposing one `echo` tool; argv[2] records every spawn. */
 const fixture = fileURLToPath(
@@ -33,8 +41,21 @@ const stdioCall = (trace: string, env?: Record<string, string>) => ({
 
 const dirs: string[] = [];
 
+/** A real stdio MCP Apps server: `show` renders a view, app-only `frame` returns an image. */
+const appsFixture = fileURLToPath(
+  new URL('../../../../src/libs/mcp/__tests__/fixtures/appsStdio.mjs', import.meta.url),
+);
+const appsParams = {
+  args: [appsFixture],
+  command: process.execPath,
+  name: 'apps-fixture',
+  type: 'stdio' as const,
+};
+const toolAuth = () => ({ accessToken: 'token', serverUrl: 'https://lobehub.test' }) as any;
+
 afterEach(async () => {
   await disposeDeviceMcp();
+  uploadFileBuffer.mockClear();
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { force: true, recursive: true })));
   resolveUserSpawnPath.mockClear();
 });
@@ -90,6 +111,71 @@ describe('executeDeviceMcpCall', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toBeTruthy();
+  });
+});
+
+describe('executeDeviceMcpCall with MCP Apps', () => {
+  it(
+    'marks the view of a result when the call announces MCP Apps',
+    { timeout: 20_000 },
+    async () => {
+      const result = await executeDeviceMcpCall(
+        { apiName: 'show', arguments: '{}', params: { ...appsParams, mcpCall: { mcpApps: true } } },
+        toolAuth,
+      );
+
+      expect(result.success).toBe(true);
+      expect((result.state as any)?.mcpApp).toMatchObject({
+        resourceUri: 'ui://apps-fixture/view',
+      });
+    },
+  );
+
+  it(
+    "runs a view's app-only call and returns its media inline, without uploading it",
+    { timeout: 20_000 },
+    async () => {
+      const result = await executeDeviceMcpCall(
+        {
+          apiName: 'frame',
+          arguments: '{}',
+          params: { ...appsParams, mcpCall: { fromApp: true, mcpApps: true } },
+        },
+        toolAuth,
+      );
+
+      expect(result.success).toBe(true);
+      const image = (result.state as any)?.content?.find((block: any) => block.type === 'image');
+      expect(image?.data).toBe(Buffer.from('frame-bytes').toString('base64'));
+      expect(uploadFileBuffer).not.toHaveBeenCalled();
+    },
+  );
+
+  it("refuses a model call to a view's app-only tool", { timeout: 20_000 }, async () => {
+    const result = await executeDeviceMcpCall(
+      { apiName: 'frame', arguments: '{}', params: { ...appsParams, mcpCall: { mcpApps: true } } },
+      toolAuth,
+    );
+
+    expect(result.success).toBe(false);
+    expect(uploadFileBuffer).not.toHaveBeenCalled();
+  });
+});
+
+describe('readDeviceMcpUiResource', () => {
+  it('reads a view from the pooled session its calls run on', { timeout: 20_000 }, async () => {
+    const result = await readDeviceMcpUiResource({
+      params: appsParams,
+      uri: 'ui://apps-fixture/view',
+    });
+
+    expect(result.contents[0]).toMatchObject({ text: '<p>apps fixture</p>' });
+  });
+
+  it('refuses anything but a ui:// resource', async () => {
+    await expect(
+      readDeviceMcpUiResource({ params: appsParams, uri: 'file:///etc/passwd' }),
+    ).rejects.toThrow();
   });
 });
 

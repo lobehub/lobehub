@@ -10,6 +10,7 @@ const mockInitWithEnvKey = vi.hoisted(() => vi.fn());
 const mockGetServerDB = vi.hoisted(() => vi.fn());
 const mockIsBotFeatureAccessAllowed = vi.hoisted(() => vi.fn());
 const mockUpdateBotRuntimeStatus = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const mockIsBotAsleep = vi.hoisted(() => vi.fn());
 
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: mockGetServerDB,
@@ -34,6 +35,8 @@ vi.mock('@/business/server/bot/featureAccess', () => ({
   }),
   isBotFeatureAccessAllowed: mockIsBotFeatureAccessAllowed,
 }));
+
+vi.mock('../botSleep', () => ({ isBotAsleep: mockIsBotAsleep }));
 
 vi.mock('../runtimeStatus', () => ({
   BOT_RUNTIME_STATUSES: { failed: 'failed' },
@@ -82,6 +85,7 @@ describe('GatewayManager', () => {
     mockFindEnabledByPlatform.mockResolvedValue([]);
     mockFindEnabledByPlatformAndAppId.mockResolvedValue(null);
     mockIsBotFeatureAccessAllowed.mockResolvedValue(true);
+    mockIsBotAsleep.mockResolvedValue(false);
     mockStartedClient.start.mockClear();
     mockStartedClient.stop.mockClear();
 
@@ -150,6 +154,54 @@ describe('GatewayManager', () => {
       expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledWith(
         expect.objectContaining({ applicationId: 'app-1', status: 'failed' }),
       );
+    });
+
+    it('stops a running persistent bot once it falls asleep from disuse', async () => {
+      mockFindEnabledByPlatform.mockResolvedValue([
+        {
+          applicationId: 'app-1',
+          credentials: { key: 'value' },
+          settings: { connectionMode: 'websocket' },
+          userId: 'owner-1',
+        },
+      ]);
+
+      await manager.start();
+      expect(mockStartedClient.start).toHaveBeenCalledTimes(1);
+
+      mockIsBotAsleep.mockClear();
+      mockIsBotAsleep.mockResolvedValue(true);
+      await (manager as any).syncPlatform('fakeplatform');
+
+      expect(mockIsBotAsleep).toHaveBeenCalledWith(
+        'fakeplatform',
+        expect.objectContaining({ applicationId: 'app-1' }),
+      );
+      expect(mockStartedClient.stop).toHaveBeenCalledTimes(1);
+      expect(mockStartedClient.start).toHaveBeenCalledTimes(1);
+      // The client's stop() writes `disconnected`; the sleeping label is
+      // re-recorded after it, so the settings page still shows the bot asleep.
+      expect(mockIsBotAsleep).toHaveBeenCalledTimes(2);
+      expect(mockIsBotAsleep.mock.invocationCallOrder[1]).toBeGreaterThan(
+        mockStartedClient.stop.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('never puts a webhook bot to sleep', async () => {
+      mockIsBotAsleep.mockResolvedValue(true);
+      mockFindEnabledByPlatform.mockResolvedValue([
+        {
+          applicationId: 'app-1',
+          credentials: { key: 'value' },
+          settings: { connectionMode: 'webhook' },
+          userId: 'owner-1',
+        },
+      ]);
+
+      await manager.start();
+
+      expect(mockIsBotAsleep).not.toHaveBeenCalled();
+      expect(mockStartedClient.start).toHaveBeenCalledTimes(1);
     });
 
     it('should handle sync errors gracefully', async () => {

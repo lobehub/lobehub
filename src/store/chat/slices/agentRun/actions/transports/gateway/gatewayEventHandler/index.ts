@@ -44,7 +44,7 @@ import {
 } from '../runtimeEndReason';
 import { applyStepMetrics } from '../stepMetrics';
 import { resolveStepSideEvent } from '../stepSideEvent';
-import { insertStreamStartSeeds, streamStartOperationMetadata } from '../streamStartSeed';
+import { applyStreamStartMetadata, insertStreamStartSeeds } from '../streamStartSeed';
 import type { RuntimeEndData } from './runtimeEndMessages';
 import { reconcileRuntimeEndMessages } from './runtimeEndMessages';
 import { createTopicRefreshGate } from './topicRefreshGate';
@@ -697,7 +697,7 @@ export const createGatewayEventHandler = (
               dispatchContext,
             );
           }
-          get().updateOperationMetadata(operationId, streamStartOperationMetadata(data));
+          applyStreamStartMetadata(get, { context, operationId }, data);
 
           // Native gateway streams carry `assistantMessage.id` directly on
           // stream_start and the shell-insert above guarantees a valid chunk

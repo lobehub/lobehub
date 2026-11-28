@@ -64,6 +64,9 @@ export const collectGatewaySystemInfo = async (
   return {
     supportedTools: [COMPUTER_USE_IDENTIFIER, BROWSER_IDENTIFIER],
     supportedAgentRuntimes: await agentRuntimes.get(),
+    // Tunneled MCP calls run with their MCP Apps options, and views are read
+    // here (`readMcpUiResource`), so the server keeps a result's view.
+    supportedMcpFeatures: ['apps'],
     arch: os.arch(),
     // Tell the server-side prompt builder which shell runCommand spawns here.
     defaultShell: (await getShellInfo()).displayName,

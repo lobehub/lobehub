@@ -36,12 +36,17 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
       ...(await importOriginal<object>()),
       Flexbox: ({
         children,
+        gap,
         paddingInline,
       }: {
         children: React.ReactNode;
+        gap?: number;
         paddingInline?: number;
       }) => (
-        <div data-testid={paddingInline === undefined ? 'sidebar-sections' : 'sidebar-body'}>
+        <div
+          data-gap={gap}
+          data-testid={paddingInline === undefined ? 'sidebar-sections' : 'sidebar-body'}
+        >
           {children}
         </div>
       ),
@@ -52,12 +57,18 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
         children,
         value,
         onValueChange,
+        style,
       }: {
         children: React.ReactNode;
         onValueChange?: (keys: string[]) => void;
+        style?: React.CSSProperties;
         value?: string[];
       }) => (
-        <div data-expanded-keys={JSON.stringify(value)} data-testid="sidebar-accordion">
+        <div
+          data-expanded-keys={JSON.stringify(value)}
+          data-gap={style?.gap}
+          data-testid="sidebar-accordion"
+        >
           <button aria-label="collapse recents" onClick={() => onValueChange?.(['agent'])} />
           {children}
         </div>
@@ -224,6 +235,18 @@ describe('Home sidebar body', () => {
     expect(children[0]).toContainElement(screen.getByTestId('sidebar-item-agent'));
     expect(children[1]).toHaveAttribute('data-testid', 'sidebar-channels');
     expect(children[2]).toContainElement(screen.getByTestId('sidebar-item-recents'));
+  });
+
+  it('leaves collapsed section headers unspaced, like nav rows', () => {
+    mocks.globalState.status.sidebarExpandedKeys = [];
+    mocks.globalState.status.sidebarItems = ['recents', 'agent', 'channels'];
+
+    render(<Body />);
+
+    // Each expanded section spaces itself (`sectionItemClassName`); a group gap would
+    // also push apart collapsed headers.
+    expect(screen.getByTestId('sidebar-sections')).not.toHaveAttribute('data-gap');
+    expect(screen.getByTestId('sidebar-accordion')).not.toHaveAttribute('data-gap');
   });
 
   it('places Channels where the saved order puts them', () => {

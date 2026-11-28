@@ -276,6 +276,22 @@ describe('dispatching a contact’s shared Agent', () => {
     });
   });
 
+  // A share whose visitor funds ran out is lifted by a tip, so its refusal must say so.
+  it("records the refusal the spend gate names, given the share's tipping setting", async () => {
+    findShare.mockResolvedValue({
+      ...liveShare,
+      shareConfig: { ...liveShare.shareConfig, tipsEnabled: true },
+    });
+    checkSpend.mockResolvedValue({ allowed: false, errorType: 'ShareFundingExhausted' });
+    await coordinator().advance('channel');
+
+    expect(checkSpend).toHaveBeenCalledWith(expect.objectContaining({ tipsEnabled: true }));
+    expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job', {
+      message: 'This shared Agent has run out of funds for visitor replies',
+      type: 'ShareFundingExhausted',
+    });
+  });
+
   // A refusal before the run starts never reaches the runtime's completion, so the share's
   // failure dashboard missed every limit refusal (trigger stays `channel` on these rows).
   it('counts a refused reply as a share admission refusal by its type', async () => {

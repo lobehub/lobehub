@@ -3,11 +3,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelMessagingService } from './ChannelMessagingService';
 
-const { currentRun, directory, openAgentPair, send } = vi.hoisted(() => ({
-  currentRun: vi.fn(),
-  directory: vi.fn(),
-  openAgentPair: vi.fn(),
-  send: vi.fn(),
+const { channelPeopleNames, currentRun, directory, findChannelRunRequester, openAgentPair, send } =
+  vi.hoisted(() => ({
+    channelPeopleNames: vi.fn(),
+    currentRun: vi.fn(),
+    directory: vi.fn(),
+    findChannelRunRequester: vi.fn(),
+    openAgentPair: vi.fn(),
+    send: vi.fn(),
+  }));
+vi.mock('@/database/repositories/channel/runRequester', () => ({
+  channelPeopleNames,
+  findChannelRunRequester,
 }));
 vi.mock('@/database/repositories/channel', async (original) => ({
   ...(await original<object>()),
@@ -70,6 +77,8 @@ describe('ChannelMessagingService', () => {
     vi.resetAllMocks();
     currentRun.mockResolvedValue(run());
     directory.mockResolvedValue([current, lobehub]);
+    findChannelRunRequester.mockResolvedValue({ name: 'Owner', userId: 'user-1' });
+    channelPeopleNames.mockResolvedValue(new Map([['channel-lobehub', ['Owner', 'Mia']]]));
     send.mockResolvedValue({ id: 'message-sent' });
   });
   const service = () =>
@@ -91,6 +100,7 @@ describe('ChannelMessagingService', () => {
           current: false,
           id: 'channel-lobehub',
           kind: 'group',
+          people: ['Owner', 'Mia'],
           projectId: 'project-lobehub',
           title: 'General',
         },
@@ -103,6 +113,25 @@ describe('ChannelMessagingService', () => {
     expect((await service().listChannels({ query: 'lobehub agent' })).channels).toHaveLength(1);
     expect(await service().listChannels({ limit: 1 })).toMatchObject({ hasMore: true });
     await expect(service().listChannels({ limit: 21 })).rejects.toThrow('limit');
+    // A person is found by name.
+    expect((await service().listChannels({ query: 'mia' })).channels.map(({ id }) => id)).toEqual([
+      'channel-lobehub',
+    ]);
+  });
+
+  it('lists only the owner’s Channels the Agent is in when it answers a visitor', async () => {
+    // A shared Agent runs as its owner (user-1) for a visitor who sent the request.
+    findChannelRunRequester.mockResolvedValue({ name: 'Visitor', userId: 'user-visitor' });
+    const ownerDirect = {
+      agents: [{ agentId: self.agentId, description: null, memberId: 'member-dm', name: 'Star' }],
+      channel: { agentId: self.agentId, id: 'channel-owner-dm', projectId: null, title: 'Star' },
+    };
+    directory.mockResolvedValue([current, lobehub, ownerDirect]);
+
+    expect((await service().listChannels()).channels.map(({ id }) => id)).toEqual([
+      'channel-current',
+      'channel-owner-dm',
+    ]);
   });
 
   it('asks one Agent in the conversation between the two Agents, even when named in a group', async () => {

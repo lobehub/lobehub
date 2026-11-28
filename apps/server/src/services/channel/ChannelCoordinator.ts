@@ -91,6 +91,8 @@ const SHARE_REFUSAL_MESSAGES: Record<string, string> = {
   [ChatErrorType.ShareAttachmentTooLarge]: `A message to a shared Agent can carry up to ${SHARE_VISITOR_MAX_FILES_PER_TURN} files of ${SHARE_VISITOR_MAX_FILE_SIZE / 1024 / 1024} MB each`,
   [ChatErrorType.ShareFileStorageExceeded]: 'This shared Agent has no room for more attachments',
   [ChatErrorType.ShareSpendLimitExceeded]: 'This shared Agent reached its monthly usage limit',
+  [ChatErrorType.ShareFundingExhausted]:
+    'This shared Agent has run out of funds for visitor replies',
 };
 
 const shareRefusal = (type: string) => new ChannelDispatchError(type, SHARE_REFUSAL_MESSAGES[type]);
@@ -206,10 +208,12 @@ export class ChannelCoordinator {
       monthlySpendLimit: share.shareConfig.monthlySpendLimit,
       ownerUserId: share.ownerId,
       shareId: share.shareId,
+      tipsEnabled: share.shareConfig.tipsEnabled,
       visitorUserId: requesterId,
       workspaceId: share.workspaceId ?? undefined,
     });
-    if (!spend.allowed) throw shareRefusal(ChatErrorType.ShareSpendLimitExceeded);
+    if (!spend.allowed)
+      throw shareRefusal(spend.errorType ?? ChatErrorType.ShareSpendLimitExceeded);
     return {
       agentId,
       canUseDevice: granted.canUseDevice,

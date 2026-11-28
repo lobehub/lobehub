@@ -425,6 +425,8 @@ export const mcpAppKeys = {
         agentId,
         linkId,
         onThisDevice = false,
+        relayDeviceId,
+        relayWorkspaceId,
         server,
         toolArguments,
         topicId,
@@ -432,6 +434,8 @@ export const mcpAppKeys = {
         agentId?: string;
         linkId?: string;
         onThisDevice?: boolean;
+        relayDeviceId?: string;
+        relayWorkspaceId?: string;
         server?: string;
         toolArguments?: string;
         topicId?: string;
@@ -446,6 +450,8 @@ export const mcpAppKeys = {
       toolArguments ?? null,
       linkId ?? null,
       topicId ?? null,
+      relayDeviceId ?? null,
+      relayWorkspaceId ?? null,
     ],
   ),
 };
