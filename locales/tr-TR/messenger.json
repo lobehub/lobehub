@@ -210,7 +210,7 @@
   "verify.confirm.noAgents": "Henüz hiçbir ajanınız yok. LobeHub'da bir tane oluşturun, ardından bağlantıyı tamamlamak için geri dönün.",
   "verify.confirm.relink.disconnectInMarketplace": "Bu LobeHub hesabı zaten {{platform}} hesabı {{account}} ile bağlı. Farklı bir {{platform}} hesabı bağlamak için önce mevcut hesabın bağlantısını Marketplace → Apps üzerinden kesin.",
   "verify.confirm.relink.openApp": "Uygulamayı aç",
-  "verify.confirm.relink.title": "Başka bir Telegram hesabı zaten bağlı",
+  "verify.confirm.relink.title": "Başka bir {{platform}} hesabı zaten bağlı",
   "verify.confirm.title": "Bağlantıyı onayla",
   "verify.confirm.workspace": "Çalışma alanı: {{workspace}}",
   "verify.error.alreadyConsumed": "Bu bağlantı, bir hesabı bağlamak için zaten kullanılmış. Bağlantıyı yönetmek için o LobeHub hesabına giriş yapın veya yeni bir bağlantı oluşturmak için bota dönüp /start komutunu tekrar gönderin.",
