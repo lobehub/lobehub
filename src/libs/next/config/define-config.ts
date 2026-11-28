@@ -402,6 +402,9 @@ export function defineConfig(config: CustomNextConfig) {
       'pdfjs-dist',
       'ajv',
       'oidc-provider',
+      // Its entry bundles an optional local-model loader that imports `node-llama-cpp`,
+      // which is not installed; bundling it fails the build, so Node resolves it at runtime.
+      'voyageai',
     ],
 
     transpilePackages: ['mermaid'],

@@ -59,7 +59,8 @@
     "openai": "^6.45.0",
     "replicate": "^1.4.0",
     "type-fest": "^5.7.0",
-    "url-join": "^5.0.0"
+    "url-join": "^5.0.0",
+    "voyageai": "^0.6.0"
   },
   "peerDependencies": {
     "zod": "^4.4.3"

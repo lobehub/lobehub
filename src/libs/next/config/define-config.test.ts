@@ -111,6 +111,12 @@ describe('defineConfig', () => {
     });
   });
 
+  // The voyageai entry bundles a loader that imports the uninstalled `node-llama-cpp`; Turbopack
+  // fails the route (and the whole lambda router) when it bundles the package.
+  it('keeps voyageai external so the server does not bundle its optional loader', () => {
+    expect(defineConfig({}).serverExternalPackages).toContain('voyageai');
+  });
+
   it('disables Next.js agent rule injection', () => {
     expect(defineConfig({}).agentRules).toBe(false);
   });

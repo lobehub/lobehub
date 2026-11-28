@@ -90,6 +90,7 @@ export { LobeTogetherAI } from './providers/togetherai';
 export { LobeTypeSafeAI } from './providers/typesafe';
 export { LobeVolcengineAI } from './providers/volcengine';
 export { LobeVolcengineCodingPlanAI } from './providers/volcengineCodingPlan';
+export { LobeVoyageAI } from './providers/voyage';
 export { LobeXiaomiMiMoAI } from './providers/xiaomimimo';
 export { LobeZenMuxAI } from './providers/zenmux';
 export { LobeZeroOneAI } from './providers/zeroone';

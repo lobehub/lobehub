@@ -1,0 +1,73 @@
+---
+title: Using Voyage AI API Key in LobeHub
+description: >-
+  Configure a Voyage AI API key in LobeHub and use Voyage text embedding and contextualized embedding models for memory and knowledge retrieval.
+tags:
+  - Voyage AI
+  - Embeddings
+  - API Key
+---
+
+# Using Voyage AI in LobeHub
+
+[Voyage AI](https://www.voyageai.com) builds embedding models for retrieval. In LobeHub, Voyage AI is an embedding provider only: it has no chat models, so the provider page shows no **Check** button.
+
+The built-in catalog has these models. There is no default model: wherever you use Voyage, choose one explicitly.
+
+| Model                              | Context (tokens) | Output dimensions              | Price per 1M tokens |
+| ---------------------------------- | ---------------- | ------------------------------ | ------------------- |
+| `voyage-4-large`, `voyage-code-4`  | 32,000           | 256, 512, 1024 (default), 2048 | $0.12               |
+| `voyage-4`, `voyage-3.5`           | 32,000           | 256, 512, 1024 (default), 2048 | $0.06               |
+| `voyage-4-lite`, `voyage-3.5-lite` | 32,000           | 256, 512, 1024 (default), 2048 | $0.02               |
+| `voyage-3-large`, `voyage-code-3`  | 32,000           | 256, 512, 1024 (default), 2048 | $0.18               |
+| `voyage-finance-2`                 | 32,000           | 1024                           | $0.12               |
+| `voyage-law-2`                     | 16,000           | 1024                           | $0.12               |
+| `voyage-context-4`                 | 32,000 per chunk | 256, 512, 1024 (default), 2048 | $0.12               |
+| `voyage-context-3`                 | 32,000 per chunk | 256, 512, 1024 (default), 2048 | $0.18               |
+
+<Steps>
+  ### Step 1: Obtain your Voyage AI API key
+
+  - Sign up or sign in at the [Voyage AI dashboard](https://dashboard.voyageai.com).
+  - Open [API Keys](https://dashboard.voyageai.com/organization/api-keys) and create a key.
+  - Copy the key and store it securely.
+
+  ### Step 2: Configure Voyage AI in LobeHub
+
+  - Open **App Settings → AI Providers** and select **Voyage AI**.
+  - Paste your key into **API Key**. Changes are saved automatically, and the key is encrypted with AES-GCM before it is stored.
+  - Turn on the switch next to the provider name.
+  - Optional: enter an alternative base URL in **API Proxy URL**. Leave it empty to use `https://api.voyageai.com/v1`.
+
+  ### Step 3: Enable models and choose one
+
+  Enable the Voyage models you want in the provider's **Model List**. They then appear in the embedding model pickers, for example **App Settings → Service Model → Embedding Model**.
+
+  <Callout type={'warning'}>
+    Voyage AI bills every embedded token. Review the [Voyage AI pricing](https://docs.voyageai.com/docs/pricing) before embedding large amounts of text.
+  </Callout>
+</Steps>
+
+## Output dimensions
+
+LobeHub stores vectors in 1024-dimension columns, so the default 1024 dimensions of every model fit. The runtime sends `output_dimension` only when a caller asks for a size, and rejects a size the model does not support before sending the request.
+
+Each call takes at most 1000 inputs and is not split for you, so keep batch sizes (for example `EMBEDDING_BATCH_SIZE`) at or below 1000.
+
+## Contextualized embeddings
+
+`voyage-context-4` and `voyage-context-3` treat each input as one whole document. The document is split automatically (`enable_auto_chunking: true`, `chunk_size: 32000`) and each chunk's vector reflects the document it comes from. The result therefore holds one vector per chunk, which can be more than the number of inputs, and the chunk text that Voyage reports is not returned.
+
+Use them where the caller expects chunk vectors of whole documents. They are not suitable where each input must map to exactly one vector, such as the knowledge base indexer.
+
+## Use Voyage AI for the knowledge base
+
+On a self-hosted deployment, the knowledge base embedding model is set by `DEFAULT_FILES_CONFIG`, for example `embedding_model=voyage/voyage-4-lite`. See [Knowledge Base](/docs/self-hosting/advanced/knowledge-base). This integration does not change the knowledge base indexing path, the search reranker, or the vector storage settings.
+
+## Troubleshooting
+
+**"Voyage AI API Key is incorrect or empty…"** — No key was found, or Voyage AI rejected it. Enter a valid key in **App Settings → AI Providers → Voyage AI**, or ask the administrator to set `VOYAGE_API_KEY` on the server.
+
+**Rate-limit and quota errors** — Voyage AI returns its own message, which LobeHub passes through. Check your usage and limits in the Voyage AI dashboard.
+
+For self-hosted deployments, see `VOYAGE_API_KEY` in the [model provider environment variables](/docs/self-hosting/environment-variables/model-provider#voyage-ai).
