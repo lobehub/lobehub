@@ -28,15 +28,15 @@ vi.mock('node:child_process', () => ({
   execFile: vi.fn(),
 }));
 
-vi.mock('../spawn/traeAcpSession', () => ({
+vi.mock('../spawn/acp/traeSession', () => ({
   listTraeAcpModels: listTraeAcpModelsMock,
 }));
 
-vi.mock('../spawn/droidAcpSession', () => ({
+vi.mock('../spawn/acp/droidSession', () => ({
   listDroidAcpModels: listDroidAcpModelsMock,
 }));
 
-vi.mock('../spawn/dshAcpSession', () => ({
+vi.mock('../spawn/acp/dsh/session', () => ({
   DSH_COMMAND: 'dsh',
   detectDshCommand: detectDshCommandMock,
   listDshAcpModels: listDshAcpModelsMock,
@@ -234,7 +234,7 @@ describe('heterogeneous agent model discovery', () => {
   it.each(['droid', 'trae'] as const)(
     'reports an unsupported %s ACP discovery method as a client capability error',
     async (type) => {
-      const { AcpRpcResponseError } = await import('../spawn/acpStdioClient');
+      const { AcpRpcResponseError } = await import('../spawn/acp/stdioClient');
       const discover = type === 'droid' ? listDroidAcpModelsMock : listTraeAcpModelsMock;
       discover.mockRejectedValue(
         new AcpRpcResponseError('session/new', {

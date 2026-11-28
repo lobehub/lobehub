@@ -8,12 +8,6 @@ export {
   QoderAdapter,
 } from './adapters';
 export {
-  appendAttachedFilesToPrompt,
-  buildAttachedFilesPrompt,
-  collectHeteroAttachedFiles,
-  type HeteroAttachedFileRef,
-} from './attachedFiles';
-export {
   buildClaudeCodeEntrypointEnv,
   CLAUDE_CODE_ENTRYPOINT_ENV,
   DEFAULT_CLAUDE_CODE_ENTRYPOINT,
@@ -86,7 +80,13 @@ export {
   HETERO_ERROR_SPECS,
   isUserSideHeteroError,
 } from './errors';
-export { heteroAgentSupportsImageInput } from './imageInput';
+export {
+  appendAttachedFilesToPrompt,
+  buildAttachedFilesPrompt,
+  collectHeteroAttachedFiles,
+  type HeteroAttachedFileRef,
+} from './input/attachedFiles';
+export { heteroAgentSupportsImageInput } from './input/imageInput';
 export { getHeterogeneousTypeLabel, HETEROGENEOUS_TYPE_LABELS } from './labels';
 export type {
   CreateAssistantIntent,

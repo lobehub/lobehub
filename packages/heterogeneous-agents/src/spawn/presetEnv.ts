@@ -2,7 +2,7 @@ import {
   CLAUDE_CODE_ENTRYPOINT_ENV,
   dropClearedClaudeCodeEntrypoint,
 } from '../claudeCodeEntrypoint';
-import { getAntigravitySpawnEnv } from './antigravity';
+import { getAntigravitySpawnEnv } from './acp/antigravity/spawnEnv';
 
 /**
  * Environment variables a host always sets for a heterogeneous agent, shared by

@@ -19,7 +19,7 @@ ignores = [
   "**/.next/**",
   "**/*.d.ts",
   "packages/sdk/src/generated/**",
-  "packages/heterogeneous-agents/src/codex/protocol/generated.ts",
+  "packages/heterogeneous-agents/src/adapters/codex/appServer/protocol/generated.ts",
 ]
 
 [config.group.ignore]
@@ -167,16 +167,14 @@ lobehub = "./packages/alint/rules"
 files = [
   "packages/heterogeneous-agents/src/*.ts",
   "packages/heterogeneous-agents/src/adapters/**/*.ts",
+  "packages/heterogeneous-agents/src/input/**/*.ts",
   "packages/heterogeneous-agents/src/client/**/*.ts",
   "packages/heterogeneous-agents/src/client/**/*.tsx",
   "packages/heterogeneous-agents/src/errors/**/*.ts",
   "packages/heterogeneous-agents/src/quota/**/*.ts",
-  "packages/heterogeneous-agents/src/utils/**/*.ts",
   "packages/heterogeneous-agents/src/mainAgentCoordinator/**/*.ts",
   "packages/heterogeneous-agents/src/subagentCoordinator/**/*.ts",
   "packages/heterogeneous-agents/src/providerBinding/**/*.ts",
-  "packages/heterogeneous-agents/src/codex/protocol/**/*.ts",
-  "packages/heterogeneous-agents/src/kimiCode/usage.ts",
   "packages/heterogeneous-agents/src/spawn/agentStreamPipeline.ts",
   "packages/heterogeneous-agents/src/spawn/spawnAgent.ts",
 ]
@@ -200,7 +198,11 @@ files = [
   "packages/heterogeneous-agents/src/client/**/*.tsx",
   "packages/heterogeneous-agents/src/errors/**/*.ts",
   "packages/heterogeneous-agents/src/quota/**/*.ts",
-  "packages/heterogeneous-agents/src/utils/**/*.ts",
+  "packages/heterogeneous-agents/src/input/**/*.ts",
+  "packages/heterogeneous-agents/src/adapters/imageEcho.ts",
+  "packages/heterogeneous-agents/src/adapters/codex/commandOutput.ts",
+  "packages/heterogeneous-agents/src/adapters/codex/errors.ts",
+  "packages/heterogeneous-agents/src/adapters/codex/usage.ts",
 ]
 # Barrels are left out: a re-export's browser consumers are not visible from the barrel.
 ignores = [ "**/*.test.ts", "**/__tests__/**", "**/generated.ts", "**/index.ts" ]

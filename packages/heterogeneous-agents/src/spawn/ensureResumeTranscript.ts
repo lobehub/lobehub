@@ -8,7 +8,7 @@ import {
   buildClaudeCodeTranscript,
   type BuildClaudeCodeTranscriptOptions,
   encodeClaudeProjectDir,
-} from '../transcript/rebuildClaudeCode';
+} from '../transcript/claudeCode/rebuild';
 
 /**
  * The CLI's own session-id gate: a lowercase-hex UUID. Anything else resolves to

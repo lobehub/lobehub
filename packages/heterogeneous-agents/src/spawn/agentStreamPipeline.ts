@@ -1,6 +1,6 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
-import { rewriteImagePlaceholders, type UploadedImageOutcome } from '../imageEcho';
+import { rewriteImagePlaceholders, type UploadedImageOutcome } from '../adapters/imageEcho';
 import { createAdapter } from '../registry';
 import type {
   AgentEventAdapter,
@@ -9,8 +9,8 @@ import type {
   PostRunUsageOptions,
   UsageData,
 } from '../types';
-import { CodexFileChangeTracker } from './codexFileChangeTracker';
-import { createCodexImageOutputReader } from './codexImageOutputs';
+import { CodexFileChangeTracker } from './codex/fileChangeTracker';
+import { createCodexImageOutputReader } from './codex/imageOutputs';
 import { readImageDimensions } from './imageDimensions';
 import { JsonlStreamProcessor } from './jsonlProcessor';
 import { readPostRunUsage } from './postRunUsage';

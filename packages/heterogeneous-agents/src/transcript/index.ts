@@ -1,10 +1,14 @@
-export type { ParseClaudeCodeOptions, ParsedClaudeCodeSession } from './claudeCode';
+export type { ParseClaudeCodeOptions, ParsedClaudeCodeSession } from './claudeCode/index';
 export {
   buildClaudeCodeImportPayload,
   CLAUDE_CODE_IDENTIFIER,
   parseClaudeCodeSession,
   parseClaudeCodeSessionDigest,
-} from './claudeCode';
+} from './claudeCode/index';
+export type { BuildClaudeCodeTranscriptOptions } from './claudeCode/rebuild';
+export { buildClaudeCodeTranscript, encodeClaudeProjectDir } from './claudeCode/rebuild';
+export type { ClaudeCodeReplayTurn } from './claudeCode/replay';
+export { buildClaudeCodeReplayTurn, claudeCodeReplayTurnMatchesPrompt } from './claudeCode/replay';
 export type { ParsedCodexSession } from './codex';
 export {
   buildCodexImportPayload,
@@ -12,8 +16,4 @@ export {
   parseCodexSession,
   parseCodexSessionDigest,
 } from './codex';
-export type { BuildClaudeCodeTranscriptOptions } from './rebuildClaudeCode';
-export { buildClaudeCodeTranscript, encodeClaudeProjectDir } from './rebuildClaudeCode';
-export type { ClaudeCodeReplayTurn } from './replayClaudeCode';
-export { buildClaudeCodeReplayTurn, claudeCodeReplayTurnMatchesPrompt } from './replayClaudeCode';
 export { parseJsonlRecords, stripNulDeep, truncateTitle } from './utils';

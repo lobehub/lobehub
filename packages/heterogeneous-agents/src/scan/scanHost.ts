@@ -8,8 +8,8 @@ import {
   LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from '../config';
+import { detectDshCommand } from '../spawn/acp/dsh/session';
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
-import { detectDshCommand } from '../spawn/dshAcpSession';
 import type { CliCommandStatus } from '../spawn/resolveCliCommand';
 import {
   detectHeterogeneousCliCommand,

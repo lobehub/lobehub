@@ -12,6 +12,123 @@
  * `@lobechat/agent-gateway-client` (which is a browser-side WebSocket client
  * that producers have no business pulling in).
  */
+export type { UsageData } from '../types';
+export {
+  ACP_PROTOCOL_VERSION,
+  AcpAgentSession,
+  type AcpAgentSessionConfig,
+  type AcpAgentSessionOptions,
+  type AcpPermissionOption,
+  parseAcpPermissionOptions,
+  selectAcpPermissionOption,
+} from './acp/agentSession';
+export {
+  type AntigravityAcpPromptBlock,
+  AntigravityAcpSession,
+  type AntigravityAcpSessionOptions,
+  buildAntigravityAcpPrompt,
+  isAntigravityAcpSessionNotFoundError,
+} from './acp/antigravity/session';
+export {
+  type AntigravityAcpLaunch,
+  buildAntigravityAcpLaunch,
+  getAntigravitySpawnEnv,
+} from './acp/antigravity/spawnEnv';
+export {
+  buildCopilotAcpArgs,
+  buildCopilotAcpPrompt,
+  type CopilotAcpImagePromptBlock,
+  type CopilotAcpModelCatalog,
+  type CopilotAcpPromptBlock,
+  CopilotAcpSession,
+  type CopilotAcpSessionOptions,
+  type CopilotAcpTextPromptBlock,
+  isCopilotAcpSessionNotFoundError,
+  listCopilotAcpModels,
+  type ListCopilotAcpModelsOptions,
+  parseCopilotAcpModelCatalog,
+} from './acp/copilotSession';
+export {
+  buildCursorAcpArgs,
+  buildCursorAcpPrompt,
+  CursorAcpSession,
+  type CursorAcpSessionOptions,
+  type CursorAcpTextPromptBlock,
+  isCursorAcpSessionNotFoundError,
+  normalizeCursorQuestion,
+} from './acp/cursorSession';
+export {
+  buildDevinAcpArgs,
+  buildDevinAcpPrompt,
+  type DevinAcpImagePromptBlock,
+  type DevinAcpPromptBlock,
+  DevinAcpSession,
+  type DevinAcpSessionOptions,
+  type DevinAcpTextPromptBlock,
+  isDevinAcpSessionNotFoundError,
+} from './acp/devinSession';
+export {
+  buildDroidAcpArgs,
+  buildDroidAcpPrompt,
+  type DroidAcpImagePromptBlock,
+  type DroidAcpModelCatalog,
+  type DroidAcpPromptBlock,
+  DroidAcpSession,
+  type DroidAcpSessionOptions,
+  type DroidAcpTextPromptBlock,
+  isDroidAcpSessionNotFoundError,
+  listDroidAcpModels,
+  type ListDroidAcpModelsOptions,
+  parseDroidAcpModelCatalog,
+} from './acp/droidSession';
+export {
+  detectDshCommand,
+  DSH_ACP_PROFILE_ARGS,
+  DSH_COMMAND,
+  DSH_MIN_VERSION,
+  DSH_VERSION_PATTERN,
+  DshAcpSession,
+  type DshAcpSessionHandle,
+  type DshAcpSessionOptions,
+  resolveDshSpawnCommand,
+  spawnDshAcpSession,
+  type SpawnDshAcpSessionOptions,
+} from './acp/dsh/session';
+export {
+  buildGrokAcpArgs,
+  buildGrokAcpPrompt,
+  type GrokAcpContentBlock,
+  GrokAcpSession,
+  type GrokAcpSessionOptions,
+} from './acp/grokBuildSession';
+export {
+  type AcpRpcErrorData,
+  type AcpRpcMessage,
+  AcpRpcResponseError,
+  AcpServerRequestError,
+  AcpStdioClient,
+  type AcpStdioClientOptions,
+} from './acp/stdioClient';
+export {
+  AgentStreamPipeline,
+  type AgentStreamPipelineOptions,
+  type UploadHeterogeneousImage,
+} from './agentStreamPipeline';
+export {
+  classifyHeteroProcessFailure,
+  type ClassifyHeteroProcessFailureParams,
+  HETERO_WORKING_DIRECTORY_NOT_FOUND,
+  isHeteroStatusGuideErrorData,
+} from './classifyProcessFailure';
+export {
+  buildClaudeSdkUserMessageFromStreamJson,
+  ClaudeAgentSdkSession,
+  type ClaudeAgentSdkSessionOptions,
+  type HeterogeneousAgentRuntimeState,
+  type HeterogeneousAgentRuntimeStatus,
+  type HeterogeneousAgentRuntimeTask,
+} from './claudeCode/agentSdkSession';
+export { type CliSpawnPlan, resolveCliSpawnPlan } from './cliSpawn';
 export {
   buildCodexAppServerArgs,
   buildCodexAppServerInput,
@@ -27,58 +144,8 @@ export {
   getCodexAppServerUnsupportedArgs,
   isCodexAppServerCompatibilityError,
   pickCodexRunProvenance,
-} from '../codex';
-export type { UsageData } from '../types';
-export {
-  ACP_PROTOCOL_VERSION,
-  AcpAgentSession,
-  type AcpAgentSessionConfig,
-  type AcpAgentSessionOptions,
-  type AcpPermissionOption,
-  parseAcpPermissionOptions,
-  selectAcpPermissionOption,
-} from './acpAgentSession';
-export {
-  type AcpRpcErrorData,
-  type AcpRpcMessage,
-  AcpRpcResponseError,
-  AcpServerRequestError,
-  AcpStdioClient,
-  type AcpStdioClientOptions,
-} from './acpStdioClient';
-export {
-  AgentStreamPipeline,
-  type AgentStreamPipelineOptions,
-  type UploadHeterogeneousImage,
-} from './agentStreamPipeline';
-export {
-  type AntigravityAcpLaunch,
-  buildAntigravityAcpLaunch,
-  getAntigravitySpawnEnv,
-} from './antigravity';
-export {
-  type AntigravityAcpPromptBlock,
-  AntigravityAcpSession,
-  type AntigravityAcpSessionOptions,
-  buildAntigravityAcpPrompt,
-  isAntigravityAcpSessionNotFoundError,
-} from './antigravityAcpSession';
-export {
-  classifyHeteroProcessFailure,
-  type ClassifyHeteroProcessFailureParams,
-  HETERO_WORKING_DIRECTORY_NOT_FOUND,
-  isHeteroStatusGuideErrorData,
-} from './classifyProcessFailure';
-export {
-  buildClaudeSdkUserMessageFromStreamJson,
-  ClaudeAgentSdkSession,
-  type ClaudeAgentSdkSessionOptions,
-  type HeterogeneousAgentRuntimeState,
-  type HeterogeneousAgentRuntimeStatus,
-  type HeterogeneousAgentRuntimeTask,
-} from './claudeAgentSdkSession';
-export { type CliSpawnPlan, resolveCliSpawnPlan } from './cliSpawn';
-export { CodexFileChangeTracker } from './codexFileChangeTracker';
+} from './codex/appServer';
+export { CodexFileChangeTracker } from './codex/fileChangeTracker';
 export {
   type CodexInitialModelResolution,
   type CodexInitialModelSource,
@@ -88,7 +155,7 @@ export {
   parseCodexProfileFromArgs,
   readCodexSessionModel,
   resolveCodexInitialModel,
-} from './codexModel';
+} from './codex/model';
 export {
   buildCodexLobeHubContextArgs,
   buildCodexShellEnvSetArgs,
@@ -98,79 +165,12 @@ export {
   LOBEHUB_JWT_FILE_ENV,
   refreshCodexJwtFiles,
   toTomlBasicString,
-} from './codexShellEnv';
-export {
-  buildCopilotAcpArgs,
-  buildCopilotAcpPrompt,
-  type CopilotAcpImagePromptBlock,
-  type CopilotAcpModelCatalog,
-  type CopilotAcpPromptBlock,
-  CopilotAcpSession,
-  type CopilotAcpSessionOptions,
-  type CopilotAcpTextPromptBlock,
-  isCopilotAcpSessionNotFoundError,
-  listCopilotAcpModels,
-  type ListCopilotAcpModelsOptions,
-  parseCopilotAcpModelCatalog,
-} from './copilotAcpSession';
-export {
-  buildCursorAcpArgs,
-  buildCursorAcpPrompt,
-  CursorAcpSession,
-  type CursorAcpSessionOptions,
-  type CursorAcpTextPromptBlock,
-  isCursorAcpSessionNotFoundError,
-  normalizeCursorQuestion,
-} from './cursorAcpSession';
-export {
-  buildDevinAcpArgs,
-  buildDevinAcpPrompt,
-  type DevinAcpImagePromptBlock,
-  type DevinAcpPromptBlock,
-  DevinAcpSession,
-  type DevinAcpSessionOptions,
-  type DevinAcpTextPromptBlock,
-  isDevinAcpSessionNotFoundError,
-} from './devinAcpSession';
-export {
-  buildDroidAcpArgs,
-  buildDroidAcpPrompt,
-  type DroidAcpImagePromptBlock,
-  type DroidAcpModelCatalog,
-  type DroidAcpPromptBlock,
-  DroidAcpSession,
-  type DroidAcpSessionOptions,
-  type DroidAcpTextPromptBlock,
-  isDroidAcpSessionNotFoundError,
-  listDroidAcpModels,
-  type ListDroidAcpModelsOptions,
-  parseDroidAcpModelCatalog,
-} from './droidAcpSession';
-export {
-  detectDshCommand,
-  DSH_ACP_PROFILE_ARGS,
-  DSH_COMMAND,
-  DSH_MIN_VERSION,
-  DSH_VERSION_PATTERN,
-  DshAcpSession,
-  type DshAcpSessionHandle,
-  type DshAcpSessionOptions,
-  resolveDshSpawnCommand,
-  spawnDshAcpSession,
-  type SpawnDshAcpSessionOptions,
-} from './dshAcpSession';
+} from './codex/shellEnv';
 export {
   createFileStoreImageUploader,
   type FileStoreCreateFileInput,
   type FileStorePort,
 } from './fileStoreImageUploader';
-export {
-  buildGrokAcpArgs,
-  buildGrokAcpPrompt,
-  type GrokAcpContentBlock,
-  GrokAcpSession,
-  type GrokAcpSessionOptions,
-} from './grokAcpSession';
 export {
   type AgentContentBlock,
   type AgentImageBlock,
@@ -206,13 +206,22 @@ export {
 // import time. Import it from the dedicated `@lobechat/heterogeneous-agents/
 // resolveCliCommand` subpath instead.
 export {
+  buildTraeAcpArgs,
+  buildTraeAcpPrompt,
+  type TraeAcpImagePromptBlock,
+  type TraeAcpPromptBlock,
+  TraeAcpSession,
+  type TraeAcpSessionOptions,
+  type TraeAcpTextPromptBlock,
+} from './acp/traeSession';
+export {
   buildClaudeCodeDirectEnv,
   type BuildClaudeCodeDirectEnvInput,
   type BuildClaudeCodeDirectEnvResult,
   normalizeAnthropicSdkBaseURL,
   sanitizeClaudeCodeDirectArgs,
   sanitizeClaudeCodeDirectEnv,
-} from './claudeCodeDirectEnv';
+} from './claudeCode/directEnv';
 export {
   type ClaudeCodeControlRequest,
   type ClaudeCodeControlRequestHandle,
@@ -220,9 +229,9 @@ export {
   type ClaudeCodeLiveExit,
   ClaudeCodeLiveInput,
   resolveClaudeCodeLiveRuntimeEnd,
-} from './claudeCodeLiveInput';
-export { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
-export { STOP_TASK_ANSWER_TIMEOUT_MS, stopClaudeCodeTask } from './claudeCodeStopTask';
+} from './claudeCode/liveInput';
+export { readClaudeCodeSessionCost } from './claudeCode/sessionCost';
+export { STOP_TASK_ANSWER_TIMEOUT_MS, stopClaudeCodeTask } from './claudeCode/stopTask';
 export {
   ensureClaudeCodeResumeTranscript,
   type EnsureResumeTranscriptReason,
@@ -250,13 +259,4 @@ export {
   spawnTraeAcpAgent,
 } from './spawnAgent';
 export { toStreamEvent } from './streamEvent';
-export {
-  buildTraeAcpArgs,
-  buildTraeAcpPrompt,
-  type TraeAcpImagePromptBlock,
-  type TraeAcpPromptBlock,
-  TraeAcpSession,
-  type TraeAcpSessionOptions,
-  type TraeAcpTextPromptBlock,
-} from './traeAcpSession';
 export type { AgentStreamEvent, AgentStreamEventType } from '@lobechat/agent-gateway-client';

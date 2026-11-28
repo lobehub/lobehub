@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type * as CodexClientModule from '../codex/CodexAppServerClient';
-import { CodexAppServerRpcError } from '../codex/CodexAppServerClient';
+import type * as CodexClientModule from '../spawn/codex/appServer/CodexAppServerClient';
+import { CodexAppServerRpcError } from '../spawn/codex/appServer/CodexAppServerClient';
 import { listCodexModels } from './codex';
 
 const { close, construct, request } = vi.hoisted(() => ({
@@ -10,7 +10,7 @@ const { close, construct, request } = vi.hoisted(() => ({
   request: vi.fn(),
 }));
 
-vi.mock('../codex/CodexAppServerClient', async (importOriginal) => {
+vi.mock('../spawn/codex/appServer/CodexAppServerClient', async (importOriginal) => {
   const actual = await importOriginal<typeof CodexClientModule>();
   return {
     ...actual,

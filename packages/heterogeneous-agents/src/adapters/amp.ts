@@ -1,5 +1,4 @@
 import { getHeterogeneousAgentConfigOrThrow } from '../config';
-import { imagePlaceholder } from '../imageEcho';
 import type {
   AgentEventAdapter,
   HeterogeneousAgentEvent,
@@ -14,6 +13,7 @@ import type {
   ToolResultData,
   UsageData,
 } from '../types';
+import { imagePlaceholder } from './imageEcho';
 
 const AMP_IDENTIFIER = 'amp';
 const AMP_DOCS_URL = getHeterogeneousAgentConfigOrThrow(AMP_IDENTIFIER).auth.docsUrl;

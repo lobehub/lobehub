@@ -10,7 +10,7 @@
 
 import { getHeterogeneousAgentConfigOrThrow } from '../config';
 import type { HeterogeneousAgentEvent, UsageData } from '../types';
-import { ClaudeCodeAdapter } from './claudeCode';
+import { ClaudeCodeAdapter } from './claudeCode/index';
 
 export const QODER_IDENTIFIER = 'qoder';
 

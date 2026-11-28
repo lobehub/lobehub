@@ -3,7 +3,10 @@ import path from 'node:path';
 import type { CodexSpeedMode, HeterogeneousAgentModel } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 
-import { CodexAppServerClient, CodexAppServerRpcError } from '../codex/CodexAppServerClient';
+import {
+  CodexAppServerClient,
+  CodexAppServerRpcError,
+} from '../spawn/codex/appServer/CodexAppServerClient';
 import { resolveHeteroSpawnCwd } from '../spawn/workingDirectory';
 
 interface CodexModelCatalogOptions {

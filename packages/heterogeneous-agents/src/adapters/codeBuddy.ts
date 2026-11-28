@@ -1,5 +1,8 @@
 import { getHeterogeneousAgentConfigOrThrow } from '../config';
-import { type ClaudeCompatibleAdapterProfile, ClaudeCompatibleStreamAdapter } from './claudeCode';
+import {
+  type ClaudeCompatibleAdapterProfile,
+  ClaudeCompatibleStreamAdapter,
+} from './claudeCode/index';
 
 const codeBuddyDescriptor = getHeterogeneousAgentConfigOrThrow('codebuddy');
 
