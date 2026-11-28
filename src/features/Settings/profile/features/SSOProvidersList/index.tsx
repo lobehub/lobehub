@@ -7,7 +7,11 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AuthIcons from '@/components/AuthIcons';
-import { normalizeProviderId } from '@/libs/better-auth/utils/client';
+import {
+  canUnlinkProvider,
+  getProviderDisplayName,
+  normalizeProviderId,
+} from '@/libs/better-auth/utils/client';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useUserStore } from '@/store/user';
@@ -25,8 +29,12 @@ export const SSOProvidersList = memo(() => {
   const oAuthSSOProviders = useServerConfigStore(serverConfigSelectors.oAuthSSOProviders);
   const { t } = useTranslation('auth');
 
-  // Allow unlink if user has multiple SSO providers OR has email/password login
-  const allowUnlink = providers.length > 1 || hasPasswordAccount;
+  // An account can be unlinked only if the user can still sign in afterwards, via email/password
+  // or another SSO provider. Link-only providers (e.g. X) never count as a sign-in method.
+  const linkedProviders = providers.map((item) => item.provider);
+  const allowUnlink = (provider: string) =>
+    canUnlinkProvider({ hasPasswordAccount, linkedProviders, provider });
+  const hasLockedProvider = linkedProviders.some((provider) => !allowUnlink(provider));
   const enableAuthActions = !isDesktop && isLogin;
 
   // Get linked provider IDs for filtering
@@ -48,9 +56,9 @@ export const SSOProvidersList = memo(() => {
 
     // The control is disabled when this is the only login method. Keep the
     // guard for callers outside the rendered list and for state races.
-    if (!allowUnlink || !accountId) return;
+    if (!allowUnlink(provider) || !accountId) return;
     confirmModal({
-      content: t('profile.sso.unlink.description', { provider }),
+      content: t('profile.sso.unlink.description', { provider: getProviderDisplayName(provider) }),
       okButtonProps: {
         danger: true,
       },
@@ -59,7 +67,11 @@ export const SSOProvidersList = memo(() => {
         await unlinkAccount({ accountId });
         refreshAuthProviders();
       },
-      title: <span style={providerNameStyle}>{t('profile.sso.unlink.title', { provider })}</span>,
+      title: (
+        <span style={providerNameStyle}>
+          {t('profile.sso.unlink.title', { provider: getProviderDisplayName(provider) })}
+        </span>
+      ),
     });
   };
 
@@ -79,7 +91,7 @@ export const SSOProvidersList = memo(() => {
   const linkMenuItems: DropdownItem[] = availableProviders.map((provider) => ({
     icon: AuthIcons(provider, 16),
     key: provider,
-    label: <span style={providerNameStyle}>{provider}</span>,
+    label: <span style={providerNameStyle}>{getProviderDisplayName(provider)}</span>,
     onClick: () => handleLinkSSO(provider),
   }));
 
@@ -95,7 +107,7 @@ export const SSOProvidersList = memo(() => {
         >
           <Flexbox horizontal align={'center'} gap={6} style={{ fontSize: 12 }}>
             {AuthIcons(item.provider, 16)}
-            <span style={providerNameStyle}>{item.provider}</span>
+            <span style={providerNameStyle}>{getProviderDisplayName(item.provider)}</span>
             {item.email && (
               <Text fontSize={11} type="secondary">
                 · {item.email}
@@ -103,10 +115,12 @@ export const SSOProvidersList = memo(() => {
             )}
           </Flexbox>
           {!isDesktop && (
-            <Tooltip title={!allowUnlink ? t('profile.sso.unlink.forbidden') : undefined}>
+            <Tooltip
+              title={!allowUnlink(item.provider) ? t('profile.sso.unlink.forbidden') : undefined}
+            >
               <span>
                 <ActionIcon
-                  disabled={!allowUnlink || !item.accountId}
+                  disabled={!allowUnlink(item.provider) || !item.accountId}
                   icon={Unlink}
                   size={'small'}
                   onClick={() => handleUnlinkSSO(item.provider, item.accountId)}
@@ -117,7 +131,7 @@ export const SSOProvidersList = memo(() => {
         </Flexbox>
       ))}
 
-      {!isDesktop && !allowUnlink && (
+      {!isDesktop && hasLockedProvider && (
         <Text fontSize={11} type="secondary">
           {t('profile.sso.unlink.forbidden')}
         </Text>

@@ -89,6 +89,8 @@ declare global {
       AUTH_SECRET?: string;
       AUTH_SSO_PROVIDERS?: string;
       AUTH_TRUSTED_ORIGINS?: string;
+      AUTH_TWITTER_ID?: string;
+      AUTH_TWITTER_SECRET?: string;
 
       AUTH_WECHAT_ID?: string;
       AUTH_WECHAT_SECRET?: string;
@@ -142,6 +144,9 @@ export const getAuthConfig = () => {
 
       AUTH_GITHUB_ID: z.string().optional(),
       AUTH_GITHUB_SECRET: z.string().optional(),
+
+      AUTH_TWITTER_ID: z.string().optional(),
+      AUTH_TWITTER_SECRET: z.string().optional(),
 
       AUTH_COGNITO_ID: z.string().optional(),
       AUTH_COGNITO_SECRET: z.string().optional(),
@@ -246,6 +251,9 @@ export const getAuthConfig = () => {
 
       AUTH_GITHUB_ID: process.env.AUTH_GITHUB_ID,
       AUTH_GITHUB_SECRET: process.env.AUTH_GITHUB_SECRET,
+
+      AUTH_TWITTER_ID: process.env.AUTH_TWITTER_ID,
+      AUTH_TWITTER_SECRET: process.env.AUTH_TWITTER_SECRET,
 
       AUTH_MICROSOFT_AUTHORITY_URL: process.env.AUTH_MICROSOFT_AUTHORITY_URL,
       AUTH_MICROSOFT_ID: process.env.AUTH_MICROSOFT_ID,
