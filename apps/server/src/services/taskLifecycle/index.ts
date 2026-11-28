@@ -546,11 +546,13 @@ export class TaskLifecycleService {
         // task deleted mid-run has no page left to link to.
       } else if (currentTask.automationMode && isAutomationTick) {
         if (runTrigger === 'schedule' || pausedByFuse) {
+          // Spread from a variable so an override slot without `failureCause` still type-checks.
+          const cause = { failureCause };
           void notifyScheduledTaskFailed({
             agentId: currentTask.assigneeAgentId ?? undefined,
             consecutiveFailures: scheduleConsecutiveFailures,
             errorCode,
-            failureCause,
+            ...cause,
             operationId: params.operationId,
             paused: pausedByFuse,
             runTrigger: runTrigger === 'schedule' ? 'schedule' : 'heartbeat',
