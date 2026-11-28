@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@aws-sdk/client-s3": "3.932.0",
+    "@aws-sdk/client-s3": "3.1178.0",
     "builder-util-runtime": "9.7.0",
     "semver": "7.8.5",
     "yaml": "2.9.1",
