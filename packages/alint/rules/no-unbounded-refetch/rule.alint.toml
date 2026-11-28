@@ -16,9 +16,9 @@ Do not report:
 - Short-lived polls that end by themselves: OAuth/device-code login, upload or import processing, an export job, a generation task, a verification run — when the interval stops on success, failure, a terminal status or timeout, even if each tick calls `mutate()` on a bundle.
 - SSE/WebSocket heartbeats and keep-alives.
 - Polls of 30 s or more against a small status endpoint, and polls of 10 s or more of one small object or a short list on a page-scoped surface. The thresholds in item 1 and here do not overlap: 10 s and 30 s exactly are not reported.
-- A poll inside a modal, drawer, popover or detail page that is mounted only while open, even without an explicit `enabled` flag.
+- A poll inside a modal, drawer or popover that is mounted only while open, even without an explicit `enabled` flag. A full page or detail page is not excluded: users leave it open in a tab.
 - For item 2 only: a per-item poll already deduped by a shared SWR key or `dedupingInterval`. Dedupe does not stop a forever-poll, so it does not exclude item 1.
-- A poll gated by `document.visibilityState` / window focus / an open panel / `refreshWhenHidden: false`, or a function-form `refreshInterval` that can return 0.
+- A poll gated by `document.visibilityState` / window focus / an open panel / `refreshWhenHidden: false`, or a function-form `refreshInterval` that returns 0 on a terminal state and also stops, backs off or gives up when that state never arrives (an error, a missing row, a cap on attempts or time). One that returns 0 only on success still polls forever while it waits, and item 1 applies.
 - A refetch in a stream handler that goes through a gate, ticket or supersede helper (`refreshGate.*`, `isSuperseded`, a snapshot generation, a processing chain), even when the helper is defined in another file.
 - A refetch on a rare, human-paced or legacy event: approval or intervention requests, a pause on `toolMessageIds`, a fallback for older servers, `notify_update`.
 - A refetch that runs after a reconnect, a revision gap, a stop/abort, or once at the end of a run.

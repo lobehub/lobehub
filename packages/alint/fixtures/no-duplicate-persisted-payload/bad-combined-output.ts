@@ -9,7 +9,7 @@ export async function runCommand(
   const { exitCode, stderr, stdout } = await shell.exec(command);
 
   return {
-    content: stdout || stderr,
+    content: `Exited with code ${exitCode}`,
     state: {
       exitCode,
       // alint-expect
