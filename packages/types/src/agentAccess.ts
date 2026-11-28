@@ -45,8 +45,11 @@ export interface AgentAccessResult {
   via: 'own' | 'share' | null;
 }
 
-/** The owner's decision on a request; both are idempotent. */
-export type AgentAccessDecision = 'approve' | 'deny';
+/**
+ * The owner's decision on a request, each idempotent: `approve` or `deny` a pending one, or
+ * `revoke` one they approved, which takes back what approving granted.
+ */
+export type AgentAccessDecision = 'approve' | 'deny' | 'revoke';
 
 /**
  * `metadata.agentAccess` of the card an Agent posts in its owner's direct conversation with it

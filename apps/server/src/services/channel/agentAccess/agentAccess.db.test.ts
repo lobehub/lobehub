@@ -239,6 +239,128 @@ describe('a friend mentions the owner’s personal Agent in a group', () => {
     ).toMatchObject({ missing: [], state: 'ok', via: 'share' });
   });
 
+  it('takes back an approval on revoke, so the friend has to ask again', async () => {
+    const { agent, agentId, asOwner, asVisitor, channel, mention } = await personalGroup();
+    const job = await mention(asVisitor, 'revoke me');
+    await execution.claim(channel.id, job.id, lease);
+    const [request] = await grantsOf(agent.id);
+    await announceAgentAccessRequests(db, channel.id);
+    const owner = new AgentAccessService(db, ownerId);
+
+    // Only an approval can be revoked.
+    await expect(owner.decide(request.id, 'revoke')).rejects.toMatchObject({ code: 'CONFLICT' });
+    await owner.decide(request.id, 'approve');
+    await expect(
+      new AgentAccessService(db, visitorId).decide(request.id, 'revoke'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    vi.mocked(wakeChannel).mockClear();
+
+    await expect(owner.decide(request.id, 'revoke')).resolves.toMatchObject({
+      grant: { status: 'revoked' },
+    });
+    // Idempotent, and it runs nothing again.
+    await owner.decide(request.id, 'revoke');
+    expect(wakeChannel).not.toHaveBeenCalled();
+
+    const [grant] = await grantsOf(agent.id);
+    expect(grant).toMatchObject({ revokeReason: 'revoked_by_owner', status: 'revoked' });
+    const [share] = await db.select().from(agentShares).where(eq(agentShares.agentId, agentId));
+    expect(share.shareConfig).toMatchObject({ deviceAllowUserIds: [] });
+    const [shareGrant] = await db
+      .select()
+      .from(agentShareGrants)
+      .where(eq(agentShareGrants.shareId, share.id));
+    expect(shareGrant.revokedAt).not.toBeNull();
+
+    const { directId } = await ownerCards(agentId);
+    expect(
+      (await asOwner.detail(directId!)).messages.find((message) => message.kind === 'agentAccess')
+        ?.agentAccess,
+    ).toMatchObject({ status: 'revoked' });
+    expect(
+      await resolveAgentAccess(db, { agentId, channelId: channel.id, requesterUserId: visitorId }),
+    ).toMatchObject({ missing: ['share', 'channel', 'device'], state: 'needs_grant' });
+    // A revoked approval cannot be approved again in place; the friend asks anew.
+    await expect(owner.decide(request.id, 'approve')).rejects.toMatchObject({ code: 'CONFLICT' });
+    await expect(
+      new AgentAccessService(db, visitorId).request({ agentId, channelId: channel.id }),
+    ).resolves.toMatchObject({ state: 'grant_pending' });
+  });
+
+  it('lets no approval racing a revoke grant the share again', async () => {
+    const { agent, agentId, asVisitor, channel, mention } = await personalGroup();
+    const job = await mention(asVisitor, 'race');
+    await execution.claim(channel.id, job.id, lease);
+    const [request] = await grantsOf(agent.id);
+    const owner = new AgentAccessService(db, ownerId);
+    await owner.decide(request.id, 'approve');
+
+    const [approved, revoked] = await Promise.allSettled([
+      owner.decide(request.id, 'approve'),
+      owner.decide(request.id, 'revoke'),
+    ]);
+    expect(revoked.status).toBe('fulfilled');
+    // Serialized: the approval either ran first (a no-op) or found the request revoked.
+    if (approved.status === 'rejected') expect(approved.reason).toMatchObject({ code: 'CONFLICT' });
+    const [grant] = await grantsOf(agent.id);
+    expect(grant.status).toBe('revoked');
+    const [share] = await db.select().from(agentShares).where(eq(agentShares.agentId, agentId));
+    const [shareGrant] = await db
+      .select()
+      .from(agentShareGrants)
+      .where(eq(agentShareGrants.shareId, share.id));
+    expect(shareGrant.revokedAt).not.toBeNull();
+    expect(share.shareConfig).toMatchObject({ deviceAllowUserIds: [] });
+  });
+
+  it('stops the friend’s replies in the group even when a link share still admits them', async () => {
+    const { agent, agentId, asVisitor, channel, mention } = await personalGroup();
+    const job = await mention(asVisitor, 'long run');
+    await execution.claim(channel.id, job.id, lease);
+    const [request] = await grantsOf(agent.id);
+    const owner = new AgentAccessService(db, ownerId);
+    await owner.decide(request.id, 'approve');
+    expect(await execution.claim(channel.id, job.id, lease)).not.toBeNull();
+    expect(await jobById(db, job.id)).toMatchObject({ status: 'running' });
+    // The owner also shares the Agent by link: that alone never admitted the group reply.
+    await db
+      .update(agentShares)
+      .set({ visibility: 'link' })
+      .where(eq(agentShares.agentId, agentId));
+    vi.mocked(wakeChannel).mockClear();
+
+    await owner.decide(request.id, 'revoke');
+    expect(await jobById(db, job.id)).toMatchObject({ status: 'cancelled' });
+    expect(wakeChannel).toHaveBeenCalledWith(channel.id);
+  });
+
+  it('keeps a share grant the friend holds from something other than the revoked approval', async () => {
+    const { agent, agentId, asVisitor, channel, mention } = await personalGroup();
+    const job = await mention(asVisitor, 'card grant stays');
+    await execution.claim(channel.id, job.id, lease);
+    const [request] = await grantsOf(agent.id);
+    const owner = new AgentAccessService(db, ownerId);
+    await owner.decide(request.id, 'approve');
+    const [share] = await db.select().from(agentShares).where(eq(agentShares.agentId, agentId));
+    // The owner later sends the friend the Agent's card: the grant now comes from that.
+    await db
+      .update(agentShareGrants)
+      .set({ source: { type: 'card' } as never })
+      .where(eq(agentShareGrants.shareId, share.id));
+
+    await owner.decide(request.id, 'revoke');
+    const [shareGrant] = await db
+      .select()
+      .from(agentShareGrants)
+      .where(eq(agentShareGrants.shareId, share.id));
+    expect(shareGrant.revokedAt).toBeNull();
+    // The share still admits them; the group approval, and the device only a request grant
+    // admits them to outside the owner's address book, are gone.
+    expect(
+      await resolveAgentAccess(db, { agentId, channelId: channel.id, requesterUserId: visitorId }),
+    ).toMatchObject({ missing: ['channel', 'device'], state: 'needs_grant' });
+  });
+
   // Approving failed with FORBIDDEN ("Agent sharing is not enabled for this account") for an owner
   // without the Agent Share feature, so the friend's reply never ran.
   it('runs the friend’s reply after approval even though the owner cannot publish shares', async () => {
