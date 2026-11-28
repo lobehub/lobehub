@@ -78,7 +78,9 @@ export const ScheduleStateCell = ({ now, state }: ScheduleStateCellProps) => {
     },
     stopped: {
       color: cssVar.colorError,
-      hint: t('taskList.scheduled.state.stopped.hint'),
+      hint: state.pauseCause
+        ? t(`taskList.scheduled.state.stopped.${state.pauseCause}.hint`)
+        : t('taskList.scheduled.state.stopped.hint'),
       text: t('taskList.scheduled.state.stopped', { count: state.consecutiveFailures }),
     },
   }[state.health];

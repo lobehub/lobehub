@@ -1,3 +1,5 @@
+import type { TaskAutomationPauseCause } from '@lobechat/types';
+
 export interface NotifyScheduledTaskCompletedParams {
   /** Agent executing the task — lets inbox surfaces render its avatar. */
   agentId?: string;
@@ -21,6 +23,9 @@ export interface NotifyScheduledTaskFailedParams {
   /** Structured terminal error type (e.g. `InsufficientBudgetForModel`). Never
    *  the raw error text — that stays on the task and in logs. */
   errorCode?: string;
+  /** A failure only the account owner can clear, classified from the structured
+   *  error fields, so the copy can name the remedy. */
+  failureCause?: TaskAutomationPauseCause;
   operationId: string;
   /** True when this failure blew the fuse and auto-paused the task. */
   paused?: boolean;

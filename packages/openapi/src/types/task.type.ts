@@ -512,6 +512,15 @@ export const TaskDetailSchema = z
     editorData: z.unknown().optional(),
     error: z.string().nullable().optional(),
     files: z.array(ChatFileItemSchema).optional(),
+    /** Set while the failure fuse holds a scheduled task paused; `cause` names an owner-fixable failure. */
+    fusePause: z
+      .object({
+        cause: z.enum(['insufficientBudget', 'paidModelRequired']).nullable(),
+        consecutiveFailures: z.number().int(),
+      })
+      .strict()
+      .nullable()
+      .optional(),
     goal: z.object({ id: z.string(), title: z.string() }).strict().nullable().optional(),
     heartbeat: z
       .object({

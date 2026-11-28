@@ -106,6 +106,7 @@ export function buildLifecycleEvent(
       duration,
       errorAttribution: formattedError?.attribution,
       errorBudget: readErrorBudgetContext(formattedError),
+      errorCategory: formattedError?.category,
       errorHeterogeneous: readHeterogeneousErrorContext(formattedError),
       errorDetail: state?.error,
       errorDispatch: readDispatchErrorContext(formattedError),

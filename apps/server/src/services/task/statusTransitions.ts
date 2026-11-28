@@ -178,13 +178,22 @@ export async function updateStatus(
   // resetting when the previous status was NOT 'running'. This lets
   // `runScheduleTick` enforce `config.schedule.maxExecutions` by counting
   // task_topics created since this timestamp.
+  //
+  // The same restart clears the failure fuse: resuming a task the fuse paused
+  // gives it a fresh run of attempts. Kept, the counter re-paused the task on
+  // its first failure after the resume, and the schedule table kept reading
+  // "stopped" while the task was due to run.
   if (
     status === 'scheduled' &&
     task.automationMode === 'schedule' &&
     resolved.status !== 'running'
   ) {
     await deps.taskModel.updateContext(task.id, {
-      scheduler: { scheduleStartedAt: new Date().toISOString() },
+      scheduler: {
+        consecutiveFailures: 0,
+        pauseCause: null,
+        scheduleStartedAt: new Date().toISOString(),
+      },
     });
   }
 

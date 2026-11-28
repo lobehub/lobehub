@@ -40,6 +40,7 @@ describe('createTaskRunHooks', () => {
     } as any);
 
     expect(onTopicComplete).toHaveBeenCalledWith({
+      errorCategory: undefined,
       errorCode: undefined,
       errorMessage: 'boom',
       lastAssistantContent: 'the answer',
@@ -50,6 +51,21 @@ describe('createTaskRunHooks', () => {
       taskIdentifier: 'T-1',
       topicId: 'tpc-1',
     });
+  });
+
+  it('passes the error category that names a plan-gated model refusal', async () => {
+    const [hook] = createTaskRunHooks({ db, taskId: 'task-1', taskIdentifier: 'T-1', userId: 'u' });
+
+    await hook.handler?.({
+      errorCategory: 'quota',
+      errorType: '403',
+      operationId: 'op-1',
+      reason: 'error',
+    } as any);
+
+    expect(onTopicComplete).toHaveBeenCalledWith(
+      expect.objectContaining({ errorCategory: 'quota', errorCode: '403' }),
+    );
   });
 
   it('defaults a run that reported no reason to a clean finish', async () => {

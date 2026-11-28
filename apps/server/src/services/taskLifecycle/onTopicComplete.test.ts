@@ -590,6 +590,29 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       );
     });
 
+    it('manual run of a fuse-paused schedule task fails → stays paused with the latest cause', async () => {
+      const task = baseTask({
+        automationMode: 'schedule',
+        context: { scheduler: { consecutiveFailures: 3, pauseCause: 'insufficientBudget' } },
+        status: 'running',
+      });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        ...createErrorParams('manual'),
+        errorCategory: 'quota',
+        errorCode: '403',
+      });
+
+      expect(updateStatus).toHaveBeenCalledWith('task-1', 'paused', { error: 'boom' });
+      expect(updateContext).toHaveBeenCalledWith(
+        'task-1',
+        expect.objectContaining({
+          scheduler: { consecutiveFailures: 3, pauseCause: 'paidModelRequired' },
+        }),
+      );
+    });
+
     it('undefined runTrigger defaults to manual (backward compat)', async () => {
       const task = baseTask({ automationMode: 'schedule' });
       findById.mockResolvedValue(task);
@@ -641,8 +664,72 @@ describe('TaskLifecycleService.onTopicComplete', () => {
         'task-1',
         expect.objectContaining({
           lifecycle: expect.objectContaining({ lastPausedAt: expect.any(String) }),
-          scheduler: { consecutiveFailures: 3 },
+          scheduler: { consecutiveFailures: 3, pauseCause: null },
         }),
+      );
+    });
+
+    it.each([
+      [{ errorCode: 'FreePlanLimit' }, 'insufficientBudget'],
+      [{ errorCode: 'InsufficientBudgetForModel' }, 'insufficientBudget'],
+      [{ errorCategory: 'quota', errorCode: '403' }, 'paidModelRequired'],
+    ])('fuse pause by %o keeps the cause %s on the task', async (error, cause) => {
+      findById.mockResolvedValue(
+        baseTask({
+          automationMode: 'schedule',
+          context: { scheduler: { consecutiveFailures: 2 } } as any,
+        }),
+      );
+
+      await service.onTopicComplete({ ...createErrorParams('schedule'), ...error });
+
+      expect(updateStatus).toHaveBeenCalledWith('task-1', 'paused', { error: 'boom' });
+      expect(updateContext).toHaveBeenCalledWith(
+        'task-1',
+        expect.objectContaining({ scheduler: { consecutiveFailures: 3, pauseCause: cause } }),
+      );
+      expect(notifyFailed).toHaveBeenCalledWith(
+        expect.objectContaining({ failureCause: cause, paused: true }),
+      );
+    });
+
+    it('a budget failure below the fuse names the cause but keeps the task scheduled', async () => {
+      findById.mockResolvedValue(
+        baseTask({
+          automationMode: 'schedule',
+          context: { scheduler: { consecutiveFailures: 0 } } as any,
+        }),
+      );
+
+      await service.onTopicComplete({
+        ...createErrorParams('schedule'),
+        errorCode: 'InsufficientBudgetForModel',
+      });
+
+      expect(updateStatus).toHaveBeenCalledWith('task-1', 'scheduled', { error: 'boom' });
+      // Only a fuse pause stores the cause: the task is not stopped yet.
+      expect(updateContext).toHaveBeenCalledWith(
+        'task-1',
+        expect.objectContaining({ scheduler: { consecutiveFailures: 1 } }),
+      );
+      expect(notifyFailed).toHaveBeenCalledWith(
+        expect.objectContaining({ failureCause: 'insufficientBudget', paused: false }),
+      );
+    });
+
+    it('a Forbidden refusal outside the quota category is no pause cause', async () => {
+      findById.mockResolvedValue(
+        baseTask({
+          automationMode: 'schedule',
+          context: { scheduler: { consecutiveFailures: 2 } } as any,
+        }),
+      );
+
+      await service.onTopicComplete({ ...createErrorParams('schedule'), errorCode: '403' });
+
+      expect(updateContext).toHaveBeenCalledWith(
+        'task-1',
+        expect.objectContaining({ scheduler: { consecutiveFailures: 3, pauseCause: null } }),
       );
     });
 
@@ -753,7 +840,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
         'task-1',
         expect.objectContaining({
           lifecycle: expect.objectContaining({ lastRecoveredAt: expect.any(String) }),
-          scheduler: { consecutiveFailures: 0 },
+          scheduler: { consecutiveFailures: 0, pauseCause: null },
         }),
       );
       // Live error still cleared so the UI shows a clean current state.

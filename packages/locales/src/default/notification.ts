@@ -8,8 +8,17 @@ export default {
   'agent_cron_job_failed_insufficient_budget':
     'Your scheduled task "{{jobName}}" couldn\'t run because your account is out of usage. Top up or upgrade your plan to resume future runs.',
   'agent_cron_job_failed_insufficient_budget_title': 'Scheduled task paused: insufficient usage',
+  'agent_cron_job_failed_paid_model':
+    'Your scheduled task "{{jobName}}" couldn\'t run because its model is available on paid plans only. Upgrade your plan or switch the task to an available model.',
+  'agent_cron_job_failed_paid_model_title': 'Scheduled task failed: model needs a paid plan',
   'agent_cron_job_failed_paused':
     'Your scheduled task "{{jobName}}" was paused after {{count}} consecutive failures. Review the error and resume it when ready.',
+  'agent_cron_job_failed_paused_insufficient_budget':
+    'Your scheduled task "{{jobName}}" was paused because your account is out of usage. Upgrade your plan or top up, or wait for your usage to reset, then run it again.',
+  'agent_cron_job_failed_paused_insufficient_budget_title': 'Scheduled task paused: out of usage',
+  'agent_cron_job_failed_paused_paid_model':
+    'Your scheduled task "{{jobName}}" was paused because its model is available on paid plans only. Upgrade your plan or switch the task to an available model, then run it again.',
+  'agent_cron_job_failed_paused_paid_model_title': 'Scheduled task paused: model needs a paid plan',
   'agent_cron_job_failed_paused_title': 'Scheduled task paused',
   'agent_cron_job_failed_title': 'Scheduled task failed',
   'agent_intervention_required': '{{agent}} needs your input: {{summary}}',

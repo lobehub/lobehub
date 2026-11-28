@@ -20,3 +20,35 @@ describe('projectTaskDetailState channelDelivery', () => {
     expect(projectTaskDetailState(row({}), {}).channelDelivery).toBeUndefined();
   });
 });
+
+describe('projectTaskDetailState fusePause', () => {
+  const task = (overrides: Record<string, unknown>) =>
+    ({ archivedAt: null, automationMode: 'schedule', status: 'paused', ...overrides }) as TaskItem;
+
+  it('names the cause while the fuse holds a schedule paused', () => {
+    const context = { scheduler: { consecutiveFailures: 3, pauseCause: 'insufficientBudget' } };
+    expect(projectTaskDetailState(task({ context }), {}).fusePause).toEqual({
+      cause: 'insufficientBudget',
+      consecutiveFailures: 3,
+    });
+  });
+
+  it('reads a fuse pause with no owner-side cause as plain failures', () => {
+    const context = { scheduler: { consecutiveFailures: 3 } };
+    expect(projectTaskDetailState(task({ context }), {}).fusePause).toEqual({
+      cause: null,
+      consecutiveFailures: 3,
+    });
+  });
+
+  it.each([
+    ['a manual pause', { context: { scheduler: { consecutiveFailures: 1 } } }],
+    ['a resumed task', { context: { scheduler: { consecutiveFailures: 3 } }, status: 'scheduled' }],
+    [
+      'a heartbeat',
+      { automationMode: 'heartbeat', context: { scheduler: { consecutiveFailures: 3 } } },
+    ],
+  ])('is absent for %s', (_label, overrides) => {
+    expect(projectTaskDetailState(task(overrides), {}).fusePause).toBeNull();
+  });
+});

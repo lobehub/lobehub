@@ -158,6 +158,25 @@ describe('reconcileOrphanedTaskRuns', () => {
     );
   });
 
+  it('passes the category that marks a plan-gated model refusal', async () => {
+    findOrphanedRunningTopics.mockResolvedValue([
+      orphanedRun({
+        completionReason: 'error',
+        operationError: {
+          error: { message: 'This model is available on paid plans only.' },
+          errorType: 403,
+        },
+        operationStatus: 'error',
+      }),
+    ]);
+
+    await reconcileOrphanedTaskRuns(db);
+
+    expect(onTopicComplete).toHaveBeenCalledWith(
+      expect.objectContaining({ errorCategory: 'quota', errorCode: '403' }),
+    );
+  });
+
   it('settles a silent end as a lost run, not as a judged failure', async () => {
     findOrphanedRunningTopics.mockResolvedValue([
       orphanedRun({ completionReason: null, operationStatus: 'error' }),

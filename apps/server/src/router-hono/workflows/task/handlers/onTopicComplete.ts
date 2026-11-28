@@ -12,6 +12,8 @@ import { isRunAlreadySettled } from '@/server/services/taskLifecycle/reconcile';
 const log = debug('lobe-server:workflows:task:on-topic-complete');
 
 export interface OnTopicCompletePayload {
+  /** Normalized error category (e.g. `quota`), spread from the lifecycle event like `errorType`. */
+  errorCategory?: string;
   errorMessage?: string;
   /** Structured terminal error type (e.g. `InsufficientBudgetForModel`). Spread
    *  onto the webhook body from the completion lifecycle event (no eventFields
@@ -38,6 +40,7 @@ export async function onTopicComplete(c: Context) {
     const body = (await c.req.json()) as OnTopicCompletePayload;
     const {
       errorMessage,
+      errorCategory,
       errorType,
       lastAssistantContent,
       operationId,
@@ -120,6 +123,7 @@ export async function onTopicComplete(c: Context) {
 
     try {
       await taskLifecycle.onTopicComplete({
+        errorCategory,
         errorCode: errorType,
         errorMessage,
         lastAssistantContent,
