@@ -1023,6 +1023,14 @@ export interface ChannelPublicJob {
   /** The acknowledgement the reply posted before its run, so its outcome can show under it. */
   openingMessageId?: string | null;
   publicationRevoked: boolean;
+  /**
+   * The request a reply still at work answers, as a bounded quote: who asked and what. Only on
+   * queued and running replies; null when that message is gone, absent from older servers.
+   */
+  request?: Pick<
+    ChannelPublicMessage,
+    'id' | 'author' | 'content' | 'deletedAt' | 'sequence' | 'threadId'
+  > | null;
   status: ChannelJobStatus;
   threadId: string | null;
   /**
