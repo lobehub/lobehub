@@ -1,6 +1,7 @@
 import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 import { type RuntimeVideoGenParams, type RuntimeVideoGenParamsKeys } from 'model-bank';
+import { supportsConversationalVideoEditReferences } from 'model-bank/standardParameters';
 
 import { handleLobeHubModelDeprecatedError } from '@/business/client/handleLobeHubModelDeprecatedError';
 import { isGenerationPromptModerationError } from '@/business/client/isGenerationPromptModerationError';
@@ -14,6 +15,7 @@ import { generationBatchSelectors } from '../generationBatch/selectors';
 import { getVideoModelAndDefaults } from '../generationConfig/action';
 import { videoGenerationConfigSelectors } from '../generationConfig/selectors';
 import { generationTopicSelectors } from '../generationTopic';
+import { restoreEditingDraft } from './editingDraft';
 import type { VideoEditingDraftSnapshot } from './initialState';
 
 type Setter = StoreSetter<VideoStore>;
@@ -43,28 +45,7 @@ const cloneEditingDraft = (store: VideoStore): VideoEditingDraftSnapshot => ({
   parametersSchema: store.parametersSchema,
   provider: store.provider,
   stashedImageInputs: store.stashedImageInputs,
-  uploadingImagePreviews: [...store.uploadingImagePreviews],
 });
-
-const restoreEditingDraft = (state: VideoStore) => {
-  const snapshot = state.editingDraftSnapshot;
-
-  if (!snapshot) {
-    return { editingDraftSnapshot: undefined, editingGenerationId: undefined };
-  }
-
-  return {
-    editingDraftSnapshot: undefined,
-    editingGenerationId: undefined,
-    imageInputMode: snapshot.imageInputMode,
-    model: snapshot.model,
-    parameters: snapshot.parameters,
-    parametersSchema: snapshot.parametersSchema,
-    provider: snapshot.provider,
-    stashedImageInputs: snapshot.stashedImageInputs,
-    uploadingImagePreviews: snapshot.uploadingImagePreviews,
-  };
-};
 
 export const createCreateVideoSlice = (set: Setter, get: () => VideoStore, _api?: unknown) =>
   new CreateVideoActionImpl(set, get, _api);
@@ -80,6 +61,8 @@ export class CreateVideoActionImpl {
   }
 
   createVideo = async (): Promise<void> => {
+    if (this.#get().uploadingImagePreviews.length > 0) return;
+
     this.#set(
       { blockedPrompt: undefined, isCreating: true },
       false,
@@ -119,6 +102,16 @@ export class CreateVideoActionImpl {
       this.#set({ isCreating: false }, false, 'createVideo/endCreateVideo');
       return;
     }
+
+    const isSubmittedDraftCurrent = (state: VideoStore) =>
+      state.editingGenerationId === store.editingGenerationId && state.parameters === parameters;
+
+    const submittedEdit = store.editingDraftSnapshot;
+    const isSubmittedPromptCurrent = (state: VideoStore) =>
+      submittedEdit
+        ? state.editingDraftSnapshot === submittedEdit &&
+          state.parameters.prompt === parameters.prompt
+        : isSubmittedDraftCurrent(state);
 
     let finalTopicId = activeGenerationTopicId;
 
@@ -165,17 +158,27 @@ export class CreateVideoActionImpl {
 
       // 6. Restore the original draft after an edit, or clear a regular generation prompt
       this.#set(
-        (state) =>
-          state.editingGenerationId
-            ? restoreEditingDraft(state)
-            : { parameters: { ...state.parameters, prompt: '' } },
+        (state) => {
+          if (!isSubmittedDraftCurrent(state)) return state;
+
+          if (state.editingGenerationId) {
+            return state.uploadingImagePreviews.length === 0 ? restoreEditingDraft(state) : state;
+          }
+
+          return { parameters: { ...state.parameters, prompt: '' } };
+        },
         false,
         'createVideo/clearPrompt',
       );
     } catch (error) {
       // A rejected prompt is shown on the prompt input, where the user fixes it.
       if (isGenerationPromptModerationError(error)) {
-        this.#set({ blockedPrompt: parameters.prompt }, false, 'createVideo/promptBlocked');
+        this.#set(
+          (state) =>
+            isSubmittedPromptCurrent(state) ? { blockedPrompt: parameters.prompt } : state,
+          false,
+          'createVideo/promptBlocked',
+        );
       }
       handleLobeHubModelDeprecatedError(error);
       throw error;
@@ -258,8 +261,13 @@ export class CreateVideoActionImpl {
 
     this.#set(
       {
-        editingDraftSnapshot: store.editingDraftSnapshot ?? cloneEditingDraft(store),
+        blockedPrompt: undefined,
+        // A fresh snapshot identity keeps a pending result tied to this edit.
+        editingDraftSnapshot: { ...(store.editingDraftSnapshot ?? cloneEditingDraft(store)) },
         editingGenerationId: generationId,
+        imageInputMode: supportsConversationalVideoEditReferences(model)
+          ? 'reference'
+          : store.imageInputMode,
         model,
         /**
          * Switching from one edit source to another keeps the typed instruction: it is
@@ -271,6 +279,8 @@ export class CreateVideoActionImpl {
         },
         parametersSchema,
         provider,
+        stashedImageInputs: {},
+        // Uploads started in an abandoned draft cannot land in this edit.
         uploadingImagePreviews: [],
       },
       false,

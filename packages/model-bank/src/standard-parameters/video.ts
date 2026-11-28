@@ -29,15 +29,25 @@ export const VIDEO_GENERATION_TASKS = [
 ] as const;
 
 export const GEMINI_OMNI_VIDEO_MODEL_ID = 'gemini-omni-1.1-flash';
+export const GEMINI_OMNI_1_2_VIDEO_MODEL_ID = 'gemini-omni-1.2-flash';
+export const GEMINI_OMNI_1_2_MAX_IMAGE_INPUTS = 6;
+export const GEMINI_OMNI_1_2_MAX_FRAME_DURATION = 10;
+export const GEMINI_OMNI_VIDEO_MODEL_IDS: readonly string[] = [
+  GEMINI_OMNI_VIDEO_MODEL_ID,
+  GEMINI_OMNI_1_2_VIDEO_MODEL_ID,
+];
 
 /**
  * Video models that can edit a finished generation by continuing its provider interaction.
  * Every stored video carries an interaction id, so model support is the capability signal.
  */
-export const CONVERSATIONAL_VIDEO_EDIT_MODELS: readonly string[] = [GEMINI_OMNI_VIDEO_MODEL_ID];
+export const CONVERSATIONAL_VIDEO_EDIT_MODELS = GEMINI_OMNI_VIDEO_MODEL_IDS;
 
 export const supportsConversationalVideoEdit = (modelId: string) =>
   CONVERSATIONAL_VIDEO_EDIT_MODELS.includes(modelId);
+
+export const supportsConversationalVideoEditReferences = (modelId: string) =>
+  modelId === GEMINI_OMNI_1_2_VIDEO_MODEL_ID;
 
 export const VideoModelParamsMetaSchema = z.object({
   prompt: z.object({
@@ -92,6 +102,7 @@ export const VideoModelParamsMetaSchema = z.object({
       default: z.string(),
       description: z.string().optional(),
       enum: z.array(z.string()),
+      supportsWithFrames: z.boolean().optional(),
       type: z.literal('string').optional(),
     })
     .optional(),
@@ -120,6 +131,7 @@ export const VideoModelParamsMetaSchema = z.object({
       description: z.string().optional(),
       enum: z.array(z.number()).optional(),
       max: z.number().optional(),
+      maxWithEndImage: z.number().optional(),
       min: z.number().optional(),
       step: z.number().optional().default(1),
       type: z.literal('number').optional(),

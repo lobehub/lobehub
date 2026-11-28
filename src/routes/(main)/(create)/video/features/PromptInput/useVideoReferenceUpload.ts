@@ -15,6 +15,12 @@ import { useVideoGenerationConfigParam } from '@/store/video/slices/generationCo
 
 const isSlotEnabledSelector = videoGenerationConfigSelectors.isImageInputSlotEnabled;
 
+const isUploadCurrent = (previews: string[]) => {
+  const { uploadingImagePreviews } = useVideoStore.getState();
+  // Each object URL belongs to one upload batch and is cleared when its draft is left.
+  return previews.every((preview) => uploadingImagePreviews.includes(preview));
+};
+
 /**
  * Video-page binding for the shared {@link useReferenceImageUpload} core.
  *
@@ -108,15 +114,30 @@ export const useVideoReferenceUpload = () => {
     [t],
   );
 
-  const { canDropImage, handleUploadFiles, maxCount, maxFileSize } = useReferenceImageUpload({
-    addUploadingPreviews: addUploadingImagePreviews,
-    canCreate,
-    maxFileSize: imageUrlsMaxFileSize ?? imageUrlMaxFileSize ?? endImageUrlMaxFileSize,
-    onLimitExceeded,
-    removeUploadingPreviews: removeUploadingImagePreviews,
-    slots,
-    uploadingPreviews,
-  });
+  const { canDropImage, handleReplaceImage, handleUploadFiles, maxCount, maxFileSize } =
+    useReferenceImageUpload({
+      addUploadingPreviews: addUploadingImagePreviews,
+      canCreate,
+      isUploadCurrent,
+      maxFileSize: imageUrlsMaxFileSize ?? imageUrlMaxFileSize ?? endImageUrlMaxFileSize,
+      onLimitExceeded,
+      removeUploadingPreviews: removeUploadingImagePreviews,
+      slots,
+      uploadingPreviews,
+    });
 
-  return { canDropImage, handleUploadFiles, maxCount, maxFileSize, uploadingPreviews };
+  const handleUploadFrameFiles = useCallback(
+    (files: File[], frame: 'imageUrl' | 'endImageUrl') =>
+      handleReplaceImage(files, (url) => setImageInputForMode(imageInputMode, frame, url)),
+    [handleReplaceImage, imageInputMode, setImageInputForMode],
+  );
+
+  return {
+    canDropImage,
+    handleUploadFiles,
+    handleUploadFrameFiles,
+    maxCount,
+    maxFileSize,
+    uploadingPreviews,
+  };
 };

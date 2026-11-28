@@ -17,7 +17,10 @@ import { isRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq, inArray } from 'drizzle-orm';
-import { supportsConversationalVideoEdit } from 'model-bank/standardParameters';
+import {
+  supportsConversationalVideoEdit,
+  supportsConversationalVideoEditReferences,
+} from 'model-bank/standardParameters';
 import { z } from 'zod';
 
 import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
@@ -426,9 +429,16 @@ export const videoRouter = router({
         log('Using callback URL: %s', callbackUrl);
 
         const requestMetadata: Record<string, unknown> = { trigger: RequestTrigger.Video };
+        const editReferenceImageUrls =
+          previousInteractionId &&
+          supportsConversationalVideoEditReferences(resolvedModelId) &&
+          Array.isArray(generationParams.imageUrls)
+            ? generationParams.imageUrls.filter((url): url is string => typeof url === 'string')
+            : [];
         const response = await modelRuntime.createVideo(
           {
             callbackUrl: callbackUrl.toString(),
+            ...(editReferenceImageUrls.length > 0 && { editReferenceImageUrls }),
             model: resolvedModelId,
             params: generationParams,
             previousInteractionId,

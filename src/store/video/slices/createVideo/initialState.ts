@@ -9,7 +9,6 @@ export interface VideoEditingDraftSnapshot {
   parametersSchema: VideoModelParamsSchema;
   provider: string;
   stashedImageInputs: Partial<Record<VideoImageInputMode, VideoImageInputs>>;
-  uploadingImagePreviews: string[];
 }
 
 export interface CreateVideoState {

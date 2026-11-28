@@ -1,17 +1,74 @@
 import { describe, expect, it } from 'vitest';
 
+import { googleVideoModels } from '../aiModels/google/video';
 import {
   extractVideoDefaultValues,
   MAX_VIDEO_SEED,
   PRESET_VIDEO_ASPECT_RATIOS,
   PRESET_VIDEO_RESOLUTIONS,
   type RuntimeVideoGenParams,
+  supportsConversationalVideoEdit,
   validateVideoModelParamsSchema,
   VideoModelParamsMetaSchema,
   type VideoModelParamsSchema,
 } from './video';
 
 describe('video standard-parameters', () => {
+  it.each([
+    {
+      id: 'gemini-omni-1.1-flash',
+      defaultDuration: 8,
+      maxDuration: 10,
+      maxImages: 7,
+      outputRate: 17.5,
+    },
+    {
+      id: 'gemini-omni-1.2-flash',
+      defaultDuration: 10,
+      maxDuration: 15,
+      maxImages: 6,
+      outputRate: 12,
+    },
+  ])(
+    'exposes the $id defaults, limits, edit support and video rate',
+    ({ id, defaultDuration, maxDuration, maxImages, outputRate }) => {
+      const model = googleVideoModels.find((entry) => entry.id === id);
+      if (!model?.parameters) throw new Error(`Missing video model parameters for ${id}`);
+      expect(model).toMatchObject({ enabled: true, isOfficial: true });
+      expect(extractVideoDefaultValues(model.parameters)).toMatchObject({
+        aspectRatio: '16:9',
+        duration: defaultDuration,
+        resolution: '720p',
+      });
+      expect(model.parameters).toMatchObject({
+        ...(id === 'gemini-omni-1.2-flash'
+          ? {
+              duration: { min: 3, max: maxDuration, maxWithEndImage: 10 },
+              endImageUrl: { requiresImageUrl: true },
+              imageUrl: { default: null },
+            }
+          : { duration: { min: 3, max: maxDuration } }),
+        imageUrls: { maxCount: maxImages },
+        resolution: { enum: ['360p', '720p', '1080p', '4k'] },
+      });
+      expect(supportsConversationalVideoEdit(id)).toBe(true);
+      const rates = {
+        imageInput: 1.5,
+        textInput: 1.5,
+        textOutput: 9,
+        videoGeneration: outputRate,
+        videoInput: 1.5,
+      };
+      const tokenUnits = Object.entries(rates).map(([name, rate]) => ({
+        name,
+        rate,
+        strategy: 'fixed',
+        unit: 'millionTokens',
+      }));
+      expect(model.pricing?.units).toEqual(expect.arrayContaining(tokenUnits));
+    },
+  );
+
   describe('VideoModelParamsMetaSchema', () => {
     it('should validate a complete schema', () => {
       const fullSchema: VideoModelParamsSchema = {

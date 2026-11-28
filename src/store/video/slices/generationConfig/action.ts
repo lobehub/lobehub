@@ -73,6 +73,17 @@ function preserveVideoInputParams(
   return normalized;
 }
 
+function clampEndFrameDuration(
+  parameters: RuntimeVideoGenParams,
+  schema: VideoModelParamsSchema,
+): RuntimeVideoGenParams {
+  const max = parameters.endImageUrl ? schema.duration?.maxWithEndImage : undefined;
+  const duration = parameters.duration;
+  return max !== undefined && duration !== undefined && duration > max
+    ? { ...parameters, duration: max }
+    : parameters;
+}
+
 type Setter = StoreSetter<VideoStore>;
 
 export const createGenerationConfigSlice = (set: Setter, get: () => VideoStore, _api?: unknown) =>
@@ -120,7 +131,9 @@ export class GenerationConfigActionImpl {
   };
 
   setModelAndProviderOnSelect = (model: string, provider: string): void => {
-    const { imageInputMode: previousMode, parameters: previousParameters } = this.#get();
+    const state = this.#get();
+    const { imageInputMode: previousMode, parameters: previousParameters } =
+      state.editingDraftSnapshot ?? state;
     const { defaultValues, parametersSchema } = getVideoModelAndDefaults(model, provider);
     const { imageInputMode, parameters } = normalizeImageInputMode(
       preserveVideoInputParams(previousParameters, defaultValues, parametersSchema),
@@ -130,6 +143,7 @@ export class GenerationConfigActionImpl {
 
     this.#set(
       {
+        blockedPrompt: state.editingGenerationId ? undefined : state.blockedPrompt,
         editingDraftSnapshot: undefined,
         editingGenerationId: undefined,
         imageInputMode,
@@ -139,6 +153,7 @@ export class GenerationConfigActionImpl {
         provider,
         // Stashed images were sized for the previous model's slots
         stashedImageInputs: {},
+        uploadingImagePreviews: state.editingGenerationId ? [] : state.uploadingImagePreviews,
       },
       false,
       `setModelAndProviderOnSelect/${model}/${provider}`,
@@ -171,8 +186,18 @@ export class GenerationConfigActionImpl {
       if (value !== undefined) merged[key] = value;
     }
 
+    const normalized = normalizeImageInputMode(
+      merged as RuntimeVideoGenParams,
+      parametersSchema,
+      imageInputMode,
+    );
     this.#set(
-      normalizeImageInputMode(merged as RuntimeVideoGenParams, parametersSchema, imageInputMode),
+      {
+        ...normalized,
+        blockedPrompt: undefined,
+        parameters: clampEndFrameDuration(normalized.parameters, parametersSchema),
+        uploadingImagePreviews: [],
+      },
       false,
       `reuseVideoSettings/${model}/${provider}`,
     );
@@ -183,13 +208,16 @@ export class GenerationConfigActionImpl {
    * the incoming mode's stash restored, so only the active mode's images are submitted.
    */
   setImageInputMode = (mode: VideoImageInputMode): void => {
-    const { imageInputMode, parameters, stashedImageInputs } = this.#get();
+    const { imageInputMode, parameters, parametersSchema, stashedImageInputs } = this.#get();
     if (mode === imageInputMode) return;
 
     this.#set(
       {
         imageInputMode: mode,
-        parameters: applyImageInputs(parameters, mode, stashedImageInputs[mode]),
+        parameters: clampEndFrameDuration(
+          applyImageInputs(parameters, mode, stashedImageInputs[mode]),
+          parametersSchema,
+        ),
         stashedImageInputs: {
           ...stashedImageInputs,
           [imageInputMode]: pickImageInputs(parameters, imageInputMode),
@@ -235,8 +263,13 @@ export class GenerationConfigActionImpl {
   ): void => {
     this.#set(
       (state) => {
-        const { parameters } = state;
-        return { parameters: { ...parameters, [paramName]: value } };
+        const { parameters, parametersSchema } = state;
+        return {
+          parameters: clampEndFrameDuration(
+            { ...parameters, [paramName]: value },
+            parametersSchema,
+          ),
+        };
       },
       false,
       `setParamOnInput/${paramName}`,

@@ -2,7 +2,12 @@ import type { GenerateVideosConfig, GoogleGenAI, Image } from '@google/genai';
 import { GenerateVideosOperation } from '@google/genai';
 import type { ModelTokensUsage } from '@lobechat/types';
 import debug from 'debug';
-import { GEMINI_OMNI_VIDEO_MODEL_ID } from 'model-bank/standardParameters';
+import {
+  GEMINI_OMNI_1_2_MAX_FRAME_DURATION,
+  GEMINI_OMNI_1_2_MAX_IMAGE_INPUTS,
+  GEMINI_OMNI_1_2_VIDEO_MODEL_ID,
+  GEMINI_OMNI_VIDEO_MODEL_IDS,
+} from 'model-bank/standardParameters';
 
 import type {
   CreateVideoPayload,
@@ -50,7 +55,8 @@ interface OmniUsage {
   total_tokens?: number;
 }
 
-export const isGeminiOmniVideoModel = (model: string) => model === GEMINI_OMNI_VIDEO_MODEL_ID;
+export const isGeminiOmniVideoModel = (model: string) =>
+  GEMINI_OMNI_VIDEO_MODEL_IDS.includes(model);
 
 /**
  * Convert image URL to Google Image format
@@ -155,8 +161,8 @@ async function createGoogleOmniVideo(
   client: GoogleGenAI,
   payload: CreateVideoPayload,
 ): Promise<CreateVideoResult> {
-  const { callbackUrl, model, params, previousInteractionId } = payload;
-  const { aspectRatio, endImageUrl, imageUrl, imageUrls, prompt, resolution } = params;
+  const { callbackUrl, editReferenceImageUrls, model, params, previousInteractionId } = payload;
+  const { aspectRatio, duration, endImageUrl, imageUrl, imageUrls, prompt, resolution } = params;
   const images = [imageUrl, ...(imageUrls ?? []), endImageUrl].filter((url): url is string =>
     Boolean(url),
   );
@@ -170,25 +176,44 @@ async function createGoogleOmniVideo(
    * single `imageUrls` entry.
    */
   const isFrameInterpolation = Boolean(endImageUrl) && images.length <= 2;
+  const isOmni12 = model === GEMINI_OMNI_1_2_VIDEO_MODEL_ID;
+
+  const editImages = isOmni12 ? (editReferenceImageUrls ?? []) : [];
+  const inputImages = previousInteractionId ? editImages : images;
+  if (isOmni12 && inputImages.length > GEMINI_OMNI_1_2_MAX_IMAGE_INPUTS) {
+    throw new Error(`Gemini Omni 1.2 supports up to ${GEMINI_OMNI_1_2_MAX_IMAGE_INPUTS} images`);
+  }
+  if (
+    isOmni12 &&
+    !previousInteractionId &&
+    isFrameInterpolation &&
+    duration !== undefined &&
+    duration > GEMINI_OMNI_1_2_MAX_FRAME_DURATION
+  ) {
+    throw new Error(
+      `Gemini Omni 1.2 first/last frame interpolation supports up to ${GEMINI_OMNI_1_2_MAX_FRAME_DURATION} seconds`,
+    );
+  }
+
+  const usesReferences = images.length > 1 || (isOmni12 && Boolean(imageUrls?.length));
   const resolvedTask = previousInteractionId
     ? 'edit'
     : isFrameInterpolation
       ? undefined
-      : images.length > 1
+      : usesReferences
         ? 'reference_to_video'
         : images.length === 1
           ? 'image_to_video'
           : 'text_to_video';
   /**
    * Stateful continuation already restores the source media from `previous_interaction_id`.
-   * Re-sending persisted frame inputs can make Gemini reject the edit as conflicting media.
+   * Only send new edit references. Re-sending the source frames can conflict with that context.
    */
-  const input = previousInteractionId
-    ? prompt
-    : images.length === 0
+  const input =
+    inputImages.length === 0
       ? prompt
       : [
-          ...(await Promise.all(images.map((url) => imageToOmniContent(url)))),
+          ...(await Promise.all(inputImages.map((url) => imageToOmniContent(url)))),
           { text: prompt, type: 'text' as const },
         ];
 
@@ -204,6 +229,7 @@ async function createGoogleOmniVideo(
     response_format: {
       ...(aspectRatio ? { aspect_ratio: aspectRatio as '16:9' | '9:16' } : {}),
       delivery: 'uri',
+      ...(isOmni12 && duration !== undefined ? { duration: `${duration}s` } : {}),
       ...(resolution ? { resolution } : {}),
       type: 'video',
     },

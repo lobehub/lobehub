@@ -1,6 +1,10 @@
+import {
+  GEMINI_OMNI_1_2_MAX_FRAME_DURATION,
+  GEMINI_OMNI_1_2_MAX_IMAGE_INPUTS,
+} from '../../standard-parameters/video';
 import type { AIVideoModelCard } from '../../types';
 
-/** Veo video generation through the Gemini API. */
+/** Video generation through the Gemini API. */
 export const googleVideoModels: AIVideoModelCard[] = [
   {
     description:
@@ -105,6 +109,54 @@ export const googleVideoModels: AIVideoModelCard[] = [
       ],
     },
     releasedAt: '2026-08-27',
+    type: 'video',
+  },
+  {
+    description:
+      "Google's video generation and editing model with native audio, reference images, first/last frame interpolation, and conversational editing.",
+    displayName: 'Gemini Omni 1.2 Flash',
+    enabled: true,
+    id: 'gemini-omni-1.2-flash',
+    isOfficial: true,
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16'],
+        supportsWithFrames: true,
+      },
+      duration: {
+        default: 10,
+        max: 15,
+        maxWithEndImage: GEMINI_OMNI_1_2_MAX_FRAME_DURATION,
+        min: 3,
+        step: 1,
+      },
+      endImageUrl: {
+        default: null,
+        requiresImageUrl: true,
+      },
+      imageUrl: { default: null },
+      imageUrls: {
+        default: [],
+        maxCount: GEMINI_OMNI_1_2_MAX_IMAGE_INPUTS,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720p',
+        enum: ['360p', '720p', '1080p', '4k'],
+      },
+    },
+    pricing: {
+      // https://aistudio.google.com/docs/pricing#gemini-omni-1.2-flash
+      units: [
+        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoGeneration', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-11-05',
     type: 'video',
   },
 ];

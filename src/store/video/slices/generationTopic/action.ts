@@ -15,6 +15,7 @@ import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { VideoStore } from '../../store';
+import { restoreEditingDraft } from '../createVideo/editingDraft';
 import type { GenerationTopicVisibility } from './initialState';
 import { GENERATION_TOPICS_KEY, generationTopicsResource } from './projection';
 import { type GenerationTopicDispatch, generationTopicReducer } from './reducer';
@@ -205,11 +206,10 @@ export class GenerationTopicActionImpl {
 
   openNewGenerationTopic = (): void => {
     this.#set(
-      {
+      (state) => ({
+        ...(state.editingGenerationId && restoreEditingDraft(state)),
         activeGenerationTopicId: null,
-        editingDraftSnapshot: undefined,
-        editingGenerationId: undefined,
-      },
+      }),
       false,
       n('openNewGenerationTopic'),
     );
@@ -340,11 +340,10 @@ export class GenerationTopicActionImpl {
     if (this.#get().activeGenerationTopicId === topicId) return;
 
     this.#set(
-      {
+      (state) => ({
+        ...(state.editingGenerationId && restoreEditingDraft(state)),
         activeGenerationTopicId: topicId,
-        editingDraftSnapshot: undefined,
-        editingGenerationId: undefined,
-      },
+      }),
       false,
       n('switchGenerationTopic'),
     );
