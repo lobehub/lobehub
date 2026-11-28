@@ -23,6 +23,7 @@ const CHANGED: Required<AgentShareConfig> = {
   seedDefaultGrants: true,
   skillGrants: ['skill-1'],
   slug: 'changed',
+  tipsEnabled: false,
   toolGrants: [{ identifier: 'tool-1' }],
 };
 

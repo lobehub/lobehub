@@ -20,7 +20,8 @@ export interface AgentShareAuthorizationState {
 
 /**
  * Which authorization kind covers each share setting; `null` for presentation (slug, demo cases,
- * featured Works, market listing), caps and bookkeeping, which grant visitors nothing. Typed over
+ * featured Works, market listing, the tips entry), caps and bookkeeping, which grant visitors
+ * nothing. Typed over
  * every setting, so a new one does not compile until it is classified, and
  * `agentShareAuthorization.test.ts` checks a granting setting really reaches its kind's snapshot.
  */
@@ -40,6 +41,7 @@ export const AGENT_SHARE_SETTING_AUTHORIZATION_KIND = {
   seedDefaultGrants: null,
   skillGrants: 'agent_share.capabilities',
   slug: null,
+  tipsEnabled: null,
   toolGrants: 'agent_share.capabilities',
 } as const satisfies Record<
   keyof AgentShareConfig,
