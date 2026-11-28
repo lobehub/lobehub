@@ -43,6 +43,7 @@ import type {
   LobeAgentConfig,
   RuntimeEnvConfig,
 } from '@/types/agent';
+import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 import { merge } from '@/utils/merge';
 
 import type { AgentStore } from '../../store';
@@ -50,6 +51,7 @@ import { heteroAgentDefaultName } from '../../utils/heteroAgentDefaultName';
 import { setLocalAgentWorkingDirectory } from '../../utils/localAgentWorkingDirectoryStorage';
 import { getSidebarAgentNames } from '../../utils/sidebarAgentNames';
 import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
+import { KnowledgeFileHydration } from './knowledgeFileHydration';
 import {
   agentConfigResource,
   agentSlugIdResource,
@@ -164,6 +166,9 @@ export class AgentSliceActionImpl {
   readonly #get: () => AgentStore;
   readonly #set: Setter;
   readonly #pendingAgentDocuments = new Map<string, Promise<AgentContextDocument[] | undefined>>();
+  readonly #knowledgeFileHydration = new KnowledgeFileHydration((agentIds, fileId, content) =>
+    this.#syncAgentFileContent(agentIds, fileId, content),
+  );
   readonly #updateAgentConfigControllers = new Map<string, AbortController>();
   readonly #updateAgentMetaControllers = new Map<string, AbortController>();
   readonly #config;
@@ -286,6 +291,21 @@ export class AgentSliceActionImpl {
       'syncAgentDocuments',
     );
   };
+
+  #syncAgentFileContent(agentIds: ReadonlySet<string>, fileId: string, content: string) {
+    const current = this.#get().agentMap;
+    const agentMap = produce(current, (draft) => {
+      for (const agentId of agentIds) {
+        const agent = draft[agentId] as LobeAgentConfig | undefined;
+        for (const file of agent?.files ?? []) {
+          if (file?.enabled && file.id === fileId && typeof file.content !== 'string')
+            file.content = content;
+        }
+      }
+    });
+
+    if (agentMap !== current) this.#set({ agentMap }, false, 'syncAgentFileContent');
+  }
 
   appendStreamingSystemRole = (agentId: string, generation: number, chunk: string): void => {
     const {
@@ -830,6 +850,29 @@ export class AgentSliceActionImpl {
     this.#pendingAgentDocuments.set(agentId, request);
 
     return request;
+  };
+
+  /** Hydrate enabled knowledge files and return any per-send prompt placeholders. */
+  ensureAgentFileContents = async (
+    agentId?: string | null,
+    signal?: AbortSignal,
+  ): Promise<Map<string, string>> => {
+    const { activeAgentId, agentMap } = this.#get();
+    // Context engineering reads files from the active agent, which can differ
+    // from the target agent in a group run.
+    if (!agentId || agentId !== activeAgentId) return new Map();
+
+    const files = (agentMap[agentId] as LobeAgentConfig | undefined)?.files ?? [];
+    const fileIds = files.flatMap((file) =>
+      file?.enabled &&
+      file.id &&
+      typeof file.content !== 'string' &&
+      !isChunkingUnsupported(file.type ?? '')
+        ? [file.id]
+        : [],
+    );
+
+    return this.#knowledgeFileHydration.hydrate(agentId, fileIds, signal);
   };
 
   /**
