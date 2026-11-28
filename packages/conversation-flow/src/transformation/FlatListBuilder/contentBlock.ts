@@ -87,6 +87,10 @@ export const toAssistantContentBlock = (
   if (message.fileList && message.fileList.length > 0) block.fileList = message.fileList;
   if (message.imageList && message.imageList.length > 0) block.imageList = message.imageList;
   if (performance) block.performance = performance;
+  // The group spreads only its first row's model; replaying signed reasoning
+  // needs each step's own source.
+  if (message.model) block.model = message.model;
+  if (message.provider) block.provider = message.provider;
   if (message.reasoning) block.reasoning = message.reasoning;
   if (tools && tools.length > 0) block.tools = tools;
   if (usage) block.usage = usage;

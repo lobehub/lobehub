@@ -115,7 +115,14 @@ export interface AssistantContentBlock {
   id: string;
   imageList?: ChatImageItem[];
   metadata?: Record<string, any>;
+  /**
+   * Model and provider that produced this block. A group spreads only its first
+   * row's model, and one chain can span a model switch, so replaying signed
+   * reasoning needs each block's own source.
+   */
+  model?: string | null;
   performance?: ModelPerformance;
+  provider?: string | null;
   reasoning?: ModelReasoning;
   /**
    * Subagent executions embedded inline. Disambiguated from regular tools

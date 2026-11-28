@@ -108,7 +108,9 @@
             "totalInputTokens": 12324,
             "totalOutputTokens": 177,
             "totalTokens": 12501
-          }
+          },
+          "model": "gpt-4",
+          "provider": "openai"
         }
       ],
       "performance": {
@@ -192,7 +194,9 @@
             "totalInputTokens": 13004,
             "totalOutputTokens": 574,
             "totalTokens": 13578
-          }
+          },
+          "model": "gpt-4",
+          "provider": "openai"
         },
         {
           "content": "Async task completed. The story has been written and saved to Notebook as \"Eleven Oh Seven\".",
@@ -208,7 +212,9 @@
             "totalInputTokens": 13059,
             "totalOutputTokens": 74,
             "totalTokens": 13133
-          }
+          },
+          "model": "gpt-4",
+          "provider": "openai"
         }
       ],
       "performance": {

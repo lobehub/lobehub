@@ -1,4 +1,5 @@
 import type { AiModelReasoningEffortSettings } from 'model-bank';
+import { anthropic as anthropicModelCards, bedrock as bedrockModelCards } from 'model-bank';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -356,6 +357,76 @@ describe('resolveModelParams', () => {
         providers(),
       );
       expect(qwen.shouldReplayAssistantReasoning).toBe(true);
+    });
+
+    describe('Claude on anthropic / bedrock', () => {
+      // The bundled cards, unmodified: Claude carries no `preserveThinking`
+      // extend param, so replay must not depend on the card or a user toggle.
+      // Mapped the way the server's model-params providers read a bundled card.
+      const toFacts =
+        (providerId: string) =>
+        (card: (typeof anthropicModelCards)[number]): ModelCardFacts => ({
+          abilities: card.abilities,
+          displayName: card.displayName,
+          extendParams: (card as { settings?: { extendParams?: string[] } }).settings?.extendParams,
+          id: card.id,
+          providerId,
+        });
+      const claudeCards: ModelCardFacts[] = [
+        ...anthropicModelCards.map(toFacts('anthropic')),
+        ...bedrockModelCards.map(toFacts('bedrock')),
+      ];
+      const withClaudeCards = providers({ listModelCards: () => [...cards, ...claudeCards] });
+
+      it('uses cards that expose no preserveThinking toggle', () => {
+        const opus = claudeCards.filter((card) => card.id.endsWith('claude-opus-5-5'));
+
+        expect(opus.map((card) => card.providerId).sort()).toEqual(['anthropic', 'bedrock']);
+        for (const card of opus) expect(card.extendParams).toEqual(['disableContextCaching']);
+      });
+
+      it.each([
+        { model: 'claude-opus-5-5', provider: 'anthropic' },
+        { model: 'global.anthropic.claude-opus-5-5', provider: 'bedrock' },
+        { model: 'anthropic.claude-opus-5-5', provider: 'bedrock' },
+        { model: 'claude-sonnet-4-5-20250929', provider: 'anthropic' },
+        { model: 'claude-3-7-sonnet-20250219', provider: 'anthropic' },
+      ])('forces replay for $model on $provider', async ({ model, provider }) => {
+        for (const chatConfig of [{}, { preserveThinking: false }, { preserveThinking: true }]) {
+          const resolved = await resolveModelParams(
+            request({ agent: { chatConfig }, model, provider }),
+            withClaudeCards,
+          );
+
+          expect(resolved.shouldReplayAssistantReasoning).toBe(true);
+          expect(resolved.preserveThinkingForPayload).toBe(true);
+        }
+      });
+
+      it.each([
+        { model: 'claude-3-5-sonnet-20240620', provider: 'anthropic' },
+        { model: 'anthropic.claude-3-5-sonnet-20240620-v1:0', provider: 'bedrock' },
+        { model: 'claude-3-haiku-20240307', provider: 'anthropic' },
+      ])(
+        'leaves $model on $provider as before (no thinking with tools)',
+        async ({ model, provider }) => {
+          const resolved = await resolveModelParams(request({ model, provider }), withClaudeCards);
+
+          expect(resolved.shouldReplayAssistantReasoning).toBe(false);
+          expect(resolved.preserveThinkingForPayload).toBeUndefined();
+        },
+      );
+
+      it.each([
+        { model: 'anthropic/claude-opus-5-5', provider: 'openrouter' },
+        { model: 'claude-opus-5-5', provider: 'lobehub' },
+        { model: 'gpt-4', provider: 'openai' },
+      ])('leaves $model on $provider as before', async ({ model, provider }) => {
+        const resolved = await resolveModelParams(request({ model, provider }), withClaudeCards);
+
+        expect(resolved.shouldReplayAssistantReasoning).toBe(false);
+        expect(resolved.preserveThinkingForPayload).toBeUndefined();
+      });
     });
   });
 

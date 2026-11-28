@@ -372,6 +372,48 @@ describe('GroupMessageFlattenProcessor', () => {
       });
     });
 
+    it("should keep each child's own model and provider, never the group's", async () => {
+      const processor = new GroupMessageFlattenProcessor();
+
+      // One chain that switched model mid-way, plus a legacy child with no source.
+      const input: any[] = [
+        {
+          children: [
+            {
+              content: '',
+              id: 'msg-claude',
+              model: 'claude-opus-5-5',
+              provider: 'anthropic',
+              reasoning: { content: 'Claude thinking', signature: 'claude-sig' },
+            },
+            {
+              content: '',
+              id: 'msg-deepseek',
+              model: 'deepseek-v4-pro',
+              provider: 'deepseek',
+              reasoning: { content: 'DeepSeek thinking', signature: 'deepseek-sig' },
+            },
+            { content: 'Done', id: 'msg-legacy' },
+          ],
+          content: '',
+          id: 'msg-group-1',
+          model: 'claude-opus-5-5',
+          provider: 'anthropic',
+          role: 'assistantGroup',
+        },
+      ];
+
+      const result = await processor.process(createContext(input));
+
+      expect(
+        result.messages.map(({ id, model, provider }: any) => ({ id, model, provider })),
+      ).toEqual([
+        { id: 'msg-claude', model: 'claude-opus-5-5', provider: 'anthropic' },
+        { id: 'msg-deepseek', model: 'deepseek-v4-pro', provider: 'deepseek' },
+        { id: 'msg-legacy', model: undefined, provider: undefined },
+      ]);
+    });
+
     it('should preserve error field from child block', async () => {
       const processor = new GroupMessageFlattenProcessor();
 

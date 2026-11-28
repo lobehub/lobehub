@@ -169,7 +169,9 @@
                   "totalInputTokens": 24,
                   "totalOutputTokens": 38,
                   "totalTokens": 62
-                }
+                },
+                "model": "gpt-4",
+                "provider": "openai"
               },
               {
                 "content": "**Benchmark Results (Array Size: 1000):**\n\n**Bubble Sort:**\n- Execution Time: 2.34 seconds\n- Comparisons: 499,500\n- Swaps: 250,000\n\n**QuickSort:**\n- Execution Time: 0.012 seconds\n- Comparisons: 9,976\n- Recursion Depth: 12\n\n**Conclusion:** QuickSort is approximately **195x faster** than Bubble Sort for an array of 1000 elements. This demonstrates why QuickSort is the industry standard for general-purpose sorting.",

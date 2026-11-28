@@ -96,7 +96,9 @@
             "totalInputTokens": 9793,
             "totalOutputTokens": 350,
             "totalTokens": 10143
-          }
+          },
+          "model": "deepseek-chat",
+          "provider": "deepseek"
         }
       ],
       "performance": {

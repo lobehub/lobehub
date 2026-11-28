@@ -1,4 +1,5 @@
 import { BRANDING_PROVIDER } from '@lobechat/business-const/branding';
+import { isThinkingWithToolClaudeModel } from '@lobechat/model-runtime/providers/anthropic/modelId';
 import {
   isDeepSeekThinkingEligibleModel,
   isDeepSeekV4FamilyModel,
@@ -325,8 +326,19 @@ export const resolveModelParams = async (
   // opaque continuation state must survive history building and tool loops
   // independently of the user's visible-thinking preference.
   const metaForcesPreserveThinking = provider === ModelProvider.Meta;
+  // Claude requires the signed thinking blocks of a tool-use turn to come back
+  // unchanged. Leaving them out raises no error: the API silently drops the
+  // reasoning, and multi-step tool runs degrade. This is an API contract, not a
+  // user preference, so it is forced here instead of exposed as a card toggle.
+  // https://platform.claude.com/docs/en/build-with-claude/thinking#preserving-thinking-blocks
+  const claudeForcesPreserveThinking =
+    (provider === ModelProvider.Anthropic || provider === ModelProvider.Bedrock) &&
+    isThinkingWithToolClaudeModel(model);
   const modelForcesPreserveThinking =
-    kimiForcesPreserveThinking || deepseekForcesPreserveThinking || metaForcesPreserveThinking;
+    kimiForcesPreserveThinking ||
+    deepseekForcesPreserveThinking ||
+    metaForcesPreserveThinking ||
+    claudeForcesPreserveThinking;
   const providerSupportsPreserveThinkingFallback =
     provider === 'qwen' || provider === 'zhipu' || provider === 'moonshot';
   const modelSupportsPreserveThinking =
