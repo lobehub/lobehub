@@ -1,5 +1,6 @@
 import type { AiProviderModelListItem } from 'model-bank';
 import { AiModelSourceEnum, resolveReasoningEffortSettings } from 'model-bank/aiModel';
+import { resolveCompressionWindowTokens } from 'model-bank/compressionWindow';
 
 import { type AIProviderStoreState } from '@/store/aiInfra/initialState';
 import { ModelSearchImplement } from '@/types/search';
@@ -117,6 +118,15 @@ const modelContextWindowTokens = (id: string, provider: string) => (s: AIProvide
 
   return model?.contextWindowTokens;
 };
+
+/** The window context compression budgets against; see {@link resolveCompressionWindowTokens}. */
+const modelCompressionWindowTokens =
+  (id: string, provider: string) => (s: AIProviderStoreState) => {
+    const model = getEnabledModelById(id, provider)(s);
+    if (!model) return;
+
+    return resolveCompressionWindowTokens(model);
+  };
 
 const modelExtendParams = (id: string, provider: string) => (s: AIProviderStoreState) => {
   const model = getEnabledModelById(id, provider)(s);
@@ -269,6 +279,7 @@ export const aiModelSelectors = {
   isModelSupportVideo,
   isModelSupportVision,
   modelBuiltinSearchImpl,
+  modelCompressionWindowTokens,
   modelContextWindowTokens,
   modelDisabledParams,
   modelExtendParams,

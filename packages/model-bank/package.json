@@ -5,6 +5,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./compressionWindow": "./src/compressionWindow.ts",
     "./knowledgeCutoff": "./src/const/knowledgeCutoff.ts",
     "./utils": "./src/utils.ts",
     "./aiModel": "./src/types/aiModel.ts",

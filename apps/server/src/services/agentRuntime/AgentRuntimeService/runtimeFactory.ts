@@ -11,6 +11,8 @@ import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
 import { type UIChatMessage } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
+import type { Pricing } from 'model-bank';
+import { resolveCompressionWindowTokens } from 'model-bank/compressionWindow';
 
 import { AgentInboxModel } from '@/database/models/agentInbox';
 import {
@@ -268,13 +270,20 @@ export async function createAgentRuntime(
 ) {
   const state = agentState as AgentState | undefined;
   const modelRuntimeConfig = state?.modelRuntimeConfig;
-  const contextWindowTokens =
+  const compressionWindowTokens =
     modelRuntimeConfig?.model && modelRuntimeConfig?.provider
-      ? await getModelPropertyWithFallback<number | undefined>(
-          modelRuntimeConfig.model,
-          'contextWindowTokens',
-          modelRuntimeConfig.provider,
-        )
+      ? resolveCompressionWindowTokens({
+          contextWindowTokens: await getModelPropertyWithFallback<number | undefined>(
+            modelRuntimeConfig.model,
+            'contextWindowTokens',
+            modelRuntimeConfig.provider,
+          ),
+          pricing: await getModelPropertyWithFallback<Pricing | undefined>(
+            modelRuntimeConfig.model,
+            'pricing',
+            modelRuntimeConfig.provider,
+          ),
+        })
       : undefined;
 
   const world = state?.world;
@@ -287,7 +296,7 @@ export async function createAgentRuntime(
     agentConfig: world?.agent,
     compressionConfig: {
       enabled: world?.agent?.chatConfig?.enableContextCompression ?? true,
-      maxWindowToken: contextWindowTokens ?? undefined,
+      maxWindowToken: compressionWindowTokens,
     },
     dynamicInterventionAudits: {
       ...dynamicInterventionAudits,

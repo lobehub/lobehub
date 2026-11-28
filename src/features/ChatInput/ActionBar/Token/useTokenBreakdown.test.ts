@@ -20,7 +20,9 @@ const state = vi.hoisted(() => ({
 
 // One token per character, so a count names the text it was taken from.
 vi.mock('@/hooks/useTokenCount', () => ({ useTokenCount: (text = '') => text.length }));
-vi.mock('@/hooks/useModelContextWindowTokens', () => ({ useModelContextWindowTokens: () => 8000 }));
+vi.mock('@/hooks/useModelCompressionWindowTokens', () => ({
+  useModelCompressionWindowTokens: () => 8000,
+}));
 vi.mock('@/hooks/useModelSupportToolUse', () => ({ useModelSupportToolUse: () => false }));
 vi.mock('@/helpers/toolEngineering', () => ({
   createAgentToolsEngine: () => ({

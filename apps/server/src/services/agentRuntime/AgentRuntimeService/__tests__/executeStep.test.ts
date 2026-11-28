@@ -222,6 +222,51 @@ describe('AgentRuntimeService', () => {
       );
     });
 
+    it.each([
+      {
+        expected: 272_000,
+        name: 'the first input pricing tier',
+        pricing: {
+          units: [
+            {
+              name: 'textInput',
+              strategy: 'tiered',
+              tiers: [
+                { rate: 5, upTo: 272_000 },
+                { rate: 10, upTo: 'infinity' },
+              ],
+              unit: 'millionTokens',
+            },
+          ],
+        },
+      },
+      { expected: 200_000, name: 'the default window', pricing: undefined },
+    ])('caps a 1M card at $name for compression', async ({ expected, pricing }) => {
+      // contextWindowTokens, then pricing
+      vi.mocked(getModelPropertyWithFallback)
+        .mockResolvedValueOnce(1_050_000)
+        .mockResolvedValueOnce(pricing);
+
+      let capturedConfig: any;
+      const serviceWithFactory = new AgentRuntimeService(mockDb, mockUserId, {
+        agentFactory: (config) => {
+          capturedConfig = config;
+          return { runner: vi.fn() } as any;
+        },
+      });
+
+      await (serviceWithFactory as any).createAgentRuntime({
+        agentState: {
+          world: { agent: { chatConfig: { enableContextCompression: true } } as any },
+          modelRuntimeConfig: { model: 'gpt-5.5', provider: 'lobehub' },
+        },
+        operationId: 'test-operation-1',
+        stepIndex: 1,
+      });
+
+      expect(capturedConfig.compressionConfig.maxWindowToken).toBe(expected);
+    });
+
     it('should fall back to undefined maxWindowToken when model lookup misses', async () => {
       vi.mocked(getModelPropertyWithFallback).mockResolvedValueOnce(undefined);
 
