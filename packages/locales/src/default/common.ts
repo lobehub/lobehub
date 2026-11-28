@@ -513,6 +513,7 @@ export default {
     'Copies made before environments became one-time setups keep what they captured — files, CLI logins, your signed-in identity — and members can reach them',
   'visibilityConfirm.publish.itemLoaded':
     'After switching back, content others have already loaded can’t be pulled back',
+  'reasoningLoadFailed': "Couldn't load the thinking process",
   'retry': 'Retry',
   'run': 'Run',
   'save': 'Save',

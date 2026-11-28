@@ -40,6 +40,7 @@ describe('readConversationMessages', () => {
 
     expect(getMessages).toHaveBeenCalledWith({
       agentId: 'agent-1',
+      omitReasoningContent: true,
       projectToolPayloads: true,
       topicId: 'topic-1',
     });
@@ -66,6 +67,7 @@ describe('readConversationMessages', () => {
 
     expect(getMessages).toHaveBeenCalledWith({
       agentId: 'agent-1',
+      omitReasoningContent: false,
       projectToolPayloads: false,
       topicId: 'topic-1',
     });
@@ -81,6 +83,7 @@ describe('readConversationMessageListPage', () => {
 
     expect(getPage).toHaveBeenCalledWith({
       agentId: 'agent-1',
+      omitReasoningContent: true,
       projectToolPayloads: true,
       topicId: 'topic-1',
     });
@@ -98,7 +101,12 @@ describe('readEarlierConversationMessages', () => {
     await readEarlierConversationMessages({ agentId: 'agent-1', topicId: 'topic-1' }, cursor);
 
     expect(getEarlierMessages).toHaveBeenCalledWith(
-      { agentId: 'agent-1', projectToolPayloads: true, topicId: 'topic-1' },
+      {
+        agentId: 'agent-1',
+        omitReasoningContent: true,
+        projectToolPayloads: true,
+        topicId: 'topic-1',
+      },
       cursor,
     );
   });

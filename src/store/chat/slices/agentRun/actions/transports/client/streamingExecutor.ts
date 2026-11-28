@@ -45,7 +45,6 @@ import { isCanUseAudio, isCanUseVideo, isCanUseVision } from '@/services/chat/he
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { composeEnabledTools, resolveAgentConfig } from '@/services/chat/mecha';
 import { messageService } from '@/services/message';
-import { hydrateProjectedConversation } from '@/services/message/hydrateProjectedTools';
 import { refreshRunConnectors } from '@/services/runConnectors';
 import { workService } from '@/services/work';
 import { getAgentStoreState } from '@/store/agent';
@@ -78,6 +77,7 @@ import { buildViewedTaskPrompt } from '../viewedTaskPrompt';
 import { steerQueuedFollowUps } from './clientSteer';
 import { deferClientSkillsTool } from './deferSkillsTool';
 import { buildRunManifestMap } from './discoverableManifests';
+import { hydrateClientRunContext } from './hydrateClientRun';
 import { clientInterventionAudits } from './interventionAudits';
 
 const log = debug('lobe-store:streaming-executor');
@@ -617,15 +617,18 @@ export class StreamingExecutorActionImpl {
     // bodies, so put the stored payloads back first. Ids come from the raw
     // store list too: a folded tool result no longer carries `payloadOmitted`.
     // Also returns a new array, so the caller's messages are never mutated.
-    const [messages, uninstalledBuiltinTools] = await Promise.all([
-      hydrateProjectedConversation(
-        [...originalMessages],
-        this.#get().dbMessagesMap[messageKey],
-        messageService.getToolResultPayloads,
-      ),
-      params.uninstalledBuiltinTools ??
-        (disableTools ? undefined : getToolStoreState().getUninstalledBuiltinToolsForRun()),
-    ]);
+    const { messages, uninstalledBuiltinTools } = await hydrateClientRunContext({
+      context,
+      disableTools,
+      get: this.#get,
+      messageKey,
+      operationId,
+      originalMessages,
+      parentMessageId,
+      parentMessageType,
+      scope,
+      uninstalledBuiltinTools: params.uninstalledBuiltinTools,
+    });
 
     // Decide tool / function-calling capability from real data, not a guess.
     // The enabled-model list hydrates asynchronously (auth session → aiProvider

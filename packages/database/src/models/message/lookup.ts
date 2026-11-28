@@ -1,8 +1,13 @@
 import { TOPIC_MESSAGE_SEARCH_LIMIT } from '@lobechat/const';
-import type { DBMessageItem, IThreadType, TopicMessageSearchMatch } from '@lobechat/types';
+import type {
+  DBMessageItem,
+  IThreadType,
+  ModelReasoning,
+  TopicMessageSearchMatch,
+} from '@lobechat/types';
 import { ThreadType } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
-import { and, asc, desc, eq, inArray, isNull, lte, ne, not, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lte, ne, not, or, sql } from 'drizzle-orm';
 
 import {
   agentsToSessions,
@@ -84,6 +89,29 @@ export class MessageLookupQueries extends MessageScope {
     return this.db.query.messages.findFirst({
       where: and(eq(messages.id, id), this.ownership()),
     });
+  };
+
+  /**
+   * Fetch stored `reasoning` objects for specific message ids, without joining
+   * plugins/files/chunks. Used to lazy-load omitted reasoning on expand or
+   * hydrate exports (`message.getReasonings`).
+   */
+  findReasoningByIds = async (ids: string[]): Promise<Record<string, ModelReasoning>> => {
+    if (ids.length === 0) return {};
+
+    const rows = await this.db
+      .select({
+        id: messages.id,
+        reasoning: messages.reasoning,
+      })
+      .from(messages)
+      .where(and(inArray(messages.id, ids), this.ownership(), isNotNull(messages.reasoning)));
+
+    const result: Record<string, ModelReasoning> = {};
+    for (const row of rows) {
+      if (row.reasoning) result[row.id] = row.reasoning as ModelReasoning;
+    }
+    return result;
   };
 
   /**

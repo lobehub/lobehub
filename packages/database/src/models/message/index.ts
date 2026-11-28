@@ -32,6 +32,7 @@ import { MessageWriteMutations } from './write';
  */
 export class MessageModel {
   findById: MessageLookupQueries['findById'];
+  findReasoningByIds: MessageLookupQueries['findReasoningByIds'];
   findShareVisitorMessageIds: MessageLookupQueries['findShareVisitorMessageIds'];
   findByClientId: MessageLookupQueries['findByClientId'];
   findLatestAssistantMessageByThread: MessageLookupQueries['findLatestAssistantMessageByThread'];
@@ -157,6 +158,7 @@ export class MessageModel {
     this.annotations = annotations;
 
     this.findById = lookups.findById;
+    this.findReasoningByIds = lookups.findReasoningByIds;
     this.findShareVisitorMessageIds = lookups.findShareVisitorMessageIds;
     this.findByClientId = lookups.findByClientId;
     this.findLatestAssistantMessageByThread = lookups.findLatestAssistantMessageByThread;

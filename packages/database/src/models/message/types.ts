@@ -72,6 +72,8 @@ export interface QueryMessagesOptions {
    * `QueryMessageParams.includeFileWorks`).
    */
   includeFileWorks?: boolean;
+  /** See `QueryMessageParams.omitReasoningContent`. */
+  omitReasoningContent?: boolean;
   /**
    * Number of messages per page
    */
@@ -166,12 +168,16 @@ export interface QueryTopicByCursorParams {
   /** See {@link QueryMessageParams.includeFileWorks}. */
   includeArtboardWorks?: boolean;
   includeFileWorks?: boolean;
+  /** See {@link QueryMessageParams.omitReasoningContent}. */
+  omitReasoningContent?: boolean;
   /** How many rounds to load per page (the current round is always whole). */
   roundLimit?: number;
   /** Ignored for the same reason as `agentId`. */
   sessionId?: string | null;
   skipWorks?: boolean;
   topicId: string;
+  /** See {@link QueryMessageParams.viewModelPluginState}. */
+  viewModelPluginState?: boolean;
 }
 
 export interface TopicMessagesByCursorResult {

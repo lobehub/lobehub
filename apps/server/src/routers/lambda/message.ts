@@ -424,6 +424,19 @@ export const messageRouter = router({
     }),
 
   /**
+   * Stored reasoning objects for messages whose list read projected `content`
+   * away (`ModelReasoning.contentOmitted`). Fetched on demand when the user
+   * expands a collapsed thinking block, or in bulk when exporting a topic.
+   */
+  getReasonings: messageProcedure
+    .input(z.object({ messageIds: z.array(z.string()).min(1).max(500) }))
+    .query(async ({ input, ctx }) => {
+      await assertCanViewMessageTargets(guardCtx(ctx), input.messageIds);
+
+      return ctx.messageModel.findReasoningByIds(input.messageIds);
+    }),
+
+  /**
    * Change probe for a topic waiting on approval cards, for the client poll
    * that waits for an answer from another device. A topic's full message page
    * can be megabytes; this answers "did anything change?" in a few bytes: each
@@ -508,6 +521,11 @@ export const messageRouter = router({
         // set, so already-deployed clients (no `file` descriptor) never receive
         // a `file` summary that would crash their works UI. New clients set it.
         includeFileWorks: z.boolean().optional(),
+        /**
+         * Opt-in: omit `reasoning.content` (and replay signatures) in SQL for
+         * settled messages; client lazy-loads via `message.getReasonings`.
+         */
+        omitReasoningContent: z.boolean().optional(),
         pageSize: getMessagesPageSizeSchema,
         /**
          * Hand back render-facing tool view models instead of the stored
@@ -525,7 +543,7 @@ export const messageRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const { topicShareId, ...queryParams } = input;
+      const { omitReasoningContent, projectToolPayloads, topicShareId, ...queryParams } = input;
 
       // Public access via topicShareId
       if (topicShareId) {
@@ -591,7 +609,12 @@ export const messageRouter = router({
       );
       await assertCanUseConversationTargets(guardCtx({ ...ctx, userId: ctx.userId }), [resolved]);
       const messages = await messageModel.query(
-        { ...queryParams, ...resolved },
+        {
+          ...queryParams,
+          ...resolved,
+          omitReasoningContent,
+          viewModelPluginState: projectToolPayloads,
+        },
         {
           postProcessUrl: (path, file) => fileService.getFileAccessUrl({ id: file.id, url: path }),
         },
@@ -603,7 +626,7 @@ export const messageRouter = router({
       // silently disappear from it. Absent ⇒ whole payloads, which is never the
       // answer that loses data.
       const visibleMessages = messages.map(omitToolWorkRegistration);
-      return input.projectToolPayloads ? projectToolViewModels(visibleMessages) : visibleMessages;
+      return projectToolPayloads ? projectToolViewModels(visibleMessages) : visibleMessages;
     }),
 
   /**

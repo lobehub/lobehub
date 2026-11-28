@@ -1,9 +1,18 @@
-// oxlint-disable-next-line stylex-migration/no-emotion-styles -- Markdown output gets no className
-import { Accordion, createStaticStyles, cx, ScrollArea } from '@lobehub/ui';
+import {
+  Accordion,
+  Button,
+  createStaticStyles,
+  cx,
+  Flexbox,
+  ScrollArea,
+  Skeleton,
+  Text,
+} from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import type { CSSProperties, ReactNode, RefObject } from 'react';
 import { memo, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import MarkdownMessage from '@/features/Conversation/Markdown';
 import { useAutoScroll } from '@/hooks/useAutoScroll';
@@ -39,13 +48,28 @@ interface ThinkingProps {
   citations?: ChatCitationItem[];
   content?: string | ReactNode;
   duration?: number;
+  error?: boolean;
+  loading?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onRetry?: () => void;
   style?: CSSProperties;
   thinking?: boolean;
   thinkingAnimated?: boolean;
 }
 
 const Thinking = memo<ThinkingProps>((props) => {
-  const { content, duration, thinking, citations, thinkingAnimated } = props;
+  const {
+    content,
+    duration,
+    error,
+    loading,
+    onOpenChange,
+    onRetry,
+    thinking,
+    citations,
+    thinkingAnimated,
+  } = props;
+  const { t } = useTranslation('common');
   const [showDetail, setShowDetail] = useState(false);
   const { density } = useDensity();
 
@@ -78,7 +102,16 @@ const Thinking = memo<ThinkingProps>((props) => {
                 onScroll: handleScroll,
               }}
             >
-              {typeof content === 'string' ? (
+              {loading && !content ? (
+                <Skeleton height={48} width={'100%'} />
+              ) : error && !content && onRetry ? (
+                <Flexbox horizontal align={'center'} gap={4} paddingBlock={4}>
+                  <Text type={'secondary'}>{t('reasoningLoadFailed')}</Text>
+                  <Button size={'small'} type={'link'} onClick={onRetry}>
+                    {t('retry')}
+                  </Button>
+                </Flexbox>
+              ) : typeof content === 'string' ? (
                 <MarkdownMessage
                   animated={thinkingAnimated}
                   citations={citations}
@@ -98,7 +131,11 @@ const Thinking = memo<ThinkingProps>((props) => {
           title: <Title duration={duration} showDetail={showDetail} thinking={thinking} />,
         },
       ]}
-      onValueChange={(keys) => setShowDetail(keys.length > 0)}
+      onValueChange={(keys) => {
+        const open = keys.length > 0;
+        setShowDetail(open);
+        onOpenChange?.(open);
+      }}
     />
   );
 });

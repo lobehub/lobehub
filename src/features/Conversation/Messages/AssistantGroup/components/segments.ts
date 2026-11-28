@@ -37,7 +37,10 @@ export const hasRenderableFinalAnswer = (segments: GroupRenderSegment[]): boolea
       (!!content && content !== LOADING_FLAT) ||
       !!block.council?.length ||
       !!block.error ||
-      !!block.reasoning?.content?.trim()
+      !!block.reasoning?.content?.trim() ||
+      // Settled list reads project reasoning text away (`contentOmitted`); the
+      // block still has reasoning to render on expand.
+      !!block.reasoning?.contentOmitted
     );
   });
 

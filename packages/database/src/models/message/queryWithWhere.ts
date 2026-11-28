@@ -26,6 +26,7 @@ import type { MessageScopeArgs } from './scope';
 import { MessageScope } from './scope';
 import type { MessageGroupNodeWindow, ModelTimingContext, QueryMessagesOptions } from './types';
 import { viewModelPluginState } from './viewModelPluginState';
+import { viewModelReasoning } from './viewModelReasoning';
 
 export class MessagePageQueries extends MessageScope {
   private readonly relations: MessageRelationQueries;
@@ -62,6 +63,7 @@ export class MessagePageQueries extends MessageScope {
       current = 0,
       includeArtboardWorks,
       includeFileWorks,
+      omitReasoningContent,
       pageSize = 1000,
       postProcessUrl,
       skipCompressedMembers,
@@ -102,7 +104,7 @@ export class MessagePageQueries extends MessageScope {
             role: messages.role,
             content: messages.content,
             editorData: messages.editorData,
-            reasoning: messages.reasoning,
+            reasoning: omitReasoningContent ? viewModelReasoning : messages.reasoning,
             search: messages.search,
             metadata: messages.metadata,
             usage: messages.usage,
@@ -220,6 +222,7 @@ export class MessagePageQueries extends MessageScope {
       current,
       groupMemberScope,
       hasBeforeCursor: !!before,
+      omitReasoningContent,
       postProcessUrl,
       skipCompressedMembers,
       result,
@@ -397,6 +400,7 @@ export class MessagePageQueries extends MessageScope {
     current,
     groupMemberScope,
     hasBeforeCursor,
+    omitReasoningContent,
     postProcessUrl,
     result,
     timing,
@@ -425,6 +429,8 @@ export class MessagePageQueries extends MessageScope {
      * duplicate them.
      */
     hasBeforeCursor?: boolean;
+    /** See `QueryMessageParams.omitReasoningContent`. */
+    omitReasoningContent?: boolean;
     postProcessUrl?: (
       path: string | null,
       file: { fileType: string; id?: string | null },
@@ -449,6 +455,7 @@ export class MessagePageQueries extends MessageScope {
           this.byIds.queryMessageGroupNodes(topicId, undefined, postProcessUrl, timing, {
             allowShareVisitor,
             memberScope: groupMemberScope,
+            omitReasoningContent,
             skipCompressedMembers,
             viewModelPluginState: selectViewModelPluginState,
             window,
@@ -467,6 +474,7 @@ export class MessagePageQueries extends MessageScope {
           this.byIds.queryMessageGroupNodes(topicId, undefined, postProcessUrl, timing, {
             allowShareVisitor,
             memberScope: groupMemberScope,
+            omitReasoningContent,
             skipCompressedMembers,
             viewModelPluginState: selectViewModelPluginState,
           }),
@@ -482,6 +490,7 @@ export class MessagePageQueries extends MessageScope {
           this.byIds.queryMessageGroupNodes(topicId, undefined, postProcessUrl, timing, {
             allowShareVisitor,
             memberScope: groupMemberScope,
+            omitReasoningContent,
             skipCompressedMembers,
             viewModelPluginState: selectViewModelPluginState,
           }),
@@ -507,6 +516,7 @@ export class MessagePageQueries extends MessageScope {
           {
             allowShareVisitor,
             memberScope: groupMemberScope,
+            omitReasoningContent,
             skipCompressedMembers,
             viewModelPluginState: selectViewModelPluginState,
           },

@@ -42,6 +42,13 @@ export interface QueryMessageParams {
    * clients set it. Ignored when `skipWorks` is set.
    */
   includeFileWorks?: boolean;
+  /**
+   * Project away `reasoning.content` (and protocol replay fields like
+   * `signature` / `responseItems`) in SQL for settled messages, keeping only
+   * `duration`, `isMultimodal`, and `contentOmitted: true`. Opt-in for UI
+   * list readers that lazy-load reasoning on expand (`message.getReasonings`).
+   */
+  omitReasoningContent?: boolean;
   pageSize?: number;
   sessionId?: string | null;
   /**

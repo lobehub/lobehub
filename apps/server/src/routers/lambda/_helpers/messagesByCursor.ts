@@ -40,6 +40,8 @@ export const messagesByCursorInputSchema = z.object({
   // Same opt-in as `getMessages`: only clients that ship the `file` work
   // descriptor ask for `file` work summaries.
   includeFileWorks: z.boolean().optional(),
+  /** Same opt-in as `getMessages`: omit `reasoning.content` in SQL for settled rows. */
+  omitReasoningContent: z.boolean().optional(),
   /** Same opt-in as `getMessages`: render-facing tool view models. */
   projectToolPayloads: z.boolean().optional(),
   roundLimit: z.number().int().positive().max(MAX_CURSOR_ROUND_LIMIT).optional(),
@@ -68,6 +70,7 @@ export const readMessagesByCursor = async (
 ) => {
   const {
     direction = 'backward',
+    omitReasoningContent,
     projectToolPayloads,
     topicShareId,
     topicId,
@@ -138,7 +141,14 @@ export const readMessagesByCursor = async (
     [resolved],
   );
   const page = await messageModel.queryTopicMessagesByCursor(
-    { ...queryParams, ...resolved, direction, topicId },
+    {
+      ...queryParams,
+      ...resolved,
+      direction,
+      omitReasoningContent,
+      topicId,
+      viewModelPluginState: projectToolPayloads,
+    },
     {
       postProcessUrl: (path, file) => fileService.getFileAccessUrl({ id: file.id, url: path }),
     },

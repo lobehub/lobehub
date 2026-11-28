@@ -28,12 +28,15 @@ export const isProjectedConversationRead = (agentId?: string | null): boolean =>
   canUseGatewayProtocolV2() &&
   resolveGatewayModeEnabled(getAgentStoreState(), agentId ?? undefined);
 
-const withConversationReadOptions = (
-  context: MessageReadQueryContext,
-): MessageReadQueryContext => ({
-  ...context,
-  projectToolPayloads: isProjectedConversationRead(context.agentId),
-});
+const withConversationReadOptions = (context: MessageReadQueryContext): MessageReadQueryContext => {
+  const projected = isProjectedConversationRead(context.agentId);
+
+  return {
+    ...context,
+    omitReasoningContent: projected,
+    projectToolPayloads: projected,
+  };
+};
 
 export const readConversationMessages = (
   context: MessageReadQueryContext,

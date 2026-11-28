@@ -53,6 +53,21 @@ describe('hasRenderableFinalAnswer', () => {
       ]),
     ).toBe(true);
   });
+
+  it('counts a reasoning-only answer whose text the list read omitted', () => {
+    expect(
+      hasRenderableFinalAnswer([
+        {
+          block: {
+            content: '',
+            id: 'reasoning-answer',
+            reasoning: { contentOmitted: true, duration: 1200 },
+          } as any,
+          kind: 'answer',
+        },
+      ]),
+    ).toBe(true);
+  });
 });
 
 describe('shouldFoldProcess', () => {

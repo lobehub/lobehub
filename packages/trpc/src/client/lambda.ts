@@ -284,6 +284,9 @@ const LARGE_INPUT_QUERY_PROCEDURES = new Set([
   // the batched GET's 2083-char budget, and a tool-heavy topic is exactly when
   // it is called.
   'message.getToolResultPayloads',
+  // Bulk reasoning hydration for export or multi-block fetches can also exceed
+  // the batched GET's 2083-char URL budget.
+  'message.getReasonings',
   // The sidebar asks for every visible agent group's device binding at once;
   // the supported 100-topic page can hold ~100 distinct agent ids, far past
   // the batched GET's 2083-char budget.
