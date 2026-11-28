@@ -1,3 +1,4 @@
+import type OpenAI from 'openai';
 import { describe, expect, it } from 'vitest';
 
 import type { ChatCompletionTool, OpenAIChatMessage } from '../../../types';
@@ -9,6 +10,7 @@ import {
   resolveOpenAIToolAnchoring,
   splitAnchoredTools,
 } from './toolAnchoring';
+import { convertChatCompletionToolToResponseTool } from './tools';
 
 const fn = (name: string): ChatCompletionTool => ({
   function: { description: `${name} tool`, name, parameters: { properties: {}, type: 'object' } },
@@ -146,6 +148,47 @@ describe('buildAnchoredToolItems', () => {
       },
     ]);
   });
+
+  it.each(['additional_tools', 'tool_search'] as const)(
+    'never replays a union schema as strict in %s, matching its top-level form',
+    (mode) => {
+      const modifyNodes: ChatCompletionTool = {
+        function: {
+          name: 'lobe-agent-documents____modifyNodes',
+          parameters: {
+            properties: {
+              operations: {
+                items: {
+                  oneOf: [
+                    { properties: { action: { const: 'remove' } }, type: 'object' },
+                    {
+                      properties: {
+                        litexml: { oneOf: [{ type: 'string' }, { type: 'array' }] },
+                      },
+                      type: 'object',
+                    },
+                  ],
+                },
+                type: 'array',
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+      const items = buildAnchoredToolItems(mode, [search, modifyNodes], 'call_1');
+      const declared = (items.at(-1) as { tools: OpenAI.Responses.FunctionTool[] }).tools;
+      const strip = ({ defer_loading: _, ...definition }: OpenAI.Responses.FunctionTool) =>
+        definition;
+
+      expect(declared.map(strip)).toEqual(
+        [search, modifyNodes].map(convertChatCompletionToolToResponseTool),
+      );
+      expect(declared[0]).not.toHaveProperty('strict');
+      expect(declared[1]).toMatchObject({ strict: false });
+    },
+  );
 
   it('declares a completed client tool search carrying deferred definitions', () => {
     const [call, output] = buildAnchoredToolItems('tool_search', [search, crawl], 'toolu:01/a b');
