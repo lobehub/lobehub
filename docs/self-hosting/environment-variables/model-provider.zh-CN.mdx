@@ -1001,4 +1001,27 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 默认值：未设置，使用内置示例模型列表，示例默认不启用；不保证这些模型已在本地安装，也不会改变已有的模型选择。
 - 示例：`-all,+your-local-model-id=Local Model`
 
+## NagaAI
+
+### `NAGAAI_API_KEY`
+
+- 类型：可选；用户也可以在服务商设置中填写自己的密钥
+- 描述：在 NagaAI 的 API Keys 页面创建的 API 密钥
+- 默认值：-
+- 示例：`your-nagaai-api-key`
+
+### `NAGAAI_PROXY_URL`
+
+- 类型：可选
+- 描述：覆盖 NagaAI 的 API 地址
+- 默认值：`https://api.naga.ac/v1`
+- 示例：`https://your-proxy.example.com/v1`
+
+### `NAGAAI_MODEL_LIST`
+
+- 类型：可选
+- 描述：使用共享的[模型列表语法][model-list]配置模型列表：`+` 增加模型，`-` 隐藏模型，`模型ID=显示名称` 重命名模型，多个条目用英文逗号分隔。
+- 默认值：`-`
+- 示例：`-all,+anthropic/claude-sonnet-5.5,+google/gemini-3.5-flash`
+
 [model-list]: /zh/docs/self-hosting/advanced/model-list
