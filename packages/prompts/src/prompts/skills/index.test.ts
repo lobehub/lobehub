@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { resourcesTreePrompt, type SkillItem, skillPrompt, skillsPrompts } from './index';
+import {
+  resourcesTreePrompt,
+  type SkillItem,
+  skillPrompt,
+  SKILLS_LIST_CHAR_BUDGET,
+  skillsPrompts,
+} from './index';
 
 describe('skillPrompt', () => {
   it('should generate skill tag with location', () => {
@@ -136,5 +142,62 @@ describe('resourcesTreePrompt', () => {
     expect(prompt).toContain('Use `readReference` with id="pdf-tools"');
     expect(prompt).not.toContain('skillName=');
     expect(prompt).toContain('guide.md');
+  });
+});
+
+describe('skillsPrompts list budget', () => {
+  /**
+   * Mirrors issue lobehub#22284: a device with 483 skills whose descriptions
+   * follow real SKILL.md lengths (median ~225 chars, long tail to ~1000).
+   */
+  const manyDeviceSkills = (count: number): SkillItem[] =>
+    Array.from({ length: count }, (_, i) => {
+      const name = `device-skill-${i}`;
+      return {
+        description: `Use when the task involves topic ${i}. `.repeat(1 + (i % 25)),
+        identifier: `device:${name}`,
+        location: `/Users/dev/.claude/skills/${name}/SKILL.md`,
+        name,
+        source: 'device',
+      };
+    });
+
+  it('keeps hundreds of device skills within the list budget while naming every skill', () => {
+    const skills = manyDeviceSkills(483);
+    const prompt = skillsPrompts(skills);
+
+    expect(prompt.length).toBeLessThanOrEqual(SKILLS_LIST_CHAR_BUDGET);
+    for (const skill of skills) expect(prompt).toContain(`name="${skill.name}"`);
+    // activateSkill loads a filesystem skill by name, so the path is not needed
+    expect(prompt).not.toContain('location=');
+    expect(prompt).toContain('activateSkill');
+  });
+
+  it('keeps the readFile path of every listed skill when activateSkill was not sent', () => {
+    const skills = manyDeviceSkills(483);
+    const prompt = skillsPrompts(skills, { canActivateSkill: false });
+
+    expect(prompt.length).toBeLessThanOrEqual(SKILLS_LIST_CHAR_BUDGET);
+    expect(prompt).toContain(`location="${skills[0].location}"`);
+    expect(prompt).toContain('readFile tool on its `location` path');
+    expect(prompt).not.toContain('a miss returns');
+    expect(prompt).not.toContain('activateSkill loads');
+  });
+
+  it('lists what fits and points at activateSkill when even bare names exceed the budget', () => {
+    const skills = manyDeviceSkills(5000);
+    const prompt = skillsPrompts(skills);
+
+    expect(prompt.length).toBeLessThanOrEqual(SKILLS_LIST_CHAR_BUDGET);
+    expect(prompt).toContain('name="device-skill-0"');
+    expect(prompt).toMatch(/\d+ more skills are not listed/);
+  });
+
+  it('renders a list under the budget exactly as before', () => {
+    const skills = manyDeviceSkills(20);
+    const full = skillsPrompts(skills);
+
+    expect(full.length).toBeLessThan(SKILLS_LIST_CHAR_BUDGET);
+    for (const skill of skills) expect(full).toContain(skillPrompt(skill));
   });
 });
