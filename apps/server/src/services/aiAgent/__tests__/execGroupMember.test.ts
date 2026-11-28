@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExecGroupMemberParams } from '@/server/services/agentRuntime/types';
 
 import { AiAgentService } from '../index';
+import { DEFAULT_SUB_AGENT_MAX_STEPS } from '../subAgentStepBudget';
 
 // Mock trusted client to avoid server-side env access
 vi.mock('@/libs/trusted-client', () => ({
@@ -213,6 +214,21 @@ describe('AiAgentService.execGroupMember', () => {
       );
     });
   });
+
+  // lobehub#17284: a member without a step budget could run unbounded while
+  // the supervisor waited on it.
+  it.each(['in_group', 'isolated'] as const)(
+    'caps a %s member at the default sub-agent step budget',
+    async (mode) => {
+      const execAgentSpy = vi.spyOn(service, 'execAgent').mockResolvedValue(execAgentResult);
+
+      await service.execGroupMember(memberParams({ mode }));
+
+      expect(execAgentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ maxSteps: DEFAULT_SUB_AGENT_MAX_STEPS }),
+      );
+    },
+  );
 
   // Codex P2 on #20093: the client told a member continuation apart by
   // comparing agent ids, which misfires when the supervisor dispatched itself.

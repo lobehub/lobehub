@@ -38,6 +38,7 @@ import {
   type ThreadCarryOver,
 } from './hooks/threadRunHooks';
 import type { SubAgentSteerOutcome } from './steerQueue/subAgent';
+import { DEFAULT_SUB_AGENT_MAX_STEPS } from './subAgentStepBudget';
 import type { InternalExecAgentParams } from './types';
 
 const HEADLESS_INTERVENTION: UserInterventionConfig = { approvalMode: 'headless' };
@@ -694,7 +695,7 @@ export const execAgentThreadRun = async (
       hooks,
       ...(options.llmExecutor && { llmExecutor: options.llmExecutor }),
       localDeviceId: options.localDeviceId,
-      ...(inheritedEval?.maxSteps && { maxSteps: inheritedEval.maxSteps }),
+      maxSteps: inheritedEval?.maxSteps ?? DEFAULT_SUB_AGENT_MAX_STEPS,
       // Explicit sub-agent model override resolved at the spawn site.
       model: options.model,
       parentOperationId: recordedParentOperationId,
@@ -893,6 +894,7 @@ export const execAgentMember = async (
         parentOperationId,
       }),
     ],
+    maxSteps: DEFAULT_SUB_AGENT_MAX_STEPS,
     parentMessageId: supervisorMessageId ?? groupToolMessageId,
     parentOperationId,
     prompt: speakerInstruction,

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { DEFAULT_SUB_AGENT_MAX_STEPS } from '../subAgentStepBudget';
 import { resolveGroupMemberApprovalContinuation } from './groupMemberApproval';
 
 const bridgeBody = {
@@ -109,6 +110,16 @@ describe('resolveGroupMemberApprovalContinuation', () => {
       });
     },
   );
+
+  // lobehub#17284: the approval continuation starts a fresh member op, which must
+  // keep the sub-agent step budget the original member run had.
+  it('keeps the sub-agent step budget on the continued member', async () => {
+    const { deps } = createDeps(member);
+
+    const result = await resolveGroupMemberApprovalContinuation(deps as any, approveParams);
+
+    expect(result?.maxSteps).toBe(DEFAULT_SUB_AGENT_MAX_STEPS);
+  });
 
   it('keeps an isolated member in its own thread', async () => {
     const { deps } = createDeps({ ...member, threadId: 'thd_1' });

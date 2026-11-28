@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { hookDispatcher } from '@/server/services/agentRuntime/hooks';
 
 import { AiAgentService } from '../index';
+import { DEFAULT_SUB_AGENT_MAX_STEPS } from '../subAgentStepBudget';
 
 // Mock trusted client to avoid server-side env access
 vi.mock('@/libs/trusted-client', () => ({
@@ -259,6 +260,7 @@ describe('AiAgentService.execSubAgent', () => {
           expect.objectContaining({ id: 'thread-metadata-update', type: 'afterStep' }),
           expect.objectContaining({ id: 'thread-completion', type: 'onComplete' }),
         ]),
+        maxSteps: DEFAULT_SUB_AGENT_MAX_STEPS,
         prompt: 'Test instruction',
         userInterventionConfig: {
           approvalMode: 'headless',
@@ -344,6 +346,26 @@ describe('AiAgentService.execSubAgent', () => {
           evalRuntime: runtime,
           maxSteps: 20,
         }),
+      );
+    });
+
+    // lobehub#17284: an unbounded child ran thousands of steps while its parent
+    // waited, so a sub-agent always carries a step budget.
+    it('caps a sub-agent run at the default step budget', async () => {
+      const execAgentSpy = vi
+        .spyOn(service, 'execAgent')
+        .mockResolvedValue({ operationId: 'op-child', success: true } as any);
+
+      await service.execVirtualSubAgent({
+        agentId: 'agent-1',
+        instruction: 'research the topic',
+        parentMessageId: 'tool-msg-1',
+        parentOperationId: 'parent-op-1',
+        topicId: 'topic-1',
+      } as any);
+
+      expect(execAgentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ maxSteps: DEFAULT_SUB_AGENT_MAX_STEPS }),
       );
     });
 
