@@ -633,6 +633,19 @@ describe('Google context-caching pricing', () => {
   });
 });
 
+describe('Gemini 4 Neon knowledge cutoff', () => {
+  it.each([
+    ['google', 'gemini-4-neon'],
+    ['vertexai', 'gemini-4-neon'],
+    ['openrouter', 'google/gemini-4-neon'],
+  ])('exposes the documented cutoff for %s/%s', (providerId, id) => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === providerId && entry.id === id,
+    );
+    expect(model?.knowledgeCutoff).toBe('2026-03');
+  });
+});
+
 describe('Gemini 4 Neon pricing', () => {
   it.each([
     ['google', 'gemini-4-neon'],
