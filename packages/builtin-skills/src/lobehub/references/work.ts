@@ -33,8 +33,10 @@ web page. Users find their Works on the reply and in the resource library.
   when you create or edit them, and \`lh work create\` refuses their links.
 - Works registered automatically cannot be changed with \`lh work update\` or deleted with
   \`lh work delete\`.
-- Several images in one card: use the \`lobe-work\` tool's \`createWork\` with \`type: collection\`
-  instead of one file Work per image.
+- Several images in one card form a collection, which \`lh work\` cannot create. When you have
+  the \`lobe-work\` tool, use its \`createWork\` with \`type: collection\` instead of one file Work
+  per image. Without that tool (for example, an external agent such as Claude Code or Codex
+  running \`lh\` in its own shell), register each image as its own file Work.
 `;
 
 export default content;

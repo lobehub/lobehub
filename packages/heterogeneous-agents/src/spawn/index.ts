@@ -189,8 +189,11 @@ export {
 } from './input';
 export { JsonlStreamProcessor } from './jsonlProcessor';
 export {
+  buildClaudeCodeLobeHubSystemPromptArgs,
   buildLobeHubCliPluginFiles,
+  CLAUDE_CODE_APPEND_SYSTEM_PROMPT_MIN_VERSION,
   CLAUDE_CODE_PLUGIN_SKILLS_MIN_VERSION,
+  claudeCodeAppendsSystemPrompt,
   claudeCodeLoadsPluginSkills,
   type ClaudeCodeLobeHubCliDelivery,
   LOBEHUB_CLI_PLUGIN_NAME,
