@@ -21,6 +21,7 @@ const runningStartTimeMock = vi.hoisted(() => ({ value: undefined as number | un
 const topicUnreadCompletedMock = vi.hoisted(() => ({ value: false }));
 const onlyMineMock = vi.hoisted(() => ({ value: false }));
 const currentUserIdMock = vi.hoisted(() => ({ value: 'user-1' as string | undefined }));
+const showRunningTimeMock = vi.hoisted(() => ({ value: true }));
 const hasDraftMock = vi.hoisted(() => ({ value: false }));
 const isDesktopMock = vi.hoisted(() => ({ value: false }));
 const renameMock = vi.hoisted(() => ({
@@ -158,6 +159,7 @@ vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: unknown) => unknown) => selector({}),
 }));
 vi.mock('@/store/user/selectors', () => ({
+  preferenceSelectors: { topicShowRunningTime: () => showRunningTimeMock.value },
   userProfileSelectors: { userId: () => currentUserIdMock.value },
 }));
 vi.mock('@/hooks/useTopicOnlyMine', () => ({ useTopicOnlyMine: () => onlyMineMock.value }));
@@ -257,6 +259,7 @@ describe('TopicItem active state', () => {
     topicMetaCardMock.value = undefined;
     onlyMineMock.value = false;
     currentUserIdMock.value = 'user-1';
+    showRunningTimeMock.value = true;
     hasDraftMock.value = false;
     vi.useRealTimers();
   });
@@ -386,6 +389,20 @@ describe('TopicItem active state', () => {
     render(<TopicItem id="tpc_test" status="running" title="Topic" />);
 
     expect(screen.getByText('00:33')).toBeInTheDocument();
+  });
+
+  // The timer takes title width; users can turn it off and keep only the ring.
+  it('hides the running elapsed time when the user turned it off', () => {
+    vi.useFakeTimers();
+    const now = Date.UTC(2026, 0, 1, 0, 0, 33);
+    vi.setSystemTime(now);
+    runningStartTimeMock.value = now - 33_000;
+    showRunningTimeMock.value = false;
+
+    render(<TopicItem id="tpc_test" status="running" title="Topic" />);
+
+    expect(screen.getByTestId('ring-loading')).toBeInTheDocument();
+    expect(screen.queryByText('00:33')).not.toBeInTheDocument();
   });
 
   // After a page refresh only the ACTIVE topic is reconnected into the
