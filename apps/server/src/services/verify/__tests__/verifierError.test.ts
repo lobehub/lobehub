@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { describeThrownError, isOutOfCreditsFailure, withErrorType } from '../verifierError';
+import {
+  describeThrownError,
+  isOutOfCreditsFailure,
+  verifierSetupFailureCode,
+  withErrorType,
+} from '../verifierError';
 
 describe('verifierError', () => {
   it.each([
@@ -17,6 +22,24 @@ describe('verifierError', () => {
     undefined,
   ])('does not read %s as a credit refusal', (text) => {
     expect(isOutOfCreditsFailure(text)).toBe(false);
+  });
+
+  it.each([
+    [
+      'Verifier failed before submitting a verdict: Model "glm-5.3-flash" is not supported by any configured account in this group (ModelNotFound)',
+      'ModelNotFound',
+    ],
+    ['Verifier failed before submitting a verdict: InvalidProviderAPIKey', 'InvalidProviderAPIKey'],
+  ])('reads %s as a verifier setup failure', (text, code) => {
+    expect(verifierSetupFailureCode(text)).toBe(code);
+  });
+
+  it.each([
+    'Verifier failed before submitting a verdict: socket hang up (ProviderNetworkError)',
+    'Verifier completed without submitting a verdict.',
+    undefined,
+  ])('does not read %s as a verifier setup failure', (text) => {
+    expect(verifierSetupFailureCode(text)).toBeUndefined();
   });
 
   it('appends the code once', () => {

@@ -991,6 +991,8 @@
   "goalProcess.gate.reason.setupCredentials": "The provider refused the run ({{error}}). Update the credentials, plan or model in the agent settings.",
   "goalProcess.gate.reason.setupDevice": "The device is unavailable ({{error}}). Reconnect it, or bind the agent to another online device.",
   "goalProcess.gate.reason.setupGateway": "The device gateway is not set up ({{error}}). Configure it on the server, or switch the agent to a connected local device.",
+  "goalProcess.gate.reason.setupVerifier": "The verify model {{model}} could not run ({{code}}), so the delivery was never judged. Choose a verify model that works in Settings > Service Model > Task Acceptance, or fix the model of the pinned verifier agent, then retry.",
+  "goalProcess.gate.reason.setupVerifierUnnamed": "The verify model could not run ({{code}}), so the delivery was never judged. Choose a verify model that works in Settings > Service Model > Task Acceptance, or fix the model of the pinned verifier agent, then retry.",
   "goalProcess.gate.reason.setupWorkingDirectory": "The working directory {{path}} does not exist on the device the agent runs on. Create it there, or point the agent at a directory that exists.",
   "goalProcess.gate.reason.transientRetriesSpent": "The run failed the same way {{count}} times over {{duration}} ({{error}}). Check the device, its network and the agent gateway.",
   "goalProcess.gate.reason.verifyFailed": "Task {{id}} did not pass verification",

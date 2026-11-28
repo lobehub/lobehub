@@ -60,6 +60,21 @@ const REASON_PATTERNS: Array<{
     pattern: /^Setup problem: (.+?)\. Update the provider credentials/,
   },
   {
+    key: 'goalProcess.gate.reason.setupVerifier',
+    params: ['model', 'code'],
+    pattern:
+      /^Setup problem: Verification could not run: the verifier model (\S+) is not usable \((\w+)\)[^.]*\. Choose a verify model that works/,
+  },
+  {
+    // The verifier operation is gone or unreadable, so the cause names no model.
+    // Still the reader's language: only the model name is missing, and a Chinese
+    // reader otherwise gets the whole English sentence.
+    key: 'goalProcess.gate.reason.setupVerifierUnnamed',
+    params: ['code'],
+    pattern:
+      /^Setup problem: Verification could not run: the verifier model is not usable \((\w+)\)[^.]*\. Choose a verify model that works/,
+  },
+  {
     key: 'goalProcess.gate.reason.setupDevice',
     params: ['error'],
     pattern: /^Setup problem: (.+?)\. Reconnect the device/,

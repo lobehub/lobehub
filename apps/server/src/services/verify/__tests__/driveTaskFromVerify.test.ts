@@ -4,6 +4,7 @@ import {
   VERIFICATION_ERRORED_ERROR,
   VERIFICATION_OUT_OF_CREDITS_ERROR,
   VERIFICATION_UNJUDGEABLE_ERROR,
+  verificationModelUnusableError,
 } from '@lobechat/const/goal';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -807,6 +808,42 @@ describe('driveTaskFromVerify', () => {
       error: VERIFICATION_ERRORED_ERROR,
     });
     expect(deliverMock.mock.calls[0][0].errorMessage).toContain('out of balance');
+  });
+
+  /**
+   * Regression: the verify service model pointed at a model the user's proxy
+   * did not serve. Every check errored with ModelNotFound, and the generic
+   * errored reason sent the Goal coordinator into builder attempt after builder
+   * attempt — 29 rounds across two goals, none of them judged.
+   */
+  it('errored on a verifier model that cannot run → pauses naming the model, not the retryable reason', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'errored' });
+    goalFindByTask.mockResolvedValue({ id: 'goal-1' });
+    checkResultsListByRun.mockResolvedValueOnce([
+      {
+        required: true,
+        status: 'errored',
+        toulmin: {
+          limitation:
+            'Verifier failed before submitting a verdict: Model "glm-5.3-flash" is not supported by any configured account in this group (ModelNotFound)',
+        },
+        verifierOperationId: 'verifier-op',
+      },
+    ]);
+    opFindById.mockImplementation(async (id: string) =>
+      id === 'verifier-op'
+        ? { id, model: 'glm-5.3-flash', provider: 'chinese-360' }
+        : { id, taskId: 'task-1', topicId: 'topic-1' },
+    );
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    const error = verificationModelUnusableError('ModelNotFound', 'chinese-360/glm-5.3-flash');
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', { error });
+    expect(taskUpdateStatus).not.toHaveBeenCalledWith('task-1', 'paused', {
+      error: VERIFICATION_ERRORED_ERROR,
+    });
+    expect(deliverMock.mock.calls[0][0].errorMessage).toContain('chinese-360/glm-5.3-flash');
   });
 
   it('errored: an optional check refused for credits does not hide a retryable required error', async () => {

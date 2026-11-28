@@ -73,6 +73,9 @@ const environmentFix = (problem: GoalEnvironmentProblem): string => {
     case 'gateway': {
       return 'Configure the device gateway on the server, or switch the agent to a connected local device';
     }
+    case 'verifier': {
+      return 'Choose a verify model that works in Settings > Service Model > Task Acceptance, or fix the model of the pinned verifier agent, then retry';
+    }
   }
 };
 

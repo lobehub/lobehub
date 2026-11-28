@@ -2940,6 +2940,10 @@ export default {
     'The run could not start ({{error}}). Install the CLI on the device the agent runs on and make sure it is on PATH.',
   'goalProcess.gate.reason.setupCredentials':
     'The provider refused the run ({{error}}). Update the credentials, plan or model in the agent settings.',
+  'goalProcess.gate.reason.setupVerifier':
+    'The verify model {{model}} could not run ({{code}}), so the delivery was never judged. Choose a verify model that works in Settings > Service Model > Task Acceptance, or fix the model of the pinned verifier agent, then retry.',
+  'goalProcess.gate.reason.setupVerifierUnnamed':
+    'The verify model could not run ({{code}}), so the delivery was never judged. Choose a verify model that works in Settings > Service Model > Task Acceptance, or fix the model of the pinned verifier agent, then retry.',
   'goalProcess.gate.reason.setupDevice':
     'The device is unavailable ({{error}}). Reconnect it, or bind the agent to another online device.',
   'goalProcess.gate.reason.setupGateway':

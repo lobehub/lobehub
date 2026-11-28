@@ -152,6 +152,22 @@ export const VERIFICATION_ERRORED_ERROR =
 export const VERIFICATION_OUT_OF_CREDITS_ERROR =
   'Verification could not run: the verifier model was refused for lack of balance (InsufficientBudgetForModel); the delivery was not evaluated.';
 /**
+ * The verifier could not run because its model is not usable as configured — a
+ * model the provider does not serve, a rejected key, a provider with no channel.
+ * The delivery was never evaluated, and nothing a builder does changes that:
+ * only picking a working verify model does.
+ *
+ * Deliberately has NO recovery branch, for the same reason as
+ * {@link VERIFICATION_OUT_OF_CREDITS_ERROR}: recovering it like any other
+ * verifier error re-ran the builder into the same broken verifier until the
+ * attempt budget ran out. The text starts with
+ * {@link VERIFICATION_MODEL_UNUSABLE_PREFIX}, so the Goal failure classifier
+ * reads it as a verifier setup problem and the gate names the model to change.
+ */
+export const VERIFICATION_MODEL_UNUSABLE_PREFIX = 'Verification could not run: the verifier model';
+export const verificationModelUnusableError = (code: string, model?: string): string =>
+  `${VERIFICATION_MODEL_UNUSABLE_PREFIX}${model ? ` ${model}` : ''} is not usable (${code}); the delivery was not evaluated.`;
+/**
  * The review read the evidence and found the criterion undecidable from it — it
  * asks for an action the review layer cannot perform (re-running the delivered
  * scripts, building, driving a live system).
