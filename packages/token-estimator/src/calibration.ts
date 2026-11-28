@@ -1,7 +1,7 @@
 /**
  * Provider-reported input tokens divided by `estimateTextTokens` of the same text-only
  * request, by model family. Measured on 2026-11-28 over four days of text-only agent requests:
- * Claude ran 1.27–1.50 (median by channel); GPT, Gemini, DeepSeek, Qwen, Kimi, MiniMax and Grok
+ * Claude ran 1.27–1.50 (median by provider); GPT, Gemini, DeepSeek, Qwen, Kimi, MiniMax and Grok
  * ran 0.82–1.0, close enough that they keep the raw estimate.
  */
 export const FAMILY_INPUT_TOKEN_RATIOS: Readonly<Record<string, number>> = {
@@ -56,11 +56,13 @@ const readAnchorRatio = (anchor: InputTokenRatioAnchor | undefined): number | un
   return ratio;
 };
 
+/** A card's own `family` wins: a `claude`-distilled open model keeps its base family. */
 const readFamilyRatio = (family: string | undefined, model: string | undefined) => {
-  const names = [family, model].filter(Boolean).map((name) => name!.toLowerCase());
+  const name = (family || model)?.toLowerCase();
+  if (!name) return;
 
   for (const [key, ratio] of Object.entries(FAMILY_INPUT_TOKEN_RATIOS)) {
-    if (names.some((name) => name.includes(key))) return ratio;
+    if (name.includes(key)) return ratio;
   }
 };
 

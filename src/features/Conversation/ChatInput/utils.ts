@@ -1,3 +1,4 @@
+import type { InputTokenRatioAnchor } from '@lobechat/context-engine';
 import { getSlicedMessages } from '@lobechat/context-engine';
 import type { FollowUpBehavior, OpenAIChatMessage, UIChatMessage } from '@lobechat/types';
 
@@ -158,6 +159,7 @@ export const getContextWindow = (
       request: {
         accounting,
         ...(inputTokens ? { inputTokens } : {}),
+        ...(message.metadata?.usageEstimated ? { inputTokensEstimated: true } : {}),
         ...(historyTruncated ? {} : { messages: messages.slice(index) }),
         model: message.model ?? undefined,
         provider: message.provider ?? undefined,
@@ -166,6 +168,31 @@ export const getContextWindow = (
   }
 
   return { history };
+};
+
+/**
+ * Picks the recorded request that calibrates estimates for the selected model.
+ *
+ * Use when:
+ * - Building the `anchor` for `resolveInputTokenRatio`.
+ *
+ * Returns:
+ * - The request's provider-reported input against its estimate, only when it went to exactly
+ *   this model and provider (another one measured another tokenizer or relay prompt) and its
+ *   input tokens are not the runtime's own estimate. Otherwise `undefined`.
+ */
+export const getInputTokenRatioAnchor = (
+  request: ContextWindow['request'],
+  selection: { model?: string; provider?: string },
+): InputTokenRatioAnchor | undefined => {
+  if (!request || request.inputTokensEstimated) return;
+  if (request.model !== selection.model || request.provider !== selection.provider) return;
+
+  return {
+    actualTokens: request.inputTokens,
+    estimatedTokens: request.accounting.total,
+    media: request.accounting.media,
+  };
 };
 
 export const getConversationSendButtonProps = (

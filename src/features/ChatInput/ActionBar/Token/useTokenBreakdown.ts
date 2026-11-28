@@ -11,6 +11,7 @@ import type { UIChatMessage } from '@lobechat/types';
 import { debounce } from 'es-toolkit/compat';
 import { startTransition, useEffect, useMemo, useState } from 'react';
 
+import { getInputTokenRatioAnchor } from '@/features/Conversation/ChatInput/utils';
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
 import { useModelContextWindowTokens } from '@/hooks/useModelContextWindowTokens';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
@@ -304,11 +305,7 @@ export const useTokenBreakdown = (): TokenBreakdown => {
   // Every count here is a `tokenx` estimate (recorded output usage is dropped
   // above), so one ratio converts the whole breakdown to the model's tokens.
   const { ratio } = resolveInputTokenRatio({
-    anchor: recorded && {
-      actualTokens: request?.inputTokens,
-      estimatedTokens: recorded.total,
-      media: recorded.media,
-    },
+    anchor: getInputTokenRatioAnchor(request, { model, provider }),
     family: modelFamily,
     model,
   });

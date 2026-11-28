@@ -365,6 +365,27 @@ describe('useTokenBreakdown', () => {
     expect(result.current.chatsToken).toBe(Math.round(estimateTokenCount('hello there') * 1.35));
   });
 
+  it('does not anchor on a request whose provider was not recorded', () => {
+    vi.useFakeTimers();
+    state.modelFamily = 'claude-sonnet';
+    const { result } = renderHook(() => useTokenBreakdown());
+
+    publishComposer({
+      contextWindow: {
+        history: [],
+        // Still the next request's tools and system prompt, but its ratio may come from
+        // another relay, so the family default applies.
+        request: {
+          accounting: { ...recordedAccounting, media: { audio: 0, image: 0, video: 0 } },
+          inputTokens: 8905,
+          model: 'model-1',
+        },
+      },
+    });
+
+    expect(result.current.toolsToken).toBe(Math.round(4000 * 1.35));
+  });
+
   it('counts the history window, not recorded messages, when a history count truncates', () => {
     vi.useFakeTimers();
     const { result } = renderHook(() => useTokenBreakdown());

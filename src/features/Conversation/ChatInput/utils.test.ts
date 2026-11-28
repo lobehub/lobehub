@@ -10,6 +10,7 @@ import {
   getContextWindow,
   getConversationChatInputUiState,
   getConversationSendButtonProps,
+  getInputTokenRatioAnchor,
   getQueuedHintKey,
   partitionSendableUploads,
   putQueuedMessageInEditor,
@@ -232,6 +233,53 @@ describe('getContextWindow', () => {
     ] as UIChatMessage[];
 
     expect(getContextWindow(messages, {}).request).toBeUndefined();
+  });
+});
+
+describe('getInputTokenRatioAnchor', () => {
+  const media = { audio: 0, image: 0, video: 0 };
+  const request = {
+    accounting: { bySource: {}, estimator: 'tokenx', media, system: 0, total: 8000 },
+    inputTokens: 12_000,
+    model: 'claude-sonnet-4-5',
+    provider: 'lobehub',
+  } as NonNullable<ReturnType<typeof getContextWindow>['request']>;
+  const selection = { model: 'claude-sonnet-4-5', provider: 'lobehub' };
+
+  it('anchors on a request to the selected model and provider', () => {
+    expect(getInputTokenRatioAnchor(request, selection)).toEqual({
+      actualTokens: 12_000,
+      estimatedTokens: 8000,
+      media,
+    });
+  });
+
+  it.each([
+    ['another provider', { ...request, provider: 'anthropic' }],
+    ['an unknown provider', { ...request, provider: undefined }],
+    ['an unknown model', { ...request, model: undefined }],
+    ['runtime-estimated input tokens', { ...request, inputTokensEstimated: true }],
+  ])('has no anchor for %s', (_, candidate) => {
+    expect(getInputTokenRatioAnchor(candidate, selection)).toBeUndefined();
+  });
+
+  it('marks input tokens the runtime estimated without provider usage', () => {
+    const messages = [
+      {
+        content: 'reply',
+        id: 'a1',
+        metadata: { contextAccounting: request.accounting, usageEstimated: true },
+        model: 'claude-sonnet-4-5',
+        provider: 'lobehub',
+        role: 'assistant',
+        usage: { totalInputTokens: 8100 },
+      },
+    ] as UIChatMessage[];
+
+    const window = getContextWindow(messages, {});
+
+    expect(window.request).toMatchObject({ inputTokens: 8100, inputTokensEstimated: true });
+    expect(getInputTokenRatioAnchor(window.request, selection)).toBeUndefined();
   });
 });
 

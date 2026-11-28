@@ -64,6 +64,11 @@ export interface ContextWindow {
     /** Provider-reported input tokens of that request, when known. */
     inputTokens?: number;
     /**
+     * The runtime estimated `inputTokens` itself because the provider reported no usage
+     * (`metadata.usageEstimated`), so it is not the model's own count.
+     */
+    inputTokensEstimated?: boolean;
+    /**
      * Messages added since: the recorded reply itself and everything after it.
      * Absent when a history count re-truncates every request; the recorded
      * messages may then drop out, so count `history` instead.

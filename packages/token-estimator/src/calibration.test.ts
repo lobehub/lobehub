@@ -31,11 +31,36 @@ describe('resolveInputTokenRatio', () => {
     ['has unknown media', { actualTokens: 15_000, estimatedTokens: 10_000 }],
     ['has no provider usage', { estimatedTokens: 10_000, media: NO_MEDIA }],
     ['is too small', { actualTokens: 900, estimatedTokens: 600, media: NO_MEDIA }],
-    ['is out of range', { actualTokens: 40_000, estimatedTokens: 10_000, media: NO_MEDIA }],
+    ['is above the range', { actualTokens: 40_000, estimatedTokens: 10_000, media: NO_MEDIA }],
+    ['is below the range', { actualTokens: 4000, estimatedTokens: 10_000, media: NO_MEDIA }],
+    [
+      'carried audio',
+      { actualTokens: 15_000, estimatedTokens: 10_000, media: { ...NO_MEDIA, audio: 1 } },
+    ],
   ])('falls back to the family default when the anchor %s', (_, anchor) => {
     expect(resolveInputTokenRatio({ anchor, family: 'claude-opus' })).toEqual({
       ratio: 1.35,
       source: 'family',
+    });
+  });
+
+  it('anchors at the size and range boundaries', () => {
+    expect(
+      resolveInputTokenRatio({
+        anchor: { actualTokens: 3000, estimatedTokens: 1000, media: NO_MEDIA },
+      }),
+    ).toEqual({ ratio: 3, source: 'anchor' });
+    expect(
+      resolveInputTokenRatio({
+        anchor: { actualTokens: 500, estimatedTokens: 1000, media: NO_MEDIA },
+      }),
+    ).toEqual({ ratio: 0.5, source: 'anchor' });
+  });
+
+  it("keeps the card's own family over a claude model id", () => {
+    expect(resolveInputTokenRatio({ family: 'qwen', model: 'qwen3-claude-opus-distill' })).toEqual({
+      ratio: 1,
+      source: 'none',
     });
   });
 

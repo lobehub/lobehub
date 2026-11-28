@@ -25,6 +25,10 @@ export const DEFAULT_DRIFT_MULTIPLIER = 1.25;
  * - The counts must stay on one estimator, e.g. before scaling them with
  *   `resolveInputTokenRatio`: a provider count is already in the model's tokens
  *   and would be scaled twice.
+ *
+ * Expects:
+ * - A flat DB message. Container messages (`assistantGroup`, `supervisor`) keep
+ *   the usage of their `children` / `members`.
  */
 export const withoutRecordedOutputUsage = (message: UIChatMessage): UIChatMessage =>
   message.usage || message.metadata?.usage
