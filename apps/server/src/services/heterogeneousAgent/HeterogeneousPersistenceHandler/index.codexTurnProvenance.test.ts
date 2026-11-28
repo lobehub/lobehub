@@ -53,7 +53,12 @@ const createHarness = (params: {
       return msg;
     }),
     findById: vi.fn(async (id: string) => messages.get(id) ?? null),
+    findAssistantSnapshotById: vi.fn(async (id: string) => messages.get(id)),
     getLatestSpineMessageId: vi.fn(async () => undefined),
+    // A superset of the incremental rows is always a correct answer.
+    listToolCallIndexByTopicSince: vi.fn(async (topicId: string) =>
+      (messageModel as any).listToolCallIndexByTopic(topicId),
+    ),
     listToolCallIndexByTopic: vi.fn(async () => []),
     query: vi.fn(async () => [...messages.values()]),
     update: vi.fn(async (id: string, patch: Partial<FakeMessage>) => {

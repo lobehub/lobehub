@@ -174,7 +174,7 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
       // Text is flushed to DB at end of each batch (multi-replica fix)
       expect(h.messageModel.update).toHaveBeenCalledWith(h.assistantMessageId, {
         content: 'hi there',
-        metadata: { operationId: h.operationId },
+        metadata: { heteroIngestStamp: expect.any(String), operationId: h.operationId },
       });
     });
 

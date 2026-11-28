@@ -9,7 +9,8 @@ import type { TopicModel } from '@/database/models/topic';
  * Per-operation in-memory state. Lifetime spans the whole CLI run from first
  * `heteroIngest` batch through `heteroFinish`. Main-agent state is projected
  * back from DB at each ingest boundary; active subagent run state is still the
- * in-memory part of the operation.
+ * in-memory part of the operation. The topic tool index is rebuilt in full
+ * only when another writer may have run (see `toolIndexSync`).
  */
 export interface OperationState {
   agentId: string | null;
@@ -60,12 +61,29 @@ export interface OperationState {
   /** Isolation thread that owns this heterogeneous run, when applicable. */
   threadId: string | undefined;
   /**
+   * When `toolMsgIdByCallId` and the intervention / tool-state projections
+   * were last known to match the DB. Undefined forces a full rebuild.
+   *
+   * - `at`: local clock just before that index read; the next incremental
+   *   read starts a safety window before it.
+   * - `stamp`: the `heteroIngestStamp` on the current assistant at that
+   *   point, refreshed by each of this replica's own batch flushes. A
+   *   different stamp means another replica ingested in between.
+   */
+  toolIndexSync?: { at: number; stamp: string | undefined };
+  /**
    * Run-global DB index for every tool message in the topic, keyed by
    * `tool_call_id`. Main and subagent reducers keep only their per-turn maps;
    * this map lets a `tool_result` land even when its `tools_calling` was
    * reduced by another serverless replica.
    */
   toolMsgIdByCallId: Map<string, string>;
+  /**
+   * This operation's `heteroCurrentMsgId` as last read off the topic. A value
+   * that differs from `main.currentAssistantId` means another writer moved
+   * the turn pointer, so the tool index is rebuilt in full.
+   */
+  topicCurrentMsgId?: string;
   topicId: string;
 }
 

@@ -49,7 +49,7 @@ describe('HeterogeneousPersistenceHandler', () => {
       // Text chunks accumulate; flushed to DB at end of each batch (multi-replica fix)
       expect(h.messageModel.update).toHaveBeenCalledWith('asst-seeded', {
         content: 'hello world',
-        metadata: { operationId: 'op-1' },
+        metadata: { heteroIngestStamp: expect.any(String), operationId: 'op-1' },
       });
     });
 
@@ -116,7 +116,7 @@ describe('HeterogeneousPersistenceHandler', () => {
       expect(isOperationLiveOnTopic).toHaveBeenCalledWith('op-1', 'topic-1');
       expect(h.messageModel.update).toHaveBeenCalledWith('asst-1', {
         content: 'kept',
-        metadata: { operationId: 'op-1' },
+        metadata: { heteroIngestStamp: expect.any(String), operationId: 'op-1' },
       });
     });
 
@@ -144,7 +144,7 @@ describe('HeterogeneousPersistenceHandler', () => {
 
       expect(h.messageModel.update).toHaveBeenCalledWith('asst-1', {
         content: 'kept',
-        metadata: { operationId: 'op-1' },
+        metadata: { heteroIngestStamp: expect.any(String), operationId: 'op-1' },
       });
     });
 
@@ -427,6 +427,7 @@ describe('HeterogeneousPersistenceHandler', () => {
 
       const asst = h.messages.get('asst-1')!;
       expect(asst.metadata).toEqual({
+        heteroIngestStamp: expect.any(String),
         operationId: 'op-1',
         usage: { totalInputTokens: 1, totalOutputTokens: 0, totalTokens: 1 },
       });

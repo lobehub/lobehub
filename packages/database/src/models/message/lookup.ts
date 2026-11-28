@@ -87,6 +87,31 @@ export class MessageLookupQueries extends MessageScope {
   };
 
   /**
+   * The columns a heterogeneous run rehydrates its in-flight assistant turn
+   * from: text, reasoning, tool calls, turn metadata and model identity.
+   *
+   * Read on every event batch of a CLI run, so it skips the heavy columns
+   * {@link findById} returns (`editor_data`, `search`, `usage`, …). Same
+   * ownership scope as `findById`.
+   */
+  findAssistantSnapshotById = async (id: string) => {
+    const [row] = await this.db
+      .select({
+        content: messages.content,
+        metadata: messages.metadata,
+        model: messages.model,
+        provider: messages.provider,
+        reasoning: messages.reasoning,
+        tools: messages.tools,
+      })
+      .from(messages)
+      .where(and(eq(messages.id, id), this.ownership()))
+      .limit(1);
+
+    return row;
+  };
+
+  /**
    * Ids among `ids` that resolve to an agent-share VISITOR message under this
    * owner — the inverse of the `notShareVisitorMessage()` predicate every
    * creator-facing read applies.
