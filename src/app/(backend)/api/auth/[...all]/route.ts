@@ -1,6 +1,7 @@
 import { toNextJsHandler } from 'better-auth/next-js';
 import type { NextRequest } from 'next/server';
 
+import { withNoStore } from '@/app/(backend)/middleware/cacheControl';
 import { auth } from '@/auth';
 import { stripEmptyUntypedBody } from '@/libs/better-auth/request-body';
 
@@ -27,7 +28,9 @@ const validateJsonBody = async (request: Request) => {
   }
 };
 
-export const GET = handler.GET;
+// Auth GETs (session, userinfo, OAuth handshakes) are credential-scoped: never
+// let an HTTP cache store them.
+export const GET = async (request: NextRequest) => withNoStore(await handler.GET(request));
 
 export const POST = async (request: NextRequest) => {
   const invalidJsonResponse = await validateJsonBody(request);

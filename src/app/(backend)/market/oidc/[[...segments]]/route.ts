@@ -1,6 +1,7 @@
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
+import { withNoStore } from '@/app/(backend)/middleware/cacheControl';
 import { getTrustedClientTokenForSession } from '@/libs/trusted-client';
 import { MarketService } from '@/server/services/market';
 
@@ -103,8 +104,7 @@ const handleProxy = async (req: NextRequest, context: RouteContext) => {
         const form = new URLSearchParams(body);
 
         const grantType = (form.get('grant_type') || 'authorization_code') as
-          | 'authorization_code'
-          | 'refresh_token';
+          'authorization_code' | 'refresh_token';
 
         if (grantType === 'authorization_code') {
           const clientId = form.get('client_id');
@@ -226,7 +226,10 @@ const handleProxy = async (req: NextRequest, context: RouteContext) => {
   }
 };
 
-export const GET = (req: NextRequest, context: RouteContext) => handleProxy(req, context);
-export const POST = (req: NextRequest, context: RouteContext) => handleProxy(req, context);
+const proxy = async (req: NextRequest, context: RouteContext) =>
+  withNoStore(await handleProxy(req, context));
+
+export const GET = proxy;
+export const POST = proxy;
 
 export const dynamic = 'force-dynamic';

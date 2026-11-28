@@ -2,6 +2,7 @@ import { createSSEHeaders, createSSEWriter } from '@lobechat/utils/server';
 import debug from 'debug';
 
 import { checkAuth } from '@/app/(backend)/middleware/auth';
+import { withNoStore } from '@/app/(backend)/middleware/cacheControl';
 import { DocumentService } from '@/server/services/document';
 import { subscribeResourceEvents } from '@/server/services/resourceEvents';
 
@@ -25,7 +26,7 @@ const jsonError = (message: string, status: number) =>
  * and `lock.changed` events so an open editor (including pure viewers) syncs
  * near-instantly instead of waiting for the polling heartbeat.
  */
-export const GET = checkAuth(async (req, { userId, serverDB }) => {
+const getDocumentEvents = checkAuth(async (req, { userId, serverDB }) => {
   const documentId = new URL(req.url).searchParams.get('documentId');
   if (!documentId) return jsonError('documentId is required', 400);
 
@@ -83,3 +84,6 @@ export const GET = checkAuth(async (req, { userId, serverDB }) => {
 
   return new Response(stream, { headers: createSSEHeaders() });
 });
+
+export const GET = async (...args: Parameters<typeof getDocumentEvents>) =>
+  withNoStore(await getDocumentEvents(...args));

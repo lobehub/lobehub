@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 
+import { noStore } from '../middlewares/noStore';
 import agentEvalRunApp from './agent-eval-run';
 import agentSignalApp from './agent-signal';
 import expertiseHistoryApp from './expertise-history';
@@ -18,6 +19,7 @@ import widgetApp from './widget';
 
 const app = new Hono().basePath('/api/workflows');
 
+app.use('*', noStore());
 app.use('*', workflowAuth());
 
 app.route('/agent-eval-run', agentEvalRunApp);

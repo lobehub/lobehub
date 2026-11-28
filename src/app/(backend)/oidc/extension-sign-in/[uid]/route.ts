@@ -2,6 +2,7 @@ import { getUserAuth } from '@lobechat/utils/server';
 import debug from 'debug';
 import { type NextRequest, NextResponse } from 'next/server';
 
+import { withNoStore } from '@/app/(backend)/middleware/cacheControl';
 import { authEnv } from '@/envs/auth';
 import { isAcceptanceExtensionClient } from '@/libs/oidc-provider/acceptanceReview';
 import { OIDCService } from '@/server/services/oidc';
@@ -32,7 +33,7 @@ const webSessionLogin = async (uid: string) => {
   return `${pathname}${search}${hash}`;
 };
 
-export async function GET(request: NextRequest, props: { params: Promise<{ uid: string }> }) {
+async function extensionSignIn(request: NextRequest, props: { params: Promise<{ uid: string }> }) {
   if (!authEnv.ENABLE_OIDC) return new NextResponse(null, { status: 404 });
 
   const { uid } = await props.params;
@@ -43,4 +44,9 @@ export async function GET(request: NextRequest, props: { params: Promise<{ uid: 
     log('Falling back to the consent page for %s: %O', uid, error);
     return seeOther(consentPage);
   }
+}
+
+// Session-bound OIDC handoff redirect: never cache it.
+export async function GET(request: NextRequest, props: { params: Promise<{ uid: string }> }) {
+  return withNoStore(await extensionSignIn(request, props));
 }

@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
 import { checkAuth } from '@/app/(backend)/middleware/auth';
+import { withNoStore } from '@/app/(backend)/middleware/cacheControl';
 import { assertTopicCommentReadAccess } from '@/server/routers/lambda/_helpers/topicCommentAccess';
 import { subscribeResourceEvents } from '@/server/services/resourceEvents';
 
@@ -19,7 +20,7 @@ const jsonError = (message: string, status: number) =>
     status,
   });
 
-export const GET = checkAuth(async (req, { userId, serverDB }) => {
+const getTopicCommentEvents = checkAuth(async (req, { userId, serverDB }) => {
   const topicId = new URL(req.url).searchParams.get('topicId');
   if (!topicId) return jsonError('topicId is required', 400);
 
@@ -106,3 +107,6 @@ export const GET = checkAuth(async (req, { userId, serverDB }) => {
 
   return new Response(stream, { headers: createSSEHeaders() });
 });
+
+export const GET = async (...args: Parameters<typeof getTopicCommentEvents>) =>
+  withNoStore(await getTopicCommentEvents(...args));

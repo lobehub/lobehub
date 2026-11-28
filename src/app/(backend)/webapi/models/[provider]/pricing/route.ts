@@ -4,6 +4,7 @@ import debug from 'debug';
 import { NextResponse } from 'next/server';
 
 import { checkAuth } from '@/app/(backend)/middleware/auth';
+import { withNoStore } from '@/app/(backend)/middleware/cacheControl';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { createErrorResponse } from '@/utils/errorResponse';
@@ -15,7 +16,7 @@ interface NewApiPricingKeyVaults {
   baseURL?: string;
 }
 
-export const GET = checkAuth(async (req, { params, userId, serverDB }) => {
+const getProviderPricing = checkAuth(async (req, { params, userId, serverDB }) => {
   const provider = (await params).provider;
 
   if (!provider) {
@@ -94,3 +95,7 @@ export const GET = checkAuth(async (req, { params, userId, serverDB }) => {
     return createErrorResponse(ChatErrorType.InternalServerError, { error });
   }
 });
+
+// Pricing is fetched with the caller's provider credentials: never cache it.
+export const GET = async (...args: Parameters<typeof getProviderPricing>) =>
+  withNoStore(await getProviderPricing(...args));

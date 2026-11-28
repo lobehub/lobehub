@@ -2,6 +2,7 @@ import debug from 'debug';
 import { type NextRequest } from 'next/server';
 import { after, NextResponse } from 'next/server';
 
+import { withNoStore } from '@/app/(backend)/middleware/cacheControl';
 import { OAuthHandoffModel } from '@/database/models/oauthHandoff';
 import { serverDB } from '@/database/server';
 
@@ -15,7 +16,7 @@ const redirectTo = (pathname: string, params?: Record<string, string>) => {
   return new NextResponse(null, { headers: { location }, status: 307 });
 };
 
-export const GET = async (req: NextRequest) => {
+const oidcDesktopCallback = async (req: NextRequest) => {
   try {
     const searchParams = req.nextUrl.searchParams;
     const code = searchParams.get('code');
@@ -55,3 +56,6 @@ export const GET = async (req: NextRequest) => {
     });
   }
 };
+
+// One-time `code`/`state` handoff for desktop sign-in: never cache it.
+export const GET = async (req: NextRequest) => withNoStore(await oidcDesktopCallback(req));
