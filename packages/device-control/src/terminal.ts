@@ -244,6 +244,13 @@ export class TerminalSessionManager {
   }
 
   /** Kill every live shell and stop sweeping. Called on daemon shutdown. */
+  /** Shells still running; a session whose shell exited only lingers to be read. */
+  get activeCount(): number {
+    let count = 0;
+    for (const session of this.sessions.values()) if (!session.exited) count++;
+    return count;
+  }
+
   dispose(): void {
     clearInterval(this.sweepTimer);
     for (const session of this.sessions.values()) {

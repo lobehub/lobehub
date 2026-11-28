@@ -13,6 +13,11 @@ import { log } from '../utils/logger';
 export interface StoredSettings {
   agentGatewayUrl?: string;
   /**
+   * `false` once the user ran `lh update --auto off`. Automatic updates are on
+   * by default, so only the opt-out is stored.
+   */
+  autoUpdates?: false;
+  /**
    * Device gateway address saved per server (keyed by `deviceGatewayServerKey`)
    * by `--gateway`. Used ahead of that server's own advertisement, and never
    * for another server.
@@ -77,6 +82,7 @@ function normalizeSettings(settings: StoredSettings): StoredSettings {
 
   return {
     agentGatewayUrl: agentGatewayUrl === OFFICIAL_AGENT_GATEWAY_URL ? undefined : agentGatewayUrl,
+    autoUpdates: settings.autoUpdates === false ? false : undefined,
     deviceGatewayUrls: normalizeDeviceGatewayUrls(settings.deviceGatewayUrls),
     gatewayUrl: normalizeUrl(settings.gatewayUrl),
     serverUrl: serverUrl === OFFICIAL_SERVER_URL ? undefined : serverUrl,
@@ -87,7 +93,8 @@ const isDefaultSettings = (settings: StoredSettings) =>
   !settings.serverUrl &&
   !settings.gatewayUrl &&
   !settings.agentGatewayUrl &&
-  !settings.deviceGatewayUrls;
+  !settings.deviceGatewayUrls &&
+  settings.autoUpdates !== false;
 
 export function saveSettings(settings: StoredSettings): void {
   const normalized = normalizeSettings(settings);
@@ -310,6 +317,7 @@ export function settingsForLogin(
   }
 
   return {
+    ...(existing?.autoUpdates === false && { autoUpdates: false as const }),
     ...(Object.keys(deviceGatewayUrls).length > 0 && { deviceGatewayUrls }),
     ...(gatewayUrl && { gatewayUrl }),
     serverUrl,

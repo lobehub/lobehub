@@ -21,6 +21,7 @@ import { resolveCliDirName } from '../constants/identity';
 import { cliPackageName, cliVersion } from '../pkg';
 import { CONNECT_RETRYABLE_EXIT_CODE } from '../service/connect';
 import { readConnectServices, serviceRestartsAfterExit } from '../service/status';
+import { INSTALL_LOCK_STALE_MS, installLockPath } from '../utils/autoUpdate';
 import { type MaintenanceConfig, writeMaintenanceState } from './maintenanceWorker';
 import { getLogPath } from './manager';
 
@@ -192,6 +193,9 @@ export class CliMaintenance {
               detectPackageManager(),
               `${cliPackageName}@${operation.targetVersion}`,
             )
+          : undefined,
+        installLock: update
+          ? { path: installLockPath(), staleMs: INSTALL_LOCK_STALE_MS }
           : undefined,
         operation,
         parentPid: process.pid,

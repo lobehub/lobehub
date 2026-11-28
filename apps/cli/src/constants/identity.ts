@@ -71,6 +71,10 @@ export const CLI_CONNECT_SERVICE_NAME = 'lobehub-connect.service';
  */
 export const CLI_API_KEY_ENV_NAMES: readonly string[] = ['LOBEHUB_CLI_API_KEY'];
 export const CLI_HOME_ENV_NAMES: readonly string[] = ['LOBEHUB_CLI_HOME'];
+/** Any non-empty value other than `0` / `false` turns automatic updates off. */
+export const CLI_DISABLE_AUTOUPDATE_ENV_NAMES: readonly string[] = [
+  'LOBEHUB_CLI_DISABLE_AUTOUPDATE',
+];
 
 const firstEnvEntry = (names: readonly string[]): { name: string; value: string } | undefined => {
   for (const name of names) {
@@ -108,6 +112,12 @@ export const readCliApiKeyEnv = (): string | undefined =>
  */
 export const readCliApiKeyEnvSource = (): { name: string; value: string } | undefined =>
   isInsideAgentRun() ? undefined : firstEnvEntry(CLI_API_KEY_ENV_NAMES);
+
+/** Whether the user turned automatic updates off through the environment. */
+export const isAutoUpdateDisabledByEnv = (): boolean => {
+  const value = firstEnvValue(CLI_DISABLE_AUTOUPDATE_ENV_NAMES)?.toLowerCase();
+  return !!value && value !== '0' && value !== 'false';
+};
 
 /** Config directory name, overridable per-install by the home env var. */
 export const resolveCliDirName = (): string =>

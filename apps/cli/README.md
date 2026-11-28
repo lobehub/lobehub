@@ -46,6 +46,21 @@ It must have publish permission for `@lobehub/cli` and support unattended
 publishing under the package's npm authentication policy. PR previews continue
 to publish separately to `pkg.pr.new`.
 
+## Automatic updates
+
+A CLI installed globally with npm, pnpm, yarn or bun keeps itself on the latest release:
+
+- An ordinary command checks for a new release at most once a day and installs it in the
+  background; the next command runs the new version.
+- A `lh connect --daemon` connection or a systemd connect service checks hourly. Once no task,
+  terminal or tunnel is active, it installs the release, verifies that it starts, and restarts
+  the connection, the same way as **Update and restart** on the device page.
+
+A source checkout, a workspace link and the copy bundled with the desktop app never update
+themselves. CI jobs, LobeHub agent runs and managed cloud devices are skipped as well. Turn
+automatic updates off with `lh update --auto off` (back on with `--auto on`) or by setting
+`LOBEHUB_CLI_DISABLE_AUTOUPDATE=1`.
+
 ## Update a connected device
 
 ```bash

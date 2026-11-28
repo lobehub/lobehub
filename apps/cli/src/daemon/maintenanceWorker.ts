@@ -1,6 +1,6 @@
 import { execFile, spawn } from 'node:child_process';
 import { rmSync } from 'node:fs';
-import { readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
 
@@ -10,6 +10,8 @@ export interface MaintenanceConfig {
   entry: string;
   executable: string;
   install?: { args: string[]; command: string };
+  /** Lock shared with background updates and `lh update` (`utils/autoUpdate.ts`). */
+  installLock?: { path: string; staleMs: number };
   operation: DeviceCliUpdateOperation;
   parentPid: number;
   receiptPath: string;
@@ -39,6 +41,25 @@ async function run(command: string, args: string[], timeout: number) {
   });
 }
 
+/** Same protocol as `acquireInstallLock`, which this copy cannot import. */
+async function acquireLock({ path, staleMs }: { path: string; staleMs: number }) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await writeFile(path, String(process.pid), { flag: 'wx', mode: 0o600 });
+      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    }
+    const age = await stat(path).then(
+      (s) => Date.now() - s.mtimeMs,
+      () => staleMs,
+    );
+    if (age < staleMs) break;
+    await rm(path, { force: true });
+  }
+  throw new Error('Another CLI update is installing. Try again in a few minutes.');
+}
+
 /** Runs from a private copy outside the package being replaced. No runtime package imports. */
 export async function runMaintenanceWorker(config: MaintenanceConfig, ready: () => void) {
   const { entry, executable, operation, statePath } = config;
@@ -47,7 +68,15 @@ export async function runMaintenanceWorker(config: MaintenanceConfig, ready: () 
     await writeMaintenanceState(statePath, operation);
   };
   try {
-    if (config.install) await run(config.install.command, config.install.args, 180_000);
+    if (config.install) {
+      // Two installs into one global package directory can leave a broken CLI behind.
+      if (config.installLock) await acquireLock(config.installLock);
+      try {
+        await run(config.install.command, config.install.args, 180_000);
+      } finally {
+        if (config.installLock) await rm(config.installLock.path, { force: true });
+      }
+    }
 
     // Do not stop a working connection unless the new executable can actually start.
     const { stdout } = await promisify(execFile)(executable, [entry, '--version'], {
