@@ -362,9 +362,10 @@ export class ChannelService {
   };
 
   /**
-   * Where a person lands opening an Agent from their contacts or Agent list. A project's main Agent
-   * talks in that project's Channel, so it opens there instead of a direct conversation beside it;
-   * a direct conversation the person already has with it still opens as it is.
+   * Where a person lands opening an Agent from their contacts or Agent list. An Agent made for one
+   * project talks in that project's Channel, so it opens there instead of a direct conversation
+   * beside it. Every other Agent, Lobe AI or an existing Agent picked to lead a project included,
+   * opens a direct conversation; one the person already has still opens as it is.
    */
   openAgent = async (agentId: string): Promise<string | undefined> => {
     const existing = await this.repository.findDirectAccess(agentId);
