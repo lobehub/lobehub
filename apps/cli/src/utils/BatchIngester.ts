@@ -37,7 +37,15 @@ export class NoopIngestSink implements IngestSink {
 }
 
 const MAX_BATCH = 50;
-const FLUSH_INTERVAL_MS = 250;
+/**
+ * How long an idle ingester waits after the first event before sending, so a
+ * burst the agent prints together leaves as one request. Claude Code asks for
+ * a tool's permission ~50ms after announcing the call, and the two should
+ * reach the approval card together. Events that arrive while a request is in
+ * flight never wait on this: they leave as the next batch the moment it
+ * returns.
+ */
+const FLUSH_INTERVAL_MS = 100;
 const MAX_RETRIES = 5;
 
 /** The server acknowledged a batch and discarded it — see {@link IngestAck}. */
@@ -78,6 +86,12 @@ export class BatchIngester {
      * left. The caller uses this to stop the agent instead.
      */
     private readonly onFatal?: (error: Error) => void,
+    /**
+     * Runs right before each batch is cut, so a caller holding back data that
+     * newer data replaces (text snapshots) can queue its latest copy then:
+     * every request carries the freshest snapshot, and none is sent twice.
+     */
+    private readonly beforeSend?: () => void,
   ) {}
 
   /** Only a lost/overflowed stream is permanent; a transport outage can recover. */
@@ -103,12 +117,21 @@ export class BatchIngester {
       if (this.timer) clearTimeout(this.timer);
       this.timer = null;
       this.startPump();
-    } else if (!this.timer) {
-      this.timer = setTimeout(() => {
-        this.timer = null;
-        this.startPump();
-      }, FLUSH_INTERVAL_MS);
+    } else {
+      this.requestFlush();
     }
+  }
+
+  /**
+   * Schedule a send without queuing an event, for data `beforeSend` will
+   * add. A request already in flight picks it up when it returns.
+   */
+  requestFlush(): void {
+    if (this.fatalError || this.pumping || this.timer) return;
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      this.startPump();
+    }, FLUSH_INTERVAL_MS);
   }
 
   /** A failed final drain still prevents the caller from reporting success. */
@@ -129,15 +152,24 @@ export class BatchIngester {
   }
 
   private startPump(): void {
-    if (this.pumping || this.fatalError || this.buffer.length === 0) return;
-    this.lastSendError = null;
+    if (this.pumping || this.fatalError) return;
+    // Claim the pump before `beforeSend`, so what it queues only joins the
+    // buffer instead of scheduling a send of its own.
     this.pumping = true;
+    this.beforeSend?.();
+    if (this.fatalError || this.buffer.length === 0) {
+      this.pumping = false;
+      return;
+    }
+    this.lastSendError = null;
     this.worker = this.pump();
   }
 
   private async pump(): Promise<void> {
     try {
-      while (!this.fatalError && this.buffer.length > 0) {
+      while (!this.fatalError) {
+        this.beforeSend?.();
+        if (this.fatalError || this.buffer.length === 0) break;
         // Remove only acknowledged events. A failed or partially acknowledged
         // batch must be redelivered before the events queued behind it.
         const batch = this.buffer.slice(0, MAX_BATCH);

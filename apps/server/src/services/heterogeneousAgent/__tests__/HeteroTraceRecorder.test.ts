@@ -289,6 +289,54 @@ describe('HeteroTraceRecorder', () => {
     });
   });
 
+  it('keeps an answer streamed as growing snapshots once', async () => {
+    // Regression: each request carries the message's whole text so far, and
+    // the trace appended every one of them ("HelHello worHello world").
+    const snapshot = (step: number, ts: number, content: string, extra = {}) =>
+      ev('stream_chunk', step, ts, {
+        chunkType: 'text',
+        content,
+        snapshotMode: 'replace',
+        ...extra,
+      });
+
+    await recorder.appendBatch('op-1', [ev('stream_start', 0, 100, {}), snapshot(0, 110, 'Hel')]);
+    await recorder.appendBatch('op-1', [
+      snapshot(0, 120, 'Hello wor'),
+      ev('stream_chunk', 0, 125, { chunkType: 'text', content: ' [sub]', subagent: {} }),
+    ]);
+    await recorder.appendBatch('op-1', [
+      snapshot(0, 130, 'Hello world'),
+      ev('stream_end', 0, 140, {}),
+      ev('stream_start', 1, 150, {}),
+      snapshot(1, 160, 'Next'),
+    ]);
+
+    expect(store.partials.get('op-1')?.steps?.map((step) => step.content)).toEqual([
+      'Hello wor [sub]ld',
+      'Next',
+    ]);
+  });
+
+  it('folds a batch delivered twice only once', async () => {
+    // `heteroIngest` records a batch before it knows whether persisting it
+    // succeeds, so the CLI's redelivery after a failure reaches the recorder.
+    const batch = [
+      ev('stream_chunk', 0, 100, { chunkType: 'text', content: 'a' }),
+      ev('tool_end', 0, 110, { isSuccess: true, toolCallId: 'tc-1' }),
+    ];
+
+    await recorder.appendBatch('op-1', batch);
+    await recorder.appendBatch('op-1', batch);
+    await recorder.appendBatch('op-1', [
+      ev('stream_chunk', 1, 120, { chunkType: 'text', content: 'b' }),
+    ]);
+
+    const steps = store.partials.get('op-1')?.steps;
+    expect(steps?.map((step) => step.content)).toEqual(['a', 'b']);
+    expect(steps?.[0].toolsResult).toHaveLength(1);
+  });
+
   it('returns null from finalize when no partial was accumulated', async () => {
     expect(await recorder.finalize('never-seen', { completionReason: 'done' })).toBeNull();
   });

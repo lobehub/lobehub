@@ -26,7 +26,6 @@ const isPreconditionFailed = (error: unknown): boolean => {
 
 const TRACE_PREFIX = 'agent-traces';
 const SNAPSHOT_SUFFIX = '.json.zst';
-const LEGACY_SUFFIX = '.json';
 const ZSTD_CONTENT_TYPE = 'application/zstd';
 
 /**
@@ -69,10 +68,6 @@ export class S3SnapshotStore implements ISnapshotStore {
 
   private partialKey(operationId: string): string {
     return `${TRACE_PREFIX}/_partial/${operationId}${SNAPSHOT_SUFFIX}`;
-  }
-
-  private legacyPartialKey(operationId: string): string {
-    return `${TRACE_PREFIX}/_partial/${operationId}${LEGACY_SUFFIX}`;
   }
 
   private async encodeSnapshot(value: unknown): Promise<Buffer> {
@@ -118,20 +113,15 @@ export class S3SnapshotStore implements ISnapshotStore {
     return [];
   }
 
+  /**
+   * Only the zstd key is read. The uncompressed `.json` fallback bridged
+   * partials across the May 2026 zstd rollout (#14807); every run's first
+   * step, which finds no partial yet, paid a second miss for it.
+   */
   async loadPartial(operationId: string): Promise<Partial<ExecutionSnapshot> | null> {
-    // Current format: .json.zst (zstd-compressed)
     try {
       const bytes = await this.s3.getFileByteArray(this.partialKey(operationId));
       return await this.decodeSnapshot<Partial<ExecutionSnapshot>>(bytes);
-    } catch {
-      // fall through to legacy
-    }
-    // Legacy format: uncompressed .json. Kept to bridge in-flight partials across the
-    // deploy window — partials are deleted on finalization so this branch dies off
-    // naturally once the longest-running operation completes.
-    try {
-      const content = await this.s3.getFileContent(this.legacyPartialKey(operationId));
-      return JSON.parse(content) as Partial<ExecutionSnapshot>;
     } catch {
       return null;
     }
@@ -161,11 +151,7 @@ export class S3SnapshotStore implements ISnapshotStore {
   }
 
   async removePartial(operationId: string): Promise<void> {
-    // Clean up both the current key and any legacy uncompressed sibling that may
-    // exist if the operation was started before the zstd rollout.
-    await Promise.allSettled([
-      this.s3.deleteFile(this.partialKey(operationId)),
-      this.s3.deleteFile(this.legacyPartialKey(operationId)),
-    ]);
+    // Cleanup only: a partial left behind never blocks the finalized trace.
+    await this.s3.deleteFile(this.partialKey(operationId)).catch(() => {});
   }
 }
