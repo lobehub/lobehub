@@ -4,10 +4,10 @@ import type {
   Part,
   Tool as GoogleFunctionCallTool,
 } from '@google/genai';
-import { imageUrlToBase64 } from '../../utils/imageToBase64';
-import { resolveImageMimeTypeFromBase64 } from '../../utils/imageMimeType';
 
 import type { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
+import { resolveImageMimeTypeFromBase64 } from '../../utils/imageMimeType';
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import { safeParseJSON } from '../../utils/safeParseJSON';
 import { resolveScopedSignature, type SignatureScope } from '../../utils/signatureScope';
 import { isPublicExternalUrl, parseDataUri, validateExternalUrl } from '../../utils/uriParser';
@@ -259,6 +259,54 @@ export const buildGooglePart = async (
   }
 };
 
+const TOOL_MEDIA_PART_TYPES = new Set(['audio_url', 'image_url', 'video_url']);
+
+/**
+ * `functionResponse.response` is JSON, so media parts inside it reach Gemini as
+ * URL text and the model never sees them (e.g. `readFile` on a local image).
+ * Keep the text as the function result and build the media as real parts,
+ * which the caller places right after the functionResponse in the same turn.
+ */
+const buildToolResult = async (
+  content: string | UserMessageContentPart[],
+  options?: GoogleMessageBuildOptions,
+): Promise<{ mediaParts: Part[]; result: unknown }> => {
+  if (!Array.isArray(content)) return { mediaParts: [], result: content };
+
+  const media = content.filter((part) => TOOL_MEDIA_PART_TYPES.has(part.type));
+  if (media.length === 0) return { mediaParts: [], result: content };
+
+  const texts = content
+    .filter((part): part is Extract<UserMessageContentPart, { type: 'text' }> => {
+      return part.type === 'text' && typeof part.text === 'string';
+    })
+    .map((part) => part.text);
+
+  // History is rebuilt on every step, so one expired or unreachable media URL
+  // must not fail every later request in the topic.
+  const mediaParts = await Promise.all(
+    media.map(async (part) => {
+      const kind = part.type.replace('_url', '');
+      try {
+        const built = await buildGooglePart(part, options);
+        if (!built) texts.push(`[${kind} unavailable: unsupported format]`);
+        return built;
+      } catch (error) {
+        console.warn('[google] tool result media dropped:', error);
+        texts.push(
+          `[${kind} unavailable: ${error instanceof Error ? error.message : String(error)}]`,
+        );
+        return undefined;
+      }
+    }),
+  );
+
+  return {
+    mediaParts: mediaParts.filter(Boolean) as Part[],
+    result: texts.join('\n\n') || '[Media output attached below]',
+  };
+};
+
 /**
  * Convert OpenAI message to Google Content format
  */
@@ -331,15 +379,26 @@ export const buildGoogleMessage = async (
   if (message.role === 'tool' && toolCallNameMap && message.tool_call_id) {
     const functionName = toolCallNameMap.get(message.tool_call_id);
     if (functionName) {
+      const { mediaParts, result } = await buildToolResult(content, options);
+
       return {
         parts: [
           {
             functionResponse: {
               id: supportsFunctionCallId(options?.model) ? message.tool_call_id : undefined,
               name: functionName,
-              response: { result: message.content },
+              response: { result },
             },
           },
+          ...(mediaParts.length > 0
+            ? [
+                {
+                  text: `Media output of tool call ${message.tool_call_id} (${functionName}):`,
+                  thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+                },
+                ...mediaParts,
+              ]
+            : []),
         ],
         role: 'user',
       };
@@ -393,18 +452,21 @@ export const buildGoogleMessages = async (
 
   // Merge consecutive functionResponse contents into a single Content.
   // Vertex AI requires the number of functionResponse parts to equal
-  // the number of functionCall parts in the preceding model turn.
+  // the number of functionCall parts in the preceding model turn. Tool media
+  // parts follow every functionResponse so the responses stay contiguous.
+  const isFunctionResponseContent = (content?: Content) =>
+    content?.role === 'user' && !!content.parts?.[0]?.functionResponse;
+
   const filteredContents: Content[] = [];
   for (const content of nonEmptyContents) {
-    const isFunctionResponse =
-      content.role === 'user' && content.parts?.every((p) => p.functionResponse);
-
     const last = filteredContents.at(-1);
-    const lastIsFunctionResponse =
-      last?.role === 'user' && last.parts?.every((p) => p.functionResponse);
 
-    if (isFunctionResponse && lastIsFunctionResponse) {
-      last!.parts = [...(last!.parts || []), ...(content.parts || [])];
+    if (isFunctionResponseContent(content) && isFunctionResponseContent(last)) {
+      const parts = [...(last!.parts || []), ...(content.parts || [])];
+      last!.parts = [
+        ...parts.filter((p) => p.functionResponse),
+        ...parts.filter((p) => !p.functionResponse),
+      ];
     } else {
       filteredContents.push(content);
     }
