@@ -231,8 +231,10 @@ export {
   resolveClaudeCodeTranscriptPath,
 } from './ensureResumeTranscript';
 export { getHeterogeneousAgentSpawnEnv } from './presetEnv';
+export { createRegularFileStdin, type RegularFileStdin } from './regularFileStdin';
 export {
   AMP_BASE_ARGS,
+  buildDoubaoArgs,
   buildQoderArgs,
   CLAUDE_CODE_BASE_ARGS,
   CODEBUDDY_BASE_ARGS,
@@ -240,6 +242,8 @@ export {
   CODEX_DEFAULT_EXECUTION_ARGS,
   CODEX_EXECUTION_MODE_FLAGS,
   CODEX_REQUIRED_ARGS,
+  DOUBAO_BASE_ARGS,
+  type DoubaoArgsOptions,
   KIMI_CODE_BASE_ARGS,
   OPENCODE_BASE_ARGS,
   QODER_BASE_ARGS,

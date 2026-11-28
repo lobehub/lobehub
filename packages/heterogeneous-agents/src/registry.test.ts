@@ -9,6 +9,7 @@ import {
   CursorAcpAdapter,
   CursorAdapter,
   DevinAcpAdapter,
+  DoubaoAdapter,
   DroidAcpAdapter,
   GrokBuildAdapter,
   KimiCodeAdapter,
@@ -64,6 +65,10 @@ describe('registry', () => {
 
     it('creates a DevinAcpAdapter for "devin"', () => {
       expect(createAdapter('devin')).toBeInstanceOf(DevinAcpAdapter);
+    });
+
+    it('creates a DoubaoAdapter for "doubao"', () => {
+      expect(createAdapter('doubao')).toBeInstanceOf(DoubaoAdapter);
     });
 
     it('creates a GrokBuildAdapter for "grok-build"', () => {

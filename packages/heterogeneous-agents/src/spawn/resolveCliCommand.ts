@@ -732,6 +732,11 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   'devin': {
     validateKeywords: ['devin'],
   },
+  'doubao': {
+    // `doubao --version` prints `doubao 2.38.2`, so the product prefix is part
+    // of the match; a bare version is accepted too for wrapper scripts.
+    validatePattern: /^(?:doubao\s+)?v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/i,
+  },
   'grok-build': {
     validateHelpArgs: ['agent', '--help'],
     validateHelpKeywords: ['agent', 'stdio'],

@@ -72,6 +72,7 @@ import {
   buildAgentInput,
   ClaudeAgentSdkSession,
   createFileStoreImageUploader,
+  createRegularFileStdin,
   detectDshCommand,
   DSH_COMMAND,
   ensureClaudeCodeResumeTranscript,
@@ -1683,6 +1684,27 @@ export default class HeterogeneousAgentCtr {
     }
 
     const useStdin = spawnPlan.stdinPayload !== undefined;
+    // Doubao refuses Node's socketpair-backed pipe as fd 0, so it gets the
+    // prompt through a regular file instead (see `createRegularFileStdin`);
+    // every other CLI keeps writing the payload to a live stdin pipe.
+    const regularFileStdin =
+      session.agentType === 'doubao' && spawnPlan.stdinPayload !== undefined
+        ? await createRegularFileStdin(spawnPlan.stdinPayload)
+        : undefined;
+
+    // Writing the stdin file is a second pre-launch hop, and a Stop that lands
+    // while it runs cannot interrupt anything: `cancelSession` finds no
+    // `session.process`, sets the flag and returns. The guard above has already
+    // run, so without this second check the turn would still spawn Doubao —
+    // with `always_allow` — and let it run tools after the user cancelled.
+    if (session.cancelledByUs) {
+      await regularFileStdin?.cleanup().catch(() => {});
+      await intervention?.cleanup().catch((cleanupError) => {
+        logger.warn('AskUserQuestion cleanup error after pre-launch cancellation:', cleanupError);
+      });
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
 
     logger.info(
       'Spawning agent:',
@@ -1707,7 +1729,11 @@ export default class HeterogeneousAgentCtr {
       // shell `ANTHROPIC_API_KEY` can't hijack the CLI's own auth. `session.env`
       // is spread last, so an agent that explicitly configures a key still wins.
       env: spawnEnv,
-      stdio: [useStdin ? 'pipe' : 'ignore', 'pipe', 'pipe'] as ['pipe' | 'ignore', 'pipe', 'pipe'],
+      stdio: [
+        regularFileStdin ? regularFileStdin.fd : useStdin ? 'pipe' : 'ignore',
+        'pipe',
+        'pipe',
+      ] as ['pipe' | 'ignore' | number, 'pipe', 'pipe'],
     };
 
     try {
@@ -1721,6 +1747,11 @@ export default class HeterogeneousAgentCtr {
           resolvedCliSpawnPlan.args,
           spawnOptions,
         );
+        if (regularFileStdin) {
+          const release = () => void regularFileStdin.cleanup();
+          proc.once('exit', release);
+          proc.once('error', release);
+        }
         this.handleSpawnedAgentProcess({
           cwd,
           intervention,
@@ -1739,6 +1770,9 @@ export default class HeterogeneousAgentCtr {
         });
       });
     } catch (error) {
+      // A spawn that failed before a process existed leaves the stdin file
+      // behind; cleanup is idempotent so the normal exit path stays a no-op.
+      await regularFileStdin?.cleanup().catch(() => {});
       // A synchronous spawn failure has no process event to own teardown.
       // Process-emitted failures may already have cleaned these resources;
       // both cleanup operations are intentionally idempotent.

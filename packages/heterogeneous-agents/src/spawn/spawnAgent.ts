@@ -38,6 +38,7 @@ import {
 import { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
 import { resolveCliSpawnPlan } from './cliSpawn';
 import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
+import { createRegularFileStdin } from './regularFileStdin';
 import {
   buildCodexLobeHubContextArgs,
   type CodexJwtFile,
@@ -281,6 +282,20 @@ export const AMP_BASE_ARGS = [
 
 export const OPENCODE_BASE_ARGS = ['run', '--format', 'json', '--thinking', '--auto'] as const;
 export const KIMI_CODE_BASE_ARGS = ['--output-format', 'stream-json'] as const;
+/**
+ * Doubao's one-shot mode. `-p -` is load-bearing twice over: it reads the
+ * prompt from stdin instead of opening the TUI, and the TUI would otherwise
+ * demand a real terminal. `always_allow` is Doubao's spelling of the bypass
+ * the other Claude-compatible CLIs get.
+ */
+export const DOUBAO_BASE_ARGS = [
+  '-p',
+  '-',
+  '--output-format',
+  'stream-json',
+  '--permission-mode',
+  'always_allow',
+] as const;
 export const QODER_BASE_ARGS = [
   '-p',
   '--input-format',
@@ -417,6 +432,23 @@ export const buildQoderArgs = ({
   ...inputArgs,
 ];
 
+export interface DoubaoArgsOptions {
+  extraArgs?: string[];
+  inputArgs?: string[];
+  resumeSessionId?: string;
+}
+
+export const buildDoubaoArgs = ({
+  extraArgs = [],
+  inputArgs = [],
+  resumeSessionId,
+}: DoubaoArgsOptions): string[] => [
+  ...DOUBAO_BASE_ARGS,
+  ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
+  ...extraArgs,
+  ...inputArgs,
+];
+
 const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
   switch (params.agentType) {
     case 'amp': {
@@ -430,6 +462,9 @@ const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
     }
     case 'codex': {
       return buildCodexArgs(params);
+    }
+    case 'doubao': {
+      return buildDoubaoArgs(params);
     }
     case 'kimi-code': {
       return buildKimiCodeArgs(params);
@@ -611,12 +646,22 @@ const spawnCliAgent = async (
   const cliSpawnPlan = await resolveCliSpawnPlan(command, args, childEnv);
   const detached = platform() !== 'win32' && (options.detached ?? true);
   const startedAt = Date.now();
+  // Doubao is the only CLI here that inspects fd 0's file type (see
+  // `createRegularFileStdin`), so it gets a regular file instead of Node's
+  // socketpair-backed pipe.
+  const regularFileStdin =
+    options.agentType === 'doubao' ? await createRegularFileStdin(inputPlan.stdin) : undefined;
   const proc = spawnManaged(cliSpawnPlan.command, cliSpawnPlan.args, {
     cwd,
     detached,
     env: cliSpawnPlan.env ?? childEnv,
-    stdio: ['pipe', 'pipe', 'pipe'],
+    stdio: [regularFileStdin?.fd ?? 'pipe', 'pipe', 'pipe'],
   });
+  if (regularFileStdin) {
+    const release = () => void regularFileStdin.cleanup();
+    proc.once('exit', release);
+    proc.once('error', release);
+  }
 
   const claudeLive =
     claudeLiveInput && proc.stdin ? new ClaudeCodeLiveInput(proc.stdin) : undefined;
