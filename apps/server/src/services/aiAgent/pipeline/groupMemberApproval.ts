@@ -14,6 +14,7 @@ import {
   createThreadHooks,
   pickThreadCarryOver,
 } from '../hooks/threadRunHooks';
+import { DEFAULT_SUB_AGENT_MAX_STEPS } from '../subAgentStepBudget';
 import type { InternalExecAgentParams } from '../types';
 
 /** Bridge params persisted on a group member run's serialized `group-member-bridge` hook. */
@@ -146,6 +147,9 @@ export const resolveGroupMemberApprovalContinuation = async (
       topicId: member.topicId ?? params.appContext?.topicId,
     },
     hooks: [...threadHooks, deps.createBridgeHook(bridge)],
+    // The continuation is a fresh op; without this the resumed member would run
+    // unbounded again (lobehub#17284).
+    maxSteps: params.maxSteps ?? DEFAULT_SUB_AGENT_MAX_STEPS,
     parentOperationId: bridge.parentOperationId,
     slug: undefined,
     topicStartOwnerOperationId: bridge.parentOperationId,
