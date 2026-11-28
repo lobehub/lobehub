@@ -1,6 +1,7 @@
+import { type LangfuseClient } from '@langfuse/client';
+import { startObservation } from '@langfuse/tracing';
 import { TraceEventType } from '@lobechat/types';
 import { diffChars } from 'diff';
-import { type LangfuseTraceClient } from 'langfuse-core';
 
 import {
   type TraceEventBasePayload,
@@ -9,6 +10,8 @@ import {
   type TraceEventModifyMessage,
   type TraceEventRegenerateMessage,
 } from '@/types/trace';
+
+import { isOtelTraceId, remoteParent } from './ids';
 
 /**
  * Trace event scores
@@ -22,10 +25,38 @@ export enum EventScore {
 
 type EventParams<T> = T & TraceEventBasePayload;
 
+interface TraceEventClientParams {
+  client: LangfuseClient;
+  traceId: string;
+}
+
 export class TraceEventClient {
-  private _trace: LangfuseTraceClient;
-  constructor(client: LangfuseTraceClient) {
-    this._trace = client;
+  private _client: LangfuseClient;
+  private _traceId: string;
+
+  constructor({ client, traceId }: TraceEventClientParams) {
+    this._client = client;
+    this._traceId = traceId;
+  }
+
+  /**
+   * Records a user action on a message as an event in the message's trace, under the generation
+   * that produced it when its id is known.
+   *
+   * Messages traced before the SDK v5 migration carry non-OTel trace ids. Those traces cannot
+   * take new observations, so only their score is recorded.
+   */
+  private recordEvent(
+    name: TraceEventType,
+    observationId: string | undefined,
+    attributes: { input?: unknown; metadata?: Record<string, unknown>; output?: unknown },
+  ) {
+    if (!isOtelTraceId(this._traceId)) return;
+
+    startObservation(name, attributes, {
+      asType: 'event',
+      parentSpanContext: remoteParent(this._traceId, observationId),
+    });
   }
 
   private scoreObservation(params: {
@@ -38,17 +69,15 @@ export class TraceEventClient {
 
     // score the observation if there is an id
     if (observationId) {
-      this._trace.client.score({ name, observationId, traceId, value });
+      this._client.score.create({ name, observationId, traceId, value });
     }
   }
 
   copyMessage({ traceId, observationId, content }: EventParams<TraceEventCopyMessage>) {
     const score = EventScore.Copy;
-    // create update event
-    this._trace?.event({
+    this.recordEvent(TraceEventType.CopyMessage, observationId, {
       input: content,
       metadata: { score },
-      name: TraceEventType.CopyMessage,
     });
 
     // score the observation if there is an id
@@ -66,11 +95,9 @@ export class TraceEventClient {
     content,
   }: EventParams<TraceEventDeleteAndRegenerateMessage>) {
     const score = EventScore.DeleteAndRegenerate;
-    // create update event
-    this._trace?.event({
+    this.recordEvent(TraceEventType.DeleteAndRegenerateMessage, observationId, {
       input: content,
       metadata: { score },
-      name: TraceEventType.DeleteAndRegenerateMessage,
     });
 
     // score the observation if there is an id
@@ -88,11 +115,9 @@ export class TraceEventClient {
     content,
   }: EventParams<TraceEventRegenerateMessage>) {
     const score = EventScore.Regenerate;
-    // create update event
-    this._trace?.event({
+    this.recordEvent(TraceEventType.RegenerateMessage, observationId, {
       input: content,
       metadata: { score },
-      name: TraceEventType.RegenerateMessage,
     });
 
     // score the observation if there is an id
@@ -107,19 +132,11 @@ export class TraceEventClient {
   }: EventParams<TraceEventModifyMessage>) {
     const score = EventScore.Modify;
 
-    // create update event
     const diffs = diffChars(prev, next);
-    this._trace?.event({
+    this.recordEvent(TraceEventType.ModifyMessage, observationId, {
       input: prev,
       metadata: { diffs, score },
-      name: TraceEventType.ModifyMessage,
       output: next,
-    });
-
-    this._trace.update({
-      output: next,
-      // TODO: add tag when supported
-      // tags: [TraceNameMap.UserEvents]
     });
 
     // score the observation if there is an id

@@ -1,7 +1,13 @@
+// @vitest-environment node
+import { type LangfuseClient } from '@langfuse/client';
+import { setLangfuseTracerProvider } from '@langfuse/tracing';
 import { TraceEventType } from '@lobechat/types';
-import { diffChars } from 'diff';
-import { type LangfuseTraceClient } from 'langfuse-core';
-import { describe, expect, it } from 'vitest';
+import {
+  BasicTracerProvider,
+  InMemorySpanExporter,
+  SimpleSpanProcessor,
+} from '@opentelemetry/sdk-trace-base';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EventScore, TraceEventClient } from './event';
 
@@ -9,149 +15,96 @@ vi.mock('diff', () => ({
   diffChars: vi.fn().mockReturnValue([{ added: true, count: 1, value: 'a' }]),
 }));
 
+const traceId = '4bf92f3577b34da6a3ce929d0e0e4736';
+const observationId = '00f067aa0ba902b7';
+
+const exporter = new InMemorySpanExporter();
+setLangfuseTracerProvider(
+  new BasicTracerProvider({ spanProcessors: [new SimpleSpanProcessor(exporter)] }),
+);
+
+const createClient = (id = traceId) => {
+  const score = { create: vi.fn() };
+  const client = new TraceEventClient({
+    client: { score } as unknown as LangfuseClient,
+    traceId: id,
+  });
+
+  return { client, score };
+};
+
+beforeEach(() => {
+  exporter.reset();
+});
+
 describe('TraceEventClient', () => {
-  it('should correctly initialize with a LangfuseTraceClient instance', () => {
-    // 准备
-    const mockLangfuseTraceClient = {} as LangfuseTraceClient; // 创建一个空的 mock 对象作为 LangfuseTraceClient 的替身
-    // 执行
-    const client = new TraceEventClient(mockLangfuseTraceClient);
-    // 断言
-    expect((client as any)._trace).toBe(mockLangfuseTraceClient); // 使用 any 类型来绕过 TypeScript 的访问限制
-  });
+  it('records the event under the generation and scores it', () => {
+    const { client, score } = createClient();
 
-  describe('scoreObservation', () => {
-    it('should call _trace.client.score when observationId is provided', () => {
-      // 准备
-      const scoreSpy = vi.fn(); // 创建一个 spy 函数
-      const mockLangfuseTraceClient = {
-        client: {
-          score: scoreSpy, // 使用 spy 函数代替实际的 score 方法
-        },
-      } as unknown as LangfuseTraceClient; // 使用 unknown 转换绕过类型检查
+    client.copyMessage({ content: 'hello', observationId, traceId });
 
-      const client = new TraceEventClient(mockLangfuseTraceClient);
-      const params = {
-        name: 'test',
-        observationId: 'obs123',
-        traceId: 'trace456',
-        value: 0.5,
-      };
-
-      // 执行
-      (client as any).scoreObservation(params); // 使用 any 类型来绕过 TypeScript 的访问限制
-
-      // 断言
-      expect(scoreSpy).toHaveBeenCalledWith(params); // 验证 scoreSpy 是否被以正确的参数调用
-    });
-
-    it('should not call _trace.client.score when observationId is not provided', () => {
-      // 准备
-      const scoreSpy = vi.fn();
-      const mockLangfuseTraceClient = {
-        client: {
-          score: scoreSpy,
-        },
-      } as unknown as LangfuseTraceClient;
-
-      const client = new TraceEventClient(mockLangfuseTraceClient);
-      const params = {
-        name: 'test',
-        // 注意，这里没有提供 observationId
-        traceId: 'trace456',
-        value: 0.5,
-      };
-
-      // 执行
-      (client as any).scoreObservation(params);
-
-      // 断言
-      expect(scoreSpy).not.toHaveBeenCalled(); // 验证 scoreSpy 没有被调用
+    const [span] = exporter.getFinishedSpans();
+    expect(span.name).toBe(TraceEventType.CopyMessage);
+    expect(span.spanContext().traceId).toBe(traceId);
+    expect(span.parentSpanContext?.spanId).toBe(observationId);
+    expect(span.attributes['langfuse.observation.type']).toBe('event');
+    expect(span.attributes['langfuse.observation.input']).toBe('hello');
+    expect(score.create).toHaveBeenCalledWith({
+      name: 'copy message',
+      observationId,
+      traceId,
+      value: EventScore.Copy,
     });
   });
 
-  describe('copyMessage', () => {
-    it('should trigger _trace.event and scoreObservation with correct parameters', async () => {
-      const eventSpy = vi.fn();
-      const scoreObservationSpy = vi.fn();
-      const mockLangfuseTraceClient = { event: eventSpy } as unknown as LangfuseTraceClient;
+  it('records the event in the trace without a score when the observation id is unknown', () => {
+    const { client, score } = createClient();
 
-      const client = new TraceEventClient(mockLangfuseTraceClient);
-      // 使用 spy 替换 scoreObservation 方法
-      (client as any).scoreObservation = scoreObservationSpy;
+    client.regenerateMessage({ content: 'hello', traceId } as any);
 
-      const params = {
-        traceId: 'trace123',
-        observationId: 'obs456',
-        content: 'test content',
-      };
+    const [span] = exporter.getFinishedSpans();
+    expect(span.name).toBe(TraceEventType.RegenerateMessage);
+    expect(span.spanContext().traceId).toBe(traceId);
+    expect(score.create).not.toHaveBeenCalled();
+  });
 
-      await client.copyMessage(params as any);
+  it('only scores messages traced before the SDK v5 migration', () => {
+    const legacyTraceId = '7d276f21-e777-4965-9c94-c91c2c07fbe4';
+    const legacyObservationId = '62a399f3-6e86-4d8b-a62d-fd1a66138082';
+    const { client, score } = createClient(legacyTraceId);
 
-      // 验证 _trace.event 是否被正确调用
-      expect(eventSpy).toHaveBeenCalledWith({
-        input: params.content,
-        metadata: { score: EventScore.Copy },
-        name: TraceEventType.CopyMessage,
-      });
+    client.deleteAndRegenerateMessage({
+      content: 'hello',
+      observationId: legacyObservationId,
+      traceId: legacyTraceId,
+    });
 
-      // 验证 scoreObservation 是否被正确调用
-      expect(scoreObservationSpy).toHaveBeenCalledWith({
-        name: 'copy message',
-        observationId: params.observationId,
-        traceId: params.traceId,
-        value: EventScore.Copy,
-      });
+    expect(exporter.getFinishedSpans()).toHaveLength(0);
+    expect(score.create).toHaveBeenCalledWith({
+      name: 'delete and regenerate message',
+      observationId: legacyObservationId,
+      traceId: legacyTraceId,
+      value: EventScore.DeleteAndRegenerate,
     });
   });
 
-  describe('modifyMessage', () => {
-    it('should trigger _trace.event, _trace.update and scoreObservation with correct parameters', async () => {
-      const eventSpy = vi.fn();
-      const updateSpy = vi.fn();
-      const mockValue = [{ added: true, count: 1, value: 'a' }];
+  it('records the edit with its diff', () => {
+    const { client, score } = createClient();
 
-      const mockLangfuseTraceClient = {
-        event: eventSpy,
-        update: updateSpy,
-      } as unknown as LangfuseTraceClient;
+    client.modifyMessage({ content: 'before', nextContent: 'after', observationId, traceId });
 
-      const client = new TraceEventClient(mockLangfuseTraceClient);
-      // @ts-ignore
-      const spy = vi.spyOn(client, 'scoreObservation').mockImplementation(() => vi.fn());
-
-      const params = {
-        content: 'hello',
-        nextContent: 'hallo',
-        observationId: 'obs789',
-        traceId: 'trace321',
-      };
-
-      await client.modifyMessage(params as any);
-
-      // 验证 diffChars 是否被调用
-      expect(diffChars).toHaveBeenCalledWith(params.content, params.nextContent);
-
-      // 验证 _trace.event 是否被正确调用
-      expect(eventSpy).toHaveBeenCalledWith({
-        input: params.content,
-        metadata: { diffs: mockValue, score: EventScore.Modify },
-        name: TraceEventType.ModifyMessage,
-        output: params.nextContent,
-      });
-
-      // 验证 _trace.update 是否被调用
-      expect(updateSpy).toHaveBeenCalledWith({
-        output: params.nextContent,
-        // tags: [TraceNameMap.UserEvents] // 当支持时添加
-      });
-
-      // 验证 scoreObservation 是否被正确调用
-      expect(spy).toHaveBeenCalledWith({
-        name: 'modify message',
-        observationId: params.observationId,
-        traceId: params.traceId,
-        value: EventScore.Modify,
-      });
+    const [span] = exporter.getFinishedSpans();
+    expect(span.name).toBe(TraceEventType.ModifyMessage);
+    expect(span.attributes['langfuse.observation.input']).toBe('before');
+    expect(span.attributes['langfuse.observation.output']).toBe('after');
+    expect(JSON.parse(span.attributes['langfuse.observation.metadata.diffs'] as string)).toEqual([
+      { added: true, count: 1, value: 'a' },
+    ]);
+    expect(score.create).toHaveBeenCalledWith({
+      name: 'modify message',
+      observationId,
+      traceId,
+      value: EventScore.Modify,
     });
   });
 });
