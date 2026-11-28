@@ -882,6 +882,12 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 
 上述示例表示先禁用所有模型，再启用 `flux-pro-1.1` 和 `flux-kontext-pro`（显示名为 `FLUX.1 Kontext [pro]`）。
 
+## ModelFold
+
+在服务端设置 `MODELFOLD_API_KEY` 可为部署启用 ModelFold。如果用户在设置页填写自己的密钥，请留空。不要把真实密钥写进 Dockerfile 或提交到代码仓库。
+
+`MODELFOLD_PROXY_URL` 可覆盖默认地址 `https://modelfold.ai/v1`。仅填写可信的 Chat Completions 端点，该端点会收到配置的密钥。`MODELFOLD_MODEL_LIST` 可选，用于定制服务端模型列表；例如，若账号有权限，可用 `+deepseek-v4-flash` 添加该模型。也可以在服务商设置中获取可用模型。
+
 ## NewAPI
 
 ### `NEWAPI_API_KEY`

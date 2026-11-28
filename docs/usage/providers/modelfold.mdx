@@ -1,0 +1,15 @@
+---
+title: Using ModelFold in LobeHub
+description: Connect a ModelFold API key and discover chat models available to your account.
+tags:
+  - LobeHub
+  - ModelFold
+---
+
+# Using ModelFold in LobeHub
+
+1. Sign in to [ModelFold](https://modelfold.ai), open **API Keys**, and create a key. See the [authentication guide](https://modelfold.ai/docs/guide/authentication).
+2. Open LobeHub's model provider settings, select **ModelFold**, and enter your key. Keep the default base URL `https://modelfold.ai/v1`; do not append `/chat/completions`.
+3. Fetch the model list and enable a chat model returned for your account. The connection check uses `deepseek-v4-flash`; if it is unavailable, select another listed model before testing a chat.
+
+Chat requests use your ModelFold account. Check the [ModelFold documentation](https://modelfold.ai/docs/) for usage and billing information. If authentication fails, check that the key is active. This integration uses Chat Completions, not Anthropic Messages or the Responses API.
