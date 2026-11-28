@@ -251,6 +251,71 @@ describe('GeneralChatAgent unresolvable tool names (llm_result phase)', () => {
     expect((result as any).type).toBe('resolve_blocked_tools');
   });
 
+  // lobehub#23684: in agent mode an on-demand builtin such as Agent Management
+  // stays out of the offered tools until `activateTools` loads it, even when
+  // the agent enables it. A model that calls its exact name before activating
+  // it (an earlier turn used it, but that turn's activation fell out of the
+  // history window) was told to "copy a name exactly", repeated the same exact
+  // name, and the run stopped after three misses.
+  describe('when the tool exists but is not activated', () => {
+    const activatorTool = {
+      function: { name: 'lobe-activator____activateTools', parameters: {} },
+      type: 'function',
+    };
+    const agentManagementManifest = {
+      api: [{ name: 'createAgent' }, { name: 'callAgent' }],
+      identifier: 'lobe-agent-management',
+    };
+    const activatableState = (overrides?: Partial<AgentState>) =>
+      createMockState({
+        operationToolSet: {
+          enabledToolIds: ['lobe-activator'],
+          manifestMap: { 'lobe-agent-management': agentManagementManifest },
+          sourceMap: {},
+          tools: [activatorTool],
+        },
+        ...overrides,
+      } as Partial<AgentState>);
+
+    it('should tell the model to activate the tool instead of copying the name', async () => {
+      const result = await createAgent().runner(
+        unresolvedContext('lobe-agent-management____createAgent'),
+        activatableState(),
+      );
+
+      expect((result as any).payload.blockedContent).toBe(
+        'Tool call rejected: lobe-agent-management____createAgent is not activated in this run. Call lobe-activator____activateTools with identifiers ["lobe-agent-management"] first, then call it again.',
+      );
+    });
+
+    it('should keep the typo feedback for an API the tool does not declare', async () => {
+      const result = await createAgent().runner(
+        unresolvedContext('lobe-agent-management____cloneAgent'),
+        activatableState(),
+      );
+
+      expect((result as any).payload.blockedContent).toBe(
+        'Tool call rejected: no available tool is named lobe-agent-management____cloneAgent. Copy a name exactly as declared in the tools schema and call it again.',
+      );
+    });
+
+    it('should keep the typo feedback when the run offers no activator', async () => {
+      const result = await createAgent().runner(
+        unresolvedContext('lobe-agent-management____createAgent'),
+        activatableState({
+          operationToolSet: {
+            enabledToolIds: [],
+            manifestMap: { 'lobe-agent-management': agentManagementManifest },
+            sourceMap: {},
+            tools: [],
+          },
+        } as Partial<AgentState>),
+      );
+
+      expect((result as any).payload.blockedContent).toContain('no available tool is named');
+    });
+  });
+
   it('should fail when unresolvable tool_calls carry no name to reject', async () => {
     await expect(createAgent().runner(unresolvedContext(''), createMockState())).rejects.toThrow(
       'LLM returned 1 unresolvable tool_calls: unnamed',
