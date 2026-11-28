@@ -41,7 +41,7 @@ const isProviderRuntimeStateKnown = () =>
 /**
  * Nothing when the provider runtime state is loaded; else resolves once it is,
  * or after {@link PROVIDER_STATE_WAIT_MS}: whether a custom provider runs on
- * the device (private base URL, `fetchOnClient`) is only known from it.
+ * the device (a private base URL without a key) is only known from it.
  */
 const waitForProviderRuntimeState = () => {
   if (isProviderRuntimeStateKnown()) return;
@@ -77,7 +77,7 @@ export const oneShotRelay = new OneShotRelay({
     );
   },
   isDeviceProvider: (provider) =>
-    aiProviderSelectors.isProviderFetchOnClient(provider)(getAiInfraStoreState()),
+    aiProviderSelectors.isProviderDeviceOnly(provider)(getAiInfraStoreState()),
   endOperation: (operationId) => llmRelayExecutor.cancelOperation(operationId),
   onCancel: (data) => llmRelayExecutor.cancel(data),
   onExecute: (data) => void llmRelayExecutor.execute(data),
@@ -103,8 +103,8 @@ export const oneShotRelay = new OneShotRelay({
 /**
  * `execAgent`'s `llmExecutor`: this client can run relayed LLM attempts for
  * the providers it has configured. The server still decides per provider
- * whether a call needs the device at all (`fetchOnClient`, a private base
- * URL). Absent outside the `agent_llm_relay` rollout.
+ * whether a call needs the device at all (a local provider, a private base
+ * URL without a key). Absent outside the `agent_llm_relay` rollout.
  */
 export const buildLlmExecutorDeclaration = (): ExecAgentLlmExecutor | undefined => {
   if (!isLlmRelayEnabled()) return;

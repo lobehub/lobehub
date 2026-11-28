@@ -2,7 +2,7 @@ import type { AgentState } from '@lobechat/agent-runtime';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import debug from 'debug';
 import { ModelProvider } from 'model-bank';
-import { isProviderFetchOnClient } from 'model-bank/modelProviders';
+import { isProviderDeviceOnly } from 'model-bank/modelProviders';
 
 import { AiProviderModel } from '@/database/models/aiProvider';
 import type { LobeChatDatabase } from '@/database/type';
@@ -47,10 +47,12 @@ export interface ResolveProviderRelayParams {
 /**
  * Whether calls to `provider` must run on the user's device, i.e. be relayed:
  * the relay is on for the user, the provider is not platform-owned, and the
- * shared `fetchOnClient` rule — the one the client store applies, on the
- * user's config with this deployment's override (desktop, `OLLAMA_PROXY_URL`,
- * `MAGPIE_PROXY_URL`) as the default — sends it to the device. `undefined` keeps
- * it on the server.
+ * shared `isProviderDeviceOnly` rule — the one the client store applies, on
+ * the user's config with this deployment's override (desktop,
+ * `OLLAMA_PROXY_URL`, `MAGPIE_PROXY_URL`) as the default — says only the device
+ * can reach it. A provider with an API key stays on the server even when the
+ * user calls it from the browser (`fetchOnClient`), so background runs with no
+ * device attached keep working. `undefined` keeps it on the server.
  */
 export const resolveProviderRelay = async ({
   db,
@@ -67,13 +69,13 @@ export const resolveProviderRelay = async ({
     provider,
     KeyVaultsGateKeeper.getUserKeyVaults,
   );
-  const fetchOnClient = isProviderFetchOnClient(provider, {
+  const deviceOnly = isProviderDeviceOnly(provider, {
     fetchOnClient: config?.fetchOnClient ?? getServerFetchOnClientOverride(provider),
     keyVaults: config?.keyVaults as { apiKey?: string; baseURL?: string } | undefined,
   });
 
-  log('provider=%s fetchOnClient=%s', provider, fetchOnClient);
-  if (!fetchOnClient) return;
+  log('provider=%s deviceOnly=%s', provider, deviceOnly);
+  if (!deviceOnly) return;
 
   return { runtimeProvider: resolveRuntimeProvider(provider, config?.settings?.sdkType) };
 };

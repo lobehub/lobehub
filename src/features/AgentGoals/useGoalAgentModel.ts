@@ -111,7 +111,7 @@ export const useGoalAgentModel = ({ goalId, routeAgentId }: UseGoalAgentModelPar
     useShallow((s) =>
       relayEnabled
         ? (s.enabledChatModelList ?? [])
-            .filter((provider) => !aiProviderSelectors.isProviderFetchOnClient(provider.id)(s))
+            .filter((provider) => !aiProviderSelectors.isProviderDeviceOnly(provider.id)(s))
             .map((provider) => provider.id)
         : undefined,
     ),

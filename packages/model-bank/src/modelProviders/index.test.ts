@@ -4,6 +4,7 @@ import { type ModelProviderCard } from '../types';
 import {
   DEFAULT_MODEL_PROVIDER_LIST,
   getProviderDisplayName,
+  isProviderDeviceOnly,
   isProviderDisableBrowserRequest,
   isProviderFetchOnClient,
   isProviderOAuthDeviceFlow,
@@ -86,5 +87,77 @@ describe('isProviderFetchOnClient', () => {
     const keyVaults = { apiKey: 'sk', baseURL: 'http://localhost:8000/v1' };
     expect(isProviderFetchOnClient('openai', { fetchOnClient: true, keyVaults })).toBe(true);
     expect(isProviderFetchOnClient('openai', { keyVaults })).toBe(false);
+  });
+});
+
+describe('isProviderDeviceOnly', () => {
+  it('relays a local provider unless fetchOnClient says otherwise', () => {
+    expect(isProviderDeviceOnly('ollama', undefined)).toBe(true);
+    expect(isProviderDeviceOnly('lmstudio', { keyVaults: {} })).toBe(true);
+    expect(isProviderDeviceOnly('ollama', { fetchOnClient: false })).toBe(false);
+  });
+
+  it('relays a provider with only a base URL', () => {
+    expect(
+      isProviderDeviceOnly('openai', { keyVaults: { baseURL: 'http://192.168.1.2:8000/v1' } }),
+    ).toBe(true);
+  });
+
+  it('relays a keyed provider on a private network only when fetchOnClient asks for it', () => {
+    for (const baseURL of [
+      'http://127.0.0.1:1234/v1',
+      'http://localhost:8000/v1',
+      'http://10.0.0.5/v1',
+      'http://172.20.1.1/v1',
+      'http://192.168.1.2:8000/v1',
+      'http://[::1]:8000/v1',
+      'http://[fd12:3456:789a::1]:8000/v1',
+      'http://[fe80::1]:8000/v1',
+      'http://[::ffff:127.0.0.1]:1234/v1',
+      'http://[::ffff:c0a8:102]:8000/v1',
+      'http://169.254.1.2:8000/v1',
+      'http://100.101.102.103:11434/v1',
+      'http://dev-box.local:8000/v1',
+      'http://gpu.lan:8000/v1',
+      'http://llm.internal/v1',
+      'http://nas.home.arpa:8000/v1',
+      'http://dev-box:8000/v1',
+    ]) {
+      const keyVaults = { apiKey: 'k', baseURL };
+      expect(isProviderDeviceOnly('my-llm', { fetchOnClient: true, keyVaults })).toBe(true);
+      // An unset flag keeps the server call, so one-shot relay setup and the
+      // server agree on the same execution site.
+      expect(isProviderDeviceOnly('my-llm', { fetchOnClient: false, keyVaults })).toBe(false);
+      expect(isProviderDeviceOnly('my-llm', { keyVaults })).toBe(false);
+    }
+
+    for (const baseURL of [
+      // Public IPv4 just outside the private ranges, a public IPv6 host and hostnames.
+      'http://172.32.0.1/v1',
+      'http://169.255.0.1/v1',
+      'http://100.128.0.1/v1',
+      'https://local.example.com/v1',
+      'http://[2001:db8::1]:8000/v1',
+      'https://api.example.com/v1',
+    ]) {
+      expect(
+        isProviderDeviceOnly('my-llm', {
+          fetchOnClient: true,
+          keyVaults: { apiKey: 'k', baseURL },
+        }),
+      ).toBe(false);
+    }
+  });
+
+  it('keeps a provider with an API key on the server even with fetchOnClient', () => {
+    const keyVaults = { apiKey: 'sk-test', baseURL: 'https://api.example.com/v1' };
+    expect(isProviderDeviceOnly('openai', { fetchOnClient: true, keyVaults })).toBe(false);
+    expect(
+      isProviderDeviceOnly('openai', { fetchOnClient: true, keyVaults: { apiKey: 'k' } }),
+    ).toBe(false);
+  });
+
+  it('keeps a provider with neither on the server', () => {
+    expect(isProviderDeviceOnly('openai', { fetchOnClient: true, keyVaults: {} })).toBe(false);
   });
 });
