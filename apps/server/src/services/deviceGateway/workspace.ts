@@ -14,11 +14,11 @@ import type { DeviceClientGetter } from './types';
 const log = debug('lobe-server:device-gateway');
 
 /**
- * Discover device skills, optionally including a bound project's skills and
- * `AGENTS.md` / `CLAUDE.md`, in a single round-trip. With no scope, only the
- * device's home skill directories are scanned. Routed through the generic device RPC relay
- * (`invokeRpc`) — a server-internal channel the agent never sees, distinct
- * from the LLM-facing tool-call path.
+ * Discover device skills and global `AGENTS.md` / `CLAUDE.md` instructions in a
+ * single round-trip. A bound working directory adds project skills and instructions;
+ * omitting it does not select an implicit project.
+ * Routed through the generic device RPC relay (`invokeRpc`) — a server-internal
+ * channel the agent never sees, distinct from the LLM-facing tool-call path.
  *
  * Returns `undefined` when the gateway is unconfigured, the device is offline,
  * or the call fails — callers fall back to the cached scan.

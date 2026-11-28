@@ -29,6 +29,30 @@ const run = async (config: ConstructorParameters<typeof ProjectInstructionsInjec
   new ProjectInstructionsInjector(config).process(createContext([systemMessage]) as any);
 
 describe('ProjectInstructionsInjector', () => {
+  it('identifies device instructions before project instructions without replacing either layer', async () => {
+    const result = await run({
+      instructions: [
+        {
+          content: 'Personal rules.',
+          path: '/home/test/.agents/AGENTS.md',
+          scope: 'device',
+          source: 'AGENTS.md',
+        },
+        { content: 'Project rules.', path: '/repo/AGENTS.md', source: 'AGENTS.md' },
+      ],
+    });
+
+    const system = systemContentOf(result);
+    expect(system).toContain(
+      '<device_instructions source="AGENTS.md" path="/home/test/.agents/AGENTS.md">\nPersonal rules.\n</device_instructions>',
+    );
+    expect(system).toContain(
+      '<project_instructions source="AGENTS.md" path="/repo/AGENTS.md">\nProject rules.\n</project_instructions>',
+    );
+    expect(system.indexOf('Personal rules.')).toBeLessThan(system.indexOf('Project rules.'));
+    expect(system.startsWith('You are a helpful assistant.')).toBe(true);
+  });
+
   it('wraps each file so the model can tell where an instruction came from', async () => {
     const result = await run({
       instructions: [

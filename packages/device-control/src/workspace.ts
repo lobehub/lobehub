@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import { resolveAgainstCwd } from '@lobechat/local-file-shell/file';
 import { detectGitHubRepository, detectRepoType } from '@lobechat/local-file-shell/git';
+import { isTrimmedNonEmptyString } from '@lobechat/utils/object';
 import matter from 'gray-matter';
 
 import type {
@@ -252,7 +253,7 @@ const approvePreviewRoots = async (
 
 /** Per-file cap, so one oversized file cannot crowd out the others. */
 const MAX_INSTRUCTIONS_FILE_BYTES = 64 * 1024;
-/** Cap across every directory, bounding the cached payload and the system role. */
+/** Project cap; device instructions have a separate single-file budget. */
 const MAX_INSTRUCTIONS_TOTAL_BYTES = 128 * 1024;
 const INSTRUCTION_FILENAMES = ['AGENTS.md', 'CLAUDE.md'] as const;
 
@@ -272,6 +273,29 @@ const truncateUtf8 = (raw: string, maxBytes: number): { bytes: number; content: 
   return { bytes: Buffer.byteLength(content, 'utf8'), content };
 };
 
+/** Read at most one device instruction file, preferring AGENTS.md over CLAUDE.md. */
+const readDeviceInstructions = async (): Promise<WorkspaceInstructionsItem[]> => {
+  const home = os.homedir();
+
+  for (const [directory, source] of [
+    ['.agents', 'AGENTS.md'],
+    ['.claude', 'CLAUDE.md'],
+  ] as const) {
+    const filePath = path.join(home, directory, source);
+    try {
+      const raw = await readFile(filePath, 'utf8');
+      if (!isTrimmedNonEmptyString(raw)) continue;
+
+      const { content } = truncateUtf8(raw, MAX_INSTRUCTIONS_FILE_BYTES);
+      return [{ content, path: filePath, scope: 'device', source }];
+    } catch {
+      // File absent or unreadable; try the next global location.
+    }
+  }
+
+  return [];
+};
+
 /**
  * Read the agent instructions files (`AGENTS.md`, then `CLAUDE.md`) in `dirs`
  * (nearest first), returned root first so the most specific file comes last
@@ -279,7 +303,7 @@ const truncateUtf8 = (raw: string, maxBytes: number): { bytes: number; content: 
  *
  * Both names are read in each directory since they can coexist, except when
  * one is a symlink to the other (a common way to share one file between
- * harnesses): the same file is never injected twice. The total budget is
+ * harnesses): each real file is read once within the project scan. The budget is
  * spent nearest first, so when it runs out the farthest parents are dropped,
  * not the working directory's own rules.
  */
@@ -338,10 +362,9 @@ export const listProjectSkills = async (
 
 /**
  * One-call "workspace init" scan: merge project and execution-device skills
- * (deduped by name, project winning) and read the agent instructions from the
- * working directory up to the repository root. Without a working directory,
- * discover only home-directory skills: neither the daemon's cwd nor the home
- * directory becomes an implicit project or supplies project instructions.
+ * (deduped by name, project winning) and load the device's global instructions.
+ * A bound working directory also contributes project instructions, root first.
+ * Without one, neither the daemon's cwd nor the home directory is an implicit project.
  * Approves the selected project root and discovered skill preview roots.
  */
 export const initWorkspace = async (
@@ -355,7 +378,10 @@ export const initWorkspace = async (
     ...(root ? createProjectSkillRoots(root, dirs) : []),
     ...createDeviceSkillRoots(),
   ]);
-  const instructions = await readWorkspaceInstructions(dirs);
+  const instructions = [
+    ...(await readDeviceInstructions()),
+    ...(await readWorkspaceInstructions(dirs)),
+  ];
 
   await approvePreviewRoots(skills, deps, root ? [root] : []);
 

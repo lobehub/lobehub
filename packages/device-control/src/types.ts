@@ -38,14 +38,16 @@ export interface ProjectSkillItem {
 }
 
 export interface InitWorkspaceParams {
-  /** Working directory; omitted to discover only device-level skills. */
+  /** Working directory; omit to discover only device-level skills and instructions. */
   scope?: string;
 }
 
 export interface WorkspaceInstructionsItem {
   content: string;
-  /** Absolute path of the file; the working directory or one of its parents. */
+  /** Absolute path of the project or execution-device instruction file. */
   path: string;
+  /** Instruction scope. Absent in older scans; defaults to project. */
+  scope?: 'device' | 'project';
   source: 'AGENTS.md' | 'CLAUDE.md';
 }
 

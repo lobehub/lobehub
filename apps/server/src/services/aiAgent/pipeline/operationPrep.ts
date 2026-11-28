@@ -229,7 +229,7 @@ export interface OperationPrepResult {
   initialContext: AgentRuntimeContext;
   operationSkillSet?: OperationSkillSet;
   /**
-   * A project's root instruction files. Run context, not agent config — it
+   * Device and project instruction files. Run context, not agent config — it
    * travels on the operation like `expertise` does, and the context engine
    * injects it.
    */
@@ -238,10 +238,9 @@ export interface OperationPrepResult {
 }
 
 /**
- * Resolve the "workspace init" scan (project skills + AGENTS.md) for a run
- * bound to a device's project directory. Reads the cache on
- * `devices.workingDirs[].workspace`, reusing it within the workspace-init TTL;
- * otherwise re-scans the device in one round-trip and writes the result back.
+ * Resolve device skills and instructions, plus project context for a bound
+ * directory. Only bound scans are cached on `devices.workingDirs[].workspace`
+ * and reused within the workspace-init TTL.
  *
  * Gated on `activeDeviceId` — without an online device there is nothing to
  * scan and no current working directory to key the cache on. The web UI reads
@@ -307,7 +306,7 @@ const resolveWorkspaceInit = async (
     });
     const boundCwd = getWorkingDirEffectivePath(boundCwdConfig);
     if (!boundCwd) {
-      // Device-level skills do not require a project. Do not substitute the
+      // Device-level skills and instructions do not require a project. Do not substitute the
       // device's home or daemon cwd, bind a directory, or cache this result as
       // a workingDirs entry (those entries also authorize file-operation roots).
       if (deviceWaking) return { workspace: empty };
@@ -800,10 +799,9 @@ export const prepareOperation = async (
     };
   }
 
-  // On device runs, workspace init discovers home-directory skills. A bound directory
-  // also contributes project skills + AGENTS.md up to the repository root;
-  // those combined scans are cached on `devices.workingDirs` within the TTL.
-  // Without a bound directory, only home skill directories are scanned.
+  // Workspace init discovers device skills and global instructions even without
+  // a working directory. Bound scans add project skills and instructions up to
+  // the repository root and are cached on `devices.workingDirs` within the TTL.
   // Skills surface in `<available_skills>` (metadata only — SKILL.md bodies are read lazily at
   // activation via `local-system` readFile, which `serverRuntimes/skills.ts`
   // re-gates on `activeDeviceId`). Only `location` (the absolute SKILL.md
@@ -848,13 +846,16 @@ export const prepareOperation = async (
   // concatenate them. Returning them rather than stamping `agentConfig` keeps
   // run context off the agent's configuration.
   if (workspaceInit.workspace.instructions.length) {
-    projectInstructions = workspaceInit.workspace.instructions.map(({ content, path, source }) => ({
-      content,
-      path,
-      source,
-    }));
+    projectInstructions = workspaceInit.workspace.instructions.map(
+      ({ content, path, scope, source }) => ({
+        content,
+        path,
+        scope,
+        source,
+      }),
+    );
     log(
-      'execAgent: injected %d project instruction file(s): %s',
+      'execAgent: injected %d workspace instruction file(s): %s',
       workspaceInit.workspace.instructions.length,
       workspaceInit.workspace.instructions.map((i) => i.source).join(', '),
     );
