@@ -28,6 +28,11 @@ export interface BusinessModelListGuard {
    * label; a business override names a different tier per model.
    */
   restrictedBadgeLabel?: (modelId: string, providerId: string) => string | undefined;
+  /**
+   * Hover text of a restricted model's badge, e.g. which plan unlocks it. Returning
+   * `undefined` shows the badge without a tooltip.
+   */
+  restrictedBadgeTooltip?: (modelId: string, providerId: string) => string | undefined;
   sortModelLast?: (modelId: string, providerId: string) => boolean;
 }
 

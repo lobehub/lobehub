@@ -12,13 +12,12 @@ import {
   DropdownMenuSubmenuTrigger,
   Flexbox,
   menuSharedStyles,
-  Tag,
 } from '@lobehub/ui';
 import { Check } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ProviderItemRender } from '@/components/ModelSelect';
+import { ProviderItemRender, RestrictedModelBadge } from '@/components/ModelSelect';
 import { useDensityTokens } from '@/styles/density';
 
 import { styles } from '../../styles';
@@ -35,6 +34,8 @@ interface MultipleProvidersModelItemProps {
   defaultProviderId?: string;
   /** Badge text of a restricted model */
   getRestrictedLabel?: (modelId: string, providerId: string) => string;
+  /** Badge hover text of a restricted model */
+  getRestrictedTooltip?: (modelId: string, providerId: string) => string | undefined;
   isModelRestricted?: (modelId: string, providerId: string) => boolean;
   newLabel: string;
   onBeforeModelSelect?: (modelId: string, providerId: string) => boolean | Promise<boolean>;
@@ -49,6 +50,7 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
     activeSecondaryText,
     data,
     getRestrictedLabel,
+    getRestrictedTooltip,
     isModelRestricted,
     newLabel,
     onBeforeModelSelect,
@@ -118,6 +120,11 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
                 ? getRestrictedLabel?.(data.model.id, defaultProvider.id)
                 : undefined
             }
+            proBadgeTooltip={
+              defaultProviderRestricted && defaultProvider
+                ? getRestrictedTooltip?.(data.model.id, defaultProvider.id)
+                : undefined
+            }
           />
         </DropdownMenuSubmenuTrigger>
         <DropdownMenuPortal>
@@ -164,9 +171,10 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
                             />
                           </Flexbox>
                           {providerRestricted && getRestrictedLabel && (
-                            <Tag color="gold" size="small">
-                              {getRestrictedLabel(data.model.id, p.id)}
-                            </Tag>
+                            <RestrictedModelBadge
+                              label={getRestrictedLabel(data.model.id, p.id)}
+                              tooltip={getRestrictedTooltip?.(data.model.id, p.id)}
+                            />
                           )}
                         </Flexbox>
                       </DropdownMenuItemLabel>

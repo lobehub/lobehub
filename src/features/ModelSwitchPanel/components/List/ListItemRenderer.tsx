@@ -36,6 +36,8 @@ interface ListItemRendererProps {
   activeSecondaryText?: string;
   /** Badge text of a restricted model */
   getRestrictedLabel?: (modelId: string, providerId: string) => string;
+  /** Badge hover text of a restricted model */
+  getRestrictedTooltip?: (modelId: string, providerId: string) => string | undefined;
   isModelRestricted?: (modelId: string, providerId: string) => boolean;
   item: ListItem;
   newLabel: string;
@@ -51,6 +53,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
     activeKey,
     activeSecondaryText,
     getRestrictedLabel,
+    getRestrictedTooltip,
     isModelRestricted,
     item,
     newLabel,
@@ -192,6 +195,9 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                   proBadgeLabel={
                     restricted ? getRestrictedLabel?.(item.model.id, item.provider.id) : undefined
                   }
+                  proBadgeTooltip={
+                    restricted ? getRestrictedTooltip?.(item.model.id, item.provider.id) : undefined
+                  }
                 />
               </DropdownMenuSubmenuTrigger>
               <DropdownMenuPortal>
@@ -243,6 +249,11 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                       ? getRestrictedLabel?.(item.data.model.id, singleProvider.id)
                       : undefined
                   }
+                  proBadgeTooltip={
+                    restricted
+                      ? getRestrictedTooltip?.(item.data.model.id, singleProvider.id)
+                      : undefined
+                  }
                 />
               </DropdownMenuSubmenuTrigger>
               <DropdownMenuPortal>
@@ -265,6 +276,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               activeSecondaryText={activeSecondaryText}
               data={item.data}
               getRestrictedLabel={getRestrictedLabel}
+              getRestrictedTooltip={getRestrictedTooltip}
               isModelRestricted={isModelRestricted}
               newLabel={newLabel}
               onBeforeModelSelect={onBeforeModelSelect}

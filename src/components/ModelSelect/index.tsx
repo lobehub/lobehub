@@ -29,7 +29,10 @@ import { type AiProviderSourceType } from '@/types/aiProvider';
 import { formatTokenNumber } from '@/utils/format';
 
 import NewModelBadgeI18n, { NewModelBadge as NewModelBadgeCore } from './NewModelBadge';
+import { RestrictedModelBadge } from './RestrictedModelBadge';
 import RoutingBadge from './RoutingBadge';
+
+export { RestrictedModelBadge } from './RestrictedModelBadge';
 
 export const TAG_CLASSNAME = 'lobe-model-info-tags';
 
@@ -253,7 +256,10 @@ interface ModelItemRenderProps extends ChatModelCard, Pick<FlexboxProps, 'classN
   /** Inline marker after the name (and secondary text), e.g. an image-output icon */
   nameSuffix?: ReactNode;
   newBadgeLabel?: string;
+  /** Badge of a model the current plan cannot use, named after the plan that unlocks it */
   proBadgeLabel?: string;
+  /** Hover text of `proBadgeLabel` */
+  proBadgeTooltip?: string;
   /** The provider the row belongs to, which some markers read the id against */
   provider?: string;
   /** Muted text right after the model name, e.g. the current reasoning effort */
@@ -274,6 +280,7 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
     nameSuffix,
     newBadgeLabel,
     proBadgeLabel,
+    proBadgeTooltip,
     provider,
     secondaryText,
     video,
@@ -332,9 +339,7 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
             <NewModelBadgeI18n releasedAt={releasedAt} />
           )}
           {proBadgeLabel && (
-            <Tag color="gold" size="small">
-              {proBadgeLabel}
-            </Tag>
+            <RestrictedModelBadge label={proBadgeLabel} tooltip={proBadgeTooltip} />
           )}
         </Flexbox>
         {extra ??

@@ -21,6 +21,8 @@ interface ModelRowRenderProps {
   /** Text for the price column when the model has no price to compare, e.g. a featured model. */
   pricePlaceholder?: string;
   proBadgeLabel?: string;
+  /** Hover text of `proBadgeLabel` */
+  proBadgeTooltip?: string;
   provider: string;
 }
 
@@ -34,6 +36,7 @@ export const ModelRowRender = memo<ModelRowRenderProps>(
     newLabel,
     pricePlaceholder,
     proBadgeLabel,
+    proBadgeTooltip,
     provider,
   }) => {
     const effortLabel = useModelEffortLabel(model.id, provider);
@@ -44,6 +47,7 @@ export const ModelRowRender = memo<ModelRowRenderProps>(
         {...model.abilities}
         newBadgeLabel={newLabel}
         proBadgeLabel={proBadgeLabel}
+        proBadgeTooltip={proBadgeTooltip}
         provider={provider}
         secondaryText={(isActive && activeEffortLabel) || effortLabel}
         extra={
