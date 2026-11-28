@@ -24,6 +24,7 @@ export enum ModelProvider {
   Fal = 'fal',
   FireworksAI = 'fireworksai',
   FishAudio = 'fishaudio',
+  FlexAI = 'flexai',
   GiteeAI = 'giteeai',
   Github = 'github',
   GithubCopilot = 'githubcopilot',

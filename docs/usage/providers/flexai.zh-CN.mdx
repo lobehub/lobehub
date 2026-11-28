@@ -1,0 +1,48 @@
+---
+title: 在 LobeHub 中使用 FlexAI
+description: >-
+  学习如何在 LobeHub 中配置并使用 FlexAI 的开放权重模型，从获取 API 密钥到选择合适的模型。
+tags:
+  - LobeHub
+  - FlexAI
+  - 开放权重模型
+  - API 密钥
+---
+
+# 在 LobeHub 中使用 FlexAI
+
+[FlexAI](https://flex.ai) 通过位于 `https://api.flex.ai/v1` 的 OpenAI 兼容 API 提供开放权重模型服务，涵盖 DeepSeek、Qwen、GLM、Llama、Gemma、gpt-oss、MiniMax 等系列，使用 Bearer 令牌鉴权。一个密钥即可访问对话、向量、图像生成、语音合成与语音转写端点，按模型费率以 token 计费。
+
+<Steps>
+  ### 步骤一：获取 FlexAI API 密钥
+
+  - 前往 [tokens.flex.ai](https://tokens.flex.ai) 申请访问权限，通过后会收到邀请邮件。
+  - 创建密钥前需要先填写账单地址并绑定信用卡，二者都在控制台的 **Billing** 页面完成。
+  - 打开 **API Keys**，点击 **Create key**，复制 `sk-…` 开头的密钥。该值只展示一次。
+  - 完整步骤参见 FlexAI 的[快速开始文档](https://docs.flex.ai/inference-api/quickstart)。
+
+  ### 步骤二：在 LobeHub 中配置 FlexAI
+
+  - 打开 **应用设置 → AI 服务商**
+  - 在服务商列表中找到并选择 `FlexAI`
+  - 粘贴刚刚创建的 API 密钥并启用该服务商
+
+  ### 步骤三：选择模型
+
+  - LobeHub 内置了 FlexAI 的对话与向量模型清单，无需拉取即可直接使用。
+  - 点击 **获取模型列表** 可从 `GET /v1/models` 拉取实时目录，新上线的模型会先出现在这里。
+  - 选择一个对话模型执行 **连通性检查**，通过后即可在助手中使用。
+</Steps>
+
+## 能力说明
+
+- **流式输出与工具调用**在 FlexAI 提供的全部对话模型上均可用。
+- **视觉**仅部分模型支持。模型行会标注可读图的模型；未标注的模型会拒绝图片附件或直接忽略图片内容，附图前请先确认标记。
+- **向量**通过 `bge-m3` 提供（1024 维）。
+- **图像生成、语音合成与语音转写**端点在 API 上存在，但尚未接入本服务商集成，LobeHub 中请使用对话与向量模型。
+
+## 价格与可用性
+
+各模型费率发布在 [FlexAI 模型页](https://flex.ai/models)，API 自身也会返回，因此模型卡片上的价格直接来自 FlexAI 目录而非抄录的表格。当前清单请以模型页为准，目录会随模型上下线而变化。
+
+服务端共享配置请参见 [FlexAI 环境变量](/docs/self-hosting/environment-variables/model-provider#flexai)。
