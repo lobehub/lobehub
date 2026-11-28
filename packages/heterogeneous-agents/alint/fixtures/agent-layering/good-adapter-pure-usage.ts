@@ -1,5 +1,5 @@
-// Fixture: adapters/kimiCode.ts — the adapter turns usage it is handed into an event.
-import type { AgentEventAdapter, HeterogeneousAgentEvent, PostRunUsage } from '../types';
+// Fixture: adapters/kimiCode/index.ts — the adapter turns usage it is handed into an event.
+import type { AgentEventAdapter, HeterogeneousAgentEvent, PostRunUsage } from '../../types';
 
 export class KimiCodeAdapter implements AgentEventAdapter {
   sessionId?: string;

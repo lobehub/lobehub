@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DSH_MIN_VERSION, DSH_VERSION_PATTERN } from '../spawn/dshAcpSession';
+import { DSH_MIN_VERSION, DSH_VERSION_PATTERN } from '../spawn/acp/dsh/session';
 import type { CliCommandStatus } from '../spawn/resolveCliCommand';
 import {
   probeRemotePlatform,

@@ -19,7 +19,7 @@ ignores = [
   "**/.next/**",
   "**/*.d.ts",
   "packages/sdk/src/generated/**",
-  "packages/heterogeneous-agents/src/codex/protocol/generated.ts",
+  "packages/heterogeneous-agents/src/adapters/codex/appServer/protocol/generated.ts",
 ]
 
 [config.group.ignore]

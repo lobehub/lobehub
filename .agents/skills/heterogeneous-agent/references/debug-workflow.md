@@ -159,7 +159,7 @@ If the repo already contains useful references, inspect these first:
 
 If you only need boundary semantics or tool persistence behavior, prefer existing adapter tests under:
 
-- `packages/heterogeneous-agents/src/adapters/claudeCode.test.ts`
+- `packages/heterogeneous-agents/src/adapters/claudeCode/index.test.ts`
 
 ## 3. Compare Raw And Adapted Events
 
@@ -204,8 +204,8 @@ Also verify these Claude-specific invariants:
 
 Good references:
 
-- `packages/heterogeneous-agents/src/adapters/claudeCode.ts`
-- `packages/heterogeneous-agents/src/adapters/claudeCode.test.ts`
+- `packages/heterogeneous-agents/src/adapters/claudeCode/index.ts`
+- `packages/heterogeneous-agents/src/adapters/claudeCode/index.test.ts`
 
 ### Codex
 
@@ -269,15 +269,15 @@ affected `__tests__/*.test.ts` files explicitly to `bun run check --test` when
 updating adjacent action entries: automatic related-test discovery may miss them.
 
 ```bash
-bunx vitest run --silent='passed-only' 'packages/heterogeneous-agents/src/adapters/codex.test.ts'
-bunx vitest run --silent='passed-only' 'packages/heterogeneous-agents/src/adapters/claudeCode.test.ts'
+bunx vitest run --silent='passed-only' 'packages/heterogeneous-agents/src/adapters/codex/index.test.ts'
+bunx vitest run --silent='passed-only' 'packages/heterogeneous-agents/src/adapters/claudeCode/index.test.ts'
 bunx vitest run --silent='passed-only' 'src/store/chat/slices/agentRun/actions/__tests__/heterogeneousAgentExecutor.test.ts'
 ```
 
 Especially useful places:
 
-- `packages/heterogeneous-agents/src/adapters/codex.test.ts`
-- `packages/heterogeneous-agents/src/adapters/claudeCode.test.ts`
+- `packages/heterogeneous-agents/src/adapters/codex/index.test.ts`
+- `packages/heterogeneous-agents/src/adapters/claudeCode/index.test.ts`
 - `src/store/chat/slices/agentRun/actions/__tests__/heterogeneousAgentExecutor.test.ts`
 
 Claude Code-specific assertions worth adding when fixing bugs:
@@ -345,10 +345,10 @@ The procedure (recurring — run it every time):
   to the overloaded (retry) classifier. Status codes (429 / 529) and message
   text are deliberately not consulted — only this structured signal decides the
   guide.
-  - `packages/heterogeneous-agents/src/adapters/claudeCode.ts` →
+  - `packages/heterogeneous-agents/src/adapters/claudeCode/index.ts` →
     `isUserQuotaRateLimit`
   - regression assertions in
-    `packages/heterogeneous-agents/src/adapters/claudeCode.test.ts`
+    `packages/heterogeneous-agents/src/adapters/claudeCode/index.test.ts`
 
 The general lesson: a field's **presence** is not its **meaning**. Confirm which
 event states a discriminator field co-occurs with in a real recorded trace

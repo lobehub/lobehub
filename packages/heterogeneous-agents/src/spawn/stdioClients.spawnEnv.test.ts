@@ -3,8 +3,8 @@ import { PassThrough } from 'node:stream';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { RpcStdioClient } from '../rpc/rpcStdioClient';
-import { AcpStdioClient } from './acpStdioClient';
+import { AcpStdioClient } from './acp/stdioClient';
+import { RpcStdioClient } from './pi/rpcStdioClient';
 
 const { resolveCliSpawnPlan, spawnManaged } = vi.hoisted(() => ({
   resolveCliSpawnPlan: vi.fn(async (command: string, args: string[]) => ({ args, command })),

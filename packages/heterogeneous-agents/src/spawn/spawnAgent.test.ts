@@ -1462,7 +1462,7 @@ describe('spawnAgent', () => {
   it('seeds a real Codex resumed stream with the previous cumulative usage from the session file', async () => {
     const threadId = '019dba1e-eec2-7a22-bdfb-ac6175e03081';
     const realCodexFixture = await readFile(
-      new URL('../adapters/__fixtures__/codex/collab_tool_call.spawn_wait.jsonl', import.meta.url),
+      new URL('../adapters/codex/__fixtures__/collab_tool_call.spawn_wait.jsonl', import.meta.url),
       'utf8',
     );
     const codexHome = await mkdtemp(path.join(os.tmpdir(), 'lobe-codex-spawn-'));

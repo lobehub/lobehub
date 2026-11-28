@@ -7,16 +7,8 @@ import type { CodexCollaborationMode, HeteroPermissionMode } from '@lobechat/typ
 import { isHeteroPermissionMode } from '@lobechat/types';
 import { spawnManaged } from '@lobechat/utils/managedProcess';
 
-import { ClaudeCodeAdapter } from '../adapters/claudeCode';
+import { ClaudeCodeAdapter } from '../adapters/claudeCode/index';
 import type { AskUserBridge } from '../askUser/AskUserBridge';
-import {
-  askThroughBridge,
-  attachClaudeCodePermissionResponder,
-  buildClaudeCodePermissionArgs,
-  isRunningAsRoot,
-  PermissionModeReporter,
-  resolveClaudeCodePermissionMode,
-} from '../claudeCodePermission';
 import { resolveHeterogeneousAgentCommand } from '../config';
 import {
   spawnAntigravityAcpAgent,
@@ -26,23 +18,31 @@ import {
   spawnDroidAcpAgent,
   spawnGrokAcpAgent,
   spawnTraeAcpAgent,
-} from './acpSpawnAgent';
+} from './acp/spawnAgent';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
-import { CLAUDE_CODE_DISALLOWED_TOOLS } from './claudeCodeDisallowedTools';
+import { CLAUDE_CODE_DISALLOWED_TOOLS } from './claudeCode/disallowedTools';
 import {
   type ClaudeCodeControlRequest,
   type ClaudeCodeControlRequestHandle,
   ClaudeCodeLiveInput,
   resolveClaudeCodeLiveRuntimeEnd,
-} from './claudeCodeLiveInput';
-import { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
+} from './claudeCode/liveInput';
+import {
+  askThroughBridge,
+  attachClaudeCodePermissionResponder,
+  buildClaudeCodePermissionArgs,
+  isRunningAsRoot,
+  PermissionModeReporter,
+  resolveClaudeCodePermissionMode,
+} from './claudeCode/permission';
+import { readClaudeCodeSessionCost } from './claudeCode/sessionCost';
 import { resolveCliSpawnPlan } from './cliSpawn';
-import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
+import { readCodexSessionModel, resolveCodexInitialModel } from './codex/model';
 import {
   buildCodexLobeHubContextArgs,
   type CodexJwtFile,
   createCodexJwtFile,
-} from './codexShellEnv';
+} from './codex/shellEnv';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
 import { prepareClaudeCodeLobeHubCli } from './lobeHubCliPlugin';
@@ -863,4 +863,4 @@ const spawnCliAgent = async (
   };
 };
 
-export { spawnTraeAcpAgent } from './acpSpawnAgent';
+export { spawnTraeAcpAgent } from './acp/spawnAgent';

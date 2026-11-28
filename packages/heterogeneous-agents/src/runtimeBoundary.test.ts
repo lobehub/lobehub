@@ -29,14 +29,21 @@ const SIDE_EFFECT_IMPORT = /^import\s*['"]([^'"]+)['"]/gm;
 const exportTargets = pkg.exports as Record<string, string>;
 const entryFile = (entry: string) => path.join(PACKAGE_ROOT, exportTargets[entry]);
 
-/** Directories owned by Node-only entries; a browser entry must not reach into them. */
+const BROWSER_ENTRY_DIRS = new Set(BROWSER_ENTRIES.map((entry) => path.dirname(entryFile(entry))));
+
+/**
+ * Directories owned by Node-only entries; a browser entry must not reach into them.
+ * Each directory holds one runtime layer, so a Node entry never shares a
+ * directory with a browser entry (asserted below): a shared directory would
+ * drop out of this list and leave its Node-only modules unguarded.
+ */
 const NODE_ONLY_DIRS = [
   ...new Set(
     Object.keys(exportTargets)
       .filter((entry) => !BROWSER_ENTRIES.includes(entry))
       .map((entry) => path.dirname(entryFile(entry))),
   ),
-].filter((dir) => !BROWSER_ENTRIES.some((entry) => path.dirname(entryFile(entry)) === dir));
+];
 
 const stripComments = (source: string) =>
   source.replaceAll(/\/\*[\s\S]*?\*\//g, '').replaceAll(/^\s*\/\/.*$/gm, '');
@@ -111,6 +118,11 @@ const collectNodeReach = (entry: string) => {
 describe('runtime boundary', () => {
   it('lists only real entries as browser entries', () => {
     expect(BROWSER_ENTRIES.filter((entry) => !(entry in exportTargets))).toEqual([]);
+  });
+
+  it('keeps browser and Node-only entries in separate directories', () => {
+    const shared = NODE_ONLY_DIRS.filter((dir) => BROWSER_ENTRY_DIRS.has(dir));
+    expect(shared.map((dir) => path.relative(PACKAGE_ROOT, dir))).toEqual([]);
   });
 
   it.each(BROWSER_ENTRIES)('browser entry %s reaches no Node code', (entry) => {

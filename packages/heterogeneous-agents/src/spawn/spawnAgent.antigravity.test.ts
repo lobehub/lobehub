@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type * as AntigravityAcpSessionModule from './antigravityAcpSession';
+import type * as AntigravityAcpSessionModule from './acp/antigravity/session';
 import { spawnAgent } from './spawnAgent';
 
 const { sessions } = vi.hoisted(() => ({ sessions: [] as any[] }));
 
-vi.mock('./antigravityAcpSession', async (importOriginal) => {
+vi.mock('./acp/antigravity/session', async (importOriginal) => {
   const actual = await importOriginal<typeof AntigravityAcpSessionModule>();
   class FakeAntigravityAcpSession {
     nativeId: string | undefined;

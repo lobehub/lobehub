@@ -6,8 +6,8 @@ import { promisify } from 'node:util';
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { detectDshCommand } from './acp/dsh/session';
 import { resolveCliSpawnPlan } from './cliSpawn';
-import { detectDshCommand } from './dshAcpSession';
 import { detectHeterogeneousCliCommand, invalidateLoginShellPathCache } from './resolveCliCommand';
 
 // The whole Windows → WSL chain, run for real on a POSIX host: detection asks a

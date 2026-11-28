@@ -113,7 +113,7 @@ describe('Windows install locations off PATH', () => {
       return undefined;
     });
 
-    const { detectDshCommand } = await import('./dshAcpSession');
+    const { detectDshCommand } = await import('./acp/dsh/session');
 
     await expect(detectDshCommand()).resolves.toMatchObject({ available: true, path: shim });
   });

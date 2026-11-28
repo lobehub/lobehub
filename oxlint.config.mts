@@ -416,7 +416,7 @@ export default defineConfig(
       // generated files (regenerate with `bun generate` in packages/sdk)
       'packages/sdk/src/generated/**',
       // generated files (regenerate with `codex app-server generate-ts`)
-      'packages/heterogeneous-agents/src/codex/protocol/generated.ts',
+      'packages/heterogeneous-agents/src/adapters/codex/appServer/protocol/generated.ts',
     ],
     next: true,
     react: 'next',

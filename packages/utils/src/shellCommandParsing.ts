@@ -179,7 +179,7 @@ const splitCommandSegments = (tokens: string[]): string[][] => {
 /**
  * Codex `command_execution` records the spawn argv verbatim, and codex wraps
  * every command in a login shell — `/bin/zsh -lc '<real command>'` (see the
- * adapter fixtures in `heterogeneous-agents/src/adapters/codex.test.ts`). Such
+ * adapter fixtures in `heterogeneous-agents/src/adapters/codex/index.test.ts`). Such
  * a segment's first token is the shell path, not the CLI binary, so the `-c`
  * payload is re-tokenized and re-split (exactly what `-c` itself does) IN
  * PLACE of the wrapper segment — outer segments around it (`bash -c 'git push'
