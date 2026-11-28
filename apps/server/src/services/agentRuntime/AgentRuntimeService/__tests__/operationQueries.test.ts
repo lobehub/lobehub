@@ -202,6 +202,44 @@ describe('AgentRuntimeService', () => {
       expect(result).toBeNull();
     });
 
+    // Regression (lobehub#23933): runtime state expires after two hours while a
+    // question stays unanswered; `null` kept a client that missed the park waiting.
+    it('reports a parked run from its durable row once runtime state expired', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue(null);
+      mockCoordinator.getOperationMetadata.mockResolvedValue(null);
+      vi.spyOn((service as any).agentOperationModel, 'findById').mockResolvedValue({
+        createdAt: new Date(Date.now() - 3 * 3600_000),
+        status: 'waiting_for_human',
+        stepCount: 3,
+        totalCost: '0.02',
+        updatedAt: new Date(Date.now() - 2.5 * 3600_000),
+      });
+
+      const result = await service.getOperationStatus({ operationId: 'test-operation-1' });
+
+      expect(result).toMatchObject({
+        currentState: { status: 'waiting_for_human', stepCount: 3 },
+        isActive: true,
+        isCompleted: false,
+        needsHumanInput: true,
+        operationId: 'test-operation-1',
+      });
+    });
+
+    it('still returns null for an expired run whose durable row is not parked', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue(null);
+      mockCoordinator.getOperationMetadata.mockResolvedValue(null);
+      vi.spyOn((service as any).agentOperationModel, 'findById').mockResolvedValue({
+        createdAt: new Date(),
+        status: 'done',
+        updatedAt: new Date(),
+      });
+
+      const result = await service.getOperationStatus({ operationId: 'test-operation-1' });
+
+      expect(result).toBeNull();
+    });
+
     it('should handle different operation statuses', async () => {
       // Test waiting_for_human status
       const waitingState = { ...mockState, status: 'waiting_for_human' };

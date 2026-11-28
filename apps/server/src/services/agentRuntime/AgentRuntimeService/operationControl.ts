@@ -474,6 +474,44 @@ export async function releaseOperationLock(
 /**
  * Get operation status
  */
+/**
+ * Status of a run parked on a human answer whose runtime state already expired.
+ *
+ * Runtime state lives in Redis for two hours, but a question can stay
+ * unanswered for up to a day (`PARKED_INTERVENTION_TTL_MS`) while the durable
+ * row stays `waiting_for_human`. Answering `null` then made a client that
+ * missed the park's terminal frame keep waiting for a stream that never comes
+ * (lobehub#23933). Any other durable status keeps the `null` answer.
+ */
+async function parkedStatusFromDurableRow(
+  deps: OperationControlDeps,
+  operationId: string,
+): Promise<OperationStatusResult | null> {
+  const row = await deps.agentOperationModel.findById(operationId);
+  if (row?.status !== 'waiting_for_human') return null;
+
+  return {
+    currentState: {
+      lastModified: new Date(row.updatedAt).toISOString(),
+      status: row.status,
+      stepCount: row.stepCount ?? 0,
+    },
+    hasError: false,
+    isActive: true,
+    isCompleted: false,
+    metadata: null,
+    needsHumanInput: true,
+    operationId,
+    stats: {
+      lastActiveTime: Date.now() - new Date(row.updatedAt).getTime(),
+      totalCost: Number(row.totalCost ?? 0),
+      totalMessages: 0,
+      totalSteps: row.stepCount ?? 0,
+      uptime: Date.now() - new Date(row.createdAt).getTime(),
+    },
+  };
+}
+
 export async function getOperationStatus(
   deps: OperationControlDeps,
   params: {
@@ -496,7 +534,7 @@ export async function getOperationStatus(
     // Operation may have expired or does not exist, return null
     if (!currentState || !operationMetadata) {
       log('Operation %s not found (may have expired)', operationId);
-      return null;
+      return parkedStatusFromDurableRow(deps, operationId);
     }
 
     // Get execution history (if needed)

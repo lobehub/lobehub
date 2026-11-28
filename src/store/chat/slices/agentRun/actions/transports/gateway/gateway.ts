@@ -85,6 +85,7 @@ import { flagQueuedMessagesOnRunStart, syncQueuedMessagesFlag } from './queuedMe
 import { gatewayRunOperationMetadata, isLocalStopNotice } from './runOperationMetadata';
 import { isCompletedRuntimeEnd } from './runtimeEndReason';
 import * as serverSteerQueue from './serverSteerQueue';
+import { isRunOverByMarker } from './silentEndMarker';
 import { watchSubAgentRun, type WatchSubAgentRunParams } from './watchSubAgentRun';
 
 const getGatewayServerConfig = () =>
@@ -2097,8 +2098,8 @@ export class GatewayActionImpl {
    * `metadata.runningOperation` is that state: the server's own `finish` clears it
    * before it publishes the terminal event, and a newer run replaces it. A
    * refreshed row that no longer names THIS operation therefore proves the run is
-   * over; a row that still names it proves the run is alive (a drop that will
-   * reconnect, or a run parked on a tool/approval) and must be left alone.
+   * over; a row that still names it means the run is alive (a drop that will
+   * reconnect) unless the server parked it on a human answer (`isRunOverByMarker`).
    *
    * Deliberately false when the row cannot be read: an unreadable row is not
    * evidence that the run ended, and "never guess completion from silence" is the
@@ -2160,16 +2161,7 @@ export class GatewayActionImpl {
     }
     if (!detail) return false;
 
-    const runningOperation = detail.metadata?.runningOperation;
-    if (!runningOperation) return true;
-    if (runningOperation.operationId === serverOperationId) return false;
-
-    // A member continuation rides the supervisor's root marker instead of owning
-    // one: while the run still lists this operation as its child, the run is alive.
-    // Same ownership test the server's own settle uses.
-    return !runningOperation.childOperations?.some(
-      (child) => child.operationId === serverOperationId,
-    );
+    return isRunOverByMarker(detail.metadata?.runningOperation, serverOperationId);
   };
 
   /**
