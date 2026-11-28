@@ -7,16 +7,19 @@ import {
 import { DASHBOARD_DRY_RUN_AUDIT } from '@lobechat/builtin-tool-dashboard';
 import { LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
+import { createFrozenModelParamsProviders, resolveModelParams } from '@lobechat/mecha';
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
 import { type UIChatMessage } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
+import { loadModels } from '@/business/client/model-bank/loadModels';
 import { AgentInboxModel } from '@/database/models/agentInbox';
 import {
   createRuntimeExecutors,
   type RuntimeExecutorContext,
 } from '@/server/modules/AgentRuntime/RuntimeExecutors';
+import { createServerModelParamsProviders } from '@/server/modules/Mecha/ModelParams/providers';
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
 import { createWidgetDryRunAudit } from '@/server/services/widget/dryRunAudit';
@@ -236,6 +239,66 @@ const holdsMailFromOutside = async (
   }
 };
 
+async function resolveShouldReplayAssistantReasoning(
+  deps: RuntimeFactoryDeps,
+  state: AgentState | undefined,
+): Promise<boolean | undefined> {
+  const modelRuntimeConfig = state?.modelRuntimeConfig;
+  const model = modelRuntimeConfig?.model;
+  const provider = modelRuntimeConfig?.provider;
+  if (!model || !provider) return undefined;
+
+  const world = state?.world;
+  const origin = state?.origin;
+  const agentConfig = world?.agent;
+  const frozenFacts =
+    modelRuntimeConfig.modelFacts?.model === model &&
+    modelRuntimeConfig.modelFacts.provider === provider
+      ? modelRuntimeConfig.modelFacts
+      : undefined;
+
+  const request = {
+    agent: {
+      chatConfig: agentConfig?.chatConfig,
+      id: agentConfig?.id,
+      subAgentChatConfigOverride: agentConfig?.subAgentChatConfigOverride,
+    },
+    mediaCapabilities: frozenFacts?.mediaCapabilities ?? modelRuntimeConfig.mediaCapabilities,
+    model,
+    provider,
+    searchDecision: world?.searchDecision,
+    topicId: origin?.topicId,
+  };
+
+  if (frozenFacts) {
+    const resolved = await resolveModelParams(
+      request,
+      createFrozenModelParamsProviders(frozenFacts),
+    );
+    return resolved.shouldReplayAssistantReasoning;
+  }
+
+  const builtinModels = await loadModels();
+  try {
+    const resolved = await resolveModelParams(
+      request,
+      createServerModelParamsProviders({
+        builtinModels,
+        serverDB: deps.serverDB,
+        userId: origin?.userId ?? deps.userId,
+        workspaceId: deps.workspaceId,
+      }),
+    );
+    return resolved.shouldReplayAssistantReasoning;
+  } catch {
+    const resolved = await resolveModelParams(
+      request,
+      createServerModelParamsProviders({ builtinModels }),
+    );
+    return resolved.shouldReplayAssistantReasoning;
+  }
+}
+
 /**
  * Create Agent Runtime instance
  */
@@ -268,14 +331,16 @@ export async function createAgentRuntime(
 ) {
   const state = agentState as AgentState | undefined;
   const modelRuntimeConfig = state?.modelRuntimeConfig;
-  const contextWindowTokens =
+  const [contextWindowTokens, shouldReplayAssistantReasoning] = await Promise.all([
     modelRuntimeConfig?.model && modelRuntimeConfig?.provider
-      ? await getModelPropertyWithFallback<number | undefined>(
+      ? getModelPropertyWithFallback<number | undefined>(
           modelRuntimeConfig.model,
           'contextWindowTokens',
           modelRuntimeConfig.provider,
         )
-      : undefined;
+      : undefined,
+    resolveShouldReplayAssistantReasoning(deps, state),
+  ]);
 
   const world = state?.world;
   const origin = state?.origin;
@@ -287,6 +352,9 @@ export async function createAgentRuntime(
     agentConfig: world?.agent,
     compressionConfig: {
       enabled: world?.agent?.chatConfig?.enableContextCompression ?? true,
+      ...(shouldReplayAssistantReasoning !== undefined && {
+        includeReasoning: shouldReplayAssistantReasoning,
+      }),
       maxWindowToken: contextWindowTokens ?? undefined,
     },
     dynamicInterventionAudits: {

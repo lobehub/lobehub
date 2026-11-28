@@ -103,10 +103,14 @@ export interface GeneralAgentConfig {
   compressionConfig?: {
     /** Whether context compression is enabled (default: true) */
     enabled?: boolean;
+    /** Whether prior-turn assistant reasoning is replayed into the request */
+    includeReasoning?: boolean;
     /** Model's max context window token count (default: 128k) */
     maxWindowToken?: number;
     /** Explicit threshold after a compression summary exists; default 0.65 reserves prompt headroom. */
     recompressionThresholdRatio?: number;
+    /** Pre-counted or estimated system-prompt tokens included in the compression budget */
+    systemTokens?: number;
     /** Threshold ratio for triggering compression (default: 0.5) */
     thresholdRatio?: number;
   };

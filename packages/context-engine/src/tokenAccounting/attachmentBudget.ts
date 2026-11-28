@@ -12,7 +12,11 @@ import type { ContextTokenAccounting } from './types';
 export interface PlanAttachmentPreviewsParams {
   /** Drift multiplier forwarded to {@link countContextTokens}. */
   driftMultiplier?: number;
+  /** Whether assistant reasoning is replayed into the request. */
+  includeReasoning?: boolean;
   messages: UIChatMessage[];
+  /** Pre-counted or estimated system-prompt tokens included in the request budget. */
+  systemTokens?: number;
   /**
    * Drift-adjusted token limit the request should stay under — the compression
    * threshold. Attachments only use the room the rest of the context leaves.
@@ -79,12 +83,18 @@ const collectInlineCandidates = (messages: UIChatMessage[]): Candidate[] => {
  */
 export const planAttachmentPreviews = ({
   driftMultiplier = DEFAULT_DRIFT_MULTIPLIER,
+  includeReasoning,
   messages,
+  systemTokens,
   threshold,
   tools,
 }: PlanAttachmentPreviewsParams): AttachmentPreviewPlan => {
   const count = (previewFileIds?: Set<string>) =>
-    countContextTokens({ messages, options: { driftMultiplier, previewFileIds }, tools });
+    countContextTokens({
+      messages,
+      options: { driftMultiplier, includeReasoning, previewFileIds, systemTokens },
+      tools,
+    });
 
   const full = count();
   if (full.adjustedTotal <= threshold) return { accounting: full, previewFileIds: new Set() };

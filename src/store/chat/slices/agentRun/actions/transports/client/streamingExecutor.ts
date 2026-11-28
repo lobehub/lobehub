@@ -43,7 +43,11 @@ import {
 import { aiAgentService } from '@/services/aiAgent';
 import { isCanUseAudio, isCanUseVideo, isCanUseVision } from '@/services/chat/helper';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
-import { composeEnabledTools, resolveAgentConfig } from '@/services/chat/mecha';
+import {
+  composeEnabledTools,
+  resolveAgentConfig,
+  resolveBrowserModelParams,
+} from '@/services/chat/mecha';
 import { messageService } from '@/services/message';
 import { hydrateProjectedConversation } from '@/services/message/hydrateProjectedTools';
 import { refreshRunConnectors } from '@/services/runConnectors';
@@ -700,11 +704,25 @@ export class StreamingExecutorActionImpl {
       model,
       provider!,
     )(getAiInfraStoreState());
+    await getAiInfraStoreState().ensureModelReasoningConfig?.(model, provider!);
+    const modelParams = await resolveBrowserModelParams({
+      agentId: effectiveAgentId,
+      chatConfig: agentConfig.chatConfig ?? agentConfigData.chatConfig ?? {},
+      groupId,
+      model,
+      provider: provider!,
+      subAgentChatConfigOverride: agentConfig.subAgentChatConfigOverride,
+      topicId: topicId ?? undefined,
+    });
 
     const agent = new GeneralChatAgent({
-      agentConfig: { maxSteps: 1000 },
+      agentConfig: { maxSteps: 1000, systemRole: agentConfigData.systemRole },
       compressionConfig: {
-        enabled: agentConfigData.chatConfig?.enableContextCompression ?? true, // Default to enabled
+        enabled:
+          agentConfig.chatConfig?.enableContextCompression ??
+          agentConfigData.chatConfig?.enableContextCompression ??
+          true, // Default to enabled
+        includeReasoning: modelParams.shouldReplayAssistantReasoning,
         maxWindowToken: contextWindowTokens ?? undefined,
       },
       dynamicInterventionAudits: clientInterventionAudits,
@@ -1006,12 +1024,8 @@ export class StreamingExecutorActionImpl {
   };
 
   /**
-   * Run a sub-agent inside an isolated thread using the *current* client
-   * runtime, then resolve with its final output so the calling tool can return
-   * a normal tool result. This is the client-side implementation behind
-   * `BuiltinToolContext.subAgent.run` — a sub-agent run is just a regular
-   * `executeClientAgent` invocation scoped to a fresh Thread, with
-   * `isSubAgent` set so the sub-agent can't recursively spawn more sub-agents.
+   * Run a sub-agent inside an isolated thread using the current client runtime,
+   * then resolve with its final output as a tool result (`isSubAgent: true` prevents nested sub-agents).
    */
   runClientSubAgent = async (params: {
     agentId: string;
@@ -1161,11 +1175,7 @@ export class StreamingExecutorActionImpl {
       this.#get().completeOperation(taskOperationId);
 
       log('[%s] Completed, result %d chars', logId, resultContent.length);
-      // Cost + the token split ride back to the caller, not just the total: they
-      // land on the tool message's pluginState, which is the only place the parent's
-      // usage tray can see a sub-agent's spend (its messages are in a thread the
-      // parent never loads). Returning tokens alone makes a client sub-agent read as
-      // free.
+      // Cost and token split land on the tool message's pluginState for the parent's usage tray.
       return {
         model,
         result: resultContent,

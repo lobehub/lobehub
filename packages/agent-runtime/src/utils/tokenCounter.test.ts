@@ -183,5 +183,28 @@ describe('tokenCounter', () => {
       expect(withTools.needsCompression).toBe(true);
       expect(withTools.currentTokenCount).toBeGreaterThan(withoutTools.currentTokenCount);
     });
+
+    it('should count systemTokens against the budget and exclude stripped reasoning tokens', () => {
+      const messages = [
+        mkMsg({
+          content: 'short reply',
+          metadata: {
+            usage: { outputReasoningTokens: 20_000, totalOutputTokens: 50_000 } as any,
+          } as any,
+          role: 'assistant',
+        }),
+      ];
+      const options = { driftMultiplier: 1, maxWindowToken: 100_000, thresholdRatio: 0.4 };
+
+      // 50k totalOutputTokens - 20k stripped reasoning = 30k <= 40k threshold
+      const withoutSystem = shouldCompress(messages, options);
+      expect(withoutSystem.currentTokenCount).toBe(30_000);
+      expect(withoutSystem.needsCompression).toBe(false);
+
+      // Adding 12k system prompt tokens brings raw total to 42k > 40k threshold
+      const withSystem = shouldCompress(messages, { ...options, systemTokens: 12_000 });
+      expect(withSystem.currentTokenCount).toBe(42_000);
+      expect(withSystem.needsCompression).toBe(true);
+    });
   });
 });

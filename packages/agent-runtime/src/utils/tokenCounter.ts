@@ -10,8 +10,18 @@ export interface TokenCountOptions {
    * Default {@link DEFAULT_DRIFT_MULTIPLIER} (1.25).
    */
   driftMultiplier?: number;
+  /**
+   * Whether prior-turn assistant reasoning is replayed into the request.
+   * Forwarded to {@link countContextTokens}.
+   */
+  includeReasoning?: boolean;
   /** Model's max context window token count */
   maxWindowToken?: number;
+  /**
+   * Pre-counted or estimated system-prompt tokens (e.g. from the latest
+   * `metadata.contextAccounting.system` or `agentConfig.systemRole`).
+   */
+  systemTokens?: number;
   /** Threshold ratio for triggering compression, default 0.5 */
   thresholdRatio?: number;
   /**
@@ -80,7 +90,9 @@ export function shouldCompress(
   const threshold = getCompressionThreshold(options);
   const { accounting, previewFileIds } = planAttachmentPreviews({
     driftMultiplier: options.driftMultiplier ?? DEFAULT_DRIFT_MULTIPLIER,
+    includeReasoning: options.includeReasoning,
     messages,
+    systemTokens: options.systemTokens,
     threshold,
     tools: options.tools,
   });

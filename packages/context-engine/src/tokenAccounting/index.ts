@@ -167,7 +167,12 @@ export const countContextTokens = ({
   options,
 }: CountContextTokensParams): ContextTokenAccounting => {
   const driftMultiplier = options?.driftMultiplier ?? DEFAULT_DRIFT_MULTIPLIER;
+  const includeReasoning = options?.includeReasoning !== false;
   const previewFileIds = options?.previewFileIds;
+  const systemTokens =
+    typeof options?.systemTokens === 'number' && options.systemTokens > 0
+      ? options.systemTokens
+      : 0;
 
   const messageBreakdowns: MessageTokenBreakdown[] = messages.map((msg, index) => {
     const bySource: Partial<Record<TokenSourceType, number>> = {};
@@ -185,14 +190,38 @@ export const countContextTokens = ({
     };
 
     const countAssistant = (message: AssistantTokenBlock) => {
+      const reasoning = message.reasoning;
+      const reasoningContent = typeof reasoning === 'string' ? reasoning : reasoning?.content;
+      const hasReasoning = Boolean(reasoningContent);
+
       // Assistant fast-path: recorded usage covers content + tool_calls + reasoning
       // produced by THIS turn's generation. Use it directly when available. Prefer
       // the dedicated `usage` field, falling back to legacy `metadata.usage`.
+      // When `outputReasoningTokens` is recorded, subtract it from `content`
+      // and only attribute it to `reasoning` when the message still carries
+      // reasoning that will be replayed into the next request.
       const recordedOutputTokens =
         message.usage?.totalOutputTokens ?? message.metadata?.usage?.totalOutputTokens;
 
       if (recordedOutputTokens && recordedOutputTokens > 0) {
-        bumpSource(bySource, 'content', recordedOutputTokens);
+        const answerSalvagedFromReasoning = Boolean(
+          (message.metadata as { answerSalvagedFromReasoning?: boolean } | undefined)
+            ?.answerSalvagedFromReasoning,
+        );
+        const rawReasoningTokens = answerSalvagedFromReasoning
+          ? 0
+          : (message.usage?.outputReasoningTokens ??
+            message.metadata?.usage?.outputReasoningTokens);
+        const recordedReasoningTokens =
+          rawReasoningTokens && rawReasoningTokens > 0
+            ? Math.min(recordedOutputTokens, rawReasoningTokens)
+            : 0;
+        const nonReasoningOutputTokens = recordedOutputTokens - recordedReasoningTokens;
+
+        bumpSource(bySource, 'content', nonReasoningOutputTokens);
+        if (hasReasoning && includeReasoning && recordedReasoningTokens > 0) {
+          bumpSource(bySource, 'reasoning', recordedReasoningTokens);
+        }
       } else {
         // Per-field estimation
         bumpSource(bySource, 'content', estimate(message.content));
@@ -219,9 +248,7 @@ export const countContextTokens = ({
         }
 
         // Reasoning trace (thinking-mode models echo this back next turn)
-        const reasoning = message.reasoning;
-        if (reasoning) {
-          const reasoningContent = typeof reasoning === 'string' ? reasoning : reasoning.content;
+        if (includeReasoning && hasReasoning) {
           bumpSource(bySource, 'reasoning', estimate(reasoningContent));
         }
       }
@@ -258,7 +285,7 @@ export const countContextTokens = ({
       }
 
       const reasoning = task.reasoning;
-      if (reasoning) {
+      if (includeReasoning && reasoning) {
         const reasoningContent = typeof reasoning === 'string' ? reasoning : reasoning.content;
         bumpSource(bySource, 'reasoning', estimate(reasoningContent));
       }
@@ -322,7 +349,7 @@ export const countContextTokens = ({
           bumpSource(bySource, 'fileContext', countFileContext(msg, previewFileIds));
 
         const reasoning = msg.reasoning;
-        if (reasoning) {
+        if (includeReasoning && reasoning) {
           const reasoningContent = typeof reasoning === 'string' ? reasoning : reasoning.content;
           bumpSource(bySource, 'reasoning', estimate(reasoningContent));
         }
@@ -365,7 +392,7 @@ export const countContextTokens = ({
   }
   bySource.toolDefinition = toolBreakdowns.reduce((s, t) => s + t.total, 0);
 
-  let rawTotal = 0;
+  let rawTotal = systemTokens;
   for (const v of Object.values(bySource)) rawTotal += v;
 
   return {

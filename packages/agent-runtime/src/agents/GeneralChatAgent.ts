@@ -1,3 +1,4 @@
+// cspell:ignore tokenx
 import { ToolNameResolver } from '@lobechat/context-engine';
 import {
   type ChatToolPayload,
@@ -6,6 +7,7 @@ import {
   type HumanInterventionConfig,
   type HumanInterventionPolicy,
 } from '@lobechat/types';
+import { estimateTokenCount } from 'tokenx';
 
 import { createDefaultGlobalAudits, DEFAULT_SECURITY_BLACKLIST } from '../audit';
 import { InterventionChecker } from '../core';
@@ -528,6 +530,40 @@ export class GeneralChatAgent implements Agent {
   }
 
   /**
+   * Resolve the system-prompt token baseline for the upcoming request:
+   * 1. Explicit `compressionConfig.systemTokens` override when provided.
+   * 2. The most recent assistant message's recorded `metadata.contextAccounting.system`
+   *    (which reflects the exact assembled `msg[0]` system prompt from the last LLM call).
+   * 3. Fallback estimate of `agentConfig.systemRole` on the first turn before any
+   *    assistant message carries `contextAccounting`.
+   */
+  private resolveSystemTokens(messages: any[], state: AgentState): number {
+    if (typeof this.config.compressionConfig?.systemTokens === 'number') {
+      return Math.max(0, this.config.compressionConfig.systemTokens);
+    }
+
+    for (let index = messages.length - 1; index >= 0; index--) {
+      const message = messages[index];
+      const recordedSystem =
+        message?.metadata?.contextAccounting?.system ??
+        message?.children?.[0]?.metadata?.contextAccounting?.system;
+      if (typeof recordedSystem === 'number' && recordedSystem > 0) {
+        return recordedSystem;
+      }
+    }
+
+    const systemRole =
+      this.config.agentConfig?.systemRole ??
+      state.world?.agent?.systemRole ??
+      (state.metadata as { agentConfig?: { systemRole?: string } } | undefined)?.agentConfig
+        ?.systemRole ??
+      undefined;
+    return typeof systemRole === 'string' && systemRole.length > 0
+      ? estimateTokenCount(systemRole)
+      : 0;
+  }
+
+  /**
    * Fit the upcoming request under the compression threshold. Runs whether or
    * not compression is enabled: the attachment preview plan keeps attachment
    * text within the room the conversation leaves even when the conversation
@@ -539,7 +575,9 @@ export class GeneralChatAgent implements Agent {
     // so they must not count against the compression budget either — otherwise
     // we'd burn an extra summarization pass on tool tokens that won't be sent.
     return shouldCompress(messages, {
+      includeReasoning: this.config.compressionConfig?.includeReasoning,
       maxWindowToken: this.config.compressionConfig?.maxWindowToken,
+      systemTokens: this.resolveSystemTokens(messages, state),
       thresholdRatio: this.getCompressionThresholdRatio(messages),
       tools: state.forceFinish ? undefined : tools,
     });
