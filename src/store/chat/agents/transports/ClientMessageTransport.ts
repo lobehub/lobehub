@@ -10,6 +10,7 @@ import { omitToolWorkRegistration } from '@lobechat/agent-runtime';
 import type {
   ChatMessagePluginError,
   CreateMessageParams,
+  ModelReasoning,
   UIChatMessage,
   UpdateMessageParams,
 } from '@lobechat/types';
@@ -18,7 +19,9 @@ import { nanoid } from '@lobechat/utils';
 
 import { type MessageBatchOperation, messageService } from '@/services/message';
 import {
+  mergeStoredReasonings,
   mergeStoredToolPayloads,
+  selectOmittedReasoningIds,
   selectProjectedToolIds,
   type StoredToolPayload,
 } from '@/services/message/hydrateProjectedTools';
@@ -26,8 +29,10 @@ import type { ChatStore } from '@/store/chat/store';
 
 /** Client message adapter backed by the optimistic chat store. */
 export class ClientMessageTransport implements MessageTransport {
-  /** Stored tool payloads refilled for this run — see `withStoredToolPayloads`. */
+  /** Stored tool payloads refilled for this run — see `withStoredProjections`. */
   private readonly storedToolPayloads = new Map<string, StoredToolPayload>();
+  /** Stored reasoning objects refilled for this run when switching from Gateway to client mode. */
+  private readonly storedReasonings = new Map<string, ModelReasoning>();
 
   constructor(
     private readonly get: () => ChatStore,
@@ -93,7 +98,7 @@ export class ClientMessageTransport implements MessageTransport {
   }
 
   async getToolMessage(id: string): Promise<RuntimeToolMessage | undefined> {
-    const messages = await this.withStoredToolPayloads(this.getMessages());
+    const messages = await this.withStoredProjections(this.getMessages());
     const message = messages.find((message) => message.id === id && message.role === 'tool');
     if (message?.payloadOmitted && !this.storedToolPayloads.has(id)) {
       throw new Error(`Cannot restore tool result for ${id}`);
@@ -105,7 +110,7 @@ export class ClientMessageTransport implements MessageTransport {
     _params?: QueryMessagesInput,
     _options?: QueryMessagesOptions,
   ): Promise<UIChatMessage[]> {
-    return (await this.withStoredToolPayloads(this.getMessages())).map(omitToolWorkRegistration);
+    return (await this.withStoredProjections(this.getMessages())).map(omitToolWorkRegistration);
   }
 
   async update(id: string, params: Partial<UpdateMessageParams>): Promise<void> {
@@ -239,7 +244,8 @@ export class ClientMessageTransport implements MessageTransport {
   }
 
   /**
-   * Put the stored tool payloads back before this list becomes an LLM context.
+   * Put the stored tool payloads and omitted reasoning back before this list
+   * becomes an LLM context.
    *
    * A browser-executed run reads its history from the same store the UI
    * renders, and that store can be holding a list fetched while the read path
@@ -251,25 +257,51 @@ export class ClientMessageTransport implements MessageTransport {
    *
    * The fetched payloads are cached per operation: a run queries once per step,
    * the map is keyed by row id and so stays valid as the conversation grows. A
-   * failed refill leaves the row projected — a degraded context still beats a
-   * step that cannot run at all.
+   * failed tool refill leaves the row projected — a degraded context still
+   * beats a step that cannot run at all. A failed reasoning refill throws
+   * instead: replaying a placeholder in place of a `signature` /
+   * `responseItems` block would break the provider's multi-turn contract.
    */
-  private async withStoredToolPayloads(messages: UIChatMessage[]): Promise<UIChatMessage[]> {
-    const missing = selectProjectedToolIds(messages).filter(
+  private async withStoredProjections(messages: UIChatMessage[]): Promise<UIChatMessage[]> {
+    const missingTools = selectProjectedToolIds(messages).filter(
       (id) => !this.storedToolPayloads.has(id),
     );
+    const missingReasonings = selectOmittedReasoningIds(messages).filter(
+      (id) => !this.storedReasonings.has(id),
+    );
 
-    if (missing.length > 0) {
-      try {
-        const fetched = await messageService.getToolResultPayloads(missing);
-        for (const [id, payload] of Object.entries(fetched)) {
-          this.storedToolPayloads.set(id, payload);
-        }
-      } catch (error) {
-        console.error('[ClientMessageTransport] failed to restore tool payloads:', error);
-      }
-    }
+    await Promise.all([
+      missingTools.length > 0
+        ? messageService
+            .getToolResultPayloads(missingTools)
+            .then((fetched) => {
+              for (const [id, payload] of Object.entries(fetched)) {
+                this.storedToolPayloads.set(id, payload);
+              }
+            })
+            .catch((error) => {
+              console.error('[ClientMessageTransport] failed to restore tool payloads:', error);
+            })
+        : Promise.resolve(),
+      missingReasonings.length > 0
+        ? messageService.getReasonings(missingReasonings).then((fetched) => {
+            for (const [id, reasoning] of Object.entries(fetched)) {
+              this.storedReasonings.set(id, reasoning);
+            }
+            const unresolved = missingReasonings.filter((id) => !this.storedReasonings.has(id));
+            if (unresolved.length > 0) {
+              throw new Error(
+                `Failed to restore omitted reasoning for ${unresolved.length} message(s) before browser execution`,
+              );
+            }
+          })
+        : Promise.resolve(),
+    ]);
 
-    return mergeStoredToolPayloads(messages, Object.fromEntries(this.storedToolPayloads)).messages;
+    const withTools = mergeStoredToolPayloads(
+      messages,
+      Object.fromEntries(this.storedToolPayloads),
+    ).messages;
+    return mergeStoredReasonings(withTools, Object.fromEntries(this.storedReasonings)).messages;
   }
 }

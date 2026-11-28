@@ -156,11 +156,23 @@ export interface ModelReasoning {
    * Reasoning content, can be plain string or serialized JSON array of MessageContentPart[]
    */
   content?: string;
+  /**
+   * True when the read path projected `content` (and protocol replay fields)
+   * away to save database egress; the UI fetches the stored reasoning on expand.
+   */
+  contentOmitted?: boolean;
   duration?: number;
   /**
    * Flag indicating if content is multimodal (serialized MessageContentPart[])
    */
   isMultimodal?: boolean;
+  /**
+   * True when a protocol-only reasoning row (`signature` / `responseItems` with
+   * no renderable `content`) had its fields projected away in SQL. Keeps UI
+   * cards hidden while telling export and browser-execution hydration to fetch
+   * the full stored reasoning when lossless replay is required.
+   */
+  protocolOmitted?: boolean;
   /**
    * Complete OpenAI Responses reasoning items in original stream order; preferred
    * over the scalar `signature` when replaying to the Responses API

@@ -76,7 +76,7 @@ const hasSubstantiveContent = (block: AssistantContentBlock): boolean =>
   !!normalizeAuthoredContent(block.content);
 
 const hasReasoningContent = (block: AssistantContentBlock): boolean =>
-  !!block.reasoning?.content?.trim();
+  !!block.reasoning?.content?.trim() || !!block.reasoning?.contentOmitted;
 
 const isTrailingReasoningCandidate = (block: AssistantContentBlock): boolean =>
   hasReasoningContent(block) && !hasTools(block) && !block.error;

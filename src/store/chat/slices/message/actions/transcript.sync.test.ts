@@ -204,6 +204,7 @@ describe('useFetchMessages', () => {
       expect(messageService.getMessages).toHaveBeenCalledWith({
         agentId: 'test-session',
         groupId: null,
+        omitReasoningContent: false,
         projectToolPayloads: false,
         threadId: 'test-thread',
         topicId: 'test-topic',

@@ -10,6 +10,7 @@ import {
   type MessageMetadata,
   type MessagePluginItem,
   type ModelRankItem,
+  type ModelReasoning,
   type TopicMessageSearchMatch,
   type UIChatMessage,
   type UpdateMessageParams,
@@ -44,6 +45,11 @@ export interface MessageReadQueryContext {
   /** Agent-share visitor surface — routes the read through `shareChat.getMessages`. */
   agentShareId?: string;
   groupId?: string | null;
+  /**
+   * Ask the server to project away `reasoning.content` (and replay signatures)
+   * in SQL for settled messages; the UI lazy-loads on expand via `getReasonings`.
+   */
+  omitReasoningContent?: boolean;
   /**
    * Ask the server for render-facing tool view models instead of the stored
    * payloads. Only set it for a read whose result is never turned into an LLM
@@ -213,22 +219,39 @@ export class MessageService {
    * projected rows than one request accepts, and the schema would reject the
    * whole set rather than return what it could.
    */
-  getToolResultPayloads = async (messageIds: string[]) => {
+  getToolResultPayloads = async (messageIds: string[]) =>
+    this.queryByIdChunks(messageIds, (ids) =>
+      lambdaClient.message.getToolResultPayloads.query({ messageIds: ids }),
+    ) as Promise<Record<string, { content: string; pluginState?: unknown }>>;
+
+  /**
+   * Stored reasoning objects for messages whose list read projected `content`
+   * away (`ModelReasoning.contentOmitted`). Chunked to the router's 500-id cap.
+   */
+  getReasonings = async (messageIds: string[]): Promise<Record<string, ModelReasoning>> => {
+    if (messageIds.length === 0) return {};
+
+    return this.queryByIdChunks(messageIds, (ids) =>
+      lambdaClient.message.getReasonings.query({ messageIds: ids }),
+    ) as Promise<Record<string, ModelReasoning>>;
+  };
+
+  /**
+   * Split `messageIds` into requests no larger than the router's 500-id cap,
+   * run up to three at a time, and merge the per-chunk id-keyed maps.
+   */
+  private queryByIdChunks = async <T>(
+    messageIds: string[],
+    query: (ids: string[]) => Promise<Record<string, T>>,
+  ): Promise<Record<string, T>> => {
     const chunks: string[][] = [];
     for (let i = 0; i < messageIds.length; i += TOOL_PAYLOAD_BATCH_SIZE) {
       chunks.push(messageIds.slice(i, i + TOOL_PAYLOAD_BATCH_SIZE));
     }
 
-    const results = await pMap(
-      chunks,
-      (ids) => lambdaClient.message.getToolResultPayloads.query({ messageIds: ids }),
-      { concurrency: 3 },
-    );
+    const results = await pMap(chunks, query, { concurrency: 3 });
 
-    return Object.assign({}, ...results) as Record<
-      string,
-      { content: string; pluginState?: unknown }
-    >;
+    return Object.assign({}, ...results) as Record<string, T>;
   };
 
   /**

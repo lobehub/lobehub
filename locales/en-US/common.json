@@ -408,6 +408,7 @@
   "promptTransform.actions.translate": "Translate",
   "promptTransform.status.rewrite": "Expanding details...",
   "promptTransform.status.translate": "Translating...",
+  "reasoningLoadFailed": "Couldn't load the thinking process",
   "recents": "Recents",
   "regenerate": "Regenerate",
   "releaseNotes": "Version Details",

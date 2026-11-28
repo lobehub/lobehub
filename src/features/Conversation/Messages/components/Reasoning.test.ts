@@ -25,4 +25,12 @@ describe('hasRenderableReasoning', () => {
       }),
     ).toBe(true);
   });
+
+  it('is true when content was omitted for lazy-loading on expand', () => {
+    expect(hasRenderableReasoning({ contentOmitted: true, duration: 3200 })).toBe(true);
+  });
+
+  it('is false when only protocol fields were omitted', () => {
+    expect(hasRenderableReasoning({ protocolOmitted: true })).toBe(false);
+  });
 });

@@ -217,6 +217,7 @@ describe('createGatewayEventHandler', () => {
     // previously rendered works back via `preserveWorks`.
     expect(getMessages).toHaveBeenCalledWith({
       ...context,
+      omitReasoningContent: false,
       projectToolPayloads: false,
       skipWorks: true,
     });
@@ -1045,6 +1046,7 @@ describe('createGatewayEventHandler', () => {
 
     expect(getMessages).toHaveBeenCalledWith({
       ...context,
+      omitReasoningContent: false,
       projectToolPayloads: false,
       skipWorks: true,
     });
@@ -1283,6 +1285,7 @@ describe('createGatewayEventHandler', () => {
     await flush();
     expect(getMessages).toHaveBeenCalledWith({
       ...context,
+      omitReasoningContent: false,
       projectToolPayloads: false,
       skipWorks: true,
     });

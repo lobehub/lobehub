@@ -28,6 +28,7 @@ export const SHARED_TOPIC_FIRST_PAGE: ForwardPageSize = { countBudget: 200, roun
 export const FORWARD_PAGE: ForwardPageSize = { countBudget: 1000, roundLimit: 5 };
 
 export interface RoundCursorReadParams extends MessageListQueryContext {
+  omitReasoningContent?: boolean;
   projectToolPayloads?: boolean;
   skipWorks?: boolean;
 }
@@ -42,6 +43,7 @@ export const toRoundCursorQueryInput = (
   cursor,
   groupId: params.groupId,
   ...workTypeOptIn(),
+  omitReasoningContent: params.omitReasoningContent,
   projectToolPayloads: params.projectToolPayloads,
   // The row budget is the real bound; ask for as many whole rounds as it holds.
   roundLimit: MESSAGE_PAGE_ROW_BUDGET,

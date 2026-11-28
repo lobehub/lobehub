@@ -60,6 +60,7 @@ import type {
   ModelTimingContext,
 } from './types';
 import { viewModelPluginState } from './viewModelPluginState';
+import { viewModelReasoning } from './viewModelReasoning';
 
 export class MessageByIdsQueries extends MessageScope {
   private readonly relations: MessageRelationQueries;
@@ -91,6 +92,8 @@ export class MessageByIdsQueries extends MessageScope {
        * itself has been classified. External callers must leave this false.
        */
       allowShareVisitor?: boolean;
+      /** See `QueryMessageParams.omitReasoningContent`. */
+      omitReasoningContent?: boolean;
       postProcessUrl?: (
         path: string | null,
         file: { fileType: string; id?: string | null },
@@ -114,7 +117,7 @@ export class MessageByIdsQueries extends MessageScope {
         role: messages.role,
         content: messages.content,
         editorData: messages.editorData,
-        reasoning: messages.reasoning,
+        reasoning: options.omitReasoningContent ? viewModelReasoning : messages.reasoning,
         search: messages.search,
         metadata: messages.metadata,
         usage: messages.usage,
@@ -408,6 +411,8 @@ export class MessageByIdsQueries extends MessageScope {
       allowShareVisitor?: boolean;
       /** See `QueryMessagesOptions.groupMemberScope`. */
       memberScope?: SQL;
+      /** See `QueryMessageParams.omitReasoningContent`. */
+      omitReasoningContent?: boolean;
       /** See `QueryMessageParams.skipCompressedMembers`. */
       skipCompressedMembers?: boolean;
       /**
@@ -532,6 +537,7 @@ export class MessageByIdsQueries extends MessageScope {
         () =>
           this.queryByIds(plan.idsToHydrate, {
             allowShareVisitor: includeVisitor,
+            omitReasoningContent: options.omitReasoningContent,
             postProcessUrl,
             viewModelPluginState: options.viewModelPluginState,
           }),
