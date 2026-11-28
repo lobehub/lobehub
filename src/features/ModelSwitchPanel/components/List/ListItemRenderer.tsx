@@ -25,8 +25,9 @@ import { useInterfaceDensity } from '@/styles/density';
 
 import { styles } from '../../styles';
 import { type ListItem } from '../../types';
-import { menuKey } from '../../utils';
+import { menuKey, resolveModelDisabledReason } from '../../utils';
 import ModelDetailPanel from '../ModelDetailPanel';
+import { DisabledModelReason } from './DisabledModelReason';
 import { ModelRowRender } from './ModelRowRender';
 import { MultipleProvidersModelItem } from './MultipleProvidersModelItem';
 
@@ -34,6 +35,8 @@ interface ListItemRendererProps {
   activeKey: string;
   /** Muted text shown after the active model's name, e.g. its reasoning effort */
   activeSecondaryText?: string;
+  /** Why a listed model cannot be picked; a model with a reason renders dimmed and inert. */
+  getDisabledReason?: (modelId: string, providerId: string) => string | undefined;
   /** Badge text of a restricted model */
   getRestrictedLabel?: (modelId: string, providerId: string) => string;
   isModelRestricted?: (modelId: string, providerId: string) => boolean;
@@ -50,6 +53,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
   ({
     activeKey,
     activeSecondaryText,
+    getDisabledReason,
     getRestrictedLabel,
     isModelRestricted,
     item,
@@ -160,18 +164,28 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
         const key = menuKey(item.provider.id, item.model.id);
         const isActive = key === activeKey;
         const restricted = isModelRestricted?.(item.model.id, item.provider.id);
+        const disabledReason = resolveModelDisabledReason(
+          { getDisabledReason, isModelRestricted },
+          item.model.id,
+          item.provider.id,
+        );
 
         return (
           <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
             <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
               <DropdownMenuSubmenuTrigger
+                aria-description={disabledReason}
+                aria-disabled={disabledReason ? true : undefined}
                 className={cx(
                   menuSharedStyles.item,
                   styles.rowTrigger,
                   isActive && styles.menuItemActive,
+                  disabledReason && styles.rowDisabled,
                 )}
                 onClick={(e) => {
                   e.preventDefault();
+                  // Inert: the hover panel already says why it cannot be picked.
+                  if (disabledReason) return;
                   setDetailOpen(false);
                   if (restricted) {
                     onRestrictedModelClick?.(item.model.id, item.provider.id);
@@ -184,6 +198,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                 <ModelRowRender
                   activeEffortLabel={activeSecondaryText}
                   badge={item.type === 'featured-model-item' ? item.badge : undefined}
+                  disabled={!!disabledReason}
                   isActive={isActive}
                   model={item.model}
                   newLabel={newLabel}
@@ -197,6 +212,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               <DropdownMenuPortal>
                 <DropdownMenuPositioner anchor={null} placement="right" sideOffset={12}>
                   <DropdownMenuPopup className={styles.detailPopup}>
+                    {disabledReason && <DisabledModelReason reason={disabledReason} />}
                     <ModelDetailPanel model={item.model.id} provider={item.provider.id} />
                   </DropdownMenuPopup>
                 </DropdownMenuPositioner>
@@ -211,18 +227,28 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
         const key = menuKey(singleProvider.id, item.data.model.id);
         const isActive = key === activeKey;
         const restricted = isModelRestricted?.(item.data.model.id, singleProvider.id);
+        const disabledReason = resolveModelDisabledReason(
+          { getDisabledReason, isModelRestricted },
+          item.data.model.id,
+          singleProvider.id,
+        );
 
         return (
           <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
             <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
               <DropdownMenuSubmenuTrigger
+                aria-description={disabledReason}
+                aria-disabled={disabledReason ? true : undefined}
                 className={cx(
                   menuSharedStyles.item,
                   styles.rowTrigger,
                   isActive && styles.menuItemActive,
+                  disabledReason && styles.rowDisabled,
                 )}
                 onClick={(e) => {
                   e.preventDefault();
+                  // Inert: the hover panel already says why it cannot be picked.
+                  if (disabledReason) return;
                   setDetailOpen(false);
                   if (restricted) {
                     onRestrictedModelClick?.(item.data.model.id, singleProvider.id);
@@ -234,6 +260,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               >
                 <ModelRowRender
                   activeEffortLabel={activeSecondaryText}
+                  disabled={!!disabledReason}
                   isActive={isActive}
                   model={item.data.model}
                   newLabel={newLabel}
@@ -248,6 +275,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               <DropdownMenuPortal>
                 <DropdownMenuPositioner anchor={null} placement="right" sideOffset={16}>
                   <DropdownMenuPopup className={styles.detailPopup}>
+                    {disabledReason && <DisabledModelReason reason={disabledReason} />}
                     <ModelDetailPanel model={item.data.model.id} provider={singleProvider.id} />
                   </DropdownMenuPopup>
                 </DropdownMenuPositioner>
@@ -264,6 +292,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               activeKey={activeKey}
               activeSecondaryText={activeSecondaryText}
               data={item.data}
+              getDisabledReason={getDisabledReason}
               getRestrictedLabel={getRestrictedLabel}
               isModelRestricted={isModelRestricted}
               newLabel={newLabel}

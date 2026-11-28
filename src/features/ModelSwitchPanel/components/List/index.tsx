@@ -17,7 +17,7 @@ import { useModelAndProvider } from '../../hooks/useModelAndProvider';
 import { usePanelHandlers } from '../../hooks/usePanelHandlers';
 import { styles } from '../../styles';
 import { type GroupMode } from '../../types';
-import { menuKey } from '../../utils';
+import { menuKey, resolvePanelHiddenPredicate } from '../../utils';
 import type { PricingMode } from '../ModelDetailPanel';
 import GenerationListItemRenderer from './GenerationListItemRenderer';
 import { ListItemRenderer } from './ListItemRenderer';
@@ -53,6 +53,7 @@ export const List: FC<ListProps> = ({
   const newLabel = tCommon('new');
   const {
     featuredModels,
+    getModelDisabledReason,
     isModelHidden,
     isModelRestricted,
     onBeforeModelSelect,
@@ -68,9 +69,19 @@ export const List: FC<ListProps> = ({
   );
 
   const chatEnabledList = useEnabledChatModels();
+  // Only the chat rows render a disabled state; generation rows (custom `ModelItemComponent`)
+  // would make such a model selectable, so they keep hiding it.
+  const isHiddenInPanel = useMemo(
+    () =>
+      resolvePanelHiddenPredicate(
+        isModelHidden,
+        ModelItemComponent ? undefined : getModelDisabledReason,
+      ),
+    [ModelItemComponent, getModelDisabledReason, isModelHidden],
+  );
   const enabledList = useMemo(
-    () => filterHiddenModels(enabledListProp ?? chatEnabledList, isModelHidden),
-    [chatEnabledList, enabledListProp, isModelHidden],
+    () => filterHiddenModels(enabledListProp ?? chatEnabledList, isHiddenInPanel),
+    [chatEnabledList, enabledListProp, isHiddenInPanel],
   );
   const { model, provider } = useModelAndProvider(modelProp, providerProp);
   const { handleModelChange, handleClose } = usePanelHandlers({
@@ -186,6 +197,7 @@ export const List: FC<ListProps> = ({
               <ListItemRenderer
                 activeKey={activeKey}
                 activeSecondaryText={activeSecondaryText}
+                getDisabledReason={getModelDisabledReason}
                 getRestrictedLabel={getRestrictedLabel}
                 isModelRestricted={isModelRestricted}
                 item={item}

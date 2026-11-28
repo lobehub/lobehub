@@ -174,6 +174,8 @@ export default {
   'limitation.insufficientBudget.window.sentenceSeparator': ' ',
   'limitation.insufficientBudget.window.title': 'Usage limit reached',
   'limitation.insufficientBudget.window.titleRules': '{{rules}} reached',
+  'limitation.workspaceModelRestricted.switchHint': 'Switch to another model to keep chatting.',
+  'limitation.workspaceModelRestricted.title': "This model isn't open to you",
   'limitation.modelAccess.switchHint': 'Or switch to another model to keep chatting.',
   'limitation.modelAccess.switchHintUltra': 'Or switch to a Plus model to keep chatting.',
   'modelSelection.confirm.continue': 'Continue using',
@@ -1141,6 +1143,8 @@ export default {
   'autoModelNudge.desc':
     'This model uses up your plan limits quickly. Auto Model has its own, more generous limits.',
   'autoModelNudge.title': 'Try Auto Model for everyday tasks',
+  'modelSwitch.workspaceTierLimit':
+    'Your workspace admin allows you models up to the {{tier}} tier. Contact an admin to use this model.',
   'modelSwitch.auto.badge': 'Own quota',
   'modelSwitch.auto.description':
     'Balanced quality and speed with generous usage quota, ideal for daily tasks',

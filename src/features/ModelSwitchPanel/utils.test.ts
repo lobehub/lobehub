@@ -2,7 +2,12 @@ import { USD_TO_CNY } from '@lobechat/const/currency';
 import { type Pricing } from 'model-bank';
 import { describe, expect, it } from 'vitest';
 
-import { formatPriceMultiplier, getInputPriceMultiplier } from './utils';
+import {
+  formatPriceMultiplier,
+  getInputPriceMultiplier,
+  resolveModelDisabledReason,
+  resolvePanelHiddenPredicate,
+} from './utils';
 
 describe('getInputPriceMultiplier', () => {
   it('uses the USD input rate per 1M tokens as the multiplier', () => {
@@ -75,5 +80,46 @@ describe('formatPriceMultiplier', () => {
     [37.5, '38'],
   ])('formats %s as %s', (input, expected) => {
     expect(formatPriceMultiplier(input)).toBe(expected);
+  });
+});
+
+describe('resolvePanelHiddenPredicate', () => {
+  const isModelHidden = (modelId: string) => modelId === 'auto' || modelId === 'opus';
+
+  it('keeps a hidden model listed when it has a disabled reason', () => {
+    const isHidden = resolvePanelHiddenPredicate(isModelHidden, (modelId) =>
+      modelId === 'opus' ? 'ask an admin' : undefined,
+    )!;
+
+    expect(isHidden('opus', 'lobehub')).toBe(false);
+    expect(isHidden('auto', 'lobehub')).toBe(true);
+    expect(isHidden('mini', 'lobehub')).toBe(false);
+  });
+
+  it('falls back to the guard predicate without disabled reasons', () => {
+    expect(resolvePanelHiddenPredicate(isModelHidden)).toBe(isModelHidden);
+    expect(resolvePanelHiddenPredicate(undefined, () => 'reason')).toBeUndefined();
+  });
+});
+
+describe('resolveModelDisabledReason', () => {
+  const getDisabledReason = (modelId: string) => (modelId === 'opus' ? 'ask an admin' : undefined);
+
+  it('returns the business reason for a model the viewer cannot pick', () => {
+    expect(resolveModelDisabledReason({ getDisabledReason }, 'opus', 'lobehub')).toBe(
+      'ask an admin',
+    );
+    expect(resolveModelDisabledReason({ getDisabledReason }, 'mini', 'lobehub')).toBeUndefined();
+    expect(resolveModelDisabledReason({}, 'opus', 'lobehub')).toBeUndefined();
+  });
+
+  it('lets a restricted model keep its upsell instead of being disabled', () => {
+    expect(
+      resolveModelDisabledReason(
+        { getDisabledReason, isModelRestricted: () => true },
+        'opus',
+        'lobehub',
+      ),
+    ).toBeUndefined();
   });
 });

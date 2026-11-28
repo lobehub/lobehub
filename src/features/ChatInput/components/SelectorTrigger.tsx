@@ -1,13 +1,20 @@
-import { Icon } from '@lobehub/ui';
+import { Icon, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ChevronDownIcon, ZapIcon } from 'lucide-react';
+import { ChevronDownIcon, LockIcon, ZapIcon } from 'lucide-react';
 import type { ComponentPropsWithRef } from 'react';
 import { memo } from 'react';
 
 import { sx } from '@/styles/sx';
 
 const styles = stylex.create({
+  // The chip's content as one hover target, so the reason tooltip covers the whole label.
+  content: {
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
+    minWidth: '0',
+  },
   label: {
     overflow: 'hidden',
     minWidth: '0',
@@ -15,6 +22,7 @@ const styles = stylex.create({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
+  lock: { flex: 'none', color: cssVar.colorWarning },
   // Dims one step while the trigger (the default marker) is idle, and follows it on hover.
   secondary: {
     flex: 'none',
@@ -65,24 +73,62 @@ const styles = stylex.create({
  */
 interface TriggerProps extends ComponentPropsWithRef<'div'> {
   ariaLabel: string;
+  /**
+   * Why the selected model cannot run for this viewer (e.g. above the tier a workspace
+   * admin allows them): a lock before the name, and the reason on hover. The chip still
+   * opens its menu, which is where another model is picked.
+   */
+  disabledReason?: string;
+  /** Leave the reason tooltip to a host that already wraps the chip in its own tooltip. */
+  disabledReasonTooltip?: boolean;
   fast?: boolean;
   secondaryText?: string;
   text: string;
 }
 
 const SelectorTrigger = memo<TriggerProps>(
-  ({ ariaLabel, className, fast, secondaryText, style, text, ...rest }) => (
-    <div
-      {...rest}
-      aria-label={ariaLabel}
-      {...sx(styles.trigger, stylex.defaultMarker(), className, style)}
-    >
-      {fast && <Icon icon={ZapIcon} size={12} />}
-      <span {...stylex.props(styles.label)}>{text}</span>
-      {secondaryText && <span {...stylex.props(styles.secondary)}>{secondaryText}</span>}
-      <Icon icon={ChevronDownIcon} size={12} />
-    </div>
-  ),
+  ({
+    ariaLabel,
+    className,
+    disabledReason,
+    disabledReasonTooltip = true,
+    fast,
+    secondaryText,
+    style,
+    text,
+    ...rest
+  }) => {
+    const label = (
+      <>
+        {disabledReason && (
+          <span {...stylex.props(styles.lock)}>
+            <Icon icon={LockIcon} size={12} />
+          </span>
+        )}
+        {fast && <Icon icon={ZapIcon} size={12} />}
+        <span {...stylex.props(styles.label)}>{text}</span>
+        {secondaryText && <span {...stylex.props(styles.secondary)}>{secondaryText}</span>}
+      </>
+    );
+
+    return (
+      <div
+        {...rest}
+        aria-label={disabledReason ? `${ariaLabel} · ${disabledReason}` : ariaLabel}
+        {...sx(styles.trigger, stylex.defaultMarker(), className, style)}
+      >
+        {/* The tooltip wraps the content, not the chip: the menu trigger clones the chip itself. */}
+        {disabledReason && disabledReasonTooltip ? (
+          <Tooltip title={disabledReason}>
+            <span {...stylex.props(styles.content)}>{label}</span>
+          </Tooltip>
+        ) : (
+          label
+        )}
+        <Icon icon={ChevronDownIcon} size={12} />
+      </div>
+    );
+  },
 );
 
 SelectorTrigger.displayName = 'SelectorTrigger';

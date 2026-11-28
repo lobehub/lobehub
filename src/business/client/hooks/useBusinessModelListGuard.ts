@@ -15,6 +15,16 @@ export interface BusinessModelListGuard {
    */
   featuredModels?: BusinessFeaturedModel[];
   /**
+   * Why the viewer cannot pick a model they can see, e.g. one above the tier a
+   * workspace admin allows them. The model switch panel keeps such a model listed,
+   * dimmed and inert, and shows the reason on hover; the composer's model trigger
+   * shows it too while that model is selected. Unlike `isModelRestricted` there is
+   * no upsell, since the viewer cannot lift it, and a restricted model keeps its
+   * upsell instead. A model with a reason stays listed in the panel even when
+   * `isModelHidden` leaves it out of the other pickers.
+   */
+  getModelDisabledReason?: (modelId: string, providerId: string) => string | undefined;
+  /**
    * Leave a model out of the list entirely, e.g. one a workspace admin has not
    * opened to this member. Unlike `isModelRestricted`, nothing here can unlock it.
    */
