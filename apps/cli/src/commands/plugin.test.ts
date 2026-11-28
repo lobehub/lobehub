@@ -49,36 +49,21 @@ describe('legacy-plugin command', () => {
   }
 
   describe('command name', () => {
-    it('should register legacy-plugin with a plugin alias and a legacy description', () => {
+    it('should register legacy-plugin with its legacy description and subcommands', () => {
       const program = createProgram();
       const command = program.commands.find((c) => c.name() === 'legacy-plugin');
 
       expect(command).toBeDefined();
-      expect(command!.aliases()).toEqual(['plugin']);
+      expect(command!.aliases()).toEqual([]);
       expect(command!.description()).toBe(
         'List, search, or uninstall legacy 1.0 plugins (user_installed_plugins). Add MCP servers with lh connector add',
       );
-      expect(program.commands.some((c) => c.name() === 'plugin')).toBe(false);
-    });
-
-    it('should resolve legacy-plugin and its plugin alias to the same subcommands', async () => {
-      const program = createProgram();
-      const subcommands = (name: string) =>
-        program.commands
-          .find((c) => c.name() === name || c.aliases().includes(name))!
-          .commands.map((c) => c.name());
-
-      expect(subcommands('plugin')).toEqual(subcommands('legacy-plugin'));
-      expect(subcommands('legacy-plugin')).toEqual(['list', 'search', 'uninstall']);
-
-      mockTrpcClient.plugin.getPlugins.query.mockResolvedValue([
-        { id: 'p1', identifier: 'search', type: 'plugin' },
+      expect(command!.commands.map((subcommand) => subcommand.name())).toEqual([
+        'list',
+        'search',
+        'uninstall',
       ]);
-      await createProgram().parseAsync(['node', 'test', 'legacy-plugin', 'list', '--json']);
-      await createProgram().parseAsync(['node', 'test', 'plugin', 'list', '--json']);
-
-      expect(mockTrpcClient.plugin.getPlugins.query).toHaveBeenCalledTimes(2);
-      expect(consoleSpy.mock.calls[1]).toEqual(consoleSpy.mock.calls[0]);
+      expect(program.commands.some((c) => c.name() === 'plugin')).toBe(false);
     });
   });
 

@@ -859,7 +859,6 @@
   "transfer.confirm.botChannels": "Les connexions des canaux de bot peuvent nécessiter une actualisation après le transfert",
   "transfer.confirm.chatGroups": "Les associations de groupes multi-agents seront supprimées",
   "transfer.confirm.desc": "Cela déplacera l'agent et toutes les données associées (sujets, messages, fichiers, etc.) vers l'espace de travail cible.",
-  "transfer.confirm.plugins": "Les plugins personnalisés peuvent ne pas être disponibles dans l'espace de travail cible",
   "transfer.confirm.title": "Transférer l'agent",
   "transfer.confirm.warning": "Certaines fonctionnalités ne sont pas transférées :",
   "transfer.copyTo": "Copier vers",

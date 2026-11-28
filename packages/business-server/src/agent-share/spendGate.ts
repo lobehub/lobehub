@@ -22,6 +22,8 @@ export interface AgentShareSpendGateParams {
   ownerUserId: string;
   /** The `agentShares.id` this run is authorized against. */
   shareId: string;
+  /** `AgentShareConfig.tipsEnabled`: whether visitors are offered the entry to tip this share. */
+  tipsEnabled?: boolean;
   /** The signed-in visitor asking to run the agent. */
   visitorUserId: string;
   /** Owning Workspace for a Workspace share; absent for a personal share. */
@@ -31,6 +33,11 @@ export interface AgentShareSpendGateParams {
 export interface AgentShareSpendGateResult {
   /** `false` rejects the run before any row is written. */
   allowed: boolean;
+  /**
+   * The `ChatErrorType` a denied run records, e.g. `ShareFundingExhausted` when a tip would let
+   * it run again. Absent means `ShareSpendLimitExceeded`.
+   */
+  errorType?: string;
 }
 
 /**

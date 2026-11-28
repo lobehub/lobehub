@@ -164,9 +164,18 @@ describe('compressContext executor', () => {
     });
 
     const state = createState({
+      discoveredAgentFiles: {
+        deviceId: 'device-a',
+        dirs: ['/repo/web'],
+        instructionPaths: ['/repo/web/AGENTS.md'],
+        skills: [],
+      },
       messages: [{ content: 'history', id: 'msg-history', role: 'user' }, preservedMessage],
     });
     const result = await compressContext(host)(createInstruction(state.messages), state);
+    // The summary may have replaced the tool result carrying them, so they
+    // are shown again on the next visit.
+    expect(result.newState.discoveredAgentFiles).toBeUndefined();
 
     expect(messagesQuery).toHaveBeenCalledWith(
       {

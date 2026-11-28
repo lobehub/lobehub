@@ -6,6 +6,7 @@ import {
   channelMessageDeletedAt,
   channelMessageDeviceGrant,
   channelMessageEditedAt,
+  channelMessagePostedFor,
   channelMessageReceipt,
   channelMessageReplyError,
   channelMessageSurfaces,
@@ -155,6 +156,8 @@ export const publicMessage = (
     connector: (isAgent && channelMessageConnector(message.metadata)) || null,
     deletedAt: channelMessageDeletedAt(message.metadata),
     editedAt: channelMessageEditedAt(message.metadata),
+    // A shared Agent's post for a visitor who is not in this Channel: whom it was sent for.
+    postedFor: (isAgent && channelMessagePostedFor(message.metadata)) || null,
     // On an Agent's message, the exchange between Agents it reports from.
     receipt: (() => {
       const receipt = channelMessageReceipt(message.metadata);

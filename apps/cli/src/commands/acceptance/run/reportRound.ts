@@ -2,6 +2,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import type { VerifyAgentPlanConfig, VerifyCheckItem } from '@lobechat/types';
+import {
+  type CoverageEvidence,
+  coverageGaps,
+  executionGapTypes,
+} from '@lobechat/utils/verify/evidenceCoverage';
 
 import { log } from '../../../utils/logger';
 import {
@@ -253,18 +258,27 @@ export function caseResult(
   };
 }
 
-/** The evidence media a check requires that its published evidence lacks. */
+/** The run-evidence requirements a planned check declares. */
+const runEvidenceSpecs = (plan: VerifyCheckItem[] | undefined, checkItemId: string) =>
+  (
+    plan?.find((item) => item.id === checkItemId)?.verifierConfig as
+      VerifyAgentPlanConfig | undefined
+  )?.requiredEvidence?.filter((spec) => !spec.scope || spec.scope === 'run_evidence');
+
+/**
+ * The evidence media a check requires that its published evidence lacks — the
+ * same rule the server's structural gate applies, so a case is never published
+ * as passed with evidence the gate will then reject. A requirement for a real
+ * execution is only met by captured or imported terminal evidence.
+ */
 export function requiredEvidenceGaps(
   plan: VerifyCheckItem[] | undefined,
   checkItemId: string,
-  published: Set<EvidenceType>,
-): EvidenceType[] {
-  const config = plan?.find((item) => item.id === checkItemId)?.verifierConfig as
-    VerifyAgentPlanConfig | undefined;
-  const required = config?.requiredEvidence;
-  return [...new Set(required?.map((spec) => spec.type as EvidenceType) ?? [])].filter(
-    (type) => !published.has(type),
-  );
+  published: CoverageEvidence[],
+): { executionGaps: EvidenceType[]; gaps: EvidenceType[] } {
+  const specs = runEvidenceSpecs(plan, checkItemId);
+  const gaps = coverageGaps(specs, published);
+  return { executionGaps: executionGapTypes(specs, gaps), gaps };
 }
 
 /** A pass that lacks required evidence is published as uncertain, never as a pass. */
@@ -272,8 +286,13 @@ export function publishedVerdictFor(verdict: Verdict, gaps: EvidenceType[]): Ver
   return gaps.length > 0 && verdict === 'passed' ? 'uncertain' : verdict;
 }
 
-export const missingEvidenceLimitation = (gaps: EvidenceType[]) =>
-  `Required evidence not published: ${gaps.join(', ')}.`;
+export const missingEvidenceLimitation = (
+  gaps: EvidenceType[],
+  executionGaps: EvidenceType[] = [],
+) =>
+  `Required evidence not published: ${gaps
+    .map((type) => (executionGaps.includes(type) ? `${type} from a real command execution` : type))
+    .join(', ')}.`;
 
 /** Planned items that produced no case but required evidence: open gaps, not passes. */
 export function unexecutedEvidenceGaps(

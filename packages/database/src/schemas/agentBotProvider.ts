@@ -10,7 +10,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
 
-import { timestamps } from './_helpers';
+import { timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
 import { users } from './user';
 import { workspaces } from './workspace';
@@ -49,6 +49,17 @@ export const agentBotProviders = pgTable(
     settings: jsonb('settings').$type<Record<string, unknown>>().default({}),
 
     enabled: boolean('enabled').default(true).notNull(),
+
+    /**
+     * When the bot last did something for its owner: replied to a message it
+     * was triggered by, or had its owner configure, connect or wake it.
+     *
+     * Not `accessedAt`: that one moves on every row update, including system
+     * writes, so it cannot tell an idle bot from a busy one. Existing rows take
+     * the migration's time, so idle time is counted from when tracking began
+     * rather than from a history that was never recorded.
+     */
+    lastActiveAt: timestamptz('last_active_at').notNull().defaultNow(),
 
     ...timestamps,
   },

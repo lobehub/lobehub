@@ -43,7 +43,12 @@ import type {
 } from '@lobechat/local-file-shell/types';
 import { AGENT_CREDENTIAL_UNSUPPORTED_MESSAGE, type DeviceCliRestartParams } from '@lobechat/types';
 
+import {
+  assertOutsideAgentCredentialRoot,
+  fileRpcGuardedPaths,
+} from './agentCredentials/pathGuard';
 import { toRedactedAgentCredentialError } from './agentCredentials/redact';
+import { defaultAgentCredentialRootDir } from './agentCredentials/store';
 import { listClaudeCodeMemory } from './claudeCodeMemory';
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
 import { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
@@ -74,6 +79,7 @@ import type {
   ProjectDirectoryListParams,
   ProjectFileIndexParams,
   ProjectFileSearchParams,
+  ReadMcpUiResourceParams,
   ReadTerminalParams,
   ResizeTerminalParams,
   TrashLocalFilesParams,
@@ -95,6 +101,7 @@ export const DEVICE_RPC_METHODS = [
   'initWorkspace',
   'listHeterogeneousAgentModels',
   'listMcpTools',
+  'readMcpUiResource',
   'getClaudeCodeQuota',
   'getCodexQuota',
   'getKimiCodeQuota',
@@ -191,7 +198,7 @@ const runAgentCredentialRpc = async <T>(
   }
 };
 
-/** Why a client that runs no MCP servers rejects `listMcpTools`. */
+/** Why a client that runs no MCP servers rejects `listMcpTools` and `readMcpUiResource`. */
 export const MCP_UNSUPPORTED_MESSAGE = 'This device client does not support MCP servers';
 
 /** Why a client without a recoverable trash (the CLI daemon) rejects `trashLocalFiles`. */
@@ -253,6 +260,16 @@ export const executeDeviceRpc = async (
   params: unknown,
   deps: DeviceControlDeps,
 ): Promise<unknown> => {
+  // No file RPC may read, list or write inside the agent-credential store,
+  // whatever `..` or symlink the path takes to get there.
+  const guardedPaths = fileRpcGuardedPaths(method, params);
+  if (guardedPaths.length > 0) {
+    await assertOutsideAgentCredentialRoot(
+      guardedPaths,
+      deps.agentCredentialRootDir ?? defaultAgentCredentialRootDir(),
+    );
+  }
+
   switch (method) {
     // Remote workspace share: the host owns the gateway connections, so both
     // handlers are host-injected. A host that can't manage a second connection
@@ -283,6 +300,11 @@ export const executeDeviceRpc = async (
     case 'listMcpTools': {
       if (!deps.listMcpTools) throw new Error(MCP_UNSUPPORTED_MESSAGE);
       return deps.listMcpTools(params as ListMcpToolsParams);
+    }
+
+    case 'readMcpUiResource': {
+      if (!deps.readMcpUiResource) throw new Error(MCP_UNSUPPORTED_MESSAGE);
+      return deps.readMcpUiResource(params as ReadMcpUiResourceParams);
     }
 
     case 'getClaudeCodeQuota': {

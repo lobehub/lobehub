@@ -144,7 +144,7 @@ export class PluginActionImpl {
   /**
    * The `ui://` resource (HTML view) an MCP App tool result renders with, read
    * from `server`, the one the tool ran on, as `agentId`'s runs resolve it, and
-   * where it ran (`onThisDevice`). `toolArguments` carry the account the tool
+   * where it ran (`onThisDevice`, or the device the server relayed it from). `toolArguments` carry the account the tool
    * ran as when its connector holds several. The HTML is only the view's: it
    * stays in this request's cache, not in the store.
    */
@@ -155,6 +155,8 @@ export class PluginActionImpl {
       agentId,
       linkId,
       onThisDevice = false,
+      relayDeviceId,
+      relayWorkspaceId,
       server,
       toolArguments,
       topicId,
@@ -163,6 +165,8 @@ export class PluginActionImpl {
       /** The account the view acts as, when its arguments cannot name one. */
       linkId?: string;
       onThisDevice?: boolean;
+      relayDeviceId?: string;
+      relayWorkspaceId?: string;
       server?: string;
       toolArguments?: string;
       topicId?: string;
@@ -173,6 +177,8 @@ export class PluginActionImpl {
         agentId,
         linkId,
         onThisDevice,
+        relayDeviceId,
+        relayWorkspaceId,
         server,
         toolArguments,
         topicId,
@@ -182,6 +188,8 @@ export class PluginActionImpl {
           agentId,
           linkId,
           onThisDevice,
+          relayDeviceId,
+          relayWorkspaceId,
           server,
           toolArguments,
           topicId,

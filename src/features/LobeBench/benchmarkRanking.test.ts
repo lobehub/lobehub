@@ -239,7 +239,7 @@ describe('rankContenders by setup, not by name', () => {
       [
         run({ config: setup(), name: 'DeepSeek', passed: 18 }),
         run({
-          config: setup({ chatConfig: { thinkingLevel: 'high' } }),
+          config: setup({ chatConfig: { reasoningEffort: 'high' } }),
           name: 'DeepSeek',
           passed: 22,
         }),
@@ -249,7 +249,7 @@ describe('rankContenders by setup, not by name', () => {
       'set-a',
     );
     expect(ranking.contenders.map((c) => [c.name, c.passed])).toEqual([
-      ['DeepSeek (openrouter · thinking level high · 20 steps · 15 min)', 22],
+      ['DeepSeek (openrouter · reasoning high · 20 steps · 15 min)', 22],
       ['DeepSeek (openrouter · default settings · 40 steps · 15 min)', 20],
       ['DeepSeek (openrouter · default settings · 20 steps · 15 min)', 18],
     ]);

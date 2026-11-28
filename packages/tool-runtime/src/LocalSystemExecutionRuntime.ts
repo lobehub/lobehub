@@ -1,5 +1,6 @@
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
+import { extractCommandFileTargets } from './commandFileTargets';
 import { ComputerRuntime } from './ComputerRuntime';
 import { resolveArgsWithScope, resolvePathWithScope } from './pathScope';
 import type { ServiceResult } from './types';
@@ -9,6 +10,17 @@ import type { ServiceResult } from './types';
  * Abstracts the Electron IPC layer so the runtime is testable and decoupled.
  */
 export interface ILocalSystemService {
+  /**
+   * Find the agent files (`AGENTS.md`, project skills) that apply where a file
+   * tool just worked. Optional: a client without it never answers an
+   * {@link AGENT_FILE_SCAN_ARG} request, which the server reads as "nothing found".
+   */
+  discoverAgentFiles?: (params: {
+    cwd?: string;
+    knownDirs?: string[];
+    path: string;
+    root: string;
+  }) => Promise<unknown>;
   editLocalFile: (params: any) => Promise<any>;
   getCommandOutput: (params: any) => Promise<any>;
   globFiles: (params: any) => Promise<any>;
@@ -23,6 +35,83 @@ export interface ILocalSystemService {
   searchLocalFiles: (params: any) => Promise<any>;
   writeFile: (params: any) => Promise<any>;
 }
+
+/**
+ * Host-owned arg of `readFile` / `writeFile` / `editFile` / `runCommand`: the
+ * server asks the device to report the agent files of a directory the run has
+ * not scanned, `{ knownDirs }`. Honored only on server-sanitized calls
+ * (`trustArgsCwd`). The request names no path or root of its own — the device
+ * takes the targets from the call itself (the file tool's path, or the paths
+ * in the command) — because a server that predates the scan forwards a
+ * model-supplied arg untouched.
+ */
+export const AGENT_FILE_SCAN_ARG = 'agentFileScan';
+
+/** Key under the tool result's `state` carrying the device's answer to {@link AGENT_FILE_SCAN_ARG}. */
+export const AGENT_FILE_SCAN_STATE_KEY = 'agentFileScan';
+
+interface AgentFileScanRequest {
+  knownDirs?: string[];
+}
+
+const readScanRequest = (value: unknown): AgentFileScanRequest | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+  const { knownDirs } = value as Record<string, unknown>;
+  return {
+    knownDirs: Array.isArray(knownDirs)
+      ? knownDirs.filter((dir): dir is string => typeof dir === 'string')
+      : undefined,
+  };
+};
+
+/** The device's answer to one scan, as far as merging several needs to read it. */
+interface DeviceScanAnswer {
+  dirs?: string[];
+  durationMs?: number;
+  instructions?: { path?: unknown }[];
+  outcome?: string;
+  skills?: { name?: unknown }[];
+}
+
+/** Time all of one command's scans may add before the remaining targets are skipped. */
+const COMMAND_SCAN_BUDGET_MS = 2000;
+
+/** Matches the device's per-scan skill cap (`MAX_DISCOVERED_SKILLS`). */
+const MAX_COMMAND_SKILLS = 150;
+
+const OUTCOME_RANK = ['found', 'empty', 'timed-out', 'failed', 'unresolved'];
+
+/**
+ * Fold the scans of one command's targets into one answer, shaped like a
+ * single scan so the server reads both the same way. The first target keeps
+ * an instruction file or skill name the second finds again.
+ */
+const mergeScanAnswers = (
+  current: DeviceScanAnswer | undefined,
+  next: DeviceScanAnswer,
+): DeviceScanAnswer => {
+  if (!current) return next;
+  const paths = new Set((current.instructions ?? []).map((item) => item.path));
+  const names = new Set((current.skills ?? []).map((skill) => skill.name));
+  const rank = (outcome: string | undefined) => {
+    const index = OUTCOME_RANK.indexOf(outcome ?? '');
+    return index === -1 ? OUTCOME_RANK.length : index;
+  };
+  return {
+    dirs: [...new Set([...(current.dirs ?? []), ...(next.dirs ?? [])])],
+    durationMs: (current.durationMs ?? 0) + (next.durationMs ?? 0),
+    instructions: [
+      ...(current.instructions ?? []),
+      ...(next.instructions ?? []).filter((item) => !paths.has(item.path)),
+    ],
+    outcome: rank(next.outcome) < rank(current.outcome) ? next.outcome : current.outcome,
+    // One scan already caps its skills; several must not add up past that.
+    skills: [
+      ...(current.skills ?? []),
+      ...(next.skills ?? []).filter((skill) => !names.has(skill.name)),
+    ].slice(0, MAX_COMMAND_SKILLS),
+  };
+};
 
 /**
  * Maps IPC tool names to localFileService method names.
@@ -156,6 +245,16 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
     // would hand that call the model's own `cwd`.
     const trustedArgsCwd = options?.trustArgsCwd ? args.cwd : undefined;
     const cwd = workingDirectory ?? trustedArgsCwd;
+    const scanRequest = options?.trustArgsCwd
+      ? readScanRequest(args[AGENT_FILE_SCAN_ARG])
+      : undefined;
+    const withScan = (output: BuiltinServerRuntimeOutput, target: unknown) =>
+      this.attachAgentFileScan(
+        output,
+        typeof target === 'string' ? [target] : [],
+        cwd,
+        scanRequest,
+      );
 
     switch (name) {
       case 'listFiles': {
@@ -169,13 +268,16 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
       }
 
       case 'readFile': {
-        return this.readFile({
-          cwd,
-          endLine: args.loc?.[1],
-          loc: args.loc,
-          path: args.path,
-          startLine: args.loc?.[0],
-        });
+        return withScan(
+          await this.readFile({
+            cwd,
+            endLine: args.loc?.[1],
+            loc: args.loc,
+            path: args.path,
+            startLine: args.loc?.[0],
+          }),
+          args.path,
+        );
       }
 
       case 'readFiles': {
@@ -183,17 +285,23 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
       }
 
       case 'writeFile': {
-        return this.writeFile({ content: args.content, cwd, path: args.path });
+        return withScan(
+          await this.writeFile({ content: args.content, cwd, path: args.path }),
+          args.path,
+        );
       }
 
       case 'editFile': {
-        return this.editFile({
-          all: args.replace_all,
-          cwd,
-          path: args.file_path,
-          replace: args.new_string,
-          search: args.old_string,
-        });
+        return withScan(
+          await this.editFile({
+            all: args.replace_all,
+            cwd,
+            path: args.file_path,
+            replace: args.new_string,
+            search: args.old_string,
+          }),
+          args.file_path,
+        );
       }
 
       case 'moveFiles': {
@@ -215,12 +323,21 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
         // ComputerRuntime's RunCommandState reads `background` for `isBackground`;
         // the manifest exposes `run_in_background`. Keep the original field too —
         // the IPC handler reads `run_in_background` itself.
-        return this.runCommand({
-          ...args,
+        const { [AGENT_FILE_SCAN_ARG]: _scanRequest, ...commandArgs } = args;
+        const output = await this.runCommand({
+          ...commandArgs,
           background: args.run_in_background,
           command: args.command,
           cwd,
         });
+        // A background command may not have touched anything yet.
+        if (args.run_in_background || typeof args.command !== 'string') return output;
+        return this.attachAgentFileScan(
+          output,
+          extractCommandFileTargets(args.command).map((target) => target.path),
+          cwd,
+          scanRequest,
+        );
       }
 
       case 'getCommandOutput': {
@@ -390,6 +507,53 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
   /**
    * Batch read multiple files — unique to local system.
    */
+  /**
+   * Answer a server's {@link AGENT_FILE_SCAN_ARG} request after the tool
+   * succeeded, for each path it touched (one for a file tool, up to a few for
+   * a command). Each scan bounds its own time, and a failed one leaves the
+   * tool result as it was: agent files are an addition, never a reason to
+   * fail. Directories one target walked count as known for the next, so
+   * `cd pkg && cat a.ts` reports `pkg` once. Targets after the first stop
+   * once the scans used up {@link COMMAND_SCAN_BUDGET_MS}; their directories
+   * load on a later call.
+   */
+  private async attachAgentFileScan(
+    output: BuiltinServerRuntimeOutput,
+    targets: string[],
+    cwd: string | undefined,
+    request: AgentFileScanRequest | undefined,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const paths = targets.filter(Boolean);
+    if (!request || !cwd || !output.success || paths.length === 0) return output;
+    if (!this.service.discoverAgentFiles) return output;
+
+    let merged: DeviceScanAnswer | undefined;
+    const startedAt = Date.now();
+    for (const target of paths) {
+      if (merged && Date.now() - startedAt >= COMMAND_SCAN_BUDGET_MS) break;
+      try {
+        const scan = (await this.service.discoverAgentFiles({
+          cwd,
+          knownDirs: [...(request.knownDirs ?? []), ...(merged?.dirs ?? [])],
+          path: target,
+          root: cwd,
+        })) as DeviceScanAnswer;
+        merged = mergeScanAnswers(merged, scan);
+      } catch {
+        // Keep what the other targets found.
+      }
+    }
+    if (!merged) return output;
+
+    return {
+      ...output,
+      state: {
+        ...(output.state && typeof output.state === 'object' ? output.state : {}),
+        [AGENT_FILE_SCAN_STATE_KEY]: merged,
+      },
+    };
+  }
+
   async readFiles(params: any): Promise<BuiltinServerRuntimeOutput> {
     try {
       const { formatMultipleFiles } = await import('@lobechat/prompts/fileSystem');

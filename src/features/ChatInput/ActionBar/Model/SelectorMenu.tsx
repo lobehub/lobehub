@@ -101,9 +101,9 @@ const SelectorMenu = memo<SelectorMenuProps>(
     const [open, setOpen] = useState(false);
 
     const {
-      effortKey,
       effortLevels,
       effortValue,
+      hasEffort,
       hasReasoningMode,
       modeLevels,
       modeValue,
@@ -119,12 +119,12 @@ const SelectorMenu = memo<SelectorMenuProps>(
     const items = useMemo(() => {
       const rows: SelectorSubmenuItem[] = [];
 
-      if (effortKey)
+      if (hasEffort)
         rows.push(
           buildSelectorSubmenu({
             current: effortValue ?? '',
             label: t('reasoningEffort.title'),
-            onSelect: (value: string) => select({ [effortKey]: value }),
+            onSelect: (value: string) => select({ reasoningEffort: value as typeof effortValue }),
             options: effortLevels.map((level) => ({
               label: t(`reasoningEffort.levels.${level}`),
               value: level,
@@ -148,7 +148,7 @@ const SelectorMenu = memo<SelectorMenuProps>(
         );
 
       return rows;
-    }, [effortKey, effortLevels, effortValue, hasReasoningMode, modeLevels, modeValue, select, t]);
+    }, [effortLevels, effortValue, hasEffort, hasReasoningMode, modeLevels, modeValue, select, t]);
 
     const modelMeta = (
       <DropdownMenuItemExtra className={stylex.props(styles.meta).className}>

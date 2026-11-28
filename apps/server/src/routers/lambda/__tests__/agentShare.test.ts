@@ -196,6 +196,13 @@ describe('share profile configuration', () => {
     });
   });
 
+  it('lets the owner turn tipping off and on', () => {
+    expect(agentShareConfigPatchSchema.parse({ tipsEnabled: false })).toEqual({
+      tipsEnabled: false,
+    });
+    expect(agentShareConfigPatchSchema.safeParse({ tipsEnabled: 'no' }).success).toBe(false);
+  });
+
   it.each([
     { demoCases: [{ description: 'Empty task', prompt: ' ' }] },
     { demoCases: [{ description: 'Description', prompt: 'Task', openingQuestion: 'Other' }] },

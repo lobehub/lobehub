@@ -6,6 +6,7 @@ export * from './image';
 export * from './messageGroup';
 export * from './metadata';
 export * from './pageSelection';
+export * from './promptCache';
 export * from './tools';
 export * from './topicSearch';
 export * from './translate';

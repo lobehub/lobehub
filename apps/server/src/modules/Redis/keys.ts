@@ -387,6 +387,22 @@ export const RedisKeys = {
     deviceSystemInfo: (userId: string, pool: string, deviceId: string): string =>
       `device_system_info:v1:${userId}:${pool}:${deviceId}`,
     /**
+     * The MCP features a device client reports for tunneled MCP calls.
+     * Full key: sendPathCache:mcp_device_features:v1:{userId}:{pool}:{deviceId}:{clientKinds}
+     */
+    mcpDeviceFeatures: (
+      userId: string,
+      pool: string,
+      deviceId: string,
+      clientKinds: string,
+    ): string => `mcp_device_features:v1:${userId}:${pool}:${deviceId}:${clientKinds}`,
+    /**
+     * The device a connector's MCP App view is relayed to, as last resolved.
+     * Full key: sendPathCache:mcp_relay_target:v1:{userId}:{pool}:{connectorId}:{deviceId}
+     */
+    mcpRelayTarget: (userId: string, pool: string, connectorId: string, deviceId: string): string =>
+      `mcp_relay_target:v1:${userId}:${pool}:${connectorId}:${deviceId}`,
+    /**
      * One connected LobeHub skill's live tool list, per connection identity.
      * Full key: sendPathCache:lobehub_skill_tools:v1:{userId}:{providerId}:{identity}
      */

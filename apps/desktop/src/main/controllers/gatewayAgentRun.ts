@@ -4,6 +4,7 @@ import {
   type AgentCredentialSpawnEnv,
   defaultAgentCredentialRootDir,
   resolveAgentCredentialSpawnEnv,
+  resolveRunCredentialSpawnEnv,
 } from '@lobechat/device-control/agent-credentials';
 import { resolveClaudeAccountSpawnEnv } from '@lobechat/device-control/claude-code-account-routing';
 import type { AgentRunRequestMessage } from '@lobechat/device-gateway-client';
@@ -42,12 +43,27 @@ export interface GatewayAgentRunDeps {
    * Defaults to the store `lh connect` shares; tests inject it.
    */
   resolveAgentCredential?: (agentType: string) => Promise<AgentCredentialSpawnEnv>;
+  /**
+   * The credential the server sent with this run, as spawn env (`none` when
+   * it sent none or the agent is not Claude Code). Tests inject it.
+   */
+  resolveRunCredential?: (
+    agentType: string,
+    runCredential: AgentRunRequestMessage['runCredential'],
+  ) => Promise<AgentCredentialSpawnEnv>;
 }
 
+const credentialStore = () => ({
+  rootDir: defaultAgentCredentialRootDir(electronApp.getPath('home')),
+});
+
 const resolveInstalledCredential = (agentType: string) =>
-  resolveAgentCredentialSpawnEnv(agentType, {
-    rootDir: defaultAgentCredentialRootDir(electronApp.getPath('home')),
-  });
+  resolveAgentCredentialSpawnEnv(agentType, credentialStore());
+
+const resolveRequestRunCredential = (
+  agentType: string,
+  runCredential: AgentRunRequestMessage['runCredential'],
+) => resolveRunCredentialSpawnEnv(agentType, runCredential, credentialStore());
 
 const NO_CREDENTIAL: AgentCredentialSpawnEnv = { kind: 'none' };
 
@@ -95,14 +111,21 @@ export const executeGatewayAgentRun = async (
       return { reason: 'Missing operation token', status: 'rejected' };
     }
 
-    // Same precedence as `lh connect`: an installed credential wins over the
-    // desktop's own logins and account routing; an expired or unreadable one
-    // rejects the run instead of falling back to another login.
-    // Only agents that accept an installed credential look one up.
+    // Same precedence as `lh connect`: a credential the server sent with this
+    // run, then one it installed, wins over the desktop's own logins and
+    // account routing; an expired or unreadable one rejects the run instead of
+    // falling back to another login. The run credential never leaves memory
+    // and the child's env. Only agents that accept a credential look one up.
+    const fromRun = await (deps.resolveRunCredential ?? resolveRequestRunCredential)(
+      request.agentType,
+      request.runCredential,
+    );
     const credential =
-      request.agentType === 'claude-code' || request.agentType === 'codex'
-        ? await (deps.resolveAgentCredential ?? resolveInstalledCredential)(request.agentType)
-        : NO_CREDENTIAL;
+      fromRun.kind !== 'none'
+        ? fromRun
+        : request.agentType === 'claude-code' || request.agentType === 'codex'
+          ? await (deps.resolveAgentCredential ?? resolveInstalledCredential)(request.agentType)
+          : NO_CREDENTIAL;
     if (credential.kind === 'reject') return { reason: credential.reason, status: 'rejected' };
 
     const account =

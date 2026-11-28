@@ -20,7 +20,10 @@ import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createDefaultChannel } from '@/server/services/channel/defaultChannel';
-import { leaveProjectChannels } from '@/server/services/channel/projectMembership';
+import {
+  deleteProjectKeepingChannels,
+  leaveProjectChannels,
+} from '@/server/services/channel/projectMembership';
 import { GoalService } from '@/server/services/goal';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
@@ -246,7 +249,11 @@ export const projectRouter = router({
   delete: projectWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     try {
       return {
-        data: requireResult(await ctx.projectRepo.delete(input.id)),
+        data: requireResult(
+          await deleteProjectKeepingChannels(ctx.serverDB, input.id, () =>
+            ctx.projectRepo.delete(input.id),
+          ),
+        ),
         message: 'Project deleted',
         success: true,
       };
@@ -261,8 +268,6 @@ export const projectRouter = router({
         ctx.projectModel,
         requireResult(await ctx.projectModel.findByReference(input.id)),
       );
-      // TODO(2026-12-31): remove with `ProjectModel.joinTopicAgents`.
-      await ctx.projectModel.joinTopicAgents(project.id);
       const [agents, completionReviews, knowledgeBases, tasks, works, coordinatorRetires] =
         await Promise.all([
           ctx.projectModel.listAgents(project.id),

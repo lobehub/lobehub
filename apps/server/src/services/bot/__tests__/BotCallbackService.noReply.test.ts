@@ -18,6 +18,7 @@ const mockGenerateTopicTitle = vi.hoisted(() => vi.fn());
 const mockBotRouterReplay = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockClearActiveThread = vi.hoisted(() => vi.fn());
 const mockRecordWakeRunOutcome = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const mockTouchActivity = vi.hoisted(() => vi.fn().mockResolvedValue(true));
 
 vi.mock('@/database/models/agentBotProvider', () => ({
   AgentBotProviderModel: {
@@ -25,6 +26,7 @@ vi.mock('@/database/models/agentBotProvider', () => ({
       credentials: '{}',
       settings: { displayToolCalls: true, reactionMode: 'minimal' },
     }),
+    touchActivity: mockTouchActivity,
   },
 }));
 vi.mock('@/database/models/topic', () => ({
@@ -121,6 +123,36 @@ describe('BotCallbackService no_reply (queue mode)', () => {
   });
 
   afterEach(() => consoleError.mockRestore());
+
+  describe('bot activity', () => {
+    it('restarts the idle clock when a run completes', async () => {
+      await service.handleCallback(body({ lastAssistantContent: 'On it.' }));
+
+      expect(mockTouchActivity).toHaveBeenCalledWith(expect.anything(), 'discord', 'app-1');
+    });
+
+    it('counts a run that chose not to reply: someone still addressed the bot', async () => {
+      await service.handleCallback(body({ lastAssistantContent: 'NO_REPLY:duplicate' }));
+
+      expect(mockTouchActivity).toHaveBeenCalledWith(expect.anything(), 'discord', 'app-1');
+    });
+
+    it('does not record step callbacks', async () => {
+      await service.handleCallback(
+        body({ shouldContinue: true, stepType: 'call_llm', type: 'step' }),
+      );
+
+      expect(mockTouchActivity).not.toHaveBeenCalled();
+    });
+
+    it('still completes the run when recording activity fails', async () => {
+      mockTouchActivity.mockRejectedValueOnce(new Error('db down'));
+
+      await service.handleCallback(body({ lastAssistantContent: 'On it.' }));
+
+      expect(mockBotRouterReplay).toHaveBeenCalled();
+    });
+  });
 
   describe('completion', () => {
     it('followup NO_REPLY: posts nothing, is not logged as a fault, and labels the wake', async () => {

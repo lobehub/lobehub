@@ -4,16 +4,13 @@ import { memo } from 'react';
 import TaskAcceptance from './TaskAcceptance';
 import TaskActivities from './TaskActivities';
 import TaskArtifacts from './TaskArtifacts';
-import TaskDetailAssignee from './TaskDetailAssignee';
 import { taskDetailLayoutStyles as styles } from './taskDetailLayoutStyles';
-import TaskDetailRunPauseAction from './TaskDetailRunPauseAction';
 import TaskDetailTitleInput from './TaskDetailTitleInput';
-import TaskExecutionConfig from './TaskExecutionConfig';
 import TaskGoalBar from './TaskGoalBar';
 import TaskInstruction from './TaskInstruction';
-import TaskModelConfig from './TaskModelConfig';
 import TaskParentBar from './TaskParentBar';
 import TaskProperties from './TaskProperties';
+import TaskStatusStrip from './TaskStatusStrip';
 import TaskSubtasks from './TaskSubtasks';
 
 /**
@@ -27,15 +24,12 @@ const TaskDetailSections = memo(() => {
     <div className={styles.root}>
       <div className={styles.grid}>
         <Flexbox className={styles.main} gap={12}>
-          <TaskGoalBar />
-          <TaskParentBar />
+          <div className={styles.meta}>
+            <TaskGoalBar />
+            <TaskParentBar />
+          </div>
           <TaskDetailTitleInput />
-          <Flexbox horizontal align={'center'} gap={8} style={{ maxWidth: '100%' }} wrap={'wrap'}>
-            <TaskDetailRunPauseAction />
-            <TaskDetailAssignee />
-            <TaskModelConfig />
-            <TaskExecutionConfig />
-          </Flexbox>
+          <TaskStatusStrip />
         </Flexbox>
         <div className={styles.side}>
           <TaskProperties />

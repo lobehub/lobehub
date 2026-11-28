@@ -22,6 +22,8 @@ export const McpAppPane = ({ id, scope }: { id: string; scope: string }) => {
       location={'fullscreen'}
       messageId={message.id}
       preferred={mcpApp.preferredModelDisplayMode}
+      relayDeviceId={mcpApp.relayDeviceId}
+      relayWorkspaceId={mcpApp.relayWorkspaceId}
       resourceUri={mcpApp.resourceUri}
       result={{ content, state: unwrapMcpToolState(state) }}
       scope={scope}

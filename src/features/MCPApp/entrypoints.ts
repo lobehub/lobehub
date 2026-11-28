@@ -2,6 +2,7 @@ import { isDesktop } from '@lobechat/const';
 import type { McpAppThreadEntry } from '@lobechat/const/mcpApp';
 import { connectorToolIdentifier, type LobeTool } from '@lobechat/types';
 import {
+  connectorDeviceBinding,
   connectorMcpEndpoint,
   type McpEndpointShape,
   shouldConnectViaDevice,
@@ -58,14 +59,17 @@ export const isEntryOfTab = (
 /**
  * Whether an app's MCP server opens only in the desktop app: elsewhere the
  * server must run it on the user's device (stdio, a localhost / LAN address,
- * or set to connect through the device — `shouldConnectViaDevice`), and an
- * app view's calls are not tunneled there, so opening it always fails.
+ * or set to connect through the device — `shouldConnectViaDevice`), and with
+ * no device named for it (`bound`) the server can't pick the one its view
+ * would run on, so opening it always fails. A connector bound to a device
+ * opens anywhere: the server runs its entrypoint there and relays its view.
  */
-const opensOnlyOnDesktop = (endpoint: McpEndpointShape) =>
+const opensOnlyOnDesktop = (endpoint: McpEndpointShape, bound = false) =>
   !isDesktop &&
   shouldConnectViaDevice(endpoint, {
     deviceGatewayConfigured: !!getServerConfigStoreState()?.serverConfig.deviceGatewayConfigured,
-  });
+  }) &&
+  !(bound && !!getServerConfigStoreState()?.serverConfig.deviceGatewayConfigured);
 
 export const selectMcpAppEntrypoints = (
   state: ToolStore,
@@ -118,7 +122,7 @@ export const selectMcpAppEntrypoints = (
     // An app only a desktop can open is offered there alone: elsewhere opening it always fails
     if (
       isMcp
-        ? opensOnlyOnDesktop(connectorMcpEndpoint(connector))
+        ? opensOnlyOnDesktop(connectorMcpEndpoint(connector), !!connectorDeviceBinding(connector))
         : plugin &&
           (!isInstalledPluginAvailableInCurrentEnv(plugin) ||
             (!!plugin.customParams?.mcp && opensOnlyOnDesktop(plugin.customParams.mcp)))

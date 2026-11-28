@@ -70,6 +70,16 @@ describe('sanitizeVisitorError', () => {
     expect(sanitizeVisitorError(error)).toEqual(error);
   });
 
+  // The visitor must still read that a tip lets the share reply again.
+  it("keeps a share's exhausted-funds refusal readable", () => {
+    const error = {
+      message: 'This shared Agent has run out of funds for visitor replies',
+      type: ChatErrorType.ShareFundingExhausted,
+    };
+
+    expect(sanitizeVisitorError(error)).toEqual(error);
+  });
+
   it('projects every other code down to a generic type and drops the raw payload', () => {
     const sanitized = sanitizeVisitorError({
       body: { provider: 'openai', raw: 'invalid key sk-…' },

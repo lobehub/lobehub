@@ -93,12 +93,13 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
         left={
           <>
             <Breadcrumb taskId={taskId} />
-            <TaskDetailHeaderActions />
             {saveStatus === 'saving' || saveStatus === 'failed' ? (
               <AutoSaveHint saveStatus={saveStatus} />
             ) : undefined}
           </>
         }
+        // Every task action sits in one cluster on the right, so the breadcrumb
+        // reads as the page title rather than a row of controls.
         right={
           <>
             <ActionIcon
@@ -109,6 +110,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
               onClick={openFind}
             />
             <TaskDetailCopyActions />
+            <TaskDetailHeaderActions />
             {showTaskAgentPanelToggle ? (
               <ToggleRightPanelButton
                 hideWhenExpanded

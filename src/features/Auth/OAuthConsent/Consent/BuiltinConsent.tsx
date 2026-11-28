@@ -1,10 +1,12 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Loader2Icon } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import BrandLoading from '@/components/Loading/BrandTextLoading';
+import { isEmbeddedAuth } from '@/features/AuthShell/embedded';
 
 interface BuiltinConsentProps {
   uid: string;
@@ -22,7 +24,12 @@ const BuiltinConsent = memo<BuiltinConsentProps>(({ uid }) => {
   return (
     <>
       <Flexbox align={'center'} gap={12}>
-        <BrandLoading debugId={'ouidc'} />
+        {/* Lobot's sign-in window shows no LobeHub branding. */}
+        {isEmbeddedAuth() ? (
+          <Icon spin icon={Loader2Icon} size={24} />
+        ) : (
+          <BrandLoading debugId={'ouidc'} />
+        )}
         <Text fontSize={14}>{t('consent.redirecting')}</Text>
       </Flexbox>
       <form action="/oidc/consent" method="post" ref={formRef} style={{ display: 'none' }}>

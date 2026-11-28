@@ -10,16 +10,12 @@
   "discover.mcp.title": "Marktplaats voor MCP-servers",
   "discover.models.description": "Ontdek toonaangevende AI-modellen OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek",
   "discover.models.title": "Marktplaats voor modellen",
-  "discover.plugins.description": "Ontdek grafieken, academische tools, beeld-/video-/spraakgeneratie en workflows—voeg Vaardigheden toe aan je Agenten.",
-  "discover.plugins.title": "Marktplaats voor vaardigheden",
   "discover.providers.description": "Ontdek toonaangevende modelproviders OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
   "discover.providers.title": "Marktplaats voor providers",
   "discover.search": "Zoeken",
   "discover.title": "Marktplaats",
   "image.description": "{{appName}} biedt je de beste ervaring met GPT Image, Flux, Midjourney en Stable Diffusion",
   "image.title": "AI-kunst",
-  "plugins.description": "Zoeken, grafieken, academische tools, beeld-/video-/spraakgeneratie, workflows—voeg Vaardigheden toe aan je Agenten.",
-  "plugins.title": "Marktplaats voor vaardigheden",
   "welcome.description": "{{appName}} biedt je de beste gebruikerservaring voor ChatGPT, Claude, Gemini en OLLaMA.",
   "welcome.title": "Welkom bij {{appName}} · Voor Samenwerkende Agenten"
 }

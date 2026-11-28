@@ -303,10 +303,9 @@ describe('systemStatusSelectors', () => {
       });
       expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual([
         // Defaults missing from a saved layout (here the newer `project`,
-        // `goals`, `dashboard` and `favorites`) are backfilled.
+        // `goals` and `favorites`) are backfilled.
         'goals',
         'project',
-        'dashboard',
         'favorites',
         'agent',
         'channels',
@@ -372,7 +371,6 @@ describe('systemStatusSelectors', () => {
         'pages',
         'goals',
         'project',
-        'dashboard',
         'resource',
         'image',
         'community',
@@ -501,7 +499,7 @@ describe('systemStatusSelectors', () => {
         status: { sidebarItems: stored },
       });
       const items = systemStatusSelectors.sidebarItems(null)(s);
-      expect(items.slice(0, 3)).toEqual(['goals', 'project', 'dashboard']);
+      expect(items.slice(0, 2)).toEqual(['goals', 'project']);
       expect(items.indexOf('project')).toBeLessThan(items.indexOf('favorites'));
     });
 
@@ -581,7 +579,6 @@ describe('systemStatusSelectors', () => {
         'tasks',
         'goals',
         'project',
-        'dashboard',
         'resource',
         'image',
         'community',
@@ -603,7 +600,6 @@ describe('systemStatusSelectors', () => {
         'tasks',
         'goals',
         'project',
-        'dashboard',
         'resource',
         'image',
         'community',

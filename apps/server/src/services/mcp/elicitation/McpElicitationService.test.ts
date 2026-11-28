@@ -18,6 +18,7 @@ import {
   users,
 } from '@/database/schemas';
 import { AgentDocumentVfsService } from '@/server/services/agentDocumentVfs';
+import { AgentRuntimeService } from '@/server/services/agentRuntime';
 
 import { getTestDB } from '../../../../../../packages/database/src/core/getTestDB';
 import {
@@ -35,6 +36,7 @@ import {
   recoverMcpElicitationResume,
   scheduleMcpElicitationResume,
 } from './queue';
+import type { McpRecoveryRuntimeFactory } from './recoveryWorker';
 import { recoverPersistedMcpWork } from './recoveryWorker';
 import { resumeMcpElicitation as resumeSavedMcpElicitation } from './resume';
 
@@ -104,6 +106,8 @@ const db = await getTestDB();
 const owner = 'mcp-test-owner';
 const other = 'mcp-test-other';
 const service = new McpElicitationService(db, owner);
+const createRecoveryRuntime: McpRecoveryRuntimeFactory = (runtimeDb, userId, options) =>
+  new AgentRuntimeService(runtimeDb, userId, options);
 const messageModel = new MessageModel(db, owner);
 const identity = {
   apiName: 'form',
@@ -568,7 +572,7 @@ describe('durable MCP elicitation', () => {
       .update(agentInterventions)
       .set({ deadline: new Date(Date.now() - 10) })
       .where(eq(agentInterventions.id, pending.item.id));
-    await recoverPersistedMcpWork(db);
+    await recoverPersistedMcpWork(db, createRecoveryRuntime);
     expect((await messageModel.findById(pending.toolMessageId))?.content).toContain('timed out');
     expect(probes.resume).toHaveBeenCalledOnce();
     expect(probes.execute).not.toHaveBeenCalled();
@@ -1072,7 +1076,7 @@ it('retains a timed-out receipt and its recovery projection after parent dispatc
   const recoverable = await McpInvocationModel.recoveryQueries(db).interactions;
   expect(recoverable.map((row) => row.itemId)).toContain(item.id);
   const fresh = new McpElicitationService(db, owner);
-  await recoverPersistedMcpWork(db);
+  await recoverPersistedMcpWork(db, createRecoveryRuntime);
   expect((await messageModel.findById(toolMessageId))?.content).toBe(receipt);
   expect((await messageModel.findMessagePlugin(toolMessageId))?.state?.mcpElicitation).toBeNull();
   expect((await messageModel.findMessagePlugin(toolMessageId))?.intervention?.status).toBe('none');

@@ -11,15 +11,14 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import TaskExecutionControls from '../features/TaskExecutionControls';
+import { taskDetailLayoutStyles as styles } from './taskDetailLayoutStyles';
 
 /**
  * Where a task's runs go, on the task detail.
  *
- * Sits in the header's main column next to the assignee it inherits from, not
- * in the properties rail: the run location is what the run action above it will
- * do, and the directory follows from that target, so the three read as one
- * cluster. The rail keeps the independent properties (status, priority,
- * visibility, schedule).
+ * Sits in the properties rail's execution group, under the assignee it
+ * inherits from and the model it runs: the directory follows from the target,
+ * so the three read as one cluster.
  *
  * Read-only members still see it — knowing a task is pinned to another machine
  * is exactly the context they need — with the controls inert.
@@ -53,6 +52,7 @@ const TaskExecutionConfig = memo(() => {
     <TaskExecutionControls
       assigneeAgentId={assigneeAgentId}
       canPinPrivateDevices={!!userId && createdByUserId === userId}
+      chipClassName={styles.propertyItem}
       disabled={!canEditTask}
       key={taskId}
       value={execution}

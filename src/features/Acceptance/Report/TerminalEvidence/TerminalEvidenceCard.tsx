@@ -21,9 +21,6 @@ const TerminalPlayer = lazy(() => import('./TerminalPlayer'));
 
 type BodyView = TerminalTextViewKey | 'replay';
 
-const downloadNameFor = (key: TerminalTextViewKey, fileName?: string | null) =>
-  key === 'transcript' && fileName ? fileName : `terminal-${key}.txt`;
-
 /**
  * One command execution, folded to a single titled row like other text
  * evidence. The row already answers the reader's first questions — which
@@ -32,10 +29,9 @@ const downloadNameFor = (key: TerminalTextViewKey, fileName?: string | null) =>
  *
  * Expanded, the execution record comes before the output: command, directory,
  * time, source, capture mode and every processing step that changed what the
- * output shows. The body opens on static text — stdout / stderr apart for a
- * pipe capture, one merged output for a pty — with Replay offered only when a
- * real recording exists, and the stored transcript always one click away so
- * the record is reviewable without the player.
+ * output shows. The body opens on static text with the pipe streams labeled
+ * or the merged output for a pty. Replay requires a recording, and the
+ * stored transcript remains available when there is one.
  */
 export const TerminalEvidenceCard = memo<{
   /** Open on mount — a before/after pair is read side by side, not one fold at a time. */
@@ -159,9 +155,13 @@ export const TerminalEvidenceCard = memo<{
             </Suspense>
           ) : textView ? (
             <TerminalOutput
-              downloadName={downloadNameFor(textView.key, evidence.fileName)}
               key={textView.key}
               view={textView}
+              downloadName={
+                textView.source.kind === 'pipe' || textView.key === 'transcript'
+                  ? evidence.fileName || 'terminal-transcript.txt'
+                  : `terminal-${textView.key}.txt`
+              }
             />
           ) : (
             <div className={styles.outputState}>{t('report.terminal.output.unavailable')}</div>

@@ -63,7 +63,8 @@ export const openaiGpt62ChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-11-17',
     settings: {
-      extendParams: ['gpt6ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -130,7 +131,8 @@ export const openaiGpt62ChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-11-17',
     settings: {
-      extendParams: ['gpt6ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',

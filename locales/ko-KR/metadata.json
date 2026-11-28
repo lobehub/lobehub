@@ -10,16 +10,12 @@
   "discover.mcp.title": "MCP 서버 마켓플레이스",
   "discover.models.description": "OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek 등 주요 AI 모델을 탐색하세요",
   "discover.models.title": "모델 마켓플레이스",
-  "discover.plugins.description": "차트 생성, 학술, 이미지 생성, 영상 생성, 음성 생성, 자동화 워크플로우 등 다양한 기능을 도우미에 통합하세요",
-  "discover.plugins.title": "스킬 마켓플레이스",
   "discover.providers.description": "OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter 등 주요 모델 제공업체를 탐색하세요",
   "discover.providers.title": "제공자 마켓플레이스",
   "discover.search": "검색",
   "discover.title": "마켓플레이스",
   "image.description": "{{appName}}는 GPT Image, Flux, Midjourney, Stable Diffusion의 최고의 사용 경험을 제공합니다",
   "image.title": "AI 그림",
-  "plugins.description": "검색, 차트 생성, 학술, 이미지 생성, 영상 생성, 음성 생성, 자동화 워크플로우 등 ChatGPT / Claude 전용 ToolCall 기능 기능을 맞춤 설정하세요",
-  "plugins.title": "스킬 마켓플레이스",
   "welcome.description": "{{appName}}는 ChatGPT, Claude, Gemini, OLLaMA WebUI의 최고의 사용 경험을 제공합니다",
   "welcome.title": "{{appName}}에 오신 것을 환영합니다 · 협업 에이전트를 위한 플랫폼"
 }

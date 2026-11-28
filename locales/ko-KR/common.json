@@ -164,8 +164,6 @@
   "cmdk.search.messages": "메시지",
   "cmdk.search.page": "문서",
   "cmdk.search.pages": "문서",
-  "cmdk.search.plugin": "기능",
-  "cmdk.search.plugins": "기능",
   "cmdk.search.searchMore": "{{type}} 더 검색하기",
   "cmdk.search.searching": "검색 결과",
   "cmdk.search.task": "작업",

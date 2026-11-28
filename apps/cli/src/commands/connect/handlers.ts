@@ -230,6 +230,7 @@ export function bindGatewayClientHandlers(
             prompt: request.prompt,
             resumeFallbackSystemContext: request.resumeFallbackSystemContext,
             resumeSessionId: request.resumeSessionId,
+            runCredential: request.runCredential,
             serverUrl: getAuth().serverUrl,
             systemContext: request.systemContext,
             topicId: request.topicId,

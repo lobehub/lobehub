@@ -2,7 +2,7 @@
 name: acceptance
 license: Apache-2.0
 metadata:
-  version: "0.10.3"
+  version: "0.11.0"
 description: >
   Verify delivery outcomes on the real product, capture inspected evidence,
   and deliver an acceptance report with the lh CLI: published to LobeHub when
@@ -364,9 +364,10 @@ reached yellow or red and what that stopped; a run that hit red must say which
 checks it left `blocked` instead of passing.
 
 Before declaring the task done, prove coverage: for each check with
-`requiredEvidence`, every declared `type` is present at least once. Report it
-explicitly; a missing type holds the delivery at `uncertain` no matter how good
-the work is.
+`requiredEvidence`, every declared `type` is present at least once, and one that
+requires `"provenance": "execution"` is backed by a captured or imported run.
+Report it explicitly; a missing type holds the delivery at `uncertain` no matter
+how good the work is.
 
 If publication returns a storage-quota failure, the publishing owner reads
 [publication-recovery.md](references/publication-recovery.md) once. Preserve

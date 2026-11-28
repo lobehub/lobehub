@@ -72,6 +72,23 @@ describe('buildOnboardingRedirectUrl', () => {
     expect(buildOnboardingRedirectUrl('/onboarding/agent')).toBe('/onboarding/agent');
   });
 
+  it('should send Lobot sign-ups straight back to the authorization', () => {
+    const desktop = '/oidc/auth?client_id=lobot-desktop&response_type=code&state=s';
+    expect(buildOnboardingRedirectUrl(desktop)).toBe(desktop);
+    expect(buildOnboardingRedirectUrl(`${window.location.origin}${desktop}`)).toBe(desktop);
+    const mobile = '/oidc/auth?client_id=lobot-mobile&state=s';
+    expect(buildOnboardingRedirectUrl(mobile)).toBe(mobile);
+  });
+
+  it('should keep onboarding for other OIDC clients and unsafe Lobot targets', () => {
+    expect(buildOnboardingRedirectUrl('/oidc/auth?client_id=lobehub-desktop')).toBe(
+      '/onboarding?callbackUrl=%2Foidc%2Fauth%3Fclient_id%3Dlobehub-desktop',
+    );
+    expect(buildOnboardingRedirectUrl('https://evil.com/oidc/auth?client_id=lobot-desktop')).toBe(
+      '/onboarding',
+    );
+  });
+
   it('should drop unsafe external targets', () => {
     expect(buildOnboardingRedirectUrl('https://evil.com')).toBe('/onboarding');
     expect(buildOnboardingRedirectUrl('//evil.com')).toBe('/onboarding');
