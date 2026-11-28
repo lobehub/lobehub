@@ -47,6 +47,25 @@ interface NormalizeListTasksOptions {
 export const normalizeOptionalFilterValues = <T>(values?: T[]) =>
   values?.length ? values : undefined;
 
+/**
+ * Reject a blank `parentIdentifier` before it reaches the list query.
+ *
+ * The task list API rejects empty and whitespace-only parents with a raw zod
+ * `too_small` issue, which models misread and retry with the same blank value
+ * (lobehub/lobehub#23977 saw 49 identical calls in one topic). The value stays
+ * an error rather than being treated as "no filter": the caller must learn to
+ * omit the field, so the message names that exact correction.
+ *
+ * @returns The model-facing error message, or `undefined` when params are valid.
+ */
+export const validateListTasksParams = (params: ListTasksParams): string | undefined => {
+  const { parentIdentifier } = params as { parentIdentifier?: unknown };
+  if (parentIdentifier === undefined) return;
+  if (typeof parentIdentifier === 'string' && parentIdentifier.trim()) return;
+
+  return `Invalid parentIdentifier ${JSON.stringify(parentIdentifier)}: it must be a task identifier or id such as "T-1". To list tasks without a parent filter, omit parentIdentifier entirely instead of passing an empty value, then retry.`;
+};
+
 const hasExplicitFilter = (params: ListTasksParams): boolean =>
   Boolean(
     params.parentIdentifier ||

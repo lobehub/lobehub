@@ -10,6 +10,7 @@ import {
   TaskIdentifier,
   toCreateTaskModelConfig,
   toTaskModelConfigPatch,
+  validateListTasksParams,
 } from '@lobechat/builtin-tool-task';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { TaskAssignableMember, TaskCreatedItem } from '@lobechat/prompts';
@@ -612,6 +613,9 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       priorities?: number[];
       statuses?: TaskStatus[];
     }) => {
+      const invalidParams = validateListTasksParams(args);
+      if (invalidParams) return { content: invalidParams, success: false };
+
       const normalized = normalizeListTasksParams(args, {
         currentAgentId: agentId,
         defaultScope: scope === 'task' ? 'allAgents' : 'currentAgent',
