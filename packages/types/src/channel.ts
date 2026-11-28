@@ -160,6 +160,11 @@ export type ChannelMemberMetadata = Record<string, unknown> & {
    * that is the Agent member's `config.muted`.
    */
   notificationsMuted?: boolean;
+  /**
+   * Highest sequence this person has read in each Thread, by Thread id. Sequences are
+   * channel-wide, so they compare directly with `ChannelPublicThread.lastSequence`.
+   */
+  threadReadSequences?: Record<string, number>;
   /** Worktree per conversation branch: a Thread id, or `main` for the main timeline. */
   worktrees?: Record<string, ChannelMemberWorktree>;
   /** The configured directory could not host a worktree (e.g. not a git repo); retried later. */
@@ -1053,10 +1058,21 @@ export interface ChannelPublicThread {
    */
   lastNewsAt?: Date | null;
   /**
+   * Highest sequence the viewer has read in this thread (0 when never opened), from
+   * `channel.markThreadRead` or their own replies. Present on every thread of a detail
+   * view; absent in views cached before read positions existed.
+   */
+  lastReadSequence?: number;
+  /**
    * The newest reply, for threads whose root is on the loaded main-timeline page. Absent in
    * thread views and in views cached before summaries existed.
    */
   lastReply?: Pick<ChannelPublicMessage, 'author' | 'content' | 'createdAt' | 'id'> | null;
+  /**
+   * The newest standing reply's sequence, or `rootSequence` when there is none. The thread is
+   * unread for the viewer while it exceeds `lastReadSequence`. Present when `lastReadSequence` is.
+   */
+  lastSequence?: number;
   /** Replies in the thread, under the same conditions as `lastReply`. */
   replyCount?: number;
   rootMessageId: string;

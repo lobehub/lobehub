@@ -21,6 +21,7 @@ import {
 } from './delivery';
 import { ChannelError } from './error';
 import { isWorkspaceMember, peerOf, requirePeerRelation } from './peer';
+import { raiseThreadRead } from './read';
 import { audit } from './transaction';
 import type { ChannelAccess } from './types';
 import { createChannelThread } from './view';
@@ -347,12 +348,13 @@ export const sendMessage = async (
   // Like any chat app, sending reads the conversation up to the sender's own message, so it
   // never counts as unread (or notifies) on the sender's other devices. An Agent's request, or a
   // relay (`via`) posted for the person, is not the person reading: their unseen messages stay
-  // unread.
+  // unread. A reply in a Thread reads that Thread up to it too.
   if (!author && !input.metadata?.via)
     await tx
       .update(channelMembers)
       .set({
         lastReadSequence: sql`greatest(coalesce(${channelMembers.lastReadSequence}, 0), ${message.sequence})`,
+        ...(threadId && { metadata: raiseThreadRead(threadId, message.sequence) }),
       })
       .where(eq(channelMembers.id, member.id));
   const delivered = await deliver(tx, message, recipients, member.id);
