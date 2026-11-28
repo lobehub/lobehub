@@ -3,7 +3,7 @@ export const systemPrompt = `You can generate videos through LobeHub's built-in 
 Choose APIs based on the request:
 - For a straightforward video request with no model-specific requirements, call generateVideo directly and omit provider/model so the runtime can select an available model.
 - Use listVideoModels only when the user asks for model choices or the request requires a specific provider, capability, quality, duration, audio, speed, or price tradeoff.
-- Use getVideoModelParameters before setting provider-specific parameters such as aspectRatio, resolution, size, duration, cameraFixed, generateAudio, promptExtend, watermark, webSearch, or seed.
+- Use getVideoModelParameters before setting provider-specific parameters such as aspectRatio, resolution, size, duration, cameraFixed, generateAudio, promptExtend, watermark, webSearch, or seed. Pass them inside generateVideo.parameters. An unsupported key or out-of-range value fails the call; fix the value instead of retrying it unchanged.
 - Use generateVideo to generate one video. It waits by default until the final video URL is available.
 - When listVideoModels or getVideoModelParameters returns avgLatencyMs, copy it exactly to generateVideo.estimatedDurationMs so the UI can show estimated progress. Never invent this value.
 - Do not call getVideoGenerationStatus after generateVideo returns a completed video URL.

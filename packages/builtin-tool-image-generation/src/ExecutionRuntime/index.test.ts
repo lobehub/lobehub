@@ -118,6 +118,30 @@ describe('ImageGenerationExecutionRuntime', () => {
     expect(result.content).toContain('"1536x1024"');
   });
 
+  it('returns parameters for a model card without a prompt entry', async () => {
+    const parameters = { size: { default: '1024x1024', enum: ['1024x1024'] } };
+    const service = createService({
+      listImageModels: vi.fn().mockResolvedValue({
+        providers: [
+          {
+            id: DEFAULT_IMAGE_GENERATION_PROVIDER,
+            models: [{ id: DEFAULT_IMAGE_GENERATION_MODEL, parameters }],
+          },
+        ],
+        totalModels: 1,
+      }),
+    });
+    const runtime = new ImageGenerationExecutionRuntime(service);
+
+    const result = await runtime.getImageModelParameters({
+      model: DEFAULT_IMAGE_GENERATION_MODEL,
+      provider: DEFAULT_IMAGE_GENERATION_PROVIDER,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.state).toMatchObject({ defaultValues: { size: '1024x1024' }, parameters });
+  });
+
   it('selects the first enabled image model when provider and model are omitted', async () => {
     const service = createService();
     const runtime = new ImageGenerationExecutionRuntime(service);
