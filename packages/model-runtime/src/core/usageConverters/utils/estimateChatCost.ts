@@ -1,54 +1,35 @@
-import type { ModelTokensUsage } from '@lobechat/types';
-import type { Pricing, PricingUnitName } from 'model-bank';
-import { estimateTokenCount } from 'tokenx';
-
-import type { ChatCompletionTool, OpenAIChatMessage } from '../../../types/chat';
 import {
   type AudioTokenEstimateSource,
-  estimateAudioInputTokens,
+  type ChatRequestInputTokenEstimate,
+  estimateChatRequestInputTokens,
+  type EstimateChatRequestInputTokensOptions,
   normalizeAudioTokensPerSecond,
-} from '../../../utils/audio';
+} from '@lobechat/token-estimator';
+import type { ModelTokensUsage } from '@lobechat/types';
+import type { Pricing, PricingUnitName } from 'model-bank';
+
+import type { ChatCompletionTool, OpenAIChatMessage } from '../../../types/chat';
 import type { ComputeChatCostOptions, PricingComputationResult } from './computeChatCost';
 import { computeChatCost } from './computeChatCost';
 
-const DEFAULT_IMAGE_INPUT_TOKEN_ESTIMATE = 1000;
-const DEFAULT_VIDEO_INPUT_TOKEN_ESTIMATE = 1000;
 const OUTPUT_INPUT_RATIO = 0.1;
 const OUTPUT_TOKEN_CAP = 8192;
 
-export interface ChatInputTokenEstimate {
-  audioDurationItemCount: number;
-  audioFallbackItemCount: number;
-  audioTokenEstimateSource: AudioTokenEstimateSource;
-  audioTokens: number;
-  imageTokens: number;
-  textTokens: number;
-  totalTokens: number;
-  videoTokens: number;
-}
+/**
+ * Input-token estimate of an OpenAI-compatible chat request, from
+ * `@lobechat/token-estimator`.
+ */
+export type ChatInputTokenEstimate = ChatRequestInputTokenEstimate;
 
-export interface EstimateOpenAIChatInputTokensOptions {
-  /**
-   * Conservative per-audio fallback used when duration or the model rate is unavailable.
-   */
-  audioTokenEstimate?: number;
-  /**
-   * Positive model-specific audio input token rate for duration-based estimates.
-   */
-  audioTokensPerSecond?: number;
-  /**
-   * Conservative token estimate for each image input when exact image accounting is unavailable.
-   */
-  imageTokenEstimate?: number;
+export interface EstimateOpenAIChatInputTokensOptions extends Omit<
+  EstimateChatRequestInputTokensOptions,
+  'tools'
+> {
   /**
    * Tool definitions are counted as input prompt tokens because providers receive them with the
    * chat request.
    */
   tools?: ChatCompletionTool[];
-  /**
-   * Conservative token estimate for each video input when exact video accounting is unavailable.
-   */
-  videoTokenEstimate?: number;
 }
 
 /**
@@ -119,13 +100,6 @@ export interface EstimateChatCostFromMessagesOptions
   maxOutputTokens?: number;
 }
 
-const estimateSerializableTokens = (value: unknown): number => {
-  if (value === undefined || value === null) return 0;
-
-  const text = typeof value === 'string' ? value : JSON.stringify(value);
-  return text ? estimateTokenCount(text) : 0;
-};
-
 const hasPricingUnit = (pricing: Pricing | undefined, unitName: PricingUnitName) =>
   pricing?.units.some((unit) => unit.name === unitName) ?? false;
 
@@ -173,77 +147,13 @@ export function estimateChatOutputTokens(
  * Estimates OpenAI-compatible chat input tokens without requiring provider-side usage.
  *
  * This helper is for pre-flight checks only. It counts text-like fields, tool definitions, and a
- * conservative per-image estimate; use provider usage plus `computeChatCost` for final billing.
+ * conservative per-media estimate; use provider usage plus `computeChatCost` for final billing.
  */
 export function estimateOpenAIChatInputTokens(
   messages: OpenAIChatMessage[],
   options: EstimateOpenAIChatInputTokensOptions = {},
 ): ChatInputTokenEstimate {
-  const imageTokenEstimate = options.imageTokenEstimate ?? DEFAULT_IMAGE_INPUT_TOKEN_ESTIMATE;
-  const videoTokenEstimate = options.videoTokenEstimate ?? DEFAULT_VIDEO_INPUT_TOKEN_ESTIMATE;
-  const audioParts: Array<{ durationMs?: unknown }> = [];
-  let textTokens = 0;
-  let imageTokens = 0;
-  let videoTokens = 0;
-
-  for (const message of messages) {
-    textTokens += estimateSerializableTokens(message.role);
-    textTokens += estimateSerializableTokens(message.name);
-    textTokens += estimateSerializableTokens(message.tool_call_id);
-    textTokens += estimateSerializableTokens(message.tool_calls);
-    textTokens += estimateSerializableTokens(message.reasoning?.content);
-
-    if (typeof message.content === 'string') {
-      textTokens += estimateSerializableTokens(message.content);
-      continue;
-    }
-
-    if (!Array.isArray(message.content)) {
-      textTokens += estimateSerializableTokens(message.content);
-      continue;
-    }
-
-    for (const part of message.content) {
-      if (part.type === 'text') {
-        textTokens += estimateSerializableTokens(part.text);
-        continue;
-      }
-
-      if (part.type === 'image_url') {
-        imageTokens += imageTokenEstimate;
-        continue;
-      }
-
-      if (part.type === 'video_url') {
-        videoTokens += videoTokenEstimate;
-        continue;
-      }
-
-      if (part.type === 'audio_url') {
-        audioParts.push(part.audio_url);
-        continue;
-      }
-
-      textTokens += estimateSerializableTokens(part);
-    }
-  }
-
-  textTokens += estimateSerializableTokens(options.tools);
-  const audioEstimate = estimateAudioInputTokens(audioParts, {
-    fallbackTokensPerItem: options.audioTokenEstimate,
-    tokensPerSecond: options.audioTokensPerSecond,
-  });
-
-  return {
-    audioDurationItemCount: audioEstimate.durationItemCount,
-    audioFallbackItemCount: audioEstimate.fallbackItemCount,
-    audioTokenEstimateSource: audioEstimate.source,
-    audioTokens: audioEstimate.tokens,
-    imageTokens,
-    textTokens,
-    totalTokens: textTokens + imageTokens + audioEstimate.tokens + videoTokens,
-    videoTokens,
-  };
+  return estimateChatRequestInputTokens(messages, options);
 }
 
 /**

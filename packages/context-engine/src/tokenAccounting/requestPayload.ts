@@ -1,6 +1,9 @@
-// cspell:ignore tokenx
-import type { MessageContextAccounting, UIChatMessage } from '@lobechat/types';
-import { estimateTokenCount } from 'tokenx';
+import { estimateTextTokens } from '@lobechat/token-estimator';
+import type {
+  MessageContextAccounting,
+  MessageContextMediaCounts,
+  UIChatMessage,
+} from '@lobechat/types';
 
 import { countContextTokens } from './index';
 
@@ -34,7 +37,7 @@ export interface CountRequestPayloadTokensParams {
 const FILES_INFO_OPEN = '<files_info>';
 const FILES_INFO_CLOSE = '</files_info>';
 
-const estimate = (text: string | undefined) => (text ? estimateTokenCount(text) : 0);
+const estimate = estimateTextTokens;
 
 /**
  * Text the provider tokenizes. Image, video and audio parts are skipped, as in
@@ -81,6 +84,16 @@ const splitFileContext = (text: string) => {
   }
 
   return { fileContext, rest: rest + text.slice(cursor) };
+};
+
+const countMedia = (content: unknown, media: MessageContextMediaCounts) => {
+  if (!Array.isArray(content)) return;
+
+  for (const part of content) {
+    if (part?.type === 'image_url') media.image += 1;
+    else if (part?.type === 'video_url') media.video += 1;
+    else if (part?.type === 'audio_url') media.audio += 1;
+  }
 };
 
 const toReasoning = (message: RequestPayloadMessage) => {
@@ -135,8 +148,10 @@ export const countRequestPayloadTokens = ({
   const conversationMessages: UIChatMessage[] = [];
   let fileContext = 0;
   let reasoningSignature = 0;
+  const media: MessageContextMediaCounts = { audio: 0, image: 0, video: 0 };
 
   messages.forEach((message, index) => {
+    countMedia(message.content, media);
     let content = toText(message.content);
 
     if (message.role === 'user') {
@@ -174,6 +189,7 @@ export const countRequestPayloadTokens = ({
   return {
     bySource,
     estimator: 'tokenx',
+    media,
     messageCount: messages.length,
     system,
     total,

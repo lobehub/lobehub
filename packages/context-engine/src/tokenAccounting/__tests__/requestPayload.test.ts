@@ -43,6 +43,7 @@ describe('countRequestPayloadTokens', () => {
         toolDefinition: 0,
       },
       estimator: 'tokenx',
+      media: { audio: 0, image: 0, video: 0 },
       messageCount: 0,
       system: 0,
       total: 0,
@@ -201,6 +202,7 @@ describe('countRequestPayloadTokens', () => {
       estimateTokenCount('what is in this image?') + estimateTokenCount('a cat'),
     );
     expect(result.bySource.reasoning).toBe(estimateTokenCount('looks like a cat'));
+    expect(result.media).toEqual({ audio: 0, image: 1, video: 0 });
   });
 });
 

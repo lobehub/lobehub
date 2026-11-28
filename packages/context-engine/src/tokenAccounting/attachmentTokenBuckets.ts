@@ -1,5 +1,10 @@
 // cspell:ignore tokenx
 import { filesPrompts } from '@lobechat/prompts';
+import {
+  estimateAudioInputTokens,
+  estimateTextTokens,
+  VISUAL_INPUT_TOKEN_ESTIMATE,
+} from '@lobechat/token-estimator';
 import type {
   ChatAudioItem,
   ChatFileItem,
@@ -8,12 +13,10 @@ import type {
   UIChatMessage,
   UploadFileItem,
 } from '@lobechat/types';
-import { estimateAudioInputTokens } from '../utils/audio';
+
 import { getMimeType } from '../utils/mimeType';
-import { estimateTokenCount } from 'tokenx';
 
 const ESTIMATE_INPUT_MESSAGE_ID = '__cost_estimate_input__';
-const VISUAL_INPUT_TOKEN_ESTIMATE = 1000;
 const BYTES_PER_TEXT_TOKEN_ESTIMATE = 4;
 const TEXT_UPLOAD_MIME_TYPES = new Set([
   'application/javascript',
@@ -56,11 +59,7 @@ export const EMPTY_TOKEN_BUCKETS: InputTokenBuckets = {
   videoTokens: 0,
 };
 
-const countPromptTextTokens = (content: string) => {
-  if (!content) return 0;
-
-  return estimateTokenCount(content);
-};
+const countPromptTextTokens = estimateTextTokens;
 
 const countFileContextTokens = ({
   audioList,
