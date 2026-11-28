@@ -701,23 +701,25 @@ export default {
   'plans.limits.autoMonthlySpend.tooltip':
     'Auto Model usage across your billing month has its own limit, separate from other models.',
   'plans.limits.autoRolling5hSpend': 'Auto Model 5-hour limit',
-  'plans.limits.autoRolling5hSpend.multiple': 'Auto Model 5-hour limit: {{multiple}}× {{plan}}',
+  'plans.limits.autoRolling5hSpend.multiple':
+    '{{multiple}}× the Auto Model 5-hour limit of {{plan}}',
   'plans.limits.autoRolling5hSpend.tooltip':
     'Auto Model usage within a 5-hour window has its own limit.',
   'plans.limits.autoRolling5hSpend.unavailable': 'No Auto Model 5-hour limit',
   'plans.limits.autoRolling7dSpend': 'Auto Model weekly limit',
-  'plans.limits.autoRolling7dSpend.multiple': 'Auto Model weekly limit: {{multiple}}× {{plan}}',
+  'plans.limits.autoRolling7dSpend.multiple':
+    '{{multiple}}× the Auto Model weekly limit of {{plan}}',
   'plans.limits.autoRolling7dSpend.tooltip':
     'Auto Model picks a suitable model for each conversation. Its usage has its own limits and does not count toward the limits of other models.',
   'plans.limits.autoRolling7dSpend.unavailable': 'Auto Model',
   'plans.limits.monthlySpend.tooltip':
     'Usage across your billing month has a limit too. It resets when the next billing month starts.',
   'plans.limits.rolling5hSpend': '5-hour limit',
-  'plans.limits.rolling5hSpend.multiple': '5-hour limit: {{multiple}}× {{plan}}',
+  'plans.limits.rolling5hSpend.multiple': '{{multiple}}× the 5-hour limit of {{plan}}',
   'plans.limits.rolling5hSpend.tooltip': 'Usage within a 5-hour window has its own limit.',
   'plans.limits.rolling5hSpend.unavailable': 'No 5-hour limit',
   'plans.limits.rolling7dSpend': 'Weekly limit',
-  'plans.limits.rolling7dSpend.multiple': 'Weekly limit: {{multiple}}× {{plan}}',
+  'plans.limits.rolling7dSpend.multiple': '{{multiple}}× the weekly limit of {{plan}}',
   'plans.limits.rolling7dSpend.tooltip':
     'The model usage your plan allows in a week. Usage across your billing month has a limit as well.',
   'plans.limits.sandboxStorage': '{{value}} cloud sandbox storage',
@@ -725,7 +727,7 @@ export default {
   'plans.limits.topUpRate': 'Top-up discount',
   'plans.limits.topUpRate.tooltip': 'Cheaper top-ups than on Free',
   'plans.limits.ultraWeeklySpend': 'Pro model weekly limit',
-  'plans.limits.ultraWeeklySpend.multiple': 'Pro model weekly limit: {{multiple}}× {{plan}}',
+  'plans.limits.ultraWeeklySpend.multiple': '{{multiple}}× the Pro model weekly limit',
   'plans.limits.ultraWeeklySpend.tooltip':
     'Pro models are the most capable and most expensive ones. Their usage counts toward your weekly limit and also has a limit of its own; both reset together.',
   'plans.limits.ultraWeeklySpend.unavailable': 'Pro models',
