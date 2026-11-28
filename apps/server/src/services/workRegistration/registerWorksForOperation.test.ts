@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MessageModel } from '@/database/models/message';
 import type * as WorkModule from '@/database/models/work';
 import { WorkModel } from '@/database/models/work';
+import { MarketService } from '@/server/services/market';
 
 import { redeployFileWork, registerWorksForOperation } from './registerWorksForOperation';
 
@@ -16,11 +17,13 @@ const {
   mockFindFileVersionByToolCall,
   mockExportAndUploadFile,
   mockCreateSandboxService,
+  mockResolveSandboxSessionConfig,
   mockFillAgentWorkCost,
   mockUpdateMessage,
   mockFindMessageById,
 } = vi.hoisted(() => ({
   mockCreateSandboxService: vi.fn(),
+  mockResolveSandboxSessionConfig: vi.fn(),
   mockExportAndUploadFile: vi.fn(),
   mockFillAgentWorkCost: vi.fn(),
   mockFindById: vi.fn(),
@@ -79,6 +82,7 @@ vi.mock('@/server/services/market', () => ({
 }));
 vi.mock('@/server/services/sandbox', () => ({
   createSandboxService: mockCreateSandboxService,
+  resolveSandboxSessionConfig: mockResolveSandboxSessionConfig,
 }));
 
 const serverDB = {} as any;
@@ -169,6 +173,11 @@ beforeEach(() => {
   mockUpdateMessage.mockResolvedValue({ success: true });
   mockFindMessageById.mockResolvedValue(undefined);
   mockCreateSandboxService.mockReturnValue({ exportAndUploadFile: mockExportAndUploadFile });
+  mockResolveSandboxSessionConfig.mockResolvedValue({
+    claim: null,
+    drive: 'personal',
+    mode: 'ephemeral',
+  });
   mockRegisterFile.mockImplementation(async (params: any) => ({
     currentVersionId: `ver-${params.filePath}`,
     id: `work-${params.filePath}`,
@@ -240,6 +249,65 @@ describe('registerWorksForOperation', () => {
       includeShareVisitor: false,
     });
     expect(mockExportAndUploadFile.mock.calls[0][2]).not.toHaveProperty('metadata');
+  });
+
+  it('exports from the sandbox session the run used for a workspace drive run', async () => {
+    // A skills-driven docx export in a workspace topic: the run's tools reached
+    // the workspace sandbox (acting account + drive claim on the token). The
+    // completion export must open that same session, or it reads the personal
+    // ephemeral sandbox, where the file does not exist, and no card appears.
+    mockListPlugins.mockResolvedValue([
+      {
+        apiName: 'exportFile',
+        arguments: JSON.stringify({ filename: 'contract.docx', path: '/tmp/lk/contract.docx' }),
+        createdAt: new Date('2026-07-20T00:01:00.000Z'),
+        id: 'a',
+        identifier: 'lobe-skills',
+        state: { fileId: 'file-x', filename: 'contract.docx', url: 'https://f/file-x' },
+        toolCallId: 'tc-a',
+      },
+    ]);
+    const claim = { key: 'ws-1', scope: 'workspace' };
+    mockResolveSandboxSessionConfig.mockResolvedValue({
+      claim,
+      cwd: '/mnt/workspace/folder',
+      drive: 'public',
+      mode: 'drive',
+      workingDir: '/mnt/workspace',
+    });
+
+    await registerWorksForOperation({ ...baseParams, workspaceId: 'ws-1' });
+
+    expect(mockResolveSandboxSessionConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isShareVisitorRun: false,
+        topicId: 'topic-1',
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+      }),
+    );
+    expect(vi.mocked(MarketService)).toHaveBeenCalledWith({
+      userInfo: {
+        sandboxOperation: { operationId: 'op-1', topicId: 'topic-1' },
+        sandboxStorage: claim,
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+      },
+    });
+    expect(mockCreateSandboxService).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sandboxCwd: '/mnt/workspace/folder',
+        sandboxMode: 'drive',
+        sandboxWorkingDir: '/mnt/workspace',
+        topicId: 'topic-1',
+      }),
+    );
+    expect(mockExportAndUploadFile).toHaveBeenCalledWith(
+      '/tmp/lk/contract.docx',
+      'contract.docx',
+      expect.anything(),
+    );
+    expect(mockRegisterFile).toHaveBeenCalledTimes(1);
   });
 
   it('registers one file Work version per edited entity file', async () => {
@@ -339,7 +407,11 @@ describe('registerWorksForOperation', () => {
     mockExportAndUploadFile.mockImplementation(async (path: string) => {
       const filename = base(path);
       if (filename === 'broken.pptx') {
-        return { error: { message: 'export boom' }, filename, success: false };
+        return {
+          error: { code: 'EXPORT_FAILED', message: 'export boom for broken.pptx' },
+          filename,
+          success: false,
+        };
       }
       return {
         fileId: `file-${filename}`,
@@ -350,8 +422,16 @@ describe('registerWorksForOperation', () => {
         url: `s3://exports/${filename}`,
       };
     });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const outcome = await registerWorksForOperation(baseParams);
+
+    // The production warning must not leak user file names (path or raw message).
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    const logged = warnSpy.mock.calls[0].map(String).join(' ');
+    expect(logged).toContain('EXPORT_FAILED');
+    expect(logged).not.toContain('broken.pptx');
+    warnSpy.mockRestore();
 
     expect(mockRegisterFile).toHaveBeenCalledTimes(1);
     expect(mockRegisterFile.mock.calls[0][0].filePath).toBe('/mnt/data/ok.xlsx');

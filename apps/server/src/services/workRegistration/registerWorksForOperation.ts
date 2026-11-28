@@ -20,7 +20,7 @@ import { WorkModel } from '@/database/models/work';
 import { type LobeChatDatabase } from '@/database/type';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
-import { createSandboxService } from '@/server/services/sandbox';
+import { createSandboxService, resolveSandboxSessionConfig } from '@/server/services/sandbox';
 
 import { UNEXECUTED_INTERVENTION_STATUSES } from './constants';
 import { createShellPullRequestLinking } from './pullRequestLinking';
@@ -576,13 +576,39 @@ export const registerWorksForOperation = async (
     };
   }
 
-  // The sandbox is derived from userId + topicId and outlives the operation, so
-  // it is safe to build once here for every export.
-  const marketService = new MarketService({ userInfo: { userId } });
+  // The sandbox outlives the operation, so it is safe to build once here for
+  // every export. It must be the SAME sandbox the run's tools wrote to: the
+  // session is keyed by the acting account (`workspaceId`) and the drive
+  // entitlement (`sandboxStorage` claim) on the trusted token, plus the topic's
+  // placement. Resolve them exactly like the `lobe-skills` / `lobe-cloud-sandbox`
+  // runtimes do; a token without them reaches the personal ephemeral sandbox,
+  // where a workspace or drive-entitled run's file does not exist, so the
+  // export fails and the file card never appears.
+  const sandbox = await resolveSandboxSessionConfig({
+    isShareVisitorRun: Boolean(params.agentShareVisitor),
+    serverDB,
+    topicId,
+    userId,
+    workspaceId,
+  });
+  const marketService = new MarketService({
+    userInfo: {
+      sandboxOperation: { operationId, topicId },
+      sandboxStorage: sandbox.claim,
+      userId,
+      workspaceId: workspaceId ?? undefined,
+    },
+  });
   const fileService = new FileService(serverDB, userId, workspaceId);
   const sandboxService = createSandboxService({
     fileService,
     marketService,
+    sandboxCwd: sandbox.cwd,
+    sandboxInitialization: sandbox.initialization,
+    sandboxInstanceId: sandbox.environment,
+    sandboxMode: sandbox.mode,
+    sandboxSpecification: sandbox.specification,
+    sandboxWorkingDir: sandbox.workingDir,
     serverDB,
     topicId,
     userId,
@@ -661,11 +687,16 @@ export const registerWorksForOperation = async (
           storageName,
         });
         if (!exported.success) {
-          log(
-            '[%s] Skipping file %s: sandbox export failed: %s',
+          // console, not the debug logger: production does not enable this
+          // namespace, and a silent failure here only shows up as a missing card.
+          // Log only structured error fields: the file path and the raw upstream
+          // message can carry user file names into production logs.
+          console.warn(
+            '[work-registration] [%s] Skipping a file: sandbox export failed (code=%s, name=%s, status=%s)',
             operationId,
-            entry.path,
-            exported.error?.message ?? 'unknown error',
+            exported.error?.code ?? 'unknown',
+            exported.error?.name ?? 'unknown',
+            exported.error?.status ?? 'unknown',
           );
           // A failed export leaves nothing to register — count it so the caller
           // withholds the marker and a later call retries this file.
