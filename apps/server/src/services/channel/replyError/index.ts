@@ -130,10 +130,12 @@ export const reportChannelReplyFailure = async (
     await notify(db, channelId);
 
     // An access card's sentence and its one action are the point; a model adds nothing to them.
+    // A network card names what to check (network, proxy), which a model's rewording drops.
     if (
       facts.share ||
       kind === 'access_denied' ||
       kind === 'access_required' ||
+      kind === 'network' ||
       deps.createSummarizer === false ||
       !facts.operation
     )

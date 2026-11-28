@@ -28,6 +28,11 @@ export type ChannelReplyFailureKind =
   | 'dispatch'
   /** The device the Agent runs on was offline or could not be reached. */
   | 'device'
+  /**
+   * The run lost its network connection mid-reply (connection reset or refused, DNS, timeout):
+   * on a device that is usually its network or proxy, which the person can check.
+   */
+  | 'network'
   /** The run ended normally but wrote no reply. */
   | 'no_reply'
   /** The CLI's subscription is out of credits: only a top-up (or another account) helps. */
@@ -51,6 +56,17 @@ export type ChannelReplyFailureKind =
   /** The platform found the run without progress for too long and abandoned it. */
   | 'watchdog'
   | 'generic';
+
+/**
+ * A failure message that says the connection itself broke: Node socket codes, undici's
+ * "fetch failed", and how CLIs word it (Claude Code: "Connection dropped (ECONNRESET). Check the
+ * proxy set in https_proxy", "Connection error."; Codex: "stream disconnected").
+ */
+const NETWORK_ERROR =
+  /\b(?:ECONNRESET|ECONNREFUSED|ECONNABORTED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|ENETUNREACH|EHOSTUNREACH|EPIPE|UND_ERR_SOCKET|UND_ERR_CONNECT_TIMEOUT)\b|connection (?:dropped|reset|refused|error)|socket hang up|fetch failed|network error|stream disconnected|unable to connect|https?_proxy/i;
+
+export const isNetworkErrorMessage = (message: string | null | undefined) =>
+  !!message && NETWORK_ERROR.test(message);
 
 const DEVICE_ERROR_TYPES = new Set<string>([
   ChatErrorType.DeviceGatewayNotConfigured,
@@ -78,6 +94,9 @@ export const classifyReplyFailure = (facts: ChannelReplyErrorFacts): ChannelRepl
   )
     return 'watchdog';
   if (!facts.job.acceptedAt) return 'dispatch';
+  // After `dispatch`: a run that never started failed on the server's side, not on a network the
+  // person can fix.
+  if (isNetworkErrorMessage(message)) return 'network';
   if (facts.operation?.status === 'done') return 'no_reply';
   return 'generic';
 };
@@ -106,6 +125,12 @@ export const replyFailureActions = (
       case 'dispatch': {
         return ['retry'];
       }
+      // Once the network is back the same conversation can carry on; another device sidesteps one
+      // whose network or proxy stays broken.
+      case 'network': {
+        const again: ChannelReplyErrorAction[] = resume ? ['resume', 'retry'] : ['retry'];
+        return facts.deviceId ? [...again, 'switch_device'] : again;
+      }
       // Only the Agent's owner can lift it: ask them. Their answer runs the reply again.
       case 'access_denied':
       case 'access_required': {
@@ -127,7 +152,10 @@ export const replyFailureActions = (
   return facts.share ? actions.filter((action) => action !== 'switch_device') : actions;
 };
 
-type Copy = Record<ChannelReplyFailureKind, (name: string, started: boolean) => string>;
+type Copy = Record<
+  ChannelReplyFailureKind,
+  (name: string, started: boolean, onDevice: boolean) => string
+>;
 
 const ZH: Copy = {
   access_denied: (name) => `${name} 的主人拒绝了你的使用申请，这次没有回复。可以再次申请。`,
@@ -138,6 +166,10 @@ const ZH: Copy = {
       : `连不上 ${name} 所在的设备，回复没能开始。`,
   dispatch: (name) => `${name} 的回复没能启动。`,
   generic: (name) => `${name} 的回复中途出错，没能完成。`,
+  network: (name, _started, onDevice) =>
+    onDevice
+      ? `${name} 所在设备的网络连接断开了，回复没能完成。请检查这台设备的网络和代理设置后重试。`
+      : `${name} 的网络连接断开了，回复没能完成。可以稍后重试。`,
   no_reply: (name) => `${name} 运行结束了，但没有写出回复。`,
   quota_credit: (name) => `${name} 使用的账号额度已用完，需要充值或换一台设备。`,
   quota_usage: (name) => `${name} 使用的账号已达到用量上限，额度重置后可以继续。`,
@@ -161,6 +193,10 @@ const EN: Copy = {
       : `${name}'s device could not be reached, so the reply did not start.`,
   dispatch: (name) => `${name}'s reply could not start.`,
   generic: (name) => `${name} ran into an error and could not finish this reply.`,
+  network: (name, _started, onDevice) =>
+    onDevice
+      ? `${name}'s device lost its network connection, so the reply could not finish. Check that device's network and proxy settings, then try again.`
+      : `${name} lost its network connection, so the reply could not finish. Try again in a moment.`,
   no_reply: (name) => `${name} finished running without writing a reply.`,
   quota_credit: (name) => `${name}'s account is out of credits; top it up or use another device.`,
   quota_usage: (name) => `${name}'s account hit its usage limit; you can continue once it resets.`,
@@ -209,10 +245,10 @@ export const ruleBasedReplyError = (
   const copy = isChineseLocale(locale) ? ZH : EN;
   return {
     actions: replyFailureActions(kind, facts),
-    deviceId: kind === 'device' || kind === 'silence' ? facts.deviceId : null,
+    deviceId: kind === 'device' || kind === 'silence' || kind === 'network' ? facts.deviceId : null,
     ...visibleError(facts),
     kind,
     occurredAt: now.toISOString(),
-    summary: copy[kind](name, !!facts.job.acceptedAt),
+    summary: copy[kind](name, !!facts.job.acceptedAt, !!facts.deviceId),
   };
 };

@@ -156,6 +156,66 @@ describe('rule-based reply error cards', () => {
     });
   });
 
+  // A Claude Code run on a device whose proxy dropped the connection read as a vague "the reply was
+  // cut off by a connection problem", with nothing saying the network or proxy was the cause.
+  it('names the network and proxy when a device run lost its connection', () => {
+    const dropped = facts({
+      error: {
+        message:
+          'API Error: Connection dropped (ECONNRESET). Check the proxy set in https_proxy, then try again.',
+        type: 'AgentRuntimeError',
+      },
+    });
+    expect(classifyReplyFailure(dropped)).toBe('network');
+    expect(ruleBasedReplyError(dropped, 'zh-CN', NOW)).toMatchObject({
+      actions: ['resume', 'retry', 'switch_device'],
+      deviceId: 'device-1',
+      errorType: 'AgentRuntimeError',
+      kind: 'network',
+      summary:
+        'Coder 所在设备的网络连接断开了，回复没能完成。请检查这台设备的网络和代理设置后重试。',
+    });
+    expect(ruleBasedReplyError(dropped, 'en-US', NOW).summary).toBe(
+      "Coder's device lost its network connection, so the reply could not finish. Check that device's network and proxy settings, then try again.",
+    );
+  });
+
+  it('recognises how runtimes word a lost connection', () => {
+    for (const message of [
+      'API Error: Connection error.',
+      'socket hang up',
+      'TypeError: fetch failed',
+      'connect ECONNREFUSED 127.0.0.1:7890',
+      'getaddrinfo ENOTFOUND api.anthropic.com',
+      'stream disconnected before completion: error sending request',
+    ])
+      expect(classifyReplyFailure(facts({ error: { message } }))).toBe('network');
+    // A 429 or a provider's own error is not the network.
+    expect(classifyReplyFailure(facts({ error: { message: 'Rate limited (429)' } }))).toBe(
+      'generic',
+    );
+  });
+
+  it('leaves the proxy out of a cloud run, which the person cannot configure', () => {
+    const card = ruleBasedReplyError(
+      facts({ error: { message: 'read ECONNRESET' } }, { deviceId: null }),
+      'zh-CN',
+      NOW,
+    );
+    expect(card).toMatchObject({
+      actions: ['resume', 'retry'],
+      deviceId: null,
+      kind: 'network',
+      summary: 'Coder 的网络连接断开了，回复没能完成。可以稍后重试。',
+    });
+  });
+
+  it('keeps a run that never started as could-not-start, even on a network error', () => {
+    expect(
+      classifyReplyFailure(facts({ error: { message: 'fetch failed' } }, {}, { acceptedAt: null })),
+    ).toBe('dispatch');
+  });
+
   it('only offers a fresh start for a run that never took its input', () => {
     expect(
       ruleBasedReplyError(
@@ -172,7 +232,9 @@ describe('rule-based reply error cards', () => {
   });
 
   it('falls back to a generic explanation, and to an empty reply when the run finished', () => {
-    expect(classifyReplyFailure(facts({ error: { message: 'socket hang up' } }))).toBe('generic');
+    expect(
+      classifyReplyFailure(facts({ error: { message: 'Cannot read properties of undefined' } })),
+    ).toBe('generic');
     expect(classifyReplyFailure(facts({ status: 'done' }))).toBe('no_reply');
     expect(ruleBasedReplyError(facts({ status: 'done' }), 'en-US').summary).toBe(
       'Coder finished running without writing a reply.',
