@@ -534,6 +534,7 @@
   "navPanelUpgrade.dismiss": "Ocultar por ahora",
   "payDiffPrice": "Pagar Diferencia",
   "payDiffPriceApprox": "Aprox.",
+  "payDiffPriceTip": "El importe real se mostrará en la página de pago",
   "payment.downgradeFailed.desc": "No se pudo programar su degradación. Por favor, inténtelo de nuevo más tarde o contáctenos por correo electrónico si el problema persiste.",
   "payment.downgradeFailed.title": "Degradación Fallida",
   "payment.error.actions.billing": "Gestión de Facturación",

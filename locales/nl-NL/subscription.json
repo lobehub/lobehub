@@ -458,6 +458,7 @@
   "navPanelUpgrade.dismiss": "Voorlopig verbergen",
   "payDiffPrice": "Betaal Verschil",
   "payDiffPriceApprox": "Ca.",
+  "payDiffPriceTip": "Het werkelijke bedrag wordt getoond op de betaalpagina",
   "payment.downgradeFailed.desc": "Het plannen van uw downgrade is mislukt. Probeer het later opnieuw, of neem contact met ons op via e-mail als het probleem aanhoudt.",
   "payment.downgradeFailed.title": "Downgrade Mislukt",
   "payment.error.actions.billing": "Facturatiebeheer",

@@ -440,6 +440,7 @@
   "navPanelUpgrade.dismiss": "今は非表示にする",
   "payDiffPrice": "差額を支払う",
   "payDiffPriceApprox": "約",
+  "payDiffPriceTip": "実際の金額は支払いページでご確認ください",
   "payment.downgradeFailed.desc": "ダウングレードのスケジュールに失敗しました。後でもう一度お試しいただくか、問題が解決しない場合はメールでお問い合わせください。",
   "payment.downgradeFailed.title": "ダウングレード失敗",
   "payment.error.actions.billing": "請求管理",

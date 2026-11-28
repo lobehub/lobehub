@@ -440,6 +440,7 @@
   "navPanelUpgrade.dismiss": "فعلاً پنهان شود",
   "payDiffPrice": "پرداخت مابه‌التفاوت",
   "payDiffPriceApprox": "تقریباً",
+  "payDiffPriceTip": "مبلغ نهایی در صفحه پرداخت مشخص می‌شود",
   "payment.downgradeFailed.desc": "برنامه‌ریزی کاهش سطح شما ناموفق بود. لطفاً بعداً دوباره تلاش کنید، یا اگر مشکل ادامه داشت، از طریق ایمیل با ما تماس بگیرید.",
   "payment.downgradeFailed.title": "کاهش سطح ناموفق بود",
   "payment.error.actions.billing": "مدیریت صورتحساب",

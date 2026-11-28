@@ -440,6 +440,7 @@
   "navPanelUpgrade.dismiss": "Nascondi per ora",
   "payDiffPrice": "Paga la differenza",
   "payDiffPriceApprox": "Circa",
+  "payDiffPriceTip": "Importo effettivo soggetto alla pagina di pagamento",
   "payment.downgradeFailed.desc": "Non è stato possibile programmare il downgrade. Riprova più tardi o contattaci via email se il problema persiste",
   "payment.downgradeFailed.title": "Downgrade non riuscito",
   "payment.error.actions.billing": "Gestione fatturazione",

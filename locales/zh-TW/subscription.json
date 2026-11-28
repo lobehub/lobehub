@@ -457,6 +457,7 @@
   "navPanelUpgrade.dismiss": "暫時隱藏",
   "payDiffPrice": "支付差額",
   "payDiffPriceApprox": "約",
+  "payDiffPriceTip": "實際金額以付款頁面為準",
   "payment.downgradeFailed.desc": "無法安排您的降級。請稍後再試，若問題持續，請透過電子郵件聯絡我們。",
   "payment.downgradeFailed.title": "降級失敗",
   "payment.error.actions.billing": "帳單管理",

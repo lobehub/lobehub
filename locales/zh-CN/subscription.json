@@ -597,6 +597,7 @@
   "navPanelUpgrade.dismiss": "暂时隐藏",
   "payDiffPrice": "支付差价",
   "payDiffPriceApprox": "约",
+  "payDiffPriceTip": "实际金额以支付页面为准",
   "payment.downgradeFailed.desc": "降级设置失败，请稍后重试；如果问题持续存在，请通过电子邮件联系我们",
   "payment.downgradeFailed.title": "降级失败",
   "payment.error.actions.billing": "账单管理",

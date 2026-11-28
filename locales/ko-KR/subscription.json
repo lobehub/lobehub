@@ -519,6 +519,7 @@
   "navPanelUpgrade.dismiss": "지금은 숨기기",
   "payDiffPrice": "차액 결제",
   "payDiffPriceApprox": "약",
+  "payDiffPriceTip": "실제 결제 금액은 결제 페이지에서 확인하세요",
   "payment.downgradeFailed.desc": "다운그레이드 예약에 실패했습니다. 나중에 다시 시도하거나 문제가 계속될 경우 이메일로 문의해 주세요.",
   "payment.downgradeFailed.title": "다운그레이드 실패",
   "payment.error.actions.billing": "결제 관리",

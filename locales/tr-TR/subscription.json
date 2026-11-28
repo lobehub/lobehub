@@ -440,6 +440,7 @@
   "navPanelUpgrade.dismiss": "Şimdilik gizle",
   "payDiffPrice": "Farkı Öde",
   "payDiffPriceApprox": "Yaklaşık",
+  "payDiffPriceTip": "Gerçek tutar ödeme sayfasında geçerlidir",
   "payment.downgradeFailed.desc": "Düşürme işlemi planlanamadı. Lütfen daha sonra tekrar deneyin veya sorun devam ederse bize e-posta yoluyla ulaşın.",
   "payment.downgradeFailed.title": "Düşürme Başarısız",
   "payment.error.actions.billing": "Fatura Yönetimi",
