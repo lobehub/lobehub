@@ -127,6 +127,18 @@ describe('marketplace apps', () => {
     for (const server of OFFICIAL_MCP_SERVERS) expect(new URL(server.url).protocol).toBe('https:');
   });
 
+  it('lists the AI/ML API MCP server as an OAuth research app on its exact host', () => {
+    const server = OFFICIAL_MCP_SERVERS.find((item) => item.identifier === 'aimlapi');
+    expect(server).toMatchObject({ auth: 'oauth', category: 'research', label: 'AI/ML API' });
+    expect(new URL(server!.url).host).toBe('mcp.aimlapi.com');
+    const app = buildMarketplaceApps({
+      ...inputs,
+      officialMcpServers: OFFICIAL_MCP_SERVERS,
+    }).find((item) => item.id === 'aimlapi')!;
+    expect(app).toMatchObject({ category: 'research', toolConnected: false });
+    expect(app.officialMcp?.url).toBe('https://mcp.aimlapi.com/mcp');
+  });
+
   it('files every LobeHub and Composio app under a named category', () => {
     const uncategorized = getConnectorCatalog({ composio: true, lobehub: true })
       .map((item) => (item.type === 'lobehub' ? item.provider.id : item.serverType.identifier))

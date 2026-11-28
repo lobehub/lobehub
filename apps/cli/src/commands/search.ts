@@ -246,7 +246,15 @@ async function crawlView(url: string, options: { impl?: string; json?: string | 
 
   const input: {
     impls?: (
-      'browserless' | 'deepseek' | 'exa' | 'firecrawl' | 'jina' | 'naive' | 'search1api' | 'tavily'
+      | 'aimlapi'
+      | 'browserless'
+      | 'deepseek'
+      | 'exa'
+      | 'firecrawl'
+      | 'jina'
+      | 'naive'
+      | 'search1api'
+      | 'tavily'
     )[];
     urls: string[];
   } = { urls: [url] };

@@ -58,6 +58,7 @@ export const searchRouter = router({
       z.object({
         impls: z
           .enum([
+            'aimlapi',
             'browserless',
             'deepseek',
             'exa',

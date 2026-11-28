@@ -1,3 +1,4 @@
+import { aimlapi } from './aimlapi';
 import { browserless } from './browserless';
 import { deepseek } from './deepseek';
 import { exa } from './exa';
@@ -8,6 +9,7 @@ import { search1api } from './search1api';
 import { tavily } from './tavily';
 
 export const crawlImpls = {
+  aimlapi,
   browserless,
   deepseek,
   exa,

@@ -9,6 +9,7 @@ import type { ReactNode } from 'react';
  * channel the client doesn't know about yet.
  */
 const CHANNEL_DISPLAY_NAME: Record<string, string> = {
+  aimlapi: 'AI/ML API',
   anspire: 'Anspire',
   bing: 'Bing',
   bocha: 'Bocha',
