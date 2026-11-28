@@ -166,6 +166,32 @@ const queryMessages = (host: AgentRuntimeHost, state: AgentState) =>
     topicId: host.operation.topicId ?? state.origin?.topicId,
   });
 
+/**
+ * The working set after a sub-agent settled: the tasks wrote their own thread
+ * rows (outside this conversation's scope) and the executor wrote the parent's
+ * result `content`. When the host re-reads the conversation at the next step
+ * entry (`MessageTransport.rehydratesOnNextStep`), patching that one content
+ * field is enough; otherwise re-query as before.
+ */
+const settleParentMessage = async (
+  host: AgentRuntimeHost,
+  state: AgentState,
+  parentMessageId: string,
+  content: string | undefined,
+): Promise<AgentState> => {
+  if (host.transports.messages.rehydratesOnNextStep?.(state) !== true) {
+    return { ...state, messages: await queryMessages(host, state) };
+  }
+  if (content === undefined) return state;
+
+  return {
+    ...state,
+    messages: state.messages.map((message) =>
+      message.id === parentMessageId ? { ...message, content } : message,
+    ),
+  };
+};
+
 export const execSubAgent =
   (host: AgentRuntimeHost): InstructionExecutor =>
   async (instruction, state) => {
@@ -190,7 +216,7 @@ export const execSubAgent =
       if (content !== undefined) {
         await host.transports.messages.update(parentMessageId, { content });
       }
-      newState = { ...state, messages: await queryMessages(host, state) };
+      newState = await settleParentMessage(host, state, parentMessageId, content);
     }
 
     return {
@@ -233,10 +259,9 @@ export const execSubAgents =
     let newState = state;
 
     if (hasTerminalResults) {
-      await host.transports.messages.update(parentMessageId, {
-        content: formatBatchResultContent(tasks, results),
-      });
-      newState = { ...state, messages: await queryMessages(host, state) };
+      const content = formatBatchResultContent(tasks, results);
+      await host.transports.messages.update(parentMessageId, { content });
+      newState = await settleParentMessage(host, state, parentMessageId, content);
     }
 
     return {

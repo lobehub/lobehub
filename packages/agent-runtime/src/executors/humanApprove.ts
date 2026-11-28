@@ -134,30 +134,32 @@ export const requestHumanApprove =
       }
 
       // Resumption mode: tool messages already exist. Look them up by
-      // tool_call_id so we can still ship the mapping to the client.
-      let dbMessages: Awaited<ReturnType<typeof transports.messages.query>> = [];
-      try {
-        dbMessages = await transports.messages.query({
-          agentId,
-          // Group runs need groupId or the query returns no group messages, so
-          // the existing tool-message lookup on resume would find nothing.
-          groupId,
-          threadId,
-          topicId,
-        });
-      } catch {
-        // The explicit missing-row guard below keeps the parked batch closed.
-      }
-      for (const toolPayload of pendingToolsCalling) {
-        const existing = dbMessages.find(
-          (m: any) => m.role === 'tool' && m.tool_call_id === toolPayload.id,
-        );
-        if (!existing) {
+      // tool_call_id so we can still ship the mapping to the client. The
+      // re-park is built from rows that all hang off `parentMessageId`, so the
+      // indexed lookup scoped to that assistant finds them — re-reading the
+      // whole conversation to pick out a few ids was a full-topic read.
+      const existingIds = await Promise.all(
+        pendingToolsCalling.map(async (toolPayload) => {
+          if (!approvalAssistantMessageId) return undefined;
+          try {
+            return await transports.messages.findToolMessageIdByToolCallId(
+              toolPayload.id,
+              approvalAssistantMessageId,
+            );
+          } catch {
+            // The explicit missing-row guard below keeps the parked batch closed.
+            return undefined;
+          }
+        }),
+      );
+      for (const [index, toolPayload] of pendingToolsCalling.entries()) {
+        const existingId = existingIds[index];
+        if (!existingId) {
           throw new Error(
             `[request_human_approve] Missing durable tool message for resumed intervention ${toolPayload.id}`,
           );
         }
-        toolMessageIds[toolPayload.id] = existing.id;
+        toolMessageIds[toolPayload.id] = existingId;
       }
 
       if (!approvalAssistantMessageId) {

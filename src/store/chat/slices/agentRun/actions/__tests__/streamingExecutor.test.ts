@@ -304,7 +304,7 @@ describe('StreamingExecutor actions', () => {
           expect(anchorWrites[0]).toEqual([
             expect.any(String),
             { work: { rootOperationId: execOperation?.id, userMessageId: userMessage.id } },
-            { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+            { agentId: TEST_IDS.SESSION_ID, returnMode: 'delta', topicId: TEST_IDS.TOPIC_ID },
           ]);
           expect(
             vi.mocked(messageService.updateMessageMetadata).mock.invocationCallOrder[0],

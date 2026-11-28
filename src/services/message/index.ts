@@ -34,6 +34,14 @@ import { readMessagesByRoundCursor, takePrimedMessageListPage } from './roundCur
 export interface MessageQueryContext {
   agentId?: string;
   groupId?: string;
+  /**
+   * Response shape of a row-local mutation (update / metadata / plugin / tool
+   * writes). Omitted → `full`: the server re-reads and returns the whole
+   * conversation list. `delta` → `{ success }` only, for callers that already
+   * applied the change to their local row; see `withDeltaReturn` in
+   * `./returnMode`.
+   */
+  returnMode?: 'delta' | 'full';
   threadId?: string | null;
   topicId?: string | null;
   topicShareId?: string;

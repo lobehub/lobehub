@@ -629,6 +629,52 @@ describe('Message CRUD Actions', () => {
         expect.any(Object),
       );
     });
+
+    it('asks for a delta and keeps every written column on the local row', async () => {
+      const updateMessageSpy = vi
+        .spyOn(messageServiceModule.messageService, 'updateMessage')
+        .mockResolvedValue({ success: true });
+
+      const store = createTestStore();
+      act(() => {
+        store.getState().internal_dispatchMessage(assistantMessage());
+      });
+
+      await act(async () => {
+        await store.getState().updateMessageContent('assistant-1', 'Final', {
+          reasoning: { content: 'thought' },
+          tools: [assistantTool().value],
+        });
+      });
+
+      expect(updateMessageSpy.mock.calls[0][2]).toMatchObject({ returnMode: 'delta' });
+      // No list comes back, so the row must already hold what was written —
+      // a tools update used to patch only `tools` locally.
+      expect(store.getState().dbMessages.find((m) => m.id === 'assistant-1')).toMatchObject({
+        content: 'Final',
+        reasoning: { content: 'thought' },
+        tools: [expect.objectContaining({ id: 'tool-call-1' })],
+      });
+    });
+
+    it('keeps the full list when new images are attached', async () => {
+      const updateMessageSpy = vi
+        .spyOn(messageServiceModule.messageService, 'updateMessage')
+        .mockResolvedValue(emptyMessageResult());
+
+      const store = createTestStore();
+      act(() => {
+        store.getState().internal_dispatchMessage(userMessage());
+      });
+
+      await act(async () => {
+        await store.getState().updateMessageContent('msg-1', 'Hi', {
+          imageList: [{ alt: '', id: 'file-1', url: 'blob:' }],
+        });
+      });
+
+      expect(updateMessageSpy.mock.calls[0][2]).not.toHaveProperty('returnMode');
+    });
   });
 
   describe('updateMessageMetadata', () => {

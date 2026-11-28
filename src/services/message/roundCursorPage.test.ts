@@ -4,11 +4,14 @@ import { lambdaClient } from '@/libs/trpc/client';
 
 import { MessageService } from './index';
 import {
+  CLIENT_RUN_HISTORY_ROW_BUDGET,
   ForwardPagingUnsupportedError,
   isPartialHeadWindow,
+  MESSAGE_PAGE_ROW_BUDGET,
   primeMessageListPage,
   readMessagesByRoundCursor,
   readMessagesForward,
+  requestClientRunHistoryWindow,
   SHARED_TOPIC_FIRST_PAGE,
   toRoundCursorQueryInput,
 } from './roundCursorPage';
@@ -56,10 +59,56 @@ describe('toRoundCursorQueryInput', () => {
     expect(older).toEqual({ messages: [{ id: 'older' }], olderCursor: null });
   });
 
-  it('keeps the full window for client-mode reads', () => {
+  it('uses the 500-row display budget for client-mode reads too', () => {
     const input = toRoundCursorQueryInput({ agentId: 'a', topicId: 't' }, null);
 
+    expect(MESSAGE_PAGE_ROW_BUDGET).toBe(500);
+    expect(input).toMatchObject({ countBudget: 500, roundLimit: 500 });
+  });
+
+  it('asks for as many whole rounds as an explicit budget holds', () => {
+    const input = toRoundCursorQueryInput({ agentId: 'a', topicId: 't' }, null, 1000);
+
     expect(input).toMatchObject({ countBudget: 1000, roundLimit: 1000 });
+  });
+});
+
+describe('client-run history window', () => {
+  const older = { createdAt: '2026-01-01T00:00:00.000000Z', id: 'u1' };
+
+  beforeEach(() => {
+    query.mockReset();
+  });
+
+  it('reads the requested head once at the history budget, then back at the display budget', async () => {
+    const context = nextContext();
+    query.mockResolvedValue({ ...page('m'), hasMore: true, nextCursor: older });
+
+    requestClientRunHistoryWindow(context);
+    await readMessagesByRoundCursor(context, null);
+    await readMessagesByRoundCursor(context, null);
+
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ countBudget: CLIENT_RUN_HISTORY_ROW_BUDGET, cursor: null }),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ countBudget: MESSAGE_PAGE_ROW_BUDGET, cursor: null }),
+    );
+  });
+
+  it('leaves older-page reads and other conversations at the display budget', async () => {
+    const context = nextContext();
+    query.mockResolvedValue(page('m'));
+
+    requestClientRunHistoryWindow(context);
+    await readMessagesByRoundCursor(context, older);
+    await readMessagesByRoundCursor(nextContext(), null);
+
+    for (const [input] of query.mock.calls) {
+      expect(input).toMatchObject({ countBudget: MESSAGE_PAGE_ROW_BUDGET });
+    }
   });
 });
 
@@ -75,12 +124,25 @@ describe('partial head window', () => {
     expect(isPartialHeadWindow(context)).toBe(true);
   });
 
-  it('clears the mark once a full-budget head page lands', async () => {
+  it('marks a client-mode head page with older history: 500 rows is not the run history', async () => {
+    // Regression guard: with the display budget at 500, a head is only "full"
+    // against the 1000-row client-run window, or client runs would silently
+    // replay a truncated history.
+    const context = nextContext();
+    query.mockResolvedValueOnce({ ...page('m'), hasMore: true, nextCursor: older });
+
+    await readMessagesByRoundCursor(context, null);
+
+    expect(isPartialHeadWindow(context)).toBe(true);
+  });
+
+  it('clears the mark once a history-budget head page lands', async () => {
     const context = nextContext();
     query.mockResolvedValueOnce({ ...page('m'), hasMore: true, nextCursor: older });
     await readMessagesByRoundCursor({ ...context, projectToolPayloads: true }, null);
     query.mockResolvedValueOnce({ ...page('m'), hasMore: true, nextCursor: older });
 
+    requestClientRunHistoryWindow(context);
     await readMessagesByRoundCursor(context, null);
 
     expect(isPartialHeadWindow(context)).toBe(false);

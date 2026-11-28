@@ -1,6 +1,9 @@
 import type { ConversationContext } from '@lobechat/types';
 
-import { isPartialHeadWindow } from '@/services/message/roundCursorPage';
+import {
+  isPartialHeadWindow,
+  requestClientRunHistoryWindow,
+} from '@/services/message/roundCursorPage';
 import { displayMessageSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import { getToolStoreState } from '@/store/tool';
@@ -13,6 +16,9 @@ export const ensureFullHistoryForClientRun = async (
   if (!isPartialHeadWindow(context)) return false;
 
   try {
+    // Display heads stop at `MESSAGE_PAGE_ROW_BUDGET`; the run replays the loaded
+    // rows as model history, so this one reload reads the full history window.
+    requestClientRunHistoryWindow(context);
     await refreshMessages(context);
   } catch (error) {
     console.warn('[ensureFullHistoryForClientRun] Failed to reload a partial head window:', error);

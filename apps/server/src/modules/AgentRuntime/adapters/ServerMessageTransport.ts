@@ -1,4 +1,5 @@
 import type {
+  AgentState,
   CreateAssistantMessageOptions,
   MessageTransport,
   QueryMessagesInput,
@@ -13,6 +14,7 @@ import type { CreateMessageParams, UIChatMessage, UpdateMessageParams } from '@l
 
 import { type MessageModel } from '@/database/models/message';
 
+import { willHydrateStepEntryMessages } from '../messagePersistence';
 import {
   createConversationParentMissingError,
   isMidOperationReferenceMissingError,
@@ -143,6 +145,15 @@ export class ServerMessageTransport implements MessageTransport {
       role: 'tool',
       tool_call_id: plugin.toolCallId,
     };
+  }
+
+  /**
+   * Every server step starts by re-reading the topic into `state.messages`
+   * (`queryStepEntryMessages`), so a tool executor's own post-tool re-read is a
+   * second full-topic read whose result that entry read discards.
+   */
+  rehydratesOnNextStep(state: AgentState): boolean {
+    return willHydrateStepEntryMessages(state);
   }
 
   async query(

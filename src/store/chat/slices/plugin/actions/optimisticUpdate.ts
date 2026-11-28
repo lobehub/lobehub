@@ -7,6 +7,7 @@ import {
 import isEqual from 'fast-deep-equal';
 
 import { messageService } from '@/services/message';
+import { withDeltaReturn } from '@/services/message/returnMode';
 import { type OptimisticUpdateContext } from '@/store/chat/slices/message/actions/optimisticUpdate';
 import { type ChatStore } from '@/store/chat/store';
 import { type StoreSetter } from '@/store/types';
@@ -61,7 +62,8 @@ export class PluginOptimisticUpdateActionImpl {
     );
 
     const ctx = internal_getConversationContext(context);
-    const result = await messageService.updateMessagePluginState(id, value, ctx);
+    // Already merged into the local row above; no conversation re-read needed.
+    const result = await messageService.updateMessagePluginState(id, value, withDeltaReturn(ctx));
 
     if (result?.success && result.messages) {
       replaceMessages(result.messages, { context: ctx });
@@ -142,7 +144,8 @@ export class PluginOptimisticUpdateActionImpl {
     );
 
     const ctx = internal_getConversationContext(context);
-    const result = await messageService.updateMessagePlugin(id, value, ctx);
+    // Already merged into the local row above; no conversation re-read needed.
+    const result = await messageService.updateMessagePlugin(id, value, withDeltaReturn(ctx));
 
     if (result?.success && result.messages) {
       replaceMessages(result.messages, { context: ctx });
@@ -214,7 +217,12 @@ export class PluginOptimisticUpdateActionImpl {
 
     const ctx = internal_getConversationContext(context);
 
-    const result = await messageService.updateMessage(id, { tools: message.tools }, ctx);
+    // Persists the tools[] the caller just dispatched locally.
+    const result = await messageService.updateMessage(
+      id,
+      { tools: message.tools },
+      withDeltaReturn(ctx),
+    );
 
     if (result?.success && result.messages) {
       replaceMessages(result.messages, { context: ctx });

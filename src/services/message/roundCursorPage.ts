@@ -7,13 +7,20 @@ import { workTypeOptIn } from '@/services/workTypeOptIn';
 import type { MessageListPage, MessageRoundCursor } from './cache';
 
 /**
- * Rows walked per round-cursor page: whole rounds up to this many mainline rows,
- * matching the newest-first window `getMessages` serves.
+ * Rows walked per round-cursor display page, in every runtime mode: whole rounds
+ * up to this many mainline rows. Scrolling up pages older history in on demand.
  */
-export const MESSAGE_PAGE_ROW_BUDGET = 1000;
+export const MESSAGE_PAGE_ROW_BUDGET = 500;
 
-// Client-mode reads keep the full budget: the client runtime replays the loaded rows as model history.
-export const GATEWAY_PAGE_ROW_BUDGET = 500;
+/**
+ * The client runtime's model-history window. A client-mode (non-gateway) run
+ * replays the loaded rows as its LLM history, so a head page holding fewer rows
+ * than this while older history exists is "partial", and is re-read at this
+ * budget before such a run starts (`ensureFullHistoryForClientRun`). Display
+ * reads never use it, so long topics are not read 1000 rows at a time just to
+ * be rendered.
+ */
+export const CLIENT_RUN_HISTORY_ROW_BUDGET = 1000;
 
 /** Page sizes for reading a topic forward from its first round. */
 export interface ForwardPageSize {
@@ -36,15 +43,16 @@ export interface RoundCursorReadParams extends MessageListQueryContext {
 export const toRoundCursorQueryInput = (
   params: RoundCursorReadParams,
   cursor: MessageRoundCursor | null,
+  countBudget: number = MESSAGE_PAGE_ROW_BUDGET,
 ) => ({
   agentId: params.agentId,
-  countBudget: params.projectToolPayloads ? GATEWAY_PAGE_ROW_BUDGET : MESSAGE_PAGE_ROW_BUDGET,
+  countBudget,
   cursor,
   groupId: params.groupId,
   ...workTypeOptIn(),
   projectToolPayloads: params.projectToolPayloads,
   // The row budget is the real bound; ask for as many whole rounds as it holds.
-  roundLimit: MESSAGE_PAGE_ROW_BUDGET,
+  roundLimit: countBudget,
   skipWorks: params.skipWorks,
   topicId: params.topicId,
   topicShareId: params.topicShareId,
@@ -64,12 +72,19 @@ export const readMessagesByRoundCursor = async (
   params: RoundCursorReadParams,
   cursor: MessageRoundCursor | null,
 ): Promise<MessageListPage> => {
-  const input = toRoundCursorQueryInput(params, cursor);
+  const key = cursor === null ? primeKey(params) : undefined;
+  // A head read a client run asked for (see `requestClientRunHistoryWindow`)
+  // spends the history budget once; every other read is a display page.
+  const historyRead = key !== undefined && clientRunHistoryReads.delete(key);
+  const input = toRoundCursorQueryInput(
+    params,
+    cursor,
+    historyRead ? CLIENT_RUN_HISTORY_ROW_BUDGET : MESSAGE_PAGE_ROW_BUDGET,
+  );
   const page = toMessageListPage(await lambdaClient.message.getMessagesByCursor.query(input));
 
-  if (cursor === null) {
-    const key = primeKey(params);
-    if (input.countBudget < MESSAGE_PAGE_ROW_BUDGET && page.olderCursor)
+  if (key !== undefined) {
+    if (input.countBudget < CLIENT_RUN_HISTORY_ROW_BUDGET && page.olderCursor)
       partialHeadWindows.add(key);
     else partialHeadWindows.delete(key);
   }
@@ -78,10 +93,21 @@ export const readMessagesByRoundCursor = async (
 };
 
 const partialHeadWindows = new Set<string>();
+const clientRunHistoryReads = new Set<string>();
 
 // A head page smaller than the client runtime's history window: a client-side run must reload it first.
 export const isPartialHeadWindow = (context: MessageListQueryContext): boolean =>
   partialHeadWindows.has(primeKey(context));
+
+/**
+ * Make the conversation's next head read a client-run history read: it walks
+ * {@link CLIENT_RUN_HISTORY_ROW_BUDGET} rows instead of the display budget.
+ * Called right before the reload `ensureFullHistoryForClientRun` triggers; the
+ * request is consumed by that one read.
+ */
+export const requestClientRunHistoryWindow = (context: MessageListQueryContext): void => {
+  clientRunHistoryReads.add(primeKey(context));
+};
 
 /** The `getMessagesByCursor` input for one forward page, starting after `cursor`. */
 export const toForwardRoundCursorQueryInput = (

@@ -2,7 +2,7 @@ import { type AgentState, omitToolWorkRegistration } from '@lobechat/agent-runti
 import { parse } from '@lobechat/conversation-flow';
 import { type ChatToolPayload, type UIChatMessage } from '@lobechat/types';
 
-import { hasNonPersistedMessage } from '@/server/modules/AgentRuntime/messagePersistence';
+import { willHydrateStepEntryMessages } from '@/server/modules/AgentRuntime/messagePersistence';
 import { FileService } from '@/server/services/file';
 import { resolveRunWorkAccessScope } from '@/server/services/workRegistration';
 
@@ -252,6 +252,9 @@ export async function queryStepEntryMessages(
 }> {
   if (!Array.isArray(state.messages)) state.messages = [];
   if (!state.origin?.agentId || !state.origin?.topicId) return {};
+  // Must agree with `willHydrateStepEntryMessages`: tool executors skip their
+  // post-tool re-read on the promise that this read replaces the working set.
+  const hydrateRuntimeMessages = willHydrateStepEntryMessages(state);
 
   let messages: UIChatMessage[];
   try {
@@ -300,7 +303,7 @@ export async function queryStepEntryMessages(
     })(),
     (async () => {
       // Transient/id-less input must not be replaced by persisted history.
-      if (hasNonPersistedMessage(state.messages)) return;
+      if (!hydrateRuntimeMessages) return;
       try {
         let fileService: FileService | undefined;
         try {

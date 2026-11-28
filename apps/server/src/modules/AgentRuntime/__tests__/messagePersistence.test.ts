@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { hasNonPersistedMessage } from '../messagePersistence';
+import { ServerMessageTransport } from '../adapters/ServerMessageTransport';
+import { hasNonPersistedMessage, willHydrateStepEntryMessages } from '../messagePersistence';
 
 describe('hasNonPersistedMessage', () => {
   it('is false when every message has a DB id', () => {
@@ -31,5 +32,38 @@ describe('hasNonPersistedMessage', () => {
 
   it('ignores malformed entries without a role', () => {
     expect(hasNonPersistedMessage([{ content: 'x' }, null, undefined])).toBe(false);
+  });
+});
+
+describe('willHydrateStepEntryMessages', () => {
+  const origin = { agentId: 'agt_1', topicId: 'tpc_1' };
+  const persisted = [{ content: 'hi', id: 'm1', role: 'user' }];
+
+  it('is true for a topic-scoped run whose working set is all DB rows', () => {
+    expect(willHydrateStepEntryMessages({ messages: persisted, origin })).toBe(true);
+  });
+
+  it('is false without a topic or agent: the step entry read is skipped', () => {
+    expect(
+      willHydrateStepEntryMessages({ messages: persisted, origin: { agentId: 'agt_1' } }),
+    ).toBe(false);
+    expect(
+      willHydrateStepEntryMessages({ messages: persisted, origin: { topicId: 'tpc_1' } }),
+    ).toBe(false);
+  });
+
+  it('is false while an ephemeral message is in the working set', () => {
+    expect(
+      willHydrateStepEntryMessages({
+        messages: [...persisted, { content: 'respond to the group', role: 'user' }],
+        origin,
+      }),
+    ).toBe(false);
+  });
+
+  it('is what the server message transport reports to the tool executors', () => {
+    const transport = new ServerMessageTransport({} as any);
+    expect(transport.rehydratesOnNextStep({ messages: persisted, origin } as any)).toBe(true);
+    expect(transport.rehydratesOnNextStep({ messages: persisted, origin: {} } as any)).toBe(false);
   });
 });

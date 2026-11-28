@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { isPartialHeadWindow } from '@/services/message/roundCursorPage';
+import {
+  isPartialHeadWindow,
+  requestClientRunHistoryWindow,
+} from '@/services/message/roundCursorPage';
 import { displayMessageSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
 
@@ -10,7 +13,10 @@ vi.mock('@/store/tool', () => ({
   getToolStoreState: () => ({ getUninstalledBuiltinToolsForRun: async () => ['lobe-calculator'] }),
 }));
 
-vi.mock('@/services/message/roundCursorPage', () => ({ isPartialHeadWindow: vi.fn() }));
+vi.mock('@/services/message/roundCursorPage', () => ({
+  isPartialHeadWindow: vi.fn(),
+  requestClientRunHistoryWindow: vi.fn(),
+}));
 vi.mock('@/store/chat/selectors', () => ({
   displayMessageSelectors: { getDisplayMessagesByKey: vi.fn() },
 }));
@@ -46,6 +52,11 @@ describe('readClientRunInputs', () => {
     );
 
     expect(uninstalledBuiltinTools).toEqual(['lobe-calculator']);
+    // The reload reads the client-run history window, not another display page.
+    expect(requestClientRunHistoryWindow).toHaveBeenCalledWith(context);
+    expect(vi.mocked(requestClientRunHistoryWindow).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(store.refreshMessages).mock.invocationCallOrder[0],
+    );
     expect(store.refreshMessages).toHaveBeenCalledWith(context);
     expect(messages.map((message) => message.id)).toEqual(['msg_oldest', 'msg_newest']);
     expect(displayMessageSelectors.getDisplayMessagesByKey).toHaveBeenCalledWith(
@@ -64,6 +75,7 @@ describe('readClientRunInputs', () => {
     );
 
     expect(uninstalledBuiltinTools).toEqual(['lobe-calculator']);
+    expect(requestClientRunHistoryWindow).not.toHaveBeenCalled();
     expect(store.refreshMessages).not.toHaveBeenCalled();
     expect(messages.map((message) => message.id)).toEqual(['msg_newest']);
   });

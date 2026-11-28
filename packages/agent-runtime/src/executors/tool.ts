@@ -40,6 +40,11 @@ import {
   updateExistingToolMessage,
 } from './toolPersistence';
 import { resolveToolReplay } from './toolReplay';
+import {
+  queryScopeMessages,
+  refreshToolStateMessages,
+  toToolStateMessage,
+} from './toolStateMessages';
 
 const TOOL_EXECUTION_PHASE = 'tool_execution';
 const DEFAULT_TOOL_MAX_RETRIES = 2;
@@ -569,34 +574,14 @@ export const callTool =
         await persistToolResultMetadata(host, toolMessageId, executionResult);
       }
       const newState = structuredClone(state);
-      if (execution.resultPersisted) {
-        newState.messages = await host.transports.messages.query({
-          agentId: runContext.agentId,
-          groupId: runContext.groupId,
-          threadId: runContext.threadId,
-          topicId: runContext.topicId,
-        });
-      } else {
-        /**
-         * Preserve the durable row id in the in-memory turn. The next gateway
-         * step uses message ids to rebuild media refs before its DB rehydrate,
-         * and an id-less tool result makes that safety gate keep the stale
-         * snapshot instead.
-         */
-        const toolMessage = {
-          content: executionResult.content,
-          id: toolMessageId,
-          plugin: tool,
-          pluginState: executionResult.state,
-          role: 'tool',
-          tool_call_id: tool.id,
-        };
-        const existingIndex = newState.messages.findIndex(
-          (message) => message.id === toolMessageId,
-        );
-        if (existingIndex >= 0) newState.messages[existingIndex] = toolMessage;
-        else newState.messages.push(toolMessage);
-      }
+      // Re-read a transport-persisted result (replay, client tool) where needed.
+      await refreshToolStateMessages(
+        host,
+        state,
+        newState,
+        [toToolStateMessage(executionResult, tool, toolMessageId)],
+        execution.resultPersisted ? () => queryScopeMessages(host, runContext) : undefined,
+      );
       newState.lastModified = nowIso();
 
       events.push({
@@ -1041,15 +1026,16 @@ export const callToolsBatch =
 
     // Close out everything the abort left unsettled BEFORE the message refresh
     // below, so the rows are part of the state this step returns.
-    if (toSettle.length > 0) {
-      await settleAbortedToolRows({
-        existingToolMessageIds,
-        host,
-        parentMessageId,
-        state,
-        toolsCalling: toSettle,
-      });
-    }
+    const settled =
+      toSettle.length > 0
+        ? await settleAbortedToolRows({
+            existingToolMessageIds,
+            host,
+            parentMessageId,
+            state,
+            toolsCalling: toSettle,
+          })
+        : undefined;
 
     const newState = structuredClone(state);
     // Work-registration intents produced by the tool executions, paired with
@@ -1093,14 +1079,17 @@ export const callToolsBatch =
       stepCount: state.stepCount,
     });
 
-    newState.messages = await host.transports.messages.query(
-      {
-        agentId: state.origin?.agentId,
-        groupId: state.origin?.groupId,
-        threadId: state.origin?.threadId,
-        topicId: state.origin?.topicId,
-      },
-      { flatten: true, resolveAssetUrls: true },
+    await refreshToolStateMessages(
+      host,
+      state,
+      newState,
+      [
+        ...toolResults.flatMap(({ data, sourceMessageId, toolCall }) =>
+          sourceMessageId ? [toToolStateMessage(data, toolCall, sourceMessageId)] : [],
+        ),
+        ...(settled?.messages ?? []),
+      ],
+      () => queryScopeMessages(host, state.origin, { flatten: true, resolveAssetUrls: true }),
     );
     newState.lastModified = nowIso();
 
