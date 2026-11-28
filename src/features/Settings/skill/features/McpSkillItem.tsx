@@ -11,8 +11,6 @@ import PluginTag from '@/components/Plugins/PluginTag';
 import McpDetail from '@/features/MCP/MCPDetail';
 import McpDetailLoading from '@/features/MCP/MCPDetail/Loading';
 import { createPluginDetailModal } from '@/features/PluginDetailModal';
-import { useToolStore } from '@/store/tool';
-import { pluginSelectors } from '@/store/tool/selectors';
 import { type LobeToolType } from '@/types/tool/tool';
 
 import Actions from './Actions';
@@ -55,8 +53,6 @@ const McpSkillItem = memo<McpSkillItemProps>(
     const isCustomPlugin = type === 'customPlugin';
     const isCommunityMCP = isMCP && !isCustomPlugin;
 
-    const plugin = useToolStore(pluginSelectors.getToolManifestById(identifier));
-
     const openDetail = () => {
       if (isCommunityMCP) {
         createModal({
@@ -73,11 +69,7 @@ const McpSkillItem = memo<McpSkillItemProps>(
       }
 
       if (isCustomPlugin) {
-        createPluginDetailModal({
-          id: identifier,
-          schema: plugin?.settings,
-          tab: 'info',
-        });
+        createPluginDetailModal({ id: identifier });
       }
     };
 

@@ -147,7 +147,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-10-26',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'] },
+      reasoningEffort: {
+        default: 'medium',
+        levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+      },
       searchImpl: 'params',
     },
     type: 'chat',

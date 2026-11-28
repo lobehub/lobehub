@@ -56,9 +56,7 @@ describe('lobeBench helpers', () => {
           thinking: 'enabled',
         },
       ),
-    ).toBe(
-      'presence penalty 0.5 · reasoning off · thinking enabled · verbosity low',
-    );
+    ).toBe('presence penalty 0.5 · reasoning off · thinking enabled · verbosity low');
   });
 
   it('writes equal settings as equal text, whatever the key order', () => {

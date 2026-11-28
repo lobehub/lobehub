@@ -3,7 +3,6 @@ import { type LobeTool } from '@lobechat/types';
 import { type ReadResourceResult } from '@modelcontextprotocol/client';
 import { type SWRResponse } from 'swr';
 
-import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { createReplicaSlice, type ReplicaLens, type ReplicaSyncResult } from '@/libs/replica';
 import { subscribeCacheScope } from '@/libs/replica/cacheScopeEvents';
 import { useClientDataSWR } from '@/libs/swr';
@@ -12,7 +11,6 @@ import { mcpService } from '@/services/mcp';
 import { pluginService } from '@/services/plugin';
 import { type StoreSetter } from '@/store/types';
 import { type PluginInstallError } from '@/types/tool/plugin';
-import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
@@ -80,29 +78,10 @@ export class PluginActionImpl {
   }
 
   /**
-   * Whether the list holds the server's full records. A list hydrated from the
-   * persisted display projection has no settings and no connection parameters,
-   * and an un-loaded list has nothing at all: a write merged over either would
-   * replace the plugin's real settings / connection with a partial object.
-   */
-  #hasServerRecords = (): boolean =>
-    this.#get().installedPluginsReplica.entries[INSTALLED_PLUGINS_KEY]?.source === 'server';
-
-  /**
-   * Load the server's full records before a write merges onto them. Rejects
-   * when they cannot be loaded, so a write never falls back to the projection.
-   */
-  #loadServerRecords = async (): Promise<void> => {
-    await this.#get().refreshPlugins();
-    if (!this.#hasServerRecords())
-      throw new Error('The installed plugins have not been loaded from the server');
-  };
-
-  /**
    * Fetch the installed plugins and confirm the replica with them. The painted
    * list stays on screen while the network answers.
    *
-   * Imperative on purpose: install / uninstall / settings flows call it on
+   * Imperative on purpose: install / uninstall / migration flows call it on
    * routes (e.g. the protocol-install popup) where no `useFetchInstalledPlugins`
    * is mounted, so revalidating the mounted sync queries would resolve without
    * fetching anything. The scope is captured before the request so a response
@@ -151,43 +130,6 @@ export class PluginActionImpl {
       false,
       'updateInstallError',
     );
-  };
-
-  updatePluginSettings = async <T>(
-    id: string,
-    settings: Partial<T>,
-    options: { override?: boolean } = {},
-  ): Promise<void> => {
-    const { override } = options;
-
-    // Publish this write's controller before anything is awaited, so a newer
-    // call always sees — and aborts — the one still in flight.
-    this.#get().updatePluginSettingsSignal?.abort(MESSAGE_CANCEL_FLAT);
-    const controller = new AbortController();
-    this.#set({ updatePluginSettingsSignal: controller }, false, n('updatePluginSettings/signal'));
-
-    // The server replaces the whole settings object: merge onto the server's
-    // settings, never the display projection (which has none), or saving one
-    // field would erase the others. Synchronous once confirmed, so the row
-    // updates in the same tick as the edit.
-    if (!this.#hasServerRecords()) {
-      await this.#loadServerRecords();
-      // A newer write took over while the records were loading.
-      if (controller.signal.aborted) return;
-    }
-
-    const previousSettings = pluginSelectors.getPluginSettingsById(id)(this.#get());
-    const nextSettings = override ? settings : merge(previousSettings, settings);
-
-    // The row shows the new settings immediately; a failed or aborted write
-    // rolls it back to the confirmed value plus any newer write in flight.
-    await this.#installedPlugins.optimistic(
-      INSTALLED_PLUGINS_KEY,
-      (plugins) => plugins.map((p) => (p.identifier === id ? { ...p, settings: nextSettings } : p)),
-      () => pluginService.updatePluginSettings(id, nextSettings, controller.signal),
-    );
-
-    await this.#get().refreshPlugins();
   };
 
   /**

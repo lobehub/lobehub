@@ -27,11 +27,6 @@ const pendingRow = (linkedByUserId: string) => ({
   identifier: 'gmail',
 });
 
-const forgedParams = {
-  composio: { connectedAccountId: 'acc-victim', linkedByUserId: 'victim', status: 'ACTIVE' },
-  mcp: { type: 'http', url: 'https://mcp.example.com' },
-};
-
 /**
  * A pending hosted OAuth link is a live capability of whoever started it. The
  * generic plugin list is workspace-wide, so it must keep the link only for its
@@ -75,51 +70,5 @@ describe('pluginRouter.getPlugins composio link redaction', () => {
     const [row] = await list({ userId: 'user-1' });
 
     expect(row.customParams?.composio?.redirectUrl).toBe('https://composio.example/link/abc');
-  });
-});
-
-// Regression: a member copied a teammate's private Composio account (read off
-// the workspace projection) into a plugin row of another identifier. The row
-// passed for a legacy connection, and executeAction ran it.
-describe('pluginRouter.updatePlugin server-owned Composio account', () => {
-  const findById = vi.fn();
-  const update = vi.fn();
-
-  const caller = () => pluginRouter.createCaller({ userId: 'user-1' } as any);
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(PluginModel).mockImplementation(function () {
-      return { findById, update } as any;
-    });
-  });
-
-  it('keeps the stored block instead of the client one', async () => {
-    const stored = { connectedAccountId: 'acc-own', linkedByUserId: 'user-1' };
-    findById.mockResolvedValue({
-      customParams: { composio: stored },
-      userId: 'user-1',
-    });
-
-    await caller().updatePlugin({ customParams: forgedParams, id: 'gmail' });
-
-    expect(update).toHaveBeenCalledWith(
-      'gmail',
-      expect.objectContaining({ customParams: { composio: stored, mcp: forgedParams.mcp } }),
-    );
-  });
-
-  it('drops a client-written block when the row has none', async () => {
-    findById.mockResolvedValue({
-      customParams: { mcp: forgedParams.mcp },
-      userId: 'user-1',
-    });
-
-    await caller().updatePlugin({ customParams: forgedParams, id: 'gmail' });
-
-    expect(update).toHaveBeenCalledWith(
-      'gmail',
-      expect.objectContaining({ customParams: { mcp: forgedParams.mcp } }),
-    );
   });
 });

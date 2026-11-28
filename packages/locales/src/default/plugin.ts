@@ -1010,10 +1010,9 @@ export default {
   'detailModal.emptyState.title': 'Install to view connector details',
   'detailModal.info.description': 'API description',
   'detailModal.info.name': 'API name',
-  'detailModal.tabs.info': 'Capabilities',
   'detailModal.tabs.manifest': 'Manifest',
-  'detailModal.tabs.settings': 'Settings',
   'detailModal.title': 'Connector details',
+
   'dev.addConnector': 'Add',
   'dev.confirmDeleteDevPlugin': 'This local connector will be deleted permanently. Continue?',
   'dev.deleteSuccess': 'Connector deleted',

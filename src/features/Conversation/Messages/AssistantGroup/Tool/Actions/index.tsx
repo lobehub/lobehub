@@ -8,12 +8,10 @@ import { useDensity } from '@/styles/density';
 
 import { STEP_ACTION_ICON_SIZE } from '../../../../components/stepTriggerStyles';
 import { useConversationStore } from '../../../../store';
-import Settings from './Settings';
 
 interface ActionsProps {
   assistantMessageId: string;
   canToggleCustomToolRender?: boolean;
-  identifier: string;
   setShowCustomToolRender?: (show: boolean) => void;
   setShowDebug?: (show: boolean) => void;
   showCustomToolRender?: boolean;
@@ -26,7 +24,6 @@ const Actions = memo<ActionsProps>(
   ({
     assistantMessageId,
     canToggleCustomToolRender,
-    identifier,
     setShowCustomToolRender,
     setShowDebug,
     showCustomToolRender,
@@ -62,22 +59,19 @@ const Actions = memo<ActionsProps>(
           onClick={() => setShowDebug?.(!showDebug)}
         />
         {canEdit && (
-          <>
-            <Settings id={identifier} size={iconSize} />
-            <ActionIcon
-              danger
-              icon={Trash2}
-              size={iconSize}
-              title={t('inspector.delete')}
-              onClick={() => {
-                if (toolRemoval) {
-                  void removeToolFromMessage(toolRemoval.messageId, toolRemoval.toolCallId);
-                } else {
-                  void deleteAssistantMessage(assistantMessageId);
-                }
-              }}
-            />
-          </>
+          <ActionIcon
+            danger
+            icon={Trash2}
+            size={iconSize}
+            title={t('inspector.delete')}
+            onClick={() => {
+              if (toolRemoval) {
+                void removeToolFromMessage(toolRemoval.messageId, toolRemoval.toolCallId);
+              } else {
+                void deleteAssistantMessage(assistantMessageId);
+              }
+            }}
+          />
         )}
       </>
     );

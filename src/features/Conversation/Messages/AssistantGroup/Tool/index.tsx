@@ -146,7 +146,6 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
               <Actions
                 assistantMessageId={assistantMessageId}
                 canToggleCustomToolRender={canToggleCustomToolRender}
-                identifier={identifier}
                 setShowCustomToolRender={setShowCustomToolRender}
                 setShowDebug={setShowDebug}
                 showCustomToolRender={showCustomToolRender}

@@ -1,3 +1,4 @@
+import { type ToolManifestSettings } from '@lobechat/types';
 import { Button, createStaticStyles, Flexbox, Markdown } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import * as m from 'motion/react-m';
@@ -5,7 +6,6 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ItemRender from '@/components/JSONSchemaConfig/ItemRender';
-import { transformPluginSettings } from '@/features/PluginSettings';
 import { useToolStore } from '@/store/tool';
 
 interface MCPConfigFormProps {
@@ -14,6 +14,22 @@ interface MCPConfigFormProps {
   onCancel?: () => void;
   onSubmit?: (config: Record<string, any>) => Promise<void>;
 }
+
+const transformPluginSettings = (pluginSettings: ToolManifestSettings) => {
+  if (!pluginSettings?.properties) return [];
+
+  return Object.entries(pluginSettings.properties).map(([name, i]) => ({
+    desc: i.description,
+    enum: i.enum,
+    format: i.format,
+    label: i.title || name,
+    maximum: i.maximum,
+    minimum: i.minimum,
+    name,
+    tag: name,
+    type: i.type,
+  }));
+};
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`

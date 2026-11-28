@@ -14,12 +14,11 @@ import { useTranslation } from 'react-i18next';
 
 import CustomConnectorModal from '@/features/Connectors/CustomConnectorModal';
 import { asLegacyMigrationPlugin } from '@/features/Connectors/legacyMigrationPlugin';
-import { createPluginDetailModal } from '@/features/PluginDetailModal';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useServerConfigStore } from '@/store/serverConfig';
-import { pluginHelpers, useToolStore } from '@/store/tool';
+import { useToolStore } from '@/store/tool';
 import { mcpStoreSelectors, pluginSelectors } from '@/store/tool/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 import { type LobeToolType } from '@/types/tool/tool';
@@ -48,7 +47,7 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
     ]);
 
   const { t } = useTranslation('plugin');
-  const plugin = useToolStore(pluginSelectors.getToolManifestById(identifier));
+
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
   const [togglePlugin, removePlugin, hasPluginEntry] = useAgentStore((s) => [
@@ -66,7 +65,7 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
       ? connectorSelectors.marketplaceMcpConnectorByIdentifier(identifier)(s)
       : undefined,
   );
-  const hasSettings = pluginHelpers.isSettingSchemaNonEmpty(plugin?.settings);
+
   // Painted from the local cache: settings and connection parameters only
   // arrive with the server's records, so configuring waits for them.
   const isConfirming = useToolStore(pluginSelectors.isInstalledPluginsCacheOnly);
@@ -85,8 +84,9 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
   // A market-hosted (cloud) connector has no connection settings to edit.
   const showConfigureButton = marketConnector
     ? marketConnector.mcpConnectionType !== 'cloud'
-    : isCustomPlugin || isMCP || hasSettings;
-  // Server-side migration reads the confirmed row itself; editing settings still waits for it.
+    : isCustomPlugin || isMCP;
+  // Server-side migration reads the confirmed row itself; a custom migration
+  // form still waits for it because it seeds the edit from the client record.
   const confirming = isConfirming && !isCommunityMCP;
 
   const configureButton = marketConnector ? (
@@ -122,12 +122,6 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
               }
             },
             title: t('store.actions.upgrade'),
-          });
-        } else {
-          createPluginDetailModal({
-            id: identifier,
-            schema: plugin?.settings,
-            tab: 'settings',
           });
         }
       }}

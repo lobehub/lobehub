@@ -88,7 +88,6 @@ const Tool = memo<InspectorProps>(
               <Actions
                 assistantMessageId={messageId}
                 canToggleCustomToolRender={hasCustomRender}
-                identifier={identifier}
                 setShowCustomToolRender={setShowCustomToolRender}
                 setShowDebug={setShowDebug}
                 showCustomToolRender={showCustomToolRender}

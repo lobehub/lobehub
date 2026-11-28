@@ -930,8 +930,8 @@
   "detailModal.info.name": "API 名称",
   "detailModal.tabs.info": "能力",
   "detailModal.tabs.manifest": "安装文件",
-  "detailModal.tabs.settings": "设置",
   "detailModal.title": "连接器详情",
+
   "dev.addConnector": "添加",
   "dev.confirmDeleteDevPlugin": "即将删除该本地连接器，删除后将无法找回，是否删除该连接器？",
   "dev.deleteSuccess": "连接器删除成功",
