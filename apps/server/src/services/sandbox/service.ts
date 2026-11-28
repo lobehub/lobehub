@@ -299,12 +299,14 @@ export class SandboxMiddlewareService implements SandboxService {
       };
     }
 
-    // The object's storage key uses `storageName` when provided so callers can
-    // guarantee a collision-proof, immutable object per (operation, path); the
-    // file record's display `name` always stays the user-facing `filename`, so a
-    // download never surfaces the mangled key. Defaults to `filename` for the
-    // common case where display name and key are the same.
-    const storageName = options?.storageName ?? filename;
+    // The object's storage key uses `storageName` when provided; the file
+    // record's display `name` always stays the user-facing `filename`, so a
+    // download never surfaces the mangled key. The default key carries a random
+    // prefix: a key derived from `filename` alone made a later same-day export of
+    // the same name in this topic overwrite the earlier object, so an older
+    // download link (and any Work version reusing that file record) silently
+    // served the newer bytes. Every export therefore owns an immutable object.
+    const storageName = options?.storageName ?? `${randomUUID()}-${filename}`;
 
     log(
       'Exporting file: %s (key: %s) from path: %s, topicId: %s',

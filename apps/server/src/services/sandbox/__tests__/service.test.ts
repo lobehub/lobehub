@@ -268,7 +268,7 @@ describe('SandboxMiddlewareService', () => {
         name: 'result.csv',
         size: 42,
         url: expect.stringMatching(
-          /^code-interpreter-exports\/\d{4}-\d{2}-\d{2}\/topic-1\/result\.csv$/,
+          /^code-interpreter-exports\/\d{4}-\d{2}-\d{2}\/topic-1\/[\da-f-]{36}-result\.csv$/,
         ),
       }),
     );
@@ -321,6 +321,34 @@ describe('SandboxMiddlewareService', () => {
     expect(exportFileToUploadUrl).toHaveBeenCalledWith(
       expect.objectContaining({ filename: 'result.csv', path: '/workspace/result.csv' }),
     );
+  });
+
+  it('gives every default export of the same filename its own object key', async () => {
+    const { SandboxMiddlewareService: TestSandboxMiddlewareService } = await import('../service');
+    const provider = {
+      capabilities: pythonSandboxCapabilities(),
+      callTool: vi.fn(),
+      exportFileToUploadUrl: vi.fn(async () => ({ success: true })),
+      kind: 'onlyboxes',
+    } satisfies SandboxProvider;
+    const createPreSignedUpload = vi.fn(async () => ({
+      headers: {},
+      url: 'https://u.example/put',
+    }));
+    const fileService = {
+      createFileRecord: vi.fn(async () => ({ fileId: 'file-1', url: '/f/file-1' })),
+      createPreSignedUpload,
+      getFileMetadata: vi.fn(async () => ({ contentLength: 1, contentType: 'text/csv' })),
+    } as unknown as FileService;
+
+    const service = new TestSandboxMiddlewareService(provider, uploadServiceOptions(fileService));
+    await service.exportAndUploadFile('/workspace/result.csv', 'result.csv');
+    await service.exportAndUploadFile('/workspace/result.csv', 'result.csv');
+
+    // A same-day re-export must not overwrite the first object: its download
+    // link and any Work version reusing its file record stay on the old bytes.
+    const [firstKey, secondKey] = createPreSignedUpload.mock.calls.map(([key]) => key);
+    expect(firstKey).not.toBe(secondKey);
   });
 
   it('normalizes provider export failures before storage metadata is read', async () => {

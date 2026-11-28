@@ -9,6 +9,7 @@ import { redeployFileWork, registerWorksForOperation } from './registerWorksForO
 
 const {
   mockFindById,
+  mockFindFileById,
   mockListOperationTree,
   mockListPlugins,
   mockRegisterFile,
@@ -27,6 +28,7 @@ const {
   mockExportAndUploadFile: vi.fn(),
   mockFillAgentWorkCost: vi.fn(),
   mockFindById: vi.fn(),
+  mockFindFileById: vi.fn(),
   mockFindFileVersionByToolCall: vi.fn(),
   mockFindMessageById: vi.fn(),
   mockListOperationTree: vi.fn(),
@@ -43,6 +45,12 @@ vi.mock('@/database/models/agentOperation', () => ({
       findById: mockFindById,
       listOperationTree: mockListOperationTree,
     };
+  }),
+}));
+
+vi.mock('@/database/models/file', () => ({
+  FileModel: vi.fn(function () {
+    return { findById: mockFindFileById };
   }),
 }));
 
@@ -72,7 +80,9 @@ vi.mock('@/database/models/work', async (importOriginal) => ({
 
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn(function () {
-    return {};
+    return {
+      getFileAccessUrl: async ({ id }: { id: string }) => `/f/${id}`,
+    };
   }),
 }));
 vi.mock('@/server/services/market', () => ({
@@ -167,6 +177,8 @@ beforeEach(() => {
   mockListOperationTree.mockResolvedValue([rootOp]);
   // Default: no parent lookup needed (root ops). Sub-op tests override this.
   mockFindById.mockResolvedValue(null);
+  // No reusable exportFile record by default, so export-only files re-export.
+  mockFindFileById.mockResolvedValue(undefined);
   // No pre-existing version by default, so every entity file exports + registers.
   mockFindFileVersionByToolCall.mockResolvedValue(null);
   mockRegisterShellGithubResult.mockResolvedValue({ id: 'work-github' });
@@ -644,6 +656,120 @@ describe('registerWorksForOperation', () => {
 
     expect(mockRegisterFile).not.toHaveBeenCalled();
     expect(mockExportAndUploadFile).not.toHaveBeenCalled();
+  });
+
+  describe('export-only files reuse the exportFile record', () => {
+    const ownedFile = {
+      fileType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      id: 'file-exported',
+      name: 'report.docx',
+      size: 4096,
+      url: 'code-interpreter-exports/2026-07-20/topic-1/0b6f2d8e-1c3a-4f5b-9d7e-2a4c6e8f0b1d-report.docx',
+    };
+
+    it.each([
+      [
+        'lobe-cloud-sandbox',
+        {
+          ...exportRow('bb', '/workspace/report.docx'),
+          state: { ...exportRow('bb', '/workspace/report.docx').state, fileId: 'file-exported' },
+        },
+      ],
+      [
+        'lobe-skills',
+        {
+          ...skillsExportRow('bb', '/workspace/report.docx'),
+          state: {
+            ...skillsExportRow('bb', '/workspace/report.docx').state,
+            fileId: 'file-exported',
+          },
+        },
+      ],
+    ])('registers a %s export without uploading a second copy', async (_identifier, row) => {
+      mockListPlugins.mockResolvedValue([row]);
+      mockFindFileById.mockResolvedValue(ownedFile);
+
+      await registerWorksForOperation(baseParams);
+
+      // A second upload would leave a duplicate object and `files` row.
+      expect(mockExportAndUploadFile).not.toHaveBeenCalled();
+      expect(mockFindFileById).toHaveBeenCalledWith('file-exported');
+      expect(mockRegisterFile).toHaveBeenCalledTimes(1);
+      expect(mockRegisterFile.mock.calls[0][0].metadata).toMatchObject({
+        fileId: 'file-exported',
+        fileSize: 4096,
+        fileUrl: '/f/file-exported',
+        mimeType: ownedFile.fileType,
+      });
+    });
+
+    it('re-exports when the recorded file id is not a file this account owns', async () => {
+      mockListPlugins.mockResolvedValue([skillsExportRow('bb', '/workspace/report.docx')]);
+      mockFindFileById.mockResolvedValue(undefined);
+
+      await registerWorksForOperation(baseParams);
+
+      expect(mockFindFileById).toHaveBeenCalledWith('file-bb');
+      expect(mockExportAndUploadFile).toHaveBeenCalledTimes(1);
+      expect(mockRegisterFile.mock.calls[0][0].metadata.fileId).toBe('file-report.docx');
+    });
+
+    it('re-exports a record stored under the legacy filename-only key', async () => {
+      // A bare-filename object is overwritten by the next same-day export of
+      // that name, so a Work version reusing it would silently change bytes.
+      mockListPlugins.mockResolvedValue([skillsExportRow('bb', '/workspace/report.docx')]);
+      mockFindFileById.mockResolvedValue({
+        ...ownedFile,
+        url: 'code-interpreter-exports/2026-07-20/topic-1/report.docx',
+      });
+
+      await registerWorksForOperation(baseParams);
+
+      expect(mockExportAndUploadFile).toHaveBeenCalledTimes(1);
+      expect(mockRegisterFile.mock.calls[0][0].metadata.fileId).toBe('file-report.docx');
+    });
+
+    it('re-exports a legacy filename-only key whose name starts with a UUID', async () => {
+      const name = '0b6f2d8e-1c3a-4f5b-9d7e-2a4c6e8f0b1d-report.docx';
+      mockListPlugins.mockResolvedValue([skillsExportRow('bb', `/workspace/${name}`)]);
+      mockFindFileById.mockResolvedValue({
+        ...ownedFile,
+        name,
+        url: `code-interpreter-exports/2026-07-20/topic-1/${name}`,
+      });
+
+      await registerWorksForOperation(baseParams);
+
+      expect(mockExportAndUploadFile).toHaveBeenCalledTimes(1);
+    });
+
+    it('re-exports with share provenance for a share visitor run', async () => {
+      mockListPlugins.mockResolvedValue([skillsExportRow('bb', '/workspace/report.docx')]);
+      mockFindFileById.mockResolvedValue(ownedFile);
+      const agentShareVisitor = { shareId: 'share-1', visitorUserId: 'visitor-1' };
+
+      await registerWorksForOperation({ ...baseParams, agentShareVisitor });
+
+      expect(mockFindFileById).not.toHaveBeenCalled();
+      expect(mockExportAndUploadFile).toHaveBeenCalledWith(
+        '/workspace/report.docx',
+        'report.docx',
+        expect.objectContaining({ metadata: { agentShare: agentShareVisitor } }),
+      );
+    });
+
+    it('still exports the current sandbox file for a path that was edited and exported', async () => {
+      mockListPlugins.mockResolvedValue([
+        writeRow('a', '/mnt/data/data.csv'),
+        skillsExportRow('bb', '/mnt/data/data.csv'),
+      ]);
+      mockFindFileById.mockResolvedValue(ownedFile);
+
+      await registerWorksForOperation(baseParams);
+
+      expect(mockFindFileById).not.toHaveBeenCalled();
+      expect(mockExportAndUploadFile).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('does not double-register a path that was both edited and exported', async () => {
