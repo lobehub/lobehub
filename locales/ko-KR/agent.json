@@ -859,7 +859,6 @@
   "transfer.confirm.botChannels": "전송 후 봇 채널 연결을 새로 고침해야 할 수 있습니다.",
   "transfer.confirm.chatGroups": "다중 에이전트 그룹 연결이 제거됩니다.",
   "transfer.confirm.desc": "에이전트와 관련된 모든 데이터(주제, 메시지, 파일 등)를 대상 워크스페이스로 이동합니다.",
-  "transfer.confirm.plugins": "사용자 정의 플러그인이 대상 워크스페이스에서 사용할 수 없을 수 있습니다.",
   "transfer.confirm.title": "에이전트 전송",
   "transfer.confirm.warning": "일부 기능은 전송되지 않습니다:",
   "transfer.copyTo": "복사 대상",

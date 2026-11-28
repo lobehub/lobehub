@@ -252,7 +252,6 @@
   "providerModels.item.modelConfig.extendParams.title": "Parâmetros Estendidos",
   "providerModels.item.modelConfig.files.extra": "A implementação atual de upload de arquivos é apenas uma solução temporária, limitada a testes próprios. Aguarde por funcionalidades completas de upload em futuras versões.",
   "providerModels.item.modelConfig.files.title": "Suporte a Upload de Arquivos",
-  "providerModels.item.modelConfig.functionCall.extra": "Esta configuração apenas habilita a capacidade do modelo de usar ferramentas, permitindo a adição de habilidades do tipo ferramenta. No entanto, a real capacidade de uso depende inteiramente do modelo; teste por conta própria.",
   "providerModels.item.modelConfig.functionCall.title": "Suporte ao Uso de Ferramentas",
   "providerModels.item.modelConfig.id.duplicate": "Um modelo com este ID já existe. Use um ID de modelo diferente.",
   "providerModels.item.modelConfig.id.extra": "Não pode ser modificado após a criação e será usado como ID do modelo ao chamar a IA",

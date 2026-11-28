@@ -10,16 +10,12 @@
   "discover.mcp.title": "سوق خوادم MCP",
   "discover.models.description": "استكشف نماذج الذكاء الاصطناعي الرائدة OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek",
   "discover.models.title": "سوق النماذج",
-  "discover.plugins.description": "استكشف الرسوم البيانية، الأدوات الأكاديمية، توليد الصور/الفيديو/الصوت، وسير العمل—أضف مهارات إلى وكلائك.",
-  "discover.plugins.title": "سوق المهارات",
   "discover.providers.description": "استكشف أبرز مزودي النماذج OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
   "discover.providers.title": "سوق المزوّدين",
   "discover.search": "بحث",
   "discover.title": "السوق",
   "image.description": "{{appName}} يقدم لك أفضل تجربة مع GPT Image وFlux وMidjourney وStable Diffusion",
   "image.title": "فن الذكاء الاصطناعي",
-  "plugins.description": "بحث، رسوم بيانية، أدوات أكاديمية، توليد الصور/الفيديو/الصوت، سير العمل—أضف مهارات إلى وكلائك.",
-  "plugins.title": "سوق المهارات",
   "welcome.description": "{{appName}} يقدم لك أفضل تجربة واجهة مستخدم لـ ChatGPT وClaude وGemini وOLLaMA.",
   "welcome.title": "مرحبًا بك في {{appName}} · للوكلاء التعاونيين"
 }

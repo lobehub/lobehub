@@ -845,7 +845,6 @@
   "transfer.confirm.botChannels": "Bot kanal bağlantılarının aktarım sonrası yenilenmesi gerekebilir",
   "transfer.confirm.chatGroups": "Çoklu ajan grup ilişkileri kaldırılacak",
   "transfer.confirm.desc": "Bu işlem, ajanı ve ilişkili tüm verileri (konular, mesajlar, dosyalar vb.) hedef çalışma alanına taşıyacaktır.",
-  "transfer.confirm.plugins": "Özel eklentiler hedef çalışma alanında mevcut olmayabilir",
   "transfer.confirm.title": "Ajanı Aktar",
   "transfer.confirm.warning": "Bazı özellikler aktarılmaz:",
   "transfer.copyTo": "Kopyala",

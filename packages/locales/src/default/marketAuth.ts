@@ -13,8 +13,8 @@ export default {
     'Sign in to Market to connect and authorize this Marketplace service.',
   'authorize.scenes.connector.title': 'Connect Marketplace Service',
   'authorize.scenes.mcp.subtitle':
-    'Create a community profile to install and run this skill from the Marketplace.',
-  'authorize.scenes.mcp.title': 'Install Marketplace Skill',
+    'Create a community profile to install and run this connector from the Marketplace.',
+  'authorize.scenes.mcp.title': 'Install Marketplace Connector',
   'authorize.scenes.sandbox.subtitle':
     'Create a community profile to run this tool in the Marketplace sandbox.',
   'authorize.scenes.sandbox.title': 'Try the Marketplace Sandbox',
@@ -63,7 +63,7 @@ export default {
   'messages.handoffTimeout': 'Authorization timed out. Finish it in your browser, then retry.',
   'messages.loading': 'Starting authorization process...',
   'messages.success.cloudMcpInstall':
-    'Authorization successful! You can now install the Cloud MCP skill.',
+    'Authorization successful! You can now install the Cloud MCP connector.',
   'profileSetup.cancel': 'Cancel',
   'profileSetup.descriptionEdit': 'Update your community profile information.',
   'profileSetup.descriptionFirstTime': 'Set up your profile to complete your community profile.',

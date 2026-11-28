@@ -1048,7 +1048,7 @@
   "transfer.confirm.botChannels": "移动后可能需要重新刷新机器人连接",
   "transfer.confirm.chatGroups": "多助理群组关联将被移除",
   "transfer.confirm.desc": "这会把助理及相关数据（话题、消息、文件等）移动到目标工作区。",
-  "transfer.confirm.plugins": "自定义技能可能无法在目标工作区使用",
+  "transfer.confirm.plugins": "自定义连接器可能无法在目标工作区使用",
   "transfer.confirm.title": "移动助理",
   "transfer.confirm.warning": "部分关联不会一起移动：",
   "transfer.copyTo": "复制到…",

@@ -1302,7 +1302,7 @@ export default {
   'transfer.confirm.desc':
     'This will move the agent and all associated data (topics, messages, files, etc.) to the target workspace.',
   'transfer.confirm.warning': "Some links won't move:",
-  'transfer.confirm.plugins': 'Custom plugins may not be available in the target workspace',
+  'transfer.confirm.plugins': 'Custom connectors may not be available in the target workspace',
   'transfer.confirm.chatGroups': 'Multi-agent group associations will be removed',
   'transfer.confirm.botChannels': 'Bot connections may need to be refreshed after moving',
   'transfer.success': 'Agent moved successfully',

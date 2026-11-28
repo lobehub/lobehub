@@ -252,7 +252,6 @@
   "providerModels.item.modelConfig.extendParams.title": "Расширенные параметры",
   "providerModels.item.modelConfig.files.extra": "Текущая реализация загрузки файлов является временным решением, предназначенным только для экспериментов. Полноценная поддержка загрузки будет добавлена позже.",
   "providerModels.item.modelConfig.files.title": "Поддержка загрузки файлов",
-  "providerModels.item.modelConfig.functionCall.extra": "Эта настройка активирует возможность модели использовать инструменты. Однако фактическая поддержка зависит от самой модели. Пожалуйста, протестируйте самостоятельно.",
   "providerModels.item.modelConfig.functionCall.title": "Поддержка использования инструментов",
   "providerModels.item.modelConfig.id.duplicate": "Модель с этим идентификатором уже существует. Используйте другой идентификатор модели.",
   "providerModels.item.modelConfig.id.extra": "Не может быть изменено после создания и будет использоваться как ID модели при вызове AI",

@@ -252,7 +252,6 @@
   "providerModels.item.modelConfig.extendParams.title": "المعلمات الموسعة",
   "providerModels.item.modelConfig.files.extra": "تنفيذ رفع الملفات الحالي هو حل مؤقت، مخصص للتجربة الذاتية فقط. يرجى الانتظار حتى تتوفر إمكانيات رفع الملفات الكاملة في المستقبل.",
   "providerModels.item.modelConfig.files.title": "دعم رفع الملفات",
-  "providerModels.item.modelConfig.functionCall.extra": "سيمكن هذا الإعداد النموذج من استخدام الأدوات، ولكن قدرة النموذج الفعلية على استخدامها تعتمد عليه بالكامل؛ يرجى الاختبار بنفسك.",
   "providerModels.item.modelConfig.functionCall.title": "دعم استخدام الأدوات",
   "providerModels.item.modelConfig.id.duplicate": "يوجد بالفعل نموذج بهذا المعرف. استخدم معرف نموذج مختلف.",
   "providerModels.item.modelConfig.id.extra": "لا يمكن تعديله بعد الإنشاء وسيُستخدم كمعرف النموذج عند استدعاء الذكاء الاصطناعي",

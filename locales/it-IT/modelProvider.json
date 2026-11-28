@@ -252,7 +252,6 @@
   "providerModels.item.modelConfig.extendParams.title": "Parametri Estesi",
   "providerModels.item.modelConfig.files.extra": "L'attuale implementazione del caricamento file è una soluzione temporanea, limitata alla sperimentazione personale. Le funzionalità complete saranno disponibili in futuro.",
   "providerModels.item.modelConfig.files.title": "Supporto caricamento file",
-  "providerModels.item.modelConfig.functionCall.extra": "Questa configurazione abilita solo la capacità del modello di utilizzare strumenti. L'effettiva usabilità dipende interamente dal modello stesso; testare in autonomia.",
   "providerModels.item.modelConfig.functionCall.title": "Supporto utilizzo strumenti",
   "providerModels.item.modelConfig.id.duplicate": "Esiste già un modello con questo ID. Usa un ID modello diverso.",
   "providerModels.item.modelConfig.id.extra": "Non modificabile dopo la creazione e sarà utilizzato come ID del modello nelle chiamate AI",

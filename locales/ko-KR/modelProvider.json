@@ -252,7 +252,6 @@
   "providerModels.item.modelConfig.extendParams.title": "확장 매개변수",
   "providerModels.item.modelConfig.files.extra": "현재 파일 업로드는 임시 방식으로 구현되어 있으며, 실험적으로만 사용 가능합니다. 정식 파일 업로드 기능은 추후 제공될 예정입니다",
   "providerModels.item.modelConfig.files.title": "파일 업로드 지원",
-  "providerModels.item.modelConfig.functionCall.extra": "이 설정은 모델의 도구 사용 기능만 활성화합니다. 실제 도구 사용 가능 여부는 모델에 따라 다르므로 직접 테스트해 주세요",
   "providerModels.item.modelConfig.functionCall.title": "도구 사용 지원",
   "providerModels.item.modelConfig.id.duplicate": "이 ID를 가진 모델이 이미 존재합니다. 다른 모델 ID를 사용하세요.",
   "providerModels.item.modelConfig.id.extra": "생성 후 수정할 수 없으며, AI 호출 시 모델 ID로 사용됩니다",
