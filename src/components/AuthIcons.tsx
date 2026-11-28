@@ -1,4 +1,4 @@
-import { SiX } from '@icons-pack/react-simple-icons';
+import SiX from '@icons-pack/react-simple-icons/icons/SiX';
 import { Apple, Aws, Google, Microsoft } from '@lobehub/icons';
 import {
   Auth0,
