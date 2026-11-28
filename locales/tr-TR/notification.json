@@ -11,7 +11,7 @@
   "agent_intervention_required": "{{agent}} sizin girdinize ihtiyaç duyuyor: {{summary}}",
   "agent_intervention_required_title": "{{agent}} incelemenizi bekliyor",
   "agent_run_completed": "{{preview}}",
-  "agent_run_completed_title": "Ajans görevi tamamlandı",
+  "agent_run_completed_title": "Ajan görevi tamamlandı",
   "agent_task_run_failed": "Göreviniz \"{{jobName}}\" başarısız oldu. Tam hatayı görmek için görevi açın.",
   "agent_task_run_failed_heartbeat_timeout": "Göreviniz \"{{jobName}}\" yanıt vermeyi durdurdu ve başarısız olarak işaretlendi. Tekrar çalıştırmak için görevi açın.",
   "agent_task_run_failed_heartbeat_timeout_title": "Görev zaman aşımına uğradı",
