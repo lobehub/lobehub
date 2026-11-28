@@ -34,7 +34,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import { MISSING_TASK_NAME_ERROR } from '../../constants';
-import { normalizeListTasksParams } from '../../listTasks';
+import { normalizeListTasksParams, validateListTasksParams } from '../../listTasks';
 import { selectAssignableMembers } from '../../listWorkspaceMembers';
 import { TaskIdentifier } from '../../manifest';
 import { normalizeSetTaskVerifyParams } from '../../setTaskVerify';
@@ -903,6 +903,9 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   ): Promise<BuiltinToolResult> => {
     try {
       log('[TaskExecutor] listTasks - params:', params);
+
+      const invalidParams = validateListTasksParams(params);
+      if (invalidParams) throw new Error(invalidParams);
 
       const normalized = normalizeListTasksParams(params, {
         currentAgentId: ctx?.agentId,

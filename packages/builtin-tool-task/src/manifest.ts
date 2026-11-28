@@ -169,7 +169,8 @@ export const TaskManifest: BuiltinToolManifest = {
           offset: { description: 'Pagination offset.', type: 'number' },
           parentIdentifier: {
             description:
-              'List subtasks of this parent (e.g. "T-1"). When omitted, no parent filter is applied unless listTasks is called without any filters, which defaults to top-level tasks. Accepts identifiers or ids returned by previous results; prefer stable ids.',
+              'List subtasks of this parent (e.g. "T-1"). Omit this field entirely when not filtering by parent; an empty or blank string is rejected. When omitted, no parent filter is applied unless listTasks is called without any filters, which defaults to top-level tasks. Accepts identifiers or ids returned by previous results; prefer stable ids.',
+            minLength: 1,
             type: 'string',
           },
           priorities: {

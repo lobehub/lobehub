@@ -11,6 +11,7 @@ export {
   DEFAULT_LIST_TASK_LIMIT,
   normalizeListTasksParams,
   normalizeOptionalFilterValues,
+  validateListTasksParams,
 } from './listTasks';
 export {
   DEFAULT_LIST_WORKSPACE_MEMBERS_LIMIT,
