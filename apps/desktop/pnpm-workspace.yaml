@@ -29,6 +29,7 @@ packages:
   - '../../packages/business/const'
   - '../../packages/types'
   - '../../packages/model-bank'
+  - '../../packages/token-estimator'
   - '../../packages/utils'
   - '.'
 
