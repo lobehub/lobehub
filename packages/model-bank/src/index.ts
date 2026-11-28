@@ -1,4 +1,5 @@
 export * from './aiModels';
+export * from './compressionWindow';
 export * from './const/knowledgeCutoff';
 export * from './const/modelProvider';
 export {

@@ -13,7 +13,7 @@ import { startTransition, useEffect, useMemo, useState } from 'react';
 
 import { getInputTokenRatioAnchor } from '@/features/Conversation/ChatInput/utils';
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
-import { useModelContextWindowTokens } from '@/hooks/useModelContextWindowTokens';
+import { useModelCompressionWindowTokens } from '@/hooks/useModelCompressionWindowTokens';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useTokenCount } from '@/hooks/useTokenCount';
 import { useAgentStore } from '@/store/agent';
@@ -234,7 +234,7 @@ export const useTokenBreakdown = (): TokenBreakdown => {
     useModelBuiltinSearch,
   });
 
-  const maxTokens = useModelContextWindowTokens(model, provider);
+  const maxTokens = useModelCompressionWindowTokens(model, provider);
 
   const canUseTool = useModelSupportToolUse(model, provider);
   const pluginIds = useAgentStore((s) => agentByIdSelectors.getAgentPluginsById(agentId)(s));

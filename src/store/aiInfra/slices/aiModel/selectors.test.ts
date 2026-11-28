@@ -257,6 +257,32 @@ describe('aiModelSelectors', () => {
         aiModelSelectors.modelContextWindowTokens('model4', 'provider2')(mockState),
       ).toBeUndefined();
     });
+
+    it('should cap the compression window of a long-context model', () => {
+      const state = {
+        ...mockState,
+        enabledAiModels: [
+          ...mockState.enabledAiModels!,
+          {
+            abilities: {},
+            contextWindowTokens: 1_000_000,
+            id: 'long-context',
+            providerId: 'provider1',
+            type: 'chat',
+          },
+        ],
+      } as AIProviderStoreState;
+
+      expect(aiModelSelectors.modelCompressionWindowTokens('model1', 'provider1')(state)).toBe(
+        4000,
+      );
+      expect(
+        aiModelSelectors.modelCompressionWindowTokens('long-context', 'provider1')(state),
+      ).toBe(200_000);
+      expect(
+        aiModelSelectors.modelCompressionWindowTokens('model4', 'provider2')(state),
+      ).toBeUndefined();
+    });
   });
 
   describe('modelDisabledParams', () => {
