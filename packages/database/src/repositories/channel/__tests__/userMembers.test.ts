@@ -59,10 +59,9 @@ describe('Channel human membership', () => {
       userId: fixture.memberId,
     });
     await expect(member.remove(channel.id)).rejects.toMatchObject({ code: 'FORBIDDEN' });
-    await expect(member.addUser(channel.id, fixture.ownerId)).rejects.toMatchObject({
-      code: 'FORBIDDEN',
-    });
-    await expect(member.userCandidates(channel.id)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    // A plain member may invite, though not manage the Channel.
+    expect(await member.userCandidates(channel.id)).toEqual([]);
+    expect((await member.addUser(channel.id, fixture.ownerId)).userId).toBe(fixture.ownerId);
   });
 
   it('rejects non-workspace and removed users without inserting membership', async () => {

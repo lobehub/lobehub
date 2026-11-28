@@ -21,8 +21,12 @@ vi.mock('@/database/repositories/channel', async (original) => ({
     findAccess = findAccess;
   },
 }));
+const projectOptions = vi.hoisted(() => [] as unknown[]);
 vi.mock('@/database/models/project', () => ({
   ProjectModel: class {
+    constructor(_db: unknown, _userId: string, _workspaceId: string, options: unknown) {
+      projectOptions.push(options);
+    }
     addAgent = addProjectAgent;
     findById = findProject;
     hasAgent = hasAgent;
@@ -115,7 +119,7 @@ describe('seating Agents in a project Channel', () => {
     );
   });
 
-  it('refuses when the caller cannot manage the project’s members', async () => {
+  it('refuses when the project refuses the Agent or the caller only views the workspace', async () => {
     hasAgent.mockResolvedValue(false);
     addProjectAgent.mockResolvedValue(null);
     await expect(
@@ -128,16 +132,19 @@ describe('seating Agents in a project Channel', () => {
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
-  it('does not let a plain Channel member seat an Agent in the project', async () => {
+  it('lets a plain Channel member seat an outside Agent in the project', async () => {
     findAccess.mockResolvedValue({
       channel: { id: 'chn_1', projectId: 'pro_1' },
       member: { role: 'member' },
     });
     hasAgent.mockResolvedValue(false);
-    await expect(
-      service().addAgent('chn_1', { agentId: 'agt_2' }, { joinProject: true }),
-    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-    expect(addProjectAgent).not.toHaveBeenCalled();
+    addProjectAgent.mockResolvedValue({ id: 'binding_1' });
+    projectOptions.length = 0;
+    await service().addAgent('chn_1', { agentId: 'agt_2' }, { joinProject: true });
+    expect(addProjectAgent).toHaveBeenCalledWith('pro_1', { agentId: 'agt_2' });
+    // Seating does not wait for the project creator or a workspace admin.
+    expect(projectOptions).toContainEqual(expect.objectContaining({ canManageAllMembers: true }));
+    expect(addAgent).toHaveBeenCalled();
   });
 
   it('seats outside Agents of a new project Channel before creating it', async () => {

@@ -15,12 +15,16 @@ describe('Channel access after revalidation', () => {
 });
 
 describe('inviting members', () => {
-  const open = { canDelete: true, status: 'active' } as const;
-  it('lets an admin invite from an open Channel', () => {
+  const open = { canDelete: false, canInvite: true, status: 'active' } as const;
+  it('lets any member invite from an open Channel', () => {
     expect(canInviteMembers(open)).toBe(true);
   });
+  it('falls back to the admin right when the server does not say', () => {
+    expect(canInviteMembers({ canDelete: true, status: 'active' })).toBe(true);
+    expect(canInviteMembers({ canDelete: false, status: 'active' })).toBe(false);
+  });
   it.each([
-    ['a plain member', { canDelete: false }],
+    ['a reader who has not joined', { canInvite: false }],
     ['an archived Channel', { status: 'archived' as const }],
   ])('offers no invite to %s', (_, override) => {
     expect(canInviteMembers({ ...open, ...override })).toBe(false);

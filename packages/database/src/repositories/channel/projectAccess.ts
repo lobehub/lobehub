@@ -150,7 +150,7 @@ export const readOpenChannel = async (
     if (!channel) throw new ChannelError('NOT_FOUND', 'Channel not found');
     const view = await readChannelView(tx, channelId, options, userId);
     return {
-      channel: { ...channel, canDelete: false },
+      channel: { ...channel, canDelete: false, canInvite: false },
       joined: false,
       ...view,
       jobs: viewerJobs(view.jobs, userId, () => false),

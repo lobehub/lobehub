@@ -269,11 +269,9 @@ export class ChannelRepository {
       { minRole: 'admin' },
     );
 
-  /** Adds a usable Agent reference; a missing reference is allowed only for retained history. */
+  /** Any member adds a usable Agent; a missing reference is allowed only for retained history. */
   addAgent = async (channelId: string, input: ChannelAddAgentInput) =>
-    this.write(channelId, (tx, { channel, member }) => addAgentMember(tx, channel, member, input), {
-      minRole: 'admin',
-    });
+    this.write(channelId, (tx, { channel, member }) => addAgentMember(tx, channel, member, input));
 
   /** The channel-local device and directory of one Agent member. */
   agentEnvironment = async (channelId: string, memberId: string) =>
@@ -413,10 +411,9 @@ export class ChannelRepository {
     return joinPublicChannel(this.db, this.userId, this.workspaceId, channelId);
   };
 
+  /** Any member may invite a person; removing one stays with admins. */
   addUser = async (channelId: string, userId: string) =>
-    this.write(channelId, (tx, access) => addChannelUser(tx, this.contacts, access, userId), {
-      minRole: 'admin',
-    });
+    this.write(channelId, (tx, access) => addChannelUser(tx, this.contacts, access, userId));
 
   /** Removes a person or an Agent; returns the writers still to stop. See {@link removeChannelMember}. */
   removeMember = async (channelId: string, memberId: string): Promise<ChannelJobItem[]> =>
@@ -452,14 +449,9 @@ export class ChannelRepository {
       newChannelUserCandidates(tx, this.contacts, this.workspaceId, this.userId, search),
     );
 
+  /** People any member may invite into the Channel. */
   userCandidates = async (channelId: string, search?: string) =>
-    this.write(
-      channelId,
-      (tx, access) => channelUserCandidates(tx, this.contacts, access, search),
-      {
-        minRole: 'admin',
-      },
-    );
+    this.write(channelId, (tx, access) => channelUserCandidates(tx, this.contacts, access, search));
 
   /** Messages in a Channel the caller can read, its live Threads included, matching `query`. */
   searchMessages = async (channelId: string, options: ChannelSearchOptions) => {
@@ -484,7 +476,13 @@ export class ChannelRepository {
       const view = await readChannelView(tx, channelId, options, this.userId);
       const shared = await sharedAgentView(tx, access.channel, this.userId);
       return {
-        channel: { ...access.channel, canDelete: admin, notificationsMuted, ...shared.channel },
+        channel: {
+          ...access.channel,
+          canDelete: admin,
+          canInvite: true,
+          notificationsMuted,
+          ...shared.channel,
+        },
         joined: true,
         sharedAgentOwner: shared.owner,
         ...view,
@@ -717,6 +715,7 @@ export class ChannelRepository {
           agentIds: agentIdsOf.get(channel.id) ?? [],
           ...sharedAgentFields(channel, agent, this.userId, shareSlug ?? shareId),
           canDelete: hasRole(role, 'admin'),
+          canInvite: true,
           hidden,
           joined: true,
           lastMessage: lastMessageOf.get(channel.id) ?? null,
@@ -743,6 +742,7 @@ export class ChannelRepository {
         sharedAgent: false,
         sharedAgentHandle: null,
         canDelete: false,
+        canInvite: false,
         hidden: false,
         joined: false,
         lastMessage: lastMessageOf.get(channel.id) ?? null,
