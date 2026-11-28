@@ -34,6 +34,7 @@ export {
   estimatePendingUploadTokenBuckets,
   estimateSentMessageAttachmentTokenBuckets,
   isTextLikeUploadFile,
+  withoutRecordedOutputUsage,
 } from './tokenAccounting';
 export type {
   AttachmentPreviewPlan,
@@ -48,6 +49,8 @@ export {
   countRequestPayloadTokens,
   tryCountRequestPayloadTokens,
 } from './tokenAccounting/requestPayload';
+export type { InputTokenRatio, InputTokenRatioAnchor } from '@lobechat/token-estimator';
+export { resolveInputTokenRatio } from '@lobechat/token-estimator';
 // Processors
 export type {
   DocumentRead,

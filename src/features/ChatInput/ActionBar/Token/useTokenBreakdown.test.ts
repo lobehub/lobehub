@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
   contextWindow: undefined as ContextWindow | undefined,
   input: '',
   listeners: new Set<() => void>(),
+  modelFamily: undefined as string | undefined,
   summaries: {} as Record<string, string>,
 }));
 
@@ -66,6 +67,7 @@ vi.mock('@/store/aiInfra', () => ({
 }));
 vi.mock('@/store/aiInfra/selectors', () => ({
   aiModelSelectors: {
+    getModelCard: () => () => (state.modelFamily ? { family: state.modelFamily } : undefined),
     isModelBuiltinSearchInternal: () => () => false,
     isModelHasBuiltinSearch: () => () => false,
   },
@@ -98,6 +100,7 @@ beforeEach(() => {
   state.contextWindow = undefined;
   state.input = '';
   state.listeners.clear();
+  state.modelFamily = undefined;
   state.summaries = { 'main-topic': 'main column summary', 'pane-topic': 'pane' };
 });
 
@@ -313,6 +316,74 @@ describe('useTokenBreakdown', () => {
       systemToken: 'pane'.length,
       toolsToken: 0,
     });
+  });
+
+  it("scales the estimate by the recorded text-only request's own provider ratio", () => {
+    vi.useFakeTimers();
+    // A family default must not override the conversation's measured ratio.
+    state.modelFamily = 'claude-sonnet';
+    const { result } = renderHook(() => useTokenBreakdown());
+
+    publishComposer({
+      contextWindow: {
+        history: [],
+        request: {
+          accounting: { ...recordedAccounting, media: { audio: 0, image: 0, video: 0 } },
+          // 1.2× the recorded estimate of 7421.
+          inputTokens: 8905,
+          model: 'model-1',
+          provider: 'provider-1',
+        },
+      },
+    });
+
+    const ratio = 8905 / 7421;
+    expect(result.current).toMatchObject({
+      systemToken: Math.round(2000 * ratio),
+      toolsToken: Math.round(4000 * ratio),
+    });
+  });
+
+  it('scales a fresh estimate by the family default after a switch to a Claude model', () => {
+    vi.useFakeTimers();
+    state.modelFamily = 'claude-sonnet';
+    const { result } = renderHook(() => useTokenBreakdown());
+
+    publishComposer({
+      contextWindow: {
+        history: [message({ content: 'hello there', id: 'u1', role: 'user' })],
+        request: {
+          accounting: { ...recordedAccounting, media: { audio: 0, image: 0, video: 0 } },
+          inputTokens: 8905,
+          messages: [],
+          // Recorded for another model: its ratio says nothing about this one.
+          model: 'other-model',
+        },
+      },
+    });
+
+    expect(result.current.chatsToken).toBe(Math.round(estimateTokenCount('hello there') * 1.35));
+  });
+
+  it('does not anchor on a request whose provider was not recorded', () => {
+    vi.useFakeTimers();
+    state.modelFamily = 'claude-sonnet';
+    const { result } = renderHook(() => useTokenBreakdown());
+
+    publishComposer({
+      contextWindow: {
+        history: [],
+        // Still the next request's tools and system prompt, but its ratio may come from
+        // another relay, so the family default applies.
+        request: {
+          accounting: { ...recordedAccounting, media: { audio: 0, image: 0, video: 0 } },
+          inputTokens: 8905,
+          model: 'model-1',
+        },
+      },
+    });
+
+    expect(result.current.toolsToken).toBe(Math.round(4000 * 1.35));
   });
 
   it('counts the history window, not recorded messages, when a history count truncates', () => {

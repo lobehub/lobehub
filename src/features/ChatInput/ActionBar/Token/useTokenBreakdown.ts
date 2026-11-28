@@ -1,7 +1,9 @@
 import {
   countContextTokens,
+  resolveInputTokenRatio,
   type TokenSourceType,
   ToolNameResolver,
+  withoutRecordedOutputUsage,
 } from '@lobechat/context-engine';
 import { initialToolSelection } from '@lobechat/mecha';
 import { pluginPrompts } from '@lobechat/prompts';
@@ -9,6 +11,7 @@ import type { UIChatMessage } from '@lobechat/types';
 import { debounce } from 'es-toolkit/compat';
 import { startTransition, useEffect, useMemo, useState } from 'react';
 
+import { getInputTokenRatioAnchor } from '@/features/Conversation/ChatInput/utils';
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
 import { useModelContextWindowTokens } from '@/hooks/useModelContextWindowTokens';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
@@ -38,24 +41,11 @@ type SourceTokens = Record<TokenSourceType, number>;
 
 const EMPTY_MESSAGES: UIChatMessage[] = [];
 
-/**
- * `countContextTokens` replaces an assistant message's per-field estimate with
- * its recorded provider output count when one exists. Drop that count so the
- * whole breakdown stays on one estimator and the reply's tool calls and
- * reasoning keep their own sources.
- */
-const withoutRecordedUsage = (message: UIChatMessage): UIChatMessage =>
-  message.usage || message.metadata?.usage
-    ? {
-        ...message,
-        metadata: message.metadata && { ...message.metadata, usage: undefined },
-        usage: undefined,
-      }
-    : message;
-
 const countContextWindowMessages = (messages: UIChatMessage[]): SourceTokens =>
   countContextTokens({
-    messages: messages.map(withoutRecordedUsage),
+    // One estimator for the whole breakdown, so the reply's tool calls and
+    // reasoning keep their own sources and one ratio scales them all.
+    messages: messages.map(withoutRecordedOutputUsage),
     options: { driftMultiplier: 1 },
   }).bySource;
 
@@ -147,7 +137,8 @@ const useComposerSource = (): ComposerSource => {
 
 /**
  * Estimated tokens of the conversation's next request, by the parts of the
- * request body they come from. All counts use the `tokenx` estimator.
+ * request body they come from. Counts start from the `tokenx` estimator and are
+ * scaled to the model's own tokens by `resolveInputTokenRatio`.
  */
 export interface TokenBreakdown {
   /** Message text: user and assistant content, tool results, tool call ids and the draft. */
@@ -308,14 +299,26 @@ export const useTokenBreakdown = (): TokenBreakdown => {
   const recorded = request?.accounting;
   const sum = (key: TokenSourceType) => (recordedMessages?.[key] ?? 0) + messages[key];
 
-  const systemToken = recorded
-    ? recorded.system
-    : systemRoleToken + historySummaryToken + toolsSystemRoleToken;
-  const toolsToken = recorded ? recorded.bySource.toolDefinition : toolsSchemaToken;
-  const chatsToken = sum('content') + sum('toolCallId') + inputTokenCount;
-  const fileContextToken = sum('fileContext');
-  const toolCallsToken = sum('toolCalls') + sum('thoughtSignature');
-  const reasoningToken = sum('reasoning');
+  const modelFamily = useAiInfraStore(
+    (s) => aiModelSelectors.getModelCard(model, provider)(s)?.family,
+  );
+  // Every count here is a `tokenx` estimate (recorded output usage is dropped
+  // above), so one ratio converts the whole breakdown to the model's tokens.
+  const { ratio } = resolveInputTokenRatio({
+    anchor: getInputTokenRatioAnchor(request, { model, provider }),
+    family: modelFamily,
+    model,
+  });
+  const scale = (tokens: number) => Math.round(tokens * ratio);
+
+  const systemToken = scale(
+    recorded ? recorded.system : systemRoleToken + historySummaryToken + toolsSystemRoleToken,
+  );
+  const toolsToken = scale(recorded ? recorded.bySource.toolDefinition : toolsSchemaToken);
+  const chatsToken = scale(sum('content') + sum('toolCallId') + inputTokenCount);
+  const fileContextToken = scale(sum('fileContext'));
+  const toolCallsToken = scale(sum('toolCalls') + sum('thoughtSignature'));
+  const reasoningToken = scale(sum('reasoning'));
 
   const totalToken =
     systemToken + toolsToken + chatsToken + fileContextToken + toolCallsToken + reasoningToken;
