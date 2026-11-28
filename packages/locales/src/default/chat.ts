@@ -965,6 +965,10 @@ export default {
   'heteroAgent.cloudRepo.notSet': 'No repo selected',
   'heteroAgent.cloudRepo.noRepos': 'No repositories configured. Add them in agent settings.',
   'heteroAgent.cloudRepo.multiSelected': '{{count}} repos selected',
+  'heteroAgent.executionTarget.selectRequired.desc':
+    'Choose where this Agent runs in the environment menu below, then send.',
+  'heteroAgent.executionTarget.selectRequired.title': 'No execution environment selected',
+  'heteroAgent.executionTarget.unselected': 'Not selected',
   'heteroAgent.executionTarget.sandboxUnsupported':
     '{{name}} currently runs only on a local or connected device',
   'heteroAgent.executionTarget.auto': 'Auto',
