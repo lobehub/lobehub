@@ -171,6 +171,30 @@ describe('file command', () => {
   });
 
   describe('upload', () => {
+    it('should print the quota and recovery links when storage is full', async () => {
+      const filePath = path.join(os.tmpdir(), `cli-storage-block-${process.pid}.png`);
+      fs.writeFileSync(filePath, 'fake');
+      const errorSpy = vi.spyOn(log, 'error').mockImplementation(() => {});
+      mockTrpcClient.file.checkFileHash.mutate.mockRejectedValue(
+        new Error('storage_block:upgrade_required'),
+      );
+      mockTrpcClient.file.getStorageQuota = {
+        query: vi
+          .fn()
+          .mockResolvedValue({ includedBytes: 1024, remainingBytes: 0, usedBytes: 2048 }),
+      };
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'file', 'upload', filePath, '--json', 'id,url']);
+      fs.rmSync(filePath);
+
+      const line = errorSpy.mock.calls[0][0];
+      expect(line).toMatch(/^storage_block:upgrade_required\./);
+      expect(line).toContain('0 B of 1.0 KB remaining');
+      expect(line).toContain('/settings/plans');
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
     it('should upload file by URL', async () => {
       mockTrpcClient.file.checkFileHash.mutate.mockResolvedValue({ isExist: false });
       mockTrpcClient.file.createFile.mutate.mockResolvedValue({

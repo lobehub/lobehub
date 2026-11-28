@@ -2,8 +2,10 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
+import { resolveServerUrl } from '../settings';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { describeStorageBlock } from '../utils/storageBlock';
 import { uploadLocalFile } from '../utils/uploadLocalFile';
 import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from './resourceUrl';
 
@@ -160,7 +162,7 @@ export function registerFileCommand(program: Command) {
           try {
             result = await uploadLocalFile(client, localPath, { parentId: options.parentId });
           } catch (error) {
-            log.error(error instanceof Error ? error.message : String(error));
+            log.error(await describeStorageBlock(client, error, resolveServerUrl()));
             process.exit(1);
             return;
           }
