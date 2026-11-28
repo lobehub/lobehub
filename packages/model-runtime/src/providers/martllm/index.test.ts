@@ -14,7 +14,7 @@ vi.mock('@lobechat/business-model-bank/model-config', () => ({
 testProvider({
   Runtime: LobeMartLLMAI,
   chatDebugEnv: 'DEBUG_MARTLLM_CHAT_COMPLETION',
-  chatModel: 'openai/gpt-4o-mini',
+  chatModel: 'deepseek/deepseek-v3.2',
   defaultBaseURL: 'https://api.martllm.com/v1',
   provider: ModelProvider.MartLLM,
   test: {
@@ -31,7 +31,7 @@ describe('LobeMartLLMAI - models', () => {
       {
         context_length: 128_000,
         display_name: 'GPT-4o Mini',
-        id: 'openai/gpt-4o-mini',
+        id: 'deepseek/deepseek-v3.2',
         max_output_tokens: 16_384,
         supports_reasoning: false,
         supports_tools: true,
@@ -44,7 +44,7 @@ describe('LobeMartLLMAI - models', () => {
       contextWindowTokens: 128_000,
       displayName: 'GPT-4o Mini',
       functionCall: true,
-      id: 'openai/gpt-4o-mini',
+      id: 'deepseek/deepseek-v3.2',
       maxOutput: 16_384,
       reasoning: false,
       vision: true,

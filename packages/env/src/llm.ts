@@ -275,6 +275,9 @@ export const getLLMConfig = () => {
 
       ENABLED_ANTGROUP: z.boolean(),
       ANTGROUP_API_KEY: z.string().optional(),
+
+      ENABLED_MARTLLM: z.boolean(),
+      MARTLLM_API_KEY: z.string().optional(),
     },
     runtimeEnv: {
       API_KEY_SELECT_MODE: process.env.API_KEY_SELECT_MODE,
@@ -552,6 +555,9 @@ export const getLLMConfig = () => {
 
       ENABLED_ANTGROUP: !!process.env.ANTGROUP_API_KEY,
       ANTGROUP_API_KEY: process.env.ANTGROUP_API_KEY,
+
+      ENABLED_MARTLLM: !!process.env.MARTLLM_API_KEY,
+      MARTLLM_API_KEY: process.env.MARTLLM_API_KEY,
     },
   });
 };

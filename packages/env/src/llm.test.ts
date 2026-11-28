@@ -32,3 +32,17 @@ describe('fal credentials', () => {
     expect(getLLMConfig().FAL_API_KEY).toBe('fal-sdk-key');
   });
 });
+
+describe('MartLLM credentials', () => {
+  it('exposes MARTLLM_API_KEY to model runtime and enables the provider', () => {
+    vi.stubEnv('MARTLLM_API_KEY', 'test-martllm-key');
+    const config = getLLMConfig();
+    expect(config.ENABLED_MARTLLM).toBe(true);
+    expect(config.MARTLLM_API_KEY).toBe('test-martllm-key');
+  });
+
+  it.each([undefined, ''])('keeps MartLLM disabled without a key (%s)', (key) => {
+    vi.stubEnv('MARTLLM_API_KEY', key);
+    expect(getLLMConfig().ENABLED_MARTLLM).toBe(false);
+  });
+});

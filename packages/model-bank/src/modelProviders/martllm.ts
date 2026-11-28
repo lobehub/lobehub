@@ -7,7 +7,7 @@ import type { ModelProviderCard } from '../types';
 // ref: https://martllm.com/docs/quickstart
 const MartLLM: ModelProviderCard = {
   chatModels: [],
-  checkModel: 'openai/gpt-4o-mini',
+  checkModel: 'deepseek/deepseek-v3.2',
   description:
     'MartLLM is a marketplace of third-party model providers behind one OpenAI-compatible API, with prepaid credit and no subscription.',
   id: 'martllm',

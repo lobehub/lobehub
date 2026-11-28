@@ -6,15 +6,6 @@ import type { AIChatModelCard } from '../types/aiModel';
 // charged, so a fixed rate here would be wrong.
 const martllmChatModels: AIChatModelCard[] = [
   {
-    abilities: { functionCall: true, vision: true },
-    contextWindowTokens: 128_000,
-    displayName: 'GPT-4o Mini',
-    enabled: true,
-    id: 'openai/gpt-4o-mini',
-    maxOutput: 16_384,
-    type: 'chat',
-  },
-  {
     abilities: { functionCall: true, reasoning: true, vision: true },
     contextWindowTokens: 200_000,
     displayName: 'Claude Haiku 4.5',
@@ -30,14 +21,6 @@ const martllmChatModels: AIChatModelCard[] = [
     enabled: true,
     id: 'google/gemini-2.5-flash',
     maxOutput: 65_535,
-    type: 'chat',
-  },
-  {
-    abilities: { functionCall: true, reasoning: true, vision: true },
-    contextWindowTokens: 1_048_576,
-    displayName: 'Gemini 2.5 Pro',
-    id: 'google/gemini-2.5-pro',
-    maxOutput: 65_536,
     type: 'chat',
   },
   {
