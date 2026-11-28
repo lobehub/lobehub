@@ -494,6 +494,10 @@ export class GoalReleaseReview {
     const version = state.planSkill
       ? await new BatchPlanSkillService(this.db, this.userId, this.workspaceId)
           .revise(state.planSkill, {
+            // The package the rewrite ships: files it adds or replaces, paths it drops.
+            ...((pending.revisedFiles || pending.removedFiles) && {
+              files: { remove: pending.removedFiles, upsert: pending.revisedFiles },
+            }),
             goalId,
             guidance: pending.correction,
             plan: recipe,

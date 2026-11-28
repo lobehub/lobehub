@@ -173,7 +173,7 @@ export class GoalProbeDistill {
       const current = (await goalModel.lockById(goalId))?.config?.rolloutState;
       // Another advance landed it first; what it decided is next either way.
       if (current?.phase !== 'plan_distill' || !current.pendingDistill) return [];
-      const { reason, recipe: raw, rerun: names } = current.pendingDistill;
+      const { files, reason, recipe: raw, removedFiles, rerun: names } = current.pendingDistill;
       const recipe = raw.trim();
       const round = String(current.templateRevision);
       const skill = recipe ? current.planSkill : undefined;
@@ -186,6 +186,8 @@ export class GoalProbeDistill {
                 this.userId,
                 this.workspaceId,
               ).revise(skill, {
+                // The package the probes taught: files added or replaced, paths dropped.
+                ...((files || removedFiles) && { files: { remove: removedFiles, upsert: files } }),
                 goalId,
                 guidance: reason,
                 plan: recipe,
