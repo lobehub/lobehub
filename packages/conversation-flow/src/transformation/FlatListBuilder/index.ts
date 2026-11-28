@@ -1,12 +1,12 @@
 import type { AssistantContentBlock, ChatToolPayloadWithResult } from '@lobechat/types';
 
-import { isInThreadScope } from '../indexing';
-import type { Message, MessageGroupMetadata, ThreadScope } from '../types';
-import { toTime } from '../utils/timestamp';
-import type { BranchResolver } from './BranchResolver';
-import type { MessageCollector } from './MessageCollector';
-import { isToollessSignalTurn } from './MessageCollector';
-import type { MessageTransformer } from './MessageTransformer';
+import { isInThreadScope } from '../../indexing';
+import type { Message, MessageGroupMetadata, ThreadScope } from '../../types';
+import { toTime } from '../../utils/timestamp';
+import type { BranchResolver } from '../BranchResolver';
+import type { MessageCollector } from '../MessageCollector';
+import { isToollessSignalTurn } from '../MessageCollector';
+import type { MessageTransformer } from '../MessageTransformer';
 
 /**
  * Metadata that describes one step rather than the whole group: a finish
