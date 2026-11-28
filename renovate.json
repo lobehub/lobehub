@@ -19,7 +19,7 @@
   "packageRules": [
     {
       "description": "Un-group tilde ranges",
-      "matchManagers": ["npm", "pnpm", "yarn", "bun"],
+      "matchManagers": ["npm", "bun"],
       "matchCurrentValue": "^~.*$",
       "groupName": null,
       "groupSlug": null,
@@ -28,7 +28,7 @@
     },
     {
       "description": "Un-group pinned deps (exact x.y.z)",
-      "matchManagers": ["npm", "pnpm", "yarn", "bun"],
+      "matchManagers": ["npm", "bun"],
       "matchCurrentValue": "/^\\d+\\.\\d+\\.\\d+([+-][0-9A-Za-z.-]+)?$/",
       "groupName": null,
       "groupSlug": null,
@@ -37,7 +37,7 @@
     },
     {
       "description": "Un-group experimental caret ranges (^0.x)",
-      "matchManagers": ["npm", "pnpm", "yarn", "bun"],
+      "matchManagers": ["npm", "bun"],
       "matchCurrentValue": "^\\^0\\.\\d+(\\.\\d+)?([+-][0-9A-Za-z.-]+)?$",
       "groupName": null,
       "separateMajorMinor": true,
@@ -45,7 +45,7 @@
     },
     {
       "description": "Group ^>=1 ranges for patch/minor",
-      "matchManagers": ["npm", "pnpm", "yarn", "bun"],
+      "matchManagers": ["npm", "bun"],
       "matchCurrentValue": "/^\\^[1-9]+[0-9]*(\\.\\d+){0,2}([+-][0-9A-Za-z.-]+)?$/",
       "matchUpdateTypes": ["minor", "patch"],
       "groupName": "all non-major dependencies",
