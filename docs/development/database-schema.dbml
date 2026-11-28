@@ -828,6 +828,7 @@ table agent_interventions {
     (user_id, workspace_id, batch_id, item_index) [name: 'agent_interventions_owner_batch_idx']
     (user_id, activity_key) [name: 'agent_interventions_activity_key_idx']
     (status, deadline) [name: 'agent_interventions_status_deadline_idx']
+    resolution_id [name: 'agent_interventions_resolution_id_idx']
     
     
     

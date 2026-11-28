@@ -166,4 +166,28 @@ describe('Agent Intervention and ActivityKit migration', () => {
       )?.indexdef,
     ).toContain('(operation_id, batch_id, tool_call_id)');
   }, 15_000);
+  /** @example Locking one resolution's items reads an index instead of the whole table. */
+  it('locks the items of one resolution through an index', async () => {
+    const indexMigration = readMigrationFiles({
+      migrationsFolder: path.join(__dirname, '../../../migrations'),
+    }).find((item) =>
+      item.sql.some((statement) => statement.includes('agent_interventions_resolution_id_idx')),
+    );
+    if (!indexMigration) throw new Error('Resolution index migration not found');
+    for (let replay = 0; replay < 2; replay += 1) {
+      for (const statement of indexMigration.sql) await serverDB.execute(sql.raw(statement));
+    }
+
+    const plan = await serverDB.transaction(async (tx) => {
+      // An empty test table is always cheapest to scan; rule the scan out so
+      // the plan shows whether an index can serve the lock at all.
+      await tx.execute(sql`SET LOCAL enable_seqscan = off`);
+      return tx.execute(
+        sql`EXPLAIN SELECT id FROM agent_interventions WHERE resolution_id = ${'00000000-0000-4000-8000-000000000000'}::uuid ORDER BY item_index FOR UPDATE`,
+      );
+    });
+    expect(plan.rows.map((row) => row['QUERY PLAN']).join('\n')).toContain(
+      'agent_interventions_resolution_id_idx',
+    );
+  }, 15_000);
 });
