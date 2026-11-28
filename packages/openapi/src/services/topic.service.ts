@@ -16,6 +16,8 @@ import type {
 } from '../types/topic.type';
 
 export class TopicService extends BaseService {
+  protected readonly serviceName = 'TopicService';
+
   constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
     super(db, userId, workspaceId);
   }

@@ -421,8 +421,9 @@ export class ErrorHandlerService {
       const enhancedError = {
         details: error.details || {},
         message: error.message,
-        // Preserve original error type and reason
-        originalErrorType: error.constructor.name,
+        // Preserve original error type and reason. Use the explicit `name` because
+        // production server bundles mangle class names.
+        originalErrorType: error.name,
         originalReason: error.reason,
         // Note: Removed originalError to avoid serialization issues
       };
