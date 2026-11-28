@@ -127,6 +127,14 @@ export const applyCanvasChanges = (
       };
     }
 
+    // indexOf('') returns text.length, not -1, so counting matches would never advance.
+    if (edit.oldText.length === 0) {
+      return {
+        error: `Cannot edit "${rawPath}": oldText must not be empty. Use writes to replace the entire file.`,
+        ok: false,
+      };
+    }
+
     const occurrences = countOccurrences(file.content, edit.oldText);
     if (occurrences !== 1) {
       return {
