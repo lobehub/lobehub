@@ -138,7 +138,10 @@ export const convertOpenAIUsage = (
 
   log('convertOpenAIUsage data(completion-api): %O', finalData);
 
-  return withUsageCost(finalData as ModelUsage, payload?.pricing);
+  return withUsageCost(finalData as ModelUsage, payload?.pricing, payload?.pricingOptions, {
+    model: payload?.model,
+    provider: payload?.provider,
+  });
 };
 
 export const convertOpenAIResponseUsage = (
@@ -205,7 +208,11 @@ export const convertOpenAIResponseUsage = (
 
   log('convertOpenAIResponseUsage data(response-api): %O', finalData);
 
-  return withUsageCost(finalData as ModelUsage, payload?.pricing); // Cast because we've built it to match
+  // Cast because we've built it to match
+  return withUsageCost(finalData as ModelUsage, payload?.pricing, payload?.pricingOptions, {
+    model: payload?.model,
+    provider: payload?.provider,
+  });
 };
 
 export const convertOpenAIImageUsage = (

@@ -18,7 +18,10 @@ import {
   resolveOpenAIResponseWithMetadata,
 } from '../../openaiCompatible/providerDiagnostics';
 import { resolveModelSamplingParameters } from '../../parameterResolver';
-import { readableFromAsyncIterable } from '../../streams/protocol';
+import {
+  type ChatPayloadForTransformStream,
+  readableFromAsyncIterable,
+} from '../../streams/protocol';
 import { convertOpenAIMessages } from './messages';
 import { transformResponseToStream } from './nonStreamToStream';
 import type { OpenAIStreamOptions } from './stream';
@@ -83,17 +86,18 @@ export const chatViaChatCompletions = async (
     | Stream<OpenAI.Chat.Completions.ChatCompletionChunk>;
   let providerResponseDiagnostics;
 
+  const streamPayload: ChatPayloadForTransformStream = {
+    apiMode: 'chat_completions',
+    includeUsageRequested,
+    model: payload.model,
+    pricing: await getModelPricing(payload.model, runtime.id, options?.pricingContext),
+    provider: runtime.id,
+    thoughtSignatureScope,
+  };
   const streamOptions: OpenAIStreamOptions = {
     bizErrorTypeTransformer: factory.chatCompletion?.handleStreamBizErrorType,
     callbacks: options?.callback,
-    payload: {
-      apiMode: 'chat_completions',
-      includeUsageRequested,
-      model: payload.model,
-      pricing: await getModelPricing(payload.model, runtime.id, options?.pricingContext),
-      provider: runtime.id,
-      thoughtSignatureScope,
-    },
+    payload: streamPayload,
   };
 
   if (factory.customClient?.createChatCompletionStream) {
@@ -115,6 +119,10 @@ export const chatViaChatCompletions = async (
       }),
     };
     const requestPayload = runtime.withMappedRequestModel(customRequestPayload, payload.model);
+    streamPayload.pricingOptions = await factory.chatCompletion?.getPricingOptions?.(
+      payload,
+      requestPayload,
+    );
     providerResponseDiagnostics = initializeOpenAIDiagnostics({
       apiMode: 'chat_completions',
       diagnostics: options?.diagnostics,
@@ -146,6 +154,10 @@ export const chatViaChatCompletions = async (
       stream_options: includeUsageRequested ? { include_usage: true } : undefined,
     };
     const requestPayload = runtime.withMappedRequestModel(finalPayload, payload.model);
+    streamPayload.pricingOptions = await factory.chatCompletion?.getPricingOptions?.(
+      payload,
+      requestPayload,
+    );
 
     log('sending chat completion request with %d messages', messages.length);
 
