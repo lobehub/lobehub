@@ -15,6 +15,7 @@ import { isAgentOperationInFlight } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { WorkModel } from '@/database/models/work';
 import { type LobeChatDatabase } from '@/database/type';
@@ -99,6 +100,13 @@ export interface WorksRegistrationOutcome {
  * terminal snapshot (and thus perceived loading end). Keep a small ceiling.
  */
 const FILE_WORK_EXPORT_CONCURRENCY = 5;
+
+/**
+ * An export object key whose last segment carries the random UUID prefix
+ * `SandboxMiddlewareService.exportAndUploadFile` adds by default — the marker of
+ * an object no later export can overwrite.
+ */
+const IMMUTABLE_EXPORT_KEY = /\/[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}-[^/]+$/;
 
 /**
  * Run `task` over `items` with at most `limit` tasks in flight, collecting
@@ -533,21 +541,27 @@ export const registerWorksForOperation = async (
   // persisted record carrying their path is the agent's `exportFile` call —
   // the sandbox tool's, or the skills tool's when a skill drives the flow
   // (see `resolveExportedSandboxPath`). Treat each successfully exported
-  // entity path as a registerable input too. The file still lives in the
-  // sandbox, so it rides the same probe → collision-proof export → register
-  // pipeline below — the object `exportFile` itself uploaded is NOT reused:
-  // its storage key derives from the basename alone, so a later export of the
-  // same file would clobber it and break version immutability. Last export
-  // per path wins; paths already covered by the edit scan keep their richer
-  // (line-delta) entries.
+  // entity path as a registerable input too. Its version reuses the file record
+  // the agent's own `exportFile` call created (`exportedFileIdByPath`) instead
+  // of exporting and uploading the same bytes again, which left a duplicate
+  // object and a duplicate `files` row in the user's library for every exported
+  // file. Every export now owns a random, immutable object key (see
+  // `SandboxMiddlewareService.exportAndUploadFile`), so that record keeps its
+  // bytes for the version's lifetime. Last export per path wins; paths already
+  // covered by the edit scan keep their richer (line-delta) entries and still
+  // export the current sandbox file below.
   const editedPaths = new Set(entities.map((entry) => entry.path));
   const exportedByPath = new Map<string, EditedFileEntry>();
+  const exportedFileIdByPath = new Map<string, string>();
   for (const record of records) {
     if (record.apiName !== 'exportFile') continue;
     if (record.error != null && record.error !== '') continue;
     const path = resolveExportedSandboxPath(record);
     if (!path || editedPaths.has(path)) continue;
     if (classifyEditedFile(path).category !== 'entity') continue;
+    const fileId = (record.state as { fileId?: unknown } | undefined)?.fileId;
+    if (typeof fileId === 'string' && fileId) exportedFileIdByPath.set(path, fileId);
+    else exportedFileIdByPath.delete(path);
     exportedByPath.set(path, {
       diffTexts: [],
       kind: 'modified',
@@ -614,6 +628,33 @@ export const registerWorksForOperation = async (
     userId,
   });
 
+  const fileModel = new FileModel(serverDB, userId, workspaceId);
+  /**
+   * The file record an export-only path's last `exportFile` call created, in
+   * the export result shape, or `undefined` to export from the sandbox instead.
+   * The id comes from persisted tool state, so it is honored only when it
+   * resolves to a file this account owns. Only a record stored under the
+   * random-prefixed key is reused: an older record keyed by the bare filename
+   * is overwritten by the next same-day export of that name in the topic, so
+   * its Work version would silently change bytes. A share visitor's run always
+   * re-exports: its `exportFile` record carries no Agent Share provenance, and
+   * a visitor Work must point at a file fenced off from the creator's library.
+   */
+  const findReusableExportedFile = async (path: string) => {
+    if (params.agentShareVisitor) return undefined;
+    const fileId = exportedFileIdByPath.get(path);
+    if (!fileId) return undefined;
+    const file = await fileModel.findById(fileId);
+    if (!file || !IMMUTABLE_EXPORT_KEY.test(file.url)) return undefined;
+    return {
+      fileId: file.id,
+      mimeType: file.fileType,
+      size: file.size,
+      success: true as const,
+      url: await fileService.getFileAccessUrl({ id: file.id, url: file.url }),
+    };
+  };
+
   // Register each entity file with bounded parallelism. Every file's own
   // export → register → redeploy chain stays sequential inside its task, and each
   // task keeps its own best-effort try/catch (returning 'ok' | 'failed' instead
@@ -669,23 +710,26 @@ export const registerWorksForOperation = async (
         // durable identity (fileId / url), so a failed export means we skip this
         // file entirely rather than register a version pointing at nothing.
         // Display name = basename (clean download filename); storage key uses the
-        // unique `storageName` so the object is never clobbered.
-        const exported = await sandboxService.exportAndUploadFile(entry.path, basename, {
-          // A visitor's exported file gets the same share provenance the
-          // upload path stamps (see `shareChat.createFile`), so it never
-          // surfaces in the creator's library while `/f/:id` stays openable.
-          ...(params.agentShareVisitor
-            ? {
-                metadata: {
-                  agentShare: {
-                    shareId: params.agentShareVisitor.shareId,
-                    visitorUserId: params.agentShareVisitor.visitorUserId,
+        // unique `storageName` so the object is never clobbered. An export-only
+        // file reuses the record its `exportFile` call already created.
+        const exported =
+          (await findReusableExportedFile(entry.path)) ??
+          (await sandboxService.exportAndUploadFile(entry.path, basename, {
+            // A visitor's exported file gets the same share provenance the
+            // upload path stamps (see `shareChat.createFile`), so it never
+            // surfaces in the creator's library while `/f/:id` stays openable.
+            ...(params.agentShareVisitor
+              ? {
+                  metadata: {
+                    agentShare: {
+                      shareId: params.agentShareVisitor.shareId,
+                      visitorUserId: params.agentShareVisitor.visitorUserId,
+                    },
                   },
-                },
-              }
-            : {}),
-          storageName,
-        });
+                }
+              : {}),
+            storageName,
+          }));
         if (!exported.success) {
           // console, not the debug logger: production does not enable this
           // namespace, and a silent failure here only shows up as a missing card.
