@@ -102,6 +102,54 @@ export const scheduledTaskListQuery = ({
 });
 export const COMPLETE_TASK_LIST_MAX_ITEMS = 1000;
 
+/** One page of the Tasks page's "My tasks" tab. */
+export interface MyTaskListOptions {
+  /**
+   * Server-side look-back for completed / canceled tasks (the "Completed
+   * tasks" display option), cut before `limit` / `offset` like `statuses`.
+   */
+  completedWithin?: TaskCompletedWindow;
+  /** The Tasks page filter, applied before `limit` / `offset`. */
+  filter?: TaskListFilter;
+  includeArchived?: boolean;
+  limit?: number;
+  offset?: number;
+  scope: 'assigned' | 'created';
+  /**
+   * Server-side status narrowing (the "Completed tasks: None" display option
+   * translated by `getVisibleTaskStatuses`). Applied before `limit` /
+   * `offset` so a page can never come back empty while older unfinished
+   * tasks exist; part of the query for the same reason as `scope`.
+   */
+  statuses?: TaskStatus[];
+}
+
+/**
+ * The task-list query of one "My tasks" page. Shared by the page's sync and
+ * the route loader's pre-paint hydrate, which must produce the same key.
+ */
+export const myTaskListQuery = ({
+  completedWithin,
+  filter,
+  includeArchived,
+  limit,
+  offset,
+  scope,
+  statuses,
+}: MyTaskListOptions): TaskListQuery => ({
+  completedWithin,
+  filter: normalizeTaskListFilter(filter),
+  // Archived rows are a different server page, like the status filter.
+  includeArchived: includeArchived || undefined,
+  limit,
+  offset,
+  orderBy: 'updatedAt',
+  scope,
+  statuses: statuses?.length ? [...statuses].sort() : undefined,
+  // The tab offers no visibility chip and sends no visibility filter.
+  visibility: 'all',
+});
+
 /**
  * A paginated collection (scheduled roll-up, "My tasks"): the task-list sync
  * plus the page in the `{ data, total }` shape of the list endpoint, undefined
@@ -576,53 +624,22 @@ export class TaskListSliceActionImpl {
    * entries, never the ordinary tab's, so flipping the tab cannot leak one
    * collection into the other.
    */
-  useFetchMyTaskList = (options: {
-    /**
-     * Server-side look-back for completed / canceled tasks (the "Completed
-     * tasks" display option), cut before `limit` / `offset` like `statuses`.
-     */
-    completedWithin?: TaskCompletedWindow;
-    enabled?: boolean;
-    /** The Tasks page filter, applied before `limit` / `offset`. */
-    filter?: TaskListFilter;
-    includeArchived?: boolean;
-    limit?: number;
-    offset?: number;
-    scope: 'assigned' | 'created';
-    /**
-     * Server-side status narrowing (the "Completed tasks: None" display option
-     * translated by `getVisibleTaskStatuses`). Applied before `limit` /
-     * `offset` so a page can never come back empty while older unfinished
-     * tasks exist; part of the query for the same reason as `scope`.
-     */
-    statuses?: TaskStatus[];
-  }): TaskCollectionPageResult => {
-    const {
-      completedWithin,
-      enabled = true,
-      filter,
-      includeArchived,
-      limit,
-      offset,
-      scope,
-      statuses,
-    } = options;
-    return this.#useCollectionPage(
-      {
-        completedWithin,
-        filter: normalizeTaskListFilter(filter),
-        // Archived rows are a different server page, like the status filter.
-        includeArchived: includeArchived || undefined,
-        limit,
-        offset,
-        orderBy: 'updatedAt',
-        scope,
-        statuses: statuses?.length ? [...statuses].sort() : undefined,
-        // The tab offers no visibility chip and sends no visibility filter.
-        visibility: 'all',
-      },
-      enabled,
-    );
+  useFetchMyTaskList = (
+    options: MyTaskListOptions & { enabled?: boolean },
+  ): TaskCollectionPageResult => {
+    const { enabled = true, ...query } = options;
+    return this.#useCollectionPage(myTaskListQuery(query), enabled);
+  };
+
+  /**
+   * Seed the persisted "My tasks" page before the route commits, so opening
+   * the Tasks page paints the local copy instead of the list's skeleton. A
+   * later `useSync` hydrate is a no-op once the slot is filled.
+   */
+  preHydrateMyTaskList = (options: MyTaskListOptions): Promise<boolean> => {
+    const scope = taskListResource.scope.get();
+    this.#taskList.ensureScope(scope);
+    return this.#taskList.hydrate(myTaskListQuery(options), scope);
   };
 
   useFetchTaskList = (

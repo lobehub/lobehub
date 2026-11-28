@@ -33,7 +33,7 @@ import { agentUsageLoader } from '@/spa/router/agentUsageLoader';
 import { channelDataLoader } from '@/spa/router/channelDataLoader';
 import { selfLearningLoader } from '@/spa/router/expertiseLoaders';
 import { NoRouteSkeleton, routeMeta } from '@/spa/router/routeMeta';
-import { scheduledTaskListLoader } from '@/spa/router/scheduledTaskListLoader';
+import { taskListLoader } from '@/spa/router/taskListLoader';
 import { dynamicElement, dynamicLayout, redirectElement } from '@/utils/router';
 
 /**
@@ -316,7 +316,7 @@ export const agentPageChildren: RouteObject[] = [
   {
     element: dynamicElement(() => import('@/routes/(main)/agent/tasks'), 'Desktop > Chat > Tasks'),
     handle: { meta: agentTasksRouteMeta },
-    loader: scheduledTaskListLoader,
+    loader: taskListLoader,
     path: 'tasks',
   },
   {

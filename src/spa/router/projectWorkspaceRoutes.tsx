@@ -11,7 +11,7 @@ import {
   projectTasksRouteMeta,
 } from '@/features/Projects/routeMeta';
 import { projectAcceptanceRoute } from '@/spa/router/projectAcceptanceRoutes';
-import { scheduledTaskListLoader } from '@/spa/router/scheduledTaskListLoader';
+import { taskListLoader } from '@/spa/router/taskListLoader';
 import { dynamicElement, dynamicLayout, ErrorBoundary } from '@/utils/router';
 
 /** Topics used to live under `conversation/`: keep old links and restored tabs working. */
@@ -76,7 +76,7 @@ export const projectWorkspaceRoute: RouteObject = {
         'Desktop > Project Tasks',
       ),
       handle: { meta: projectTasksRouteMeta },
-      loader: scheduledTaskListLoader,
+      loader: taskListLoader,
       path: 'tasks',
     },
     {

@@ -2,7 +2,7 @@ import type { RouteObject } from 'react-router';
 
 import { goalDetailRouteMeta, goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
-import { scheduledTaskListLoader } from '@/spa/router/scheduledTaskListLoader';
+import { taskListLoader } from '@/spa/router/taskListLoader';
 import { dynamicElement, ErrorBoundary } from '@/utils/router';
 
 interface TaskWorkspaceOptions {
@@ -30,7 +30,7 @@ export const createTaskWorkspaceChildren = ({
         }),
         handle: { meta: tasksRouteMeta },
         index: true,
-        loader: scheduledTaskListLoader,
+        loader: taskListLoader,
       },
     ],
     errorElement: <ErrorBoundary resetPath=".." />,
