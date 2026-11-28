@@ -170,11 +170,18 @@ export async function completeSubAgentBridge(
   const errorReason = failed
     ? formatSubAgentErrorReason(finalState?.error ?? params.errorMessage)
     : undefined;
-  const resultContent = failed
+  // A child that hit its step budget still ends `done`: the runtime strips its
+  // tools and takes the reply it writes then. Without a note the parent cannot
+  // tell that reply from a finished task (lobehub#17284).
+  const stoppedAtStepLimit = !failed && finalState?.forceFinish === true;
+  const answer = failed
     ? errorReason
       ? `Sub-agent did not complete (${reason}): ${errorReason}`
       : `Sub-agent did not complete (${reason}).`
     : lastAssistantContent || 'Sub-agent completed without a textual answer.';
+  const resultContent = stoppedAtStepLimit
+    ? `${answer}\n\n${formatStepLimitNote(finalState?.maxSteps)}`
+    : answer;
 
   // A background sub-agent's parent never parked on it: the placeholder holds
   // the start receipt the parent already read, so the answer is kept for a
@@ -223,7 +230,10 @@ export async function completeSubAgentBridge(
   // this same sub-agent a follow-up (`callSubAgent({ subAgentId })`) — e.g.
   // to hand over what it gathered before failing — instead of redoing it.
   const content = (await deps.isCallSubAgentToolMessage(toolMessageId, threadId))
-    ? appendSubAgentReference(resultContent, threadId)
+    ? appendSubAgentReference(
+        stoppedAtStepLimit ? `${resultContent} ${STEP_LIMIT_CONTINUE_HINT}` : resultContent,
+        threadId,
+      )
     : resultContent;
 
   const { result: completed, blocked } = await deps.controlCompletedToolResult({
@@ -272,6 +282,13 @@ export async function completeSubAgentBridge(
     { knownFulfilledMessageId: toolMessageId, scheduleVerifyOnHold: true },
   );
 }
+
+/** Added to a step-capped `callSubAgent` result, the only kind that can be continued. */
+const STEP_LIMIT_CONTINUE_HINT =
+  'To finish the remaining work, call callSubAgent again with this subAgentId.';
+
+const formatStepLimitNote = (maxSteps: number | undefined): string =>
+  `Note: the sub-agent stopped at its step limit${maxSteps ? ` (${maxSteps} steps)` : ''} before finishing, so the answer above may be incomplete.`;
 
 /**
  * Whether the bridged placeholder was started with `runInBackground`

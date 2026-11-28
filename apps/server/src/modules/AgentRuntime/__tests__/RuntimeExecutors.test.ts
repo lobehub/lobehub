@@ -2902,6 +2902,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           (m: any) =>
             m.role === 'system' &&
             m.content.includes('maximum step limit') &&
+            m.content.includes('list what remains unfinished') &&
             m.content.includes('Do not attempt to use any tools'),
         );
         expect(hasForceFinishMessage).toBe(true);

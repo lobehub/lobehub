@@ -44,8 +44,10 @@ export class ForceFinishSummaryInjector extends BaseProvider {
     const clonedContext = this.cloneContext(context);
 
     clonedContext.messages.push({
+      // Listing the unfinished work lets whoever reads this reply (the user, or
+      // a parent agent continuing a capped sub-agent) pick up where it stopped.
       content:
-        'You have reached the maximum step limit. Please summarize your progress and provide a final response. Do not attempt to use any tools.',
+        'You have reached the maximum step limit. Write your final response now: summarize what you completed, list what remains unfinished, and recommend the next steps. Do not attempt to use any tools.',
       role: 'system' as const,
     });
 

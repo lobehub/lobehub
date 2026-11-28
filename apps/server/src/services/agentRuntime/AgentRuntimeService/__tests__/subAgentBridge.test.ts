@@ -314,6 +314,57 @@ describe('AgentRuntimeService', () => {
       );
     });
 
+    // lobehub#17284: a step-capped child still ends `done`, so the parent must be
+    // told its answer may be partial and how to continue it.
+    describe('child stopped at its step limit', () => {
+      const cappedState = { ...childState, forceFinish: true, maxSteps: 100 };
+
+      it('marks a callSubAgent result as partial and continuable', async () => {
+        (service as any).messageModel.findMessagePlugin = vi
+          .fn()
+          .mockResolvedValue({ apiName: 'callSubAgent', identifier: 'lobe-agent' });
+
+        await service.completeSubAgentBridge({ ...bridgeParams, finalState: cappedState as any });
+
+        expect(updateToolMessage).toHaveBeenCalledWith(
+          'tool-msg-1',
+          expect.objectContaining({
+            content:
+              'final answer\n\nNote: the sub-agent stopped at its step limit (100 steps) before finishing, so the answer above may be incomplete. To finish the remaining work, call callSubAgent again with this subAgentId.\n\n<sub_agent id="thread-1" />',
+          }),
+        );
+      });
+
+      it('marks the result when the capped state is loaded on the webhook path', async () => {
+        mockCoordinator.loadAgentState.mockResolvedValue(cappedState);
+
+        await service.completeSubAgentBridge(bridgeParams);
+
+        expect(updateToolMessage).toHaveBeenCalledWith(
+          'tool-msg-1',
+          expect.objectContaining({
+            content: expect.stringContaining('stopped at its step limit (100 steps)'),
+          }),
+        );
+      });
+
+      it('marks a callAgent result as partial without a continue hint', async () => {
+        (service as any).messageModel.findMessagePlugin = vi
+          .fn()
+          .mockResolvedValue({ apiName: 'callAgent', identifier: 'lobe-agent-management' });
+
+        await service.completeSubAgentBridge({ ...bridgeParams, finalState: cappedState as any });
+
+        expect(updateToolMessage).toHaveBeenCalledWith(
+          'tool-msg-1',
+          expect.objectContaining({
+            content:
+              'final answer\n\nNote: the sub-agent stopped at its step limit (100 steps) before finishing, so the answer above may be incomplete.',
+          }),
+        );
+      });
+    });
+
     it('loads the child state from the coordinator when finalState is not passed (webhook path)', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue(childState);
 
@@ -735,6 +786,18 @@ describe('AgentRuntimeService', () => {
         });
 
         expect(release).not.toHaveBeenCalled();
+      });
+
+      it('marks a step-capped answer as partial in the delivered result', async () => {
+        await service.completeSubAgentBridge({
+          ...bridgeParams,
+          finalState: { ...childState, forceFinish: true, maxSteps: 100 } as any,
+        });
+
+        const [, update] = updateToolMessage.mock.calls[0];
+        expect(update.pluginState.result).toBe(
+          'final answer\n\nNote: the sub-agent stopped at its step limit (100 steps) before finishing, so the answer above may be incomplete.',
+        );
       });
 
       it('stores a failure as an error result', async () => {
