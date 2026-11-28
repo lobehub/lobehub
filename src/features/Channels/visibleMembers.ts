@@ -1,13 +1,11 @@
-import type { ChannelListItem, ChannelPublicMember } from '@lobechat/types';
+import type { ChannelPublicMember } from '@lobechat/types';
 
-/** The personal channel owner is implicit; only workspace channels list people. */
-export const getVisibleStatusMembers = (
-  members: ChannelPublicMember[],
-  workspaceId: ChannelListItem['workspaceId'],
-) =>
-  members.filter(
-    (member) => member.status === 'active' && (member.actorType === 'agent' || !!workspaceId),
-  );
+/**
+ * Everyone still in the Channel. A personal group holds the owner's contacts too, so it lists
+ * people the same way a workspace Channel does.
+ */
+export const getVisibleStatusMembers = (members: ChannelPublicMember[]) =>
+  members.filter((member) => member.status === 'active');
 
 /** People first, then Agents, each group keeping its join order. */
 export const groupMembersByActor = <T extends { member: Pick<ChannelPublicMember, 'actorType'> }>(

@@ -98,7 +98,7 @@ export function ChannelSidePanel({
   );
 }
 
-/** Workspace roster: a single list, without online/offline groups. */
+/** The Channel roster: a single list, without online/offline groups. */
 export function MemberPanel({
   availableWidth,
   detail,
