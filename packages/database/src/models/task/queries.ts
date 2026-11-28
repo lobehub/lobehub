@@ -74,10 +74,6 @@ export const groupList = async (
 > => {
   const { assigneeAgentId, excludeStatuses, groupBy, groups, labelGroupId } = options;
 
-  if ((!groups || groups.length === 0) && !groupBy) {
-    throw new Error('Task groups or a grouping dimension are required');
-  }
-
   const baseConditions = buildListConditions(ctx, options);
   if (excludeStatuses?.length) {
     baseConditions.push(notInArray(tasks.status, excludeStatuses));
@@ -86,12 +82,11 @@ export const groupList = async (
   interface GroupQuery {
     assigneeAgentId?: string | null;
     assigneeUserId?: string | null;
-    conditions: SQL[];
     key: string;
     labelId?: string | null;
     limit: number;
     offset: number;
-    prefetchedTasks?: TaskItem[];
+    prefetchedTasks: TaskItem[];
     priority?: number;
     projectId?: string | null;
     total: number;
@@ -162,16 +157,10 @@ export const groupList = async (
         : isUnassigned
           ? null
           : undefined;
-      const conditions = isUser
-        ? [and(isNull(tasks.assigneeAgentId), eq(tasks.assigneeUserId, groupAssigneeUserId!))!]
-        : isUnassigned
-          ? [and(isNull(tasks.assigneeAgentId), isNull(tasks.assigneeUserId))!]
-          : [eq(tasks.assigneeAgentId, groupAssigneeAgentId!)];
 
       return {
         assigneeAgentId: groupAssigneeAgentId,
         assigneeUserId: groupAssigneeUserId,
-        conditions,
         key,
         limit,
         offset: 0,
@@ -249,12 +238,10 @@ export const groupList = async (
       const assigneeId = isUnassigned ? null : key.slice(groupPrefix.length);
       const groupAssigneeAgentId = groupBy === 'agent' ? assigneeId : undefined;
       const groupAssigneeUserId = groupBy === 'member' ? assigneeId : undefined;
-      const conditions = [isUnassigned ? isNull(groupColumn) : eq(groupColumn, assigneeId!)];
 
       return {
         assigneeAgentId: groupAssigneeAgentId,
         assigneeUserId: groupAssigneeUserId,
-        conditions,
         key,
         limit,
         offset: 0,
@@ -289,7 +276,6 @@ export const groupList = async (
         .offset(offset);
 
       return {
-        conditions,
         key: `priority:${priority}`,
         limit,
         offset,
@@ -312,8 +298,11 @@ export const groupList = async (
       total: priorityCounts.get(group.priority) ?? 0,
     }));
   } else {
-    /* v8 ignore next -- unreachable: `groupBy` is exhausted above, so the guard at the top already proved `groups` non-empty */
-    const statusGroups = (groups ?? []).map((group) => ({
+    // Every grouping dimension is handled above, so only explicit status groups remain.
+    if (!groups || groups.length === 0) {
+      throw new Error('Task groups or a grouping dimension are required');
+    }
+    const statusGroups = groups.map((group) => ({
       ...group,
       statuses: Array.from(new Set(group.statuses)),
     }));
@@ -336,7 +325,6 @@ export const groupList = async (
         .offset(offset);
 
       return {
-        conditions,
         key: group.key,
         limit,
         offset,
@@ -354,35 +342,23 @@ export const groupList = async (
     }));
   }
 
-  const results = await Promise.all(
-    groupQueries.map(async (group) => {
-      const groupTasks =
-        group.prefetchedTasks ??
-        /* v8 ignore start -- unreachable: every grouping branch above prefetches its tasks. The stop marker sits after the return because V8 charges the continuation of this never-resumed `await` to the statement that follows it */
-        (await ctx.db
-          .select()
-          .from(tasks)
-          .where(and(...baseConditions, ...group.conditions))
-          .orderBy(desc(tasks.createdAt), desc(tasks.seq))
-          .limit(group.limit)
-          .offset(group.offset));
+  const results = groupQueries.map((group) => {
+    const groupTasks = group.prefetchedTasks;
 
-      return {
-        ...(group.assigneeAgentId !== undefined ? { assigneeAgentId: group.assigneeAgentId } : {}),
-        ...(group.assigneeUserId !== undefined ? { assigneeUserId: group.assigneeUserId } : {}),
-        ...(group.labelId !== undefined ? { labelId: group.labelId } : {}),
-        hasMore: group.offset + groupTasks.length < group.total,
-        key: group.key,
-        limit: group.limit,
-        offset: group.offset,
-        ...(group.priority !== undefined ? { priority: group.priority } : {}),
-        ...(group.projectId !== undefined ? { projectId: group.projectId } : {}),
-        tasks: groupTasks,
-        total: group.total,
-      };
-      /* v8 ignore stop */
-    }),
-  );
+    return {
+      ...(group.assigneeAgentId !== undefined ? { assigneeAgentId: group.assigneeAgentId } : {}),
+      ...(group.assigneeUserId !== undefined ? { assigneeUserId: group.assigneeUserId } : {}),
+      ...(group.labelId !== undefined ? { labelId: group.labelId } : {}),
+      hasMore: group.offset + groupTasks.length < group.total,
+      key: group.key,
+      limit: group.limit,
+      offset: group.offset,
+      ...(group.priority !== undefined ? { priority: group.priority } : {}),
+      ...(group.projectId !== undefined ? { projectId: group.projectId } : {}),
+      tasks: groupTasks,
+      total: group.total,
+    };
+  });
 
   const taskIds = Array.from(new Set(results.flatMap((group) => group.tasks.map(({ id }) => id))));
   const [runStats, subtaskProgressByTaskId, labelsByTaskId] = await Promise.all([
@@ -488,7 +464,6 @@ const buildLabelGroupQueries = async (
   return [...groupLabels.map((label) => label.id), null].map((labelId) => {
     const key = labelId ? `label:${labelId}` : noneKey;
     return {
-      conditions: [labelId ? sql`${labelColumn} = ${labelId}` : sql`${labelColumn} is null`],
       key,
       labelId,
       limit,

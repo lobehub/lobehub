@@ -109,17 +109,14 @@ export const listLessonSources = async (ctx: ExpertiseContext, lessonId: string,
  * merge would otherwise keep the counts and lose the evidence.
  */
 const resolveLineage = async (ctx: ExpertiseContext, lessonId: string): Promise<string[]> =>
-  (await resolveLineages(ctx, [lessonId])).get(lessonId) ??
-  /* v8 ignore start -- unreachable: the `[]` arm; resolveLineages maps every id it is given */
-  [];
-/* v8 ignore stop */
+  lineageOf(await loadParents(ctx, [lessonId]), lessonId);
 
 /**
- * {@link resolveLineage} for many rules at once: one read per generation instead of one walk
- * per rule, so a whole page of rules costs a handful of queries. A rule outside the caller's
- * scope maps to an empty lineage.
+ * The parent links of every lesson reachable from `lessonIds`, read in one query per generation
+ * instead of one walk per rule, so a whole page of rules costs a handful of queries. A rule
+ * outside the caller's scope gets no entry.
  */
-const resolveLineages = async (ctx: ExpertiseContext, lessonIds: string[]) => {
+const loadParents = async (ctx: ExpertiseContext, lessonIds: string[]) => {
   const parents = new Map<string, string[]>();
   let frontier = [...new Set(lessonIds)];
   // Bounded so a malformed cycle can never spin; real lineages are a handful of steps deep.
@@ -133,50 +130,50 @@ const resolveLineages = async (ctx: ExpertiseContext, lessonIds: string[]) => {
       .from(expertiseLessons)
       .innerJoin(expertiseDomains, eq(expertiseDomains.id, expertiseLessons.domainId))
       .where(and(inArray(expertiseLessons.id, frontier), domainScopeWhere(ctx)));
+    const next: string[] = [];
     for (const row of rows) {
-      parents.set(row.id, [
+      const rowParents = [
         ...(row.generalizedFromIds ?? []),
         ...(row.salvagedFromId ? [row.salvagedFromId] : []),
-      ]);
+      ];
+      parents.set(row.id, rowParents);
+      next.push(...rowParents);
     }
-    frontier = [
-      ...new Set(
-        rows.flatMap(
-          (row) =>
-            parents.get(row.id) ??
-            /* v8 ignore start -- unreachable: the `[]` arm; the loop above just set an entry for every row */
-            [],
-          /* v8 ignore stop */
-        ),
-      ),
-    ].filter((id) => !parents.has(id));
+    frontier = [...new Set(next)].filter((id) => !parents.has(id));
   }
+  return parents;
+};
 
-  return new Map(
-    lessonIds.map((root) => {
-      if (!parents.has(root)) return [root, []];
-      const seen = new Set<string>([root]);
-      const stack = [root];
-      while (stack.length > 0) {
-        for (const parent of parents.get(stack.pop()!) ?? []) {
-          if (seen.has(parent)) continue;
-          seen.add(parent);
-          stack.push(parent);
-        }
-      }
-      return [root, [...seen]];
-    }),
-  );
+/** {@link resolveLineage} over parent links already loaded; a rule with no entry has none. */
+const lineageOf = (parents: Map<string, string[]>, root: string): string[] => {
+  if (!parents.has(root)) return [];
+  const seen = new Set<string>([root]);
+  const stack = [root];
+  while (stack.length > 0) {
+    for (const parent of parents.get(stack.pop()!) ?? []) {
+      if (seen.has(parent)) continue;
+      seen.add(parent);
+      stack.push(parent);
+    }
+  }
+  return [...seen];
 };
 
 /**
- * How many times each rule's lineage was hit by a rejected acceptance versus observed in a
- * conversation. `hitCount` adds both, and the two mean different things to the reviewer: only
- * the first is "you rejected a delivery for this".
+ * Each lesson with how many times its lineage was hit by a rejected acceptance versus observed
+ * in a conversation. `hitCount` adds both, and the two mean different things to the reviewer:
+ * only the first is "you rejected a delivery for this".
  */
-export const countHitsBySource = async (ctx: ExpertiseContext, lessonIds: string[]) => {
-  const lineages = await resolveLineages(ctx, lessonIds);
-  const all = [...new Set([...lineages.values()].flat())];
+export const withHitsBySource = async <T extends { id: string }>(
+  ctx: ExpertiseContext,
+  lessons: T[],
+) => {
+  const parents = await loadParents(
+    ctx,
+    lessons.map((lesson) => lesson.id),
+  );
+  const lineages = lessons.map((lesson) => ({ lesson, lineage: lineageOf(parents, lesson.id) }));
+  const all = [...new Set(lineages.flatMap(({ lineage }) => lineage))];
   const rows =
     all.length === 0
       ? []
@@ -194,25 +191,16 @@ export const countHitsBySource = async (ctx: ExpertiseContext, lessonIds: string
           .groupBy(expertiseHits.lessonId);
   const byLesson = new Map(rows.map((row) => [row.lessonId, row]));
 
-  return new Map(
-    lessonIds.map((id) => {
-      const lineage =
-        lineages.get(id) ??
-        /* v8 ignore start -- unreachable: the `[]` arm; resolveLineages maps every id in lessonIds */
-        [];
-      /* v8 ignore stop */
-      const sum = (key: 'conversations' | 'materials' | 'rejections') =>
-        lineage.reduce((total, member) => total + (byLesson.get(member)?.[key] ?? 0), 0);
-      return [
-        id,
-        {
-          conversationHitCount: sum('conversations'),
-          materialHitCount: sum('materials'),
-          rejectionHitCount: sum('rejections'),
-        },
-      ];
-    }),
-  );
+  return lineages.map(({ lesson, lineage }) => {
+    const sum = (key: 'conversations' | 'materials' | 'rejections') =>
+      lineage.reduce((total, member) => total + (byLesson.get(member)?.[key] ?? 0), 0);
+    return {
+      ...lesson,
+      conversationHitCount: sum('conversations'),
+      materialHitCount: sum('materials'),
+      rejectionHitCount: sum('rejections'),
+    };
+  });
 };
 
 /**
