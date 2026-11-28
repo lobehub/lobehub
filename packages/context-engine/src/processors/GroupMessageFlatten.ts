@@ -85,6 +85,13 @@ export class GroupMessageFlattenProcessor extends BaseProcessor {
             assistantMsg.reasoning = child.reasoning;
           }
 
+          // Keep the block's own source. Provider runtimes replay signed
+          // reasoning only for history they know they produced (Claude checks
+          // the model), and one chain can span a model switch, so the group's
+          // first-row model is not a safe stand-in.
+          if (child.model) assistantMsg.model = child.model;
+          if (child.provider) assistantMsg.provider = child.provider;
+
           // Add error if present
           if (child.error) {
             assistantMsg.error = child.error;
