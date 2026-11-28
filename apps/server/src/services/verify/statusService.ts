@@ -42,10 +42,23 @@ export class VerifyStatusService {
    * fix, so it should still gate + repair). A check waived by an upheld dispute
    * is skipped entirely. A required `skipped` result is an
    * execution gap and rolls up as `errored`; only optional checks may skip.
+   *
+   * `preserveRepairClaim` is for callers that land a verdict and then settle
+   * the run (verdict submission, verifier terminal fallback): they must not
+   * replace a `repairing` claim another finalizer took after they read the
+   * run, or their own finalizer would claim the same failures a second time.
+   * The write is then conditional on the run not being `repairing`, and the
+   * method returns `repairing` when the claim kept it — the caller leaves
+   * settlement to the repair round.
    */
-  async recompute(operationId: string): Promise<VerifyRunStatus | null> {
+  async recompute(
+    operationId: string,
+    options?: { preserveRepairClaim?: boolean },
+  ): Promise<VerifyRunStatus | null> {
     const run = await this.runModel.findByOperation(operationId);
     if (!run) return null;
+    const preserveRepairClaim = options?.preserveRepairClaim ?? false;
+    if (preserveRepairClaim && run.status === 'repairing') return 'repairing';
 
     const plan = (run.plan ?? []) as VerifyCheckItem[];
     if (plan.length === 0) {
@@ -85,7 +98,14 @@ export class VerifyStatusService {
           : 'passed';
 
     if (status !== run.status) {
-      await this.runModel.updateStatus(run.id, status);
+      if (preserveRepairClaim) {
+        if (!(await this.runModel.updateStatusUnlessRepairing(run.id, status))) {
+          log('rollup op %s (run %s) kept by an active repair claim', operationId, run.id);
+          return 'repairing';
+        }
+      } else {
+        await this.runModel.updateStatus(run.id, status);
+      }
       if (run.acceptanceId) {
         await new AcceptanceService(this.db, this.userId, this.workspaceId).recomputeStatus(
           run.acceptanceId,

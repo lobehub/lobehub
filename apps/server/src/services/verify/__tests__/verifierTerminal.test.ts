@@ -80,7 +80,7 @@ describe('settleVerifierCheckFromTerminal', () => {
       verifierOperationId: 'verifier-op',
     });
     expect(written.verdict).toBeUndefined();
-    expect(recomputeMock).toHaveBeenCalledWith('parent-op');
+    expect(recomputeMock).toHaveBeenCalledWith('parent-op', { preserveRepairClaim: true });
     expect(finalizeVerifyRunMock).toHaveBeenCalledWith(db, 'u', 'parent-op', {}, 'ws');
   });
 
@@ -112,6 +112,23 @@ describe('settleVerifierCheckFromTerminal', () => {
 
     expect(updateByCheckItemMock).not.toHaveBeenCalled();
     expect(recomputeMock).not.toHaveBeenCalled();
+    expect(finalizeVerifyRunMock).not.toHaveBeenCalled();
+  });
+
+  it('leaves a repair claim another finalizer took and skips its own finalize', async () => {
+    // An optional check's verifier dies after a required failure was already
+    // claimed for repair: the recompute keeps the claim, and finalizing here
+    // would spawn a second repair round.
+    recomputeMock.mockResolvedValue('repairing');
+
+    await settleVerifierCheckFromTerminal(db, 'u', {
+      checkItemId: 'check-1',
+      parentOperationId: 'parent-op',
+      reason: 'done',
+      verifierOperationId: 'verifier-op',
+    });
+
+    expect(recomputeMock).toHaveBeenCalledWith('parent-op', { preserveRepairClaim: true });
     expect(finalizeVerifyRunMock).not.toHaveBeenCalled();
   });
 });

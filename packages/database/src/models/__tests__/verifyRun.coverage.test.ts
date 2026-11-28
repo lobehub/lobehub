@@ -62,6 +62,7 @@ describe('VerifyRunModel coverage', () => {
 
     expect(await new VerifyRunModel(serverDB, userId).getState(run.id)).toEqual({
       verifyAutoRepair: null,
+      verifyOperationId: null,
       verifyPlan: null,
       verifyPlanConfirmedAt: null,
       verifyRunId: run.id,

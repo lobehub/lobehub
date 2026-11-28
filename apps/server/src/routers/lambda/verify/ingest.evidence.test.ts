@@ -32,6 +32,9 @@ vi.mock('@/database/models/verifyRun', () => ({
     return {
       findByOperation: modelMocks.findRunByOperation,
       findById: modelMocks.findRunById,
+      // An operation with its own round resolves to it; the topic fallback is
+      // covered in operationScope.test.ts.
+      findRoundForOperation: modelMocks.findRunByOperation,
     };
   }),
 }));

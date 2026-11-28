@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { acceptanceEvidenceRuntime } from './acceptanceEvidence';
 
@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   operationFindById: vi.fn(),
   resultUpsert: vi.fn(),
   runFindByOperation: vi.fn(),
+  runFindRound: vi.fn(),
 }));
 
 vi.mock('@/database/models/agentOperation', () => ({
@@ -45,7 +46,7 @@ vi.mock('@/database/models/verifyEvidence', () => ({
 vi.mock('@/server/services/verify/dispute', () => ({ fileCheckDispute: mocks.fileDispute }));
 vi.mock('@/database/models/verifyRun', () => ({
   VerifyRunModel: vi.fn(function () {
-    return { findByOperation: mocks.runFindByOperation };
+    return { findByOperation: mocks.runFindByOperation, findRoundForOperation: mocks.runFindRound };
   }),
 }));
 
@@ -80,6 +81,8 @@ describe('acceptanceEvidenceRuntime', () => {
             ],
           },
     );
+    // No topic round to inherit unless a test sets one up: own round only.
+    mocks.runFindRound.mockImplementation(async (id) => mocks.runFindByOperation(id));
     mocks.resultUpsert.mockResolvedValue({ id: 'result-1' });
     mocks.evidenceCreateMany.mockResolvedValue([]);
     mocks.evidenceListByRun.mockResolvedValue([]);
@@ -305,6 +308,83 @@ describe('acceptanceEvidenceRuntime', () => {
     expect(result.success).toBe(true);
     expect(result.criteria).toHaveLength(1);
     expect(mocks.runFindByOperation.mock.calls.length).toBeGreaterThan(2);
+  });
+
+  describe('a later run in the topic with no round of its own (T-730)', () => {
+    // The verification session is bound to the operation that started it. A
+    // builder resumed with feedback, an intervention or a retry runs as a new
+    // operation, and every listCriteria answered NO_ACCEPTANCE_PLAN — so it had
+    // no checkItemId and could never submit evidence.
+    const topicRound = {
+      id: 'first-run',
+      operationId: 'first-op',
+      plan: [{ id: 'criterion-1', index: 0, required: true, title: 'Doc', verifierType: 'llm' }],
+    };
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      mocks.operationFindById.mockImplementation(async (id) =>
+        id === 'later-op'
+          ? { id, parentOperationId: null }
+          : { id, parentOperationId: null, taskId: 'task-1' },
+      );
+      mocks.runFindByOperation.mockResolvedValue(undefined);
+      mocks.runFindRound.mockResolvedValue(topicRound);
+    });
+    afterEach(() => vi.useRealTimers());
+
+    it('lists the criteria of the round it answers to once its own plan never lands', async () => {
+      const pending = createRuntime('later-op').listCriteria();
+      await vi.runAllTimersAsync();
+      const result = await pending;
+
+      expect(result.success).toBe(true);
+      expect(result.criteria).toEqual([expect.objectContaining({ id: 'criterion-1' })]);
+      expect(mocks.runFindRound).toHaveBeenCalledWith('later-op');
+    });
+
+    it('does not hand a run whose own plan lands late its predecessor’s criteria', async () => {
+      mocks.runFindByOperation.mockResolvedValueOnce(undefined).mockResolvedValue({
+        id: 'own-run',
+        plan: [{ id: 'own-1', index: 0, required: true, title: 'Own', verifierType: 'llm' }],
+      });
+
+      const pending = createRuntime('later-op').listCriteria();
+      await vi.runAllTimersAsync();
+      const result = await pending;
+
+      expect(result.criteria).toEqual([expect.objectContaining({ id: 'own-1' })]);
+      expect(mocks.runFindRound).not.toHaveBeenCalled();
+    });
+
+    it('submits evidence into that round, addressed by its own operation', async () => {
+      const result = await createRuntime('later-op').submitEvidence({
+        checkItemId: 'criterion-1',
+        evidence: [{ content: 'observed output', type: 'text' }],
+      });
+
+      expect(result.success).toBe(true);
+      expect(mocks.resultUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({ operationId: 'first-op', verifyRunId: 'first-run' }),
+      );
+    });
+
+    it('files a dispute against that round', async () => {
+      mocks.fileDispute.mockResolvedValue({ dispute: {}, message: 'Filed', success: true });
+
+      await createRuntime('later-op').disputeCriterion({
+        checkItemId: 'criterion-1',
+        kind: 'invalid_criterion',
+        reason: 'Out of scope',
+      });
+
+      expect(mocks.fileDispute).toHaveBeenCalledWith(
+        {},
+        'user-1',
+        expect.objectContaining({ runOperationId: 'first-op', taskId: 'task-1' }),
+        undefined,
+      );
+    });
   });
 
   it('rejects a visual type that has no artifact behind it', async () => {

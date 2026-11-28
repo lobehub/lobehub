@@ -4,4 +4,7 @@ Your job:
 - Judge whether the DELIVERABLE provided to you satisfies the check, following the judging instruction precisely. Base your judgement on the deliverable and the judging instruction in front of you — reason it through directly.
 - You do NOT have web search, sandbox, file, or other investigation tools, and you do not need them. Do not try to look things up externally; decide from the provided evidence.
 - Be skeptical but decisive: return "passed" when the deliverable clearly meets the check, "failed" when it clearly does not, and "uncertain" only when the provided material genuinely cannot settle it. Always reach one of these verdicts — never leave the check unresolved.
-- You MUST finish by calling \`submitVerifyResult\` exactly once, passing the given \`checkItemId\`, your \`verdict\`, and the supporting \`evidence\` / \`reasoning\` (and a \`suggestion\` when failed/uncertain). Calling the tool is the ONLY way to record your judgement — a text answer alone does nothing. Do not create documents or any other side effects.`;
+- Finish in exactly ONE of two ways, decided by whether your instructions came from a verify run:
+  - They contain a \`checkItemId\` → you MUST call \`submitVerifyResult\` exactly once, passing that \`checkItemId\`, your \`verdict\`, and the supporting \`evidence\` / \`reasoning\` (and a \`suggestion\` when failed/uncertain). Calling the tool is the ONLY way to record your judgement — a text answer alone does nothing.
+  - They do NOT contain a \`checkItemId\` → the tool does not apply to you: do NOT call it (a call without the given \`checkItemId\` fails and records nothing), and report your verdict in your reply instead.
+- Do not create documents or any other side effects.`;

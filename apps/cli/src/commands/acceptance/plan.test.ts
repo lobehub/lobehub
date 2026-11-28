@@ -5,7 +5,9 @@ import { log } from '../../utils/logger';
 import { attachPlanCommands } from './plan';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
-  mockTrpcClient: { verify: { disputeCheck: { mutate: vi.fn() } } },
+  mockTrpcClient: {
+    verify: { disputeCheck: { mutate: vi.fn() }, getVerifyState: { query: vi.fn() } },
+  },
 }));
 const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({ getTrpcClient: vi.fn() }));
 
@@ -86,5 +88,45 @@ describe('acceptance plan dispute', () => {
 
     errorSpy.mockRestore();
     exitSpy.mockRestore();
+  });
+});
+
+describe('acceptance plan state', () => {
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
+    mockTrpcClient.verify.getVerifyState.query.mockReset();
+  });
+
+  afterEach(() => consoleSpy.mockRestore());
+
+  /** Regression (T-730): a run resumed with feedback read no round, so it never saw a checkItemId. */
+  it("shows the round a later run inherits from its topic, with each check's id", async () => {
+    mockTrpcClient.verify.getVerifyState.query.mockResolvedValue({
+      verifyAutoRepair: null,
+      verifyOperationId: 'op-first',
+      verifyPlan: [
+        { id: 'crit_login', index: 0, required: true, title: 'Login works', verifierType: 'agent' },
+      ],
+      verifyPlanConfirmedAt: new Date(),
+      verifyRunId: 'run-topic',
+      verifyStatus: 'failed',
+    });
+
+    const program = new Command();
+    program.exitOverride();
+    attachPlanCommands(program);
+    await program.parseAsync(['node', 'lh', 'plan', 'state', 'op-follow-up']);
+
+    expect(mockTrpcClient.verify.getVerifyState.query).toHaveBeenCalledWith({
+      inherit: true,
+      operationId: 'op-follow-up',
+    });
+    const output = consoleSpy.mock.calls.flat().join('\n');
+    expect(output).toContain('run-topic');
+    expect(output).toContain('inherited from op-first');
+    expect(output).toContain('crit_login');
   });
 });

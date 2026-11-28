@@ -5,7 +5,7 @@ import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLi
 
 import type * as AcceptanceServiceModule from '../acceptanceService';
 import { instantiateVerifyPlanOnStart } from '../planInstantiation';
-import { createRepairRunner } from '../repairService';
+import { createRepairRunner, RepairClaimSupersededError } from '../repairService';
 
 const mocks = vi.hoisted(() => ({
   goalFind: vi.fn(),
@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   detachUndeliveredRound: vi.fn(),
   recomputeStatus: vi.fn(),
   ensureForOperation: vi.fn(),
+  fenceRepairClaim: vi.fn(),
   generateDraftPlan: vi.fn(),
   operationFindById: vi.fn(),
   resolveModelConfig: vi.fn(),
@@ -84,6 +85,7 @@ vi.mock('@/database/models/verifyRun', () => ({
       confirmPlan: mocks.confirmPlan,
       detachUndeliveredRound: mocks.detachUndeliveredRound,
       ensureForOperation: mocks.ensureForOperation,
+      fenceRepairClaim: mocks.fenceRepairClaim,
       findByOperation: mocks.runFindByOperation,
       setMetadata: mocks.setMetadata,
       setPlan: mocks.setPlan,
@@ -371,6 +373,54 @@ describe('Verify acceptance lifecycle', () => {
     },
   );
 
+  it.each(['normal', 'heterogeneous'])(
+    'drops a %s child whose repair claim the sweep retook while the spawner stalled',
+    async (runtime) => {
+      // The child operation is persisted before its round is prepared. If the
+      // sweep reclaimed the parent in between, a replacement repair may already
+      // be running: this child must be aborted, not prepared alongside it.
+      const claimVersion = new Date('2026-11-21T12:00:00Z');
+      mocks.operationFindById.mockResolvedValue({ parentOperationId: null });
+      mocks.runFindByOperation.mockResolvedValue({ id: 'source-run', plan });
+      mocks.fenceRepairClaim.mockResolvedValue(false);
+      const complete = vi
+        .spyOn(CompletionLifecycle.prototype, 'completeOperation')
+        .mockResolvedValue(undefined);
+      mocks.agentExec.mockImplementation(async ({ onOperationCreated }) => {
+        try {
+          await onOperationCreated('stale-repair-op');
+        } catch (error) {
+          if (runtime === 'heterogeneous') throw error;
+          return { operationId: 'stale-repair-op', success: false };
+        }
+        throw new Error('Unexpected dispatch');
+      });
+      const runner = createRepairRunner({
+        agentId: 'a',
+        db,
+        maxRepairRounds: 2,
+        topicId: 't',
+        userId: 'u',
+      });
+
+      await expect(
+        runner!({
+          claimVersion,
+          failedItemIds: ['check-1'],
+          instruction: 'Fix',
+          operationId: 'source',
+        }),
+      ).rejects.toBeInstanceOf(RepairClaimSupersededError);
+      expect(mocks.fenceRepairClaim).toHaveBeenCalledWith('source-run', claimVersion);
+      expect(mocks.ensureForOperation).not.toHaveBeenCalled();
+      expect(mocks.acceptanceAttachPolicyRun).not.toHaveBeenCalled();
+      expect(complete).toHaveBeenCalledWith(
+        expect.objectContaining({ operationId: 'stale-repair-op' }),
+        'error',
+      );
+    },
+  );
+
   it('attaches an auto-repair verify run as the next round of the same acceptance', async () => {
     mocks.operationFindById.mockResolvedValue({ parentOperationId: null });
     let confirmed = false;
@@ -397,6 +447,8 @@ describe('Verify acceptance lifecycle', () => {
       plan,
     });
     mocks.ensureForOperation.mockResolvedValue({ id: 'repair-run' });
+    mocks.fenceRepairClaim.mockResolvedValue(true);
+    const claimVersion = new Date('2026-11-21T12:00:00Z');
 
     const runner = createRepairRunner({
       agentId: 'agent-1',
@@ -408,12 +460,14 @@ describe('Verify acceptance lifecycle', () => {
       workspaceId: 'workspace-1',
     });
     const result = await runner!({
+      claimVersion,
       failedItemIds: ['check-1'],
       instruction: 'Fix the failed check',
       operationId: 'source-operation',
     });
 
     expect(result).toEqual({ repairOperationId: 'repair-operation' });
+    expect(mocks.fenceRepairClaim).toHaveBeenCalledWith('source-run', claimVersion);
     expect(stateAtStart).toEqual([true, true]);
     expect(mocks.agentExec).toHaveBeenCalledWith(
       expect.objectContaining({

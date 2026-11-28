@@ -8,7 +8,20 @@ import type {
   VerifyRunSource,
   VerifyRunStatus,
 } from '@lobechat/types';
-import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, lt, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import { agentOperations } from '../schemas/agentOperations';
 import type { NewVerifyRun, VerifyRunItem } from '../schemas/verify';
@@ -31,6 +44,12 @@ export type VerifyAutoRepairOutcome = 'declined' | 'spawned';
 export interface VerifyRunState {
   /** `declined` makes a failed round with `auto_repair` checks final. */
   verifyAutoRepair: VerifyAutoRepairOutcome | null;
+  /**
+   * The Agent Run the round is bound to. Differs from the operation asked about
+   * when that operation has no round of its own and inherits its topic's round
+   * (see {@link VerifyRunModel.findRoundForOperation}).
+   */
+  verifyOperationId: string | null;
   verifyPlan: VerifyCheckItem[] | null;
   verifyPlanConfirmedAt: Date | null;
   /** The session id — exposed so a builder holding only its operationId can
@@ -62,6 +81,7 @@ const toState = (run: VerifyRunItem | null | undefined): VerifyRunState | null =
         verifyAutoRepair:
           (run.metadata as { autoRepair?: VerifyAutoRepairOutcome } | null)?.autoRepair ?? null,
         verifyPlan: (run.plan ?? null) as VerifyCheckItem[] | null,
+        verifyOperationId: run.operationId ?? null,
         verifyPlanConfirmedAt: run.planConfirmedAt ?? null,
         verifyRunId: run.id,
         verifyStatus: (run.status ?? null) as VerifyRunStatus | null,
@@ -511,6 +531,58 @@ export class VerifyRunModel {
   };
 
   /**
+   * The round an Agent Run answers to: its own session, else the latest round
+   * with a confirmed plan bound to an earlier run in the same topic. Rounds of
+   * runs started after this one are never inherited.
+   *
+   * A verification session is bound to the operation that started it. A later
+   * operation in the same conversation — the builder resumed with the user's
+   * feedback, an intervention, a retry — has no row of its own, yet it is the
+   * run asked to hand in evidence for that round's checks. Read-only: it never
+   * creates a row or reserves the later operation's id, and the verify
+   * lifecycle keeps addressing the round by its own operation. Only a confirmed
+   * plan round is inherited; an authored round is an immutable snapshot, and a
+   * later run publishes its own.
+   */
+  findRoundForOperation = async (operationId: string): Promise<VerifyRunItem | undefined> => {
+    const own = await this.findByOperation(operationId);
+    if (own) return own;
+
+    const [op] = await this.db
+      .select({ createdAt: agentOperations.createdAt, topicId: agentOperations.topicId })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            agentOperations,
+          ),
+        ),
+      )
+      .limit(1);
+    if (!op?.topicId) return undefined;
+
+    const [row] = await this.db
+      .select({ run: verifyRuns })
+      .from(verifyRuns)
+      .innerJoin(agentOperations, eq(agentOperations.id, verifyRuns.operationId))
+      .where(
+        and(
+          eq(agentOperations.topicId, op.topicId),
+          // Only a predecessor's round: an earlier run must never reach (and,
+          // through its token, write to) a round a later run started.
+          lt(agentOperations.createdAt, op.createdAt),
+          isNotNull(verifyRuns.planConfirmedAt),
+          this.ownership(),
+        ),
+      )
+      .orderBy(desc(verifyRuns.createdAt), desc(verifyRuns.id))
+      .limit(1);
+    return row?.run;
+  };
+
+  /**
    * Get (or lazily create) the verification session for an Agent Run. Upserts on
    * the `operation_id` unique index so concurrent callers converge on one row.
    */
@@ -702,16 +774,141 @@ export class VerifyRunModel {
   };
 
   /**
-   * One page of runs stranded in `verifying`, or confirmed `planned` rounds
+   * Optimistic-concurrency guard for the repair claims: the row must still be
+   * the exact version the caller read. Status alone is ABA-prone — a run can
+   * leave `failed`, go through a whole repair round, and be recomputed back to
+   * `failed` between a caller's read and its write — but every write to the row
+   * re-stamps `updated_at` (`$onUpdate`), so a matching timestamp means nothing
+   * happened in between.
+   *
+   * Compared at millisecond precision: the expectation was read back through a
+   * JS `Date`, while the column holds microseconds (see {@link findStuckVerifying}).
+   */
+  private isUnchangedSince = (updatedAt: Date) =>
+    eq(sql`date_trunc('milliseconds', ${verifyRuns.updatedAt})`, updatedAt);
+
+  /**
+   * Atomically claim the repair round: flip the run to `repairing` in one
+   * conditional UPDATE that only fires while the row is still the version the
+   * caller freshly read, so exactly one of two overlapping settlement calls can
+   * spawn a repair against the same failures.
+   *
+   * PostgreSQL's UPDATE ... RETURNING hands back the NEW row, so the
+   * pre-claim status can't be read out of the claim itself — the caller
+   * passes the status and `updatedAt` it just read as the CAS expectation and
+   * keeps the status for the release path. If the row moved since the read
+   * (another claimer won, a rollup recompute landed, a repair round finished —
+   * even one that recomputed the run back to the same status), the UPDATE
+   * matches nothing and the caller drops out; the next settlement retry or
+   * sweep re-enters with a fresh read.
+   *
+   * @returns the claim's version (the row's new `updatedAt`) when this caller
+   * owns the repair round — the spawner fences its child with it (see
+   * {@link fenceRepairClaim}) — or null when another caller got there first.
+   */
+  claimRepairing = async (
+    runId: string,
+    expected: Pick<VerifyRunItem, 'status' | 'updatedAt'>,
+  ): Promise<Date | null> => {
+    const claimed = await this.db
+      .update(verifyRuns)
+      .set({ status: 'repairing' })
+      .where(
+        and(
+          eq(verifyRuns.id, runId),
+          // SQL's `= / <>` never match NULL rows, so a run with no status yet
+          // needs an explicit IS NULL branch to stay claimable.
+          expected.status === null
+            ? isNull(verifyRuns.status)
+            : eq(verifyRuns.status, expected.status),
+          this.isUnchangedSince(expected.updatedAt),
+          this.ownership(),
+        ),
+      )
+      .returning({ updatedAt: verifyRuns.updatedAt });
+
+    return claimed[0]?.updatedAt ?? null;
+  };
+
+  /**
+   * Confirm a repair claim is still current right before its child round is
+   * prepared, and re-stamp it so the claim can no longer be retaken from an
+   * older read.
+   *
+   * The spawner persists its child operation before it prepares the child's
+   * round, so a spawner that stalls past the sweep's grace leaves the parent
+   * looking abandoned: the sweep reclaims it and a replacement repair starts.
+   * The stalled spawner must then drop its child instead of preparing it
+   * alongside the replacement. Both sides go through one conditional UPDATE on
+   * the claim's version: if the sweep's `reclaimRepairing` landed first the
+   * fence misses, and if the fence landed first its re-stamp makes the
+   * sweep's CAS miss — never both.
+   *
+   * @returns true when the claim is still the caller's and the child may be
+   * prepared.
+   */
+  fenceRepairClaim = async (runId: string, claimVersion: Date): Promise<boolean> => {
+    const fenced = await this.db
+      .update(verifyRuns)
+      .set({ status: 'repairing' })
+      .where(
+        and(
+          eq(verifyRuns.id, runId),
+          eq(verifyRuns.status, 'repairing'),
+          this.isUnchangedSince(claimVersion),
+          this.ownership(),
+        ),
+      )
+      .returning({ id: verifyRuns.id });
+
+    return fenced.length > 0;
+  };
+
+  /**
+   * Atomically retake an abandoned repair claim: flip `repairing` →
+   * `verifying`, exactly once, only while the run is still the stale
+   * `repairing` row the sweep read (`expectedUpdatedAt`). A concurrent delivery
+   * that got here first, a spawner that came back to life, or a newer claim
+   * that replaced the abandoned one all re-stamp the row, so a sweep holding
+   * the old read drops out.
+   *
+   * @returns true when this caller now owns the re-driven verification.
+   */
+  reclaimRepairing = async (runId: string, expectedUpdatedAt: Date): Promise<boolean> => {
+    const claimed = await this.db
+      .update(verifyRuns)
+      .set({ status: 'verifying' })
+      .where(
+        and(
+          eq(verifyRuns.id, runId),
+          eq(verifyRuns.status, 'repairing'),
+          this.isUnchangedSince(expectedUpdatedAt),
+          this.ownership(),
+        ),
+      )
+      .returning({ id: verifyRuns.id });
+
+    return claimed.length > 0;
+  };
+
+  /**
+   * One page of runs stranded in `verifying`, confirmed `planned` rounds
    * whose operation ended without a delivery (a child that aborted, or a
    * task's own run that errored or was abandoned while still on the
-   * acceptance), since before `olderThan`, across all owners — the sweep's
-   * input (see `sweepStuckVerifyRuns`).
+   * acceptance), or `repairing` claims left behind by a dead worker, since
+   * before `olderThan`, across all owners — the sweep's input (see
+   * `sweepStuckVerifyRuns`).
    *
    * No per-user scope, like `TaskModel.findStuckTasks`: this backs a global
    * cron, and each row carries the owner the recovery is then performed as.
    * Operation-less rounds are excluded — the rollup is addressed by operation,
    * so there is nothing to recompute for them.
+   *
+   * `repairing` rows only qualify once stale: a live spawner holds a fresh
+   * claim, and both `triggerAutoRepair` and duplicate-verdict settlement skip
+   * `repairing` unconditionally — the `updatedAt` bound is the only signal
+   * separating "spawner died before returning" from "spawner is between its
+   * claim write and its next write".
    *
    * Paged on the `(updatedAt, id)` keyset rather than returning a fixed oldest-N
    * slice. The sweep deliberately leaves some rows untouched (a check whose
@@ -758,6 +955,12 @@ export class VerifyRunModel {
               and ${agentOperations.parentOperationId} is null
               and ${agentOperations.status} in ('error', 'abandoned', 'interrupted'))`,
         ),
+        // An abandoned repair claim: `triggerAutoRepair` writes `repairing`
+        // durably before spawning, so a worker killed in that window leaves the
+        // run parked with neither a settlement path (both repair paths skip
+        // `repairing`) nor a sweep predicate — a permanent stranding. Stale
+        // `updated_at` is what marks the spawner as gone.
+        eq(verifyRuns.status, 'repairing'),
       )!,
       lt(verifyRuns.updatedAt, olderThan),
       isNotNull(verifyRuns.operationId),
@@ -788,6 +991,36 @@ export class VerifyRunModel {
       .where(and(eq(verifyRuns.id, runId), this.ownership()));
   };
 
+  /**
+   * Write the rollup unless a repair round holds the run. One conditional
+   * UPDATE, so a verdict that lands after another finalizer's
+   * `claimRepairing` cannot overwrite the claim with the derived status and
+   * let a second finalizer claim the same failures again. Only the paths that
+   * own the claim's end (repair-chain collapse, sweep reclaim) may replace
+   * `repairing`, and they use {@link updateStatus}.
+   *
+   * @returns false when the run was `repairing` and nothing was written.
+   */
+  updateStatusUnlessRepairing = async (
+    runId: string,
+    status: VerifyRunStatus | null,
+  ): Promise<boolean> => {
+    const updated = await this.db
+      .update(verifyRuns)
+      .set({ status })
+      .where(
+        and(
+          eq(verifyRuns.id, runId),
+          // `<>` never matches NULL, so a run with no status yet needs its own branch.
+          or(isNull(verifyRuns.status), sql`${verifyRuns.status} <> 'repairing'`),
+          this.ownership(),
+        ),
+      )
+      .returning({ id: verifyRuns.id });
+
+    return updated.length > 0;
+  };
+
   update = async (
     runId: string,
     value: Partial<
@@ -809,9 +1042,17 @@ export class VerifyRunModel {
     return toState(run);
   };
 
-  /** Same as {@link getState} but addressed by the bound Agent Run. */
-  getStateByOperation = async (operationId: string): Promise<VerifyRunState | null> => {
-    const run = await this.findByOperation(operationId);
+  /**
+   * Same as {@link getState} but addressed by the bound Agent Run. `inherit`
+   * falls back to the topic's round for a run that has none of its own.
+   */
+  getStateByOperation = async (
+    operationId: string,
+    options?: { inherit?: boolean },
+  ): Promise<VerifyRunState | null> => {
+    const run = options?.inherit
+      ? await this.findRoundForOperation(operationId)
+      : await this.findByOperation(operationId);
     return toState(run);
   };
 

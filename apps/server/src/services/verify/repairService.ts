@@ -5,6 +5,7 @@ import {
   type VerifyAgentPlanConfig,
   type VerifyCheckItem,
   type VerifyRunMetadata,
+  type VerifyRunStatus,
 } from '@lobechat/types';
 import debug from 'debug';
 
@@ -71,12 +72,31 @@ export const carriedRunPolicy = (metadata: Record<string, unknown>): Record<stri
  */
 export interface RepairSpawner {
   (args: {
+    /**
+     * Version of the parent's repair claim (`claimRepairing`). The child round
+     * is only prepared while that claim is still current — see
+     * {@link RepairClaimSupersededError}.
+     */
+    claimVersion?: Date;
     failedItemIds: string[];
     instruction: string;
     operationId: string;
     /** The failed round's `role=verify` message carrying the persisted feedback. */
     verifyMessageId?: string;
   }): Promise<{ repairOperationId: string } | null>;
+}
+
+/**
+ * Thrown by a spawner whose repair claim was retaken (by the sweep) while it
+ * stalled between persisting the child operation and preparing its round. The
+ * child is aborted; the claim now belongs to whoever retook it, so the caller
+ * must neither release it nor decline the repair.
+ */
+export class RepairClaimSupersededError extends Error {
+  constructor(operationId: string) {
+    super(`Repair claim on ${operationId} was superseded before its child round was prepared`);
+    this.name = 'RepairClaimSupersededError';
+  }
 }
 
 /** Count how many repair rounds already precede this operation (parent-chain depth). */
@@ -119,7 +139,7 @@ export const createRepairRunner = (params: {
     params;
   if (!agentId || !topicId) return undefined;
 
-  return async ({ failedItemIds, instruction, operationId, verifyMessageId }) => {
+  return async ({ claimVersion, failedItemIds, instruction, operationId, verifyMessageId }) => {
     const operationModel = new AgentOperationModel(db, userId, workspaceId);
 
     const round = await countRepairRounds(operationModel, operationId);
@@ -129,6 +149,7 @@ export const createRepairRunner = (params: {
     }
 
     let preparationFailed = false;
+    let claimSuperseded = false;
     const prepareRepairRound = async (repairOperationId: string) => {
       try {
         await db.transaction(async (tx) => {
@@ -137,6 +158,17 @@ export const createRepairRunner = (params: {
           // repair run re-verifies (round N+1) against its corrected deliverable.
           const runModel = new VerifyRunModel(repairDB, userId, workspaceId);
           const sourceRun = await runModel.findByOperation(operationId);
+          // The child operation is already persisted. If this spawner stalled long
+          // enough for the sweep to retake the claim, a replacement repair may be
+          // running — drop this child instead of preparing a second round.
+          if (
+            sourceRun &&
+            claimVersion &&
+            !(await runModel.fenceRepairClaim(sourceRun.id, claimVersion))
+          ) {
+            claimSuperseded = true;
+            throw new RepairClaimSupersededError(operationId);
+          }
           const plan = (sourceRun?.plan ?? []) as VerifyCheckItem[];
           if (plan.length > 0) {
             const repairRun = await runModel.ensureForOperation(repairOperationId);
@@ -180,7 +212,8 @@ export const createRepairRunner = (params: {
         });
       } catch (error) {
         preparationFailed = true;
-        console.error('Failed to prepare repair round for %s: %O', operationId, error);
+        if (claimSuperseded) log('repair claim on op %s superseded — dropping child', operationId);
+        else console.error('Failed to prepare repair round for %s: %O', operationId, error);
         await new CompletionLifecycle(db, userId, workspaceId).completeOperation(
           {
             operationId: repairOperationId,
@@ -227,6 +260,7 @@ export const createRepairRunner = (params: {
         if (preparationFailed) return null;
         throw error;
       });
+    if (claimSuperseded) throw new RepairClaimSupersededError(operationId);
     if (!result?.success) return null;
     const repairOperationId = result.operationId;
 
@@ -499,6 +533,21 @@ export class VerifyRepairService {
     spawner?: RepairSpawner,
     reviewRejections?: ReviewRejection[],
   ): Promise<{ repairOperationId: string } | null> {
+    // Settlement may re-enter this path (finalizeVerifyRun is idempotent and
+    // duplicate verifier submissions re-run settlement), so a run whose repair
+    // round is already in flight must not spawn a second one against the same
+    // failures. The read below is only a fast-path skip — the atomic claim is
+    // the actual race protection.
+    const runForGuard = await this.runModel.findByOperation(operationId);
+    if (!runForGuard) {
+      log('op %s has no verify run, not repairing', operationId);
+      return null;
+    }
+    if (runForGuard.status === 'repairing') {
+      log('op %s already has a repair round in flight, not repairing again', operationId);
+      return null;
+    }
+
     const failures = await this.collectRepairable(operationId, reviewRejections);
     if (failures.length === 0) return null;
     if (await this.isSuperseded(operationId)) {
@@ -510,45 +559,114 @@ export class VerifyRepairService {
       return this.declineRepair(operationId);
     }
 
-    const failedItemIds = failures.map((f) => f.item.id);
-    const instruction = buildInstruction(failures);
-
-    // Persist the failure feedback onto this round's verify card so it (a) renders
-    // and (b) is surfaced into the repair run's context by VerifyMessageProcessor
-    // — the durable home of the round's repair prompt (structured backing data
-    // still lives per-check on verify_check_results.suggestion / toulmin).
-    const verifyMessage = await this.messageModel.findVerifyMessageByOperationId(operationId);
-    if (verifyMessage) {
-      await this.messageModel.update(verifyMessage.id, { content: instruction });
-    } else {
-      log('no verify message found for op %s — repair feedback not persisted to card', operationId);
+    // Claim the repair round BEFORE spawning: `claimRepairing` is a CAS on the
+    // just-read row version (status + `updatedAt`), so of two concurrent
+    // settlement calls (both past the read above) exactly one flips the run to
+    // `repairing` and spawns; the loser's CAS misses and drops out instead of
+    // launching a duplicate repair agent against the same failures — including
+    // when a whole repair round ran and recomputed the run back to `failed`
+    // while the loser was between its read and its claim.
+    const fromStatus = runForGuard.status;
+    const claimVersion = await this.runModel.claimRepairing(runForGuard.id, runForGuard);
+    if (!claimVersion) {
+      log('op %s lost the repair-round claim to a concurrent caller', operationId);
+      return null;
     }
 
-    const spawned = await spawner({
-      failedItemIds,
-      instruction,
-      operationId,
-      verifyMessageId: verifyMessage?.id,
-    });
-    // Cap reached, or the spawn failed: the failure stands as this round's verdict.
-    if (!spawned) return this.declineRepair(operationId);
+    try {
+      const failedItemIds = failures.map((f) => f.item.id);
+      const instruction = buildInstruction(failures);
 
-    // Link the repair operation onto each failed result and flip the rollup.
-    const run = await this.runModel.findByOperation(operationId);
-    if (run) {
-      await this.runModel.recordAutoRepair(run.id, 'spawned');
-      for (const { item } of failures) {
-        await this.resultModel.updateByCheckItem(run.id, item.id, {
-          repairOperationId: spawned.repairOperationId,
-        });
+      // Persist the failure feedback onto this round's verify card so it (a) renders
+      // and (b) is surfaced into the repair run's context by VerifyMessageProcessor
+      // — the durable home of the round's repair prompt (structured backing data
+      // still lives per-check on verify_check_results.suggestion / toulmin).
+      const verifyMessage = await this.messageModel.findVerifyMessageByOperationId(operationId);
+      if (verifyMessage) {
+        await this.messageModel.update(verifyMessage.id, { content: instruction });
+      } else {
+        log(
+          'no verify message found for op %s — repair feedback not persisted to card',
+          operationId,
+        );
       }
-    }
-    await this.statusService.markRepairing(operationId);
-    // A fast startup failure can precede the plan/parent writes above. Reconcile
-    // after both exist as well as from the completion hook.
-    await settleFailedRepair(this.db, this.userId, spawned.repairOperationId, this.workspaceId);
-    log('triggered auto-repair op %s → %s', operationId, spawned.repairOperationId);
 
-    return spawned;
+      const spawned = await spawner({
+        claimVersion,
+        failedItemIds,
+        instruction,
+        operationId,
+        verifyMessageId: verifyMessage?.id,
+      });
+      // Cap reached, or the spawn failed: no child owns the claim, so hand the
+      // status back, and the failure stands as this round's verdict.
+      if (!spawned) {
+        await this.releaseRepairClaim(runForGuard.id, fromStatus);
+        return this.declineRepair(operationId);
+      }
+
+      // Everything below the spawn is reconciliation for an already-active
+      // child. The claim now belongs to that child's settlement (it recomputes
+      // the parent through `recomputeRepairAncestors`), so a failure here must
+      // NOT release the claim back to the old status — a released claim lets a
+      // settlement retry claim the parent again and spawn a duplicate repair
+      // for the same failures while the first child is still working. Log and
+      // keep the claim; the child or the sweep drives the parent from here.
+      try {
+        // Link the repair operation onto each failed result and flip the rollup.
+        const run = await this.runModel.findByOperation(operationId);
+        if (run) {
+          await this.runModel.recordAutoRepair(run.id, 'spawned');
+          for (const { item } of failures) {
+            await this.resultModel.updateByCheckItem(run.id, item.id, {
+              repairOperationId: spawned.repairOperationId,
+            });
+          }
+        }
+        // Already stamped `repairing` by the claim; this recomputes the linked
+        // acceptance.
+        await this.statusService.markRepairing(operationId);
+        // A fast startup failure can precede the plan/parent writes above. Reconcile
+        // after both exist as well as from the completion hook.
+        await settleFailedRepair(this.db, this.userId, spawned.repairOperationId, this.workspaceId);
+        log('triggered auto-repair op %s → %s', operationId, spawned.repairOperationId);
+      } catch (error) {
+        log(
+          'post-spawn reconciliation for op %s (repair child %s) failed — repair claim kept: %O',
+          operationId,
+          spawned.repairOperationId,
+          error,
+        );
+      }
+
+      return spawned;
+    } catch (error) {
+      // The sweep retook this claim while the spawner stalled; the child was
+      // dropped and the claim is no longer ours to release or decline.
+      if (error instanceof RepairClaimSupersededError) {
+        log('op %s repair claim superseded by the sweep, not repairing', operationId);
+        return null;
+      }
+      // Pre-spawn failures (verify-card write, spawner itself) must not leave the
+      // run stuck in `repairing` — no repair child exists to own the claim, so
+      // no later attempt could re-enter. Roll the claim back so the next caller
+      // (a settlement retry or the sweep) can try again.
+      await this.releaseRepairClaim(runForGuard.id, fromStatus);
+      throw error;
+    }
+  }
+
+  /** Roll back a repair-round claim after a failed spawn. Best-effort: a
+   * release failure is logged, not thrown, so it never masks the original
+   * spawn error. */
+  private async releaseRepairClaim(
+    runId: string,
+    previousStatus: VerifyRunStatus | null,
+  ): Promise<void> {
+    try {
+      await this.runModel.updateStatus(runId, previousStatus);
+    } catch (releaseError) {
+      log('failed to release repair claim on run %s: %O', runId, releaseError);
+    }
   }
 }
