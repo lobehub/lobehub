@@ -72,6 +72,8 @@ export default {
   'table.columns.type.enums.speechRecognition': 'Voice transcription',
   'table.columns.type.enums.textToSpeech': 'Speech synthesis',
   'table.columns.type.enums.videoGeneration': 'Video generation',
+  'table.columns.type.enums.webCrawl': 'Web page reading',
+  'table.columns.type.enums.webSearch': 'Web search',
   'table.columns.type.title': 'Type',
   'table.agentShareDesc':
     'Every model call a visitor of this share triggered, billed to your account.',

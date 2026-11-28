@@ -17,6 +17,10 @@ const log = debug('lobe-search:Exa');
  * Primarily used for web crawling
  */
 export class ExaImpl implements SearchServiceImpl {
+  // Exa has no engine choice and ignores `searchEngines`, so retrying without it would send the
+  // same billed request again
+  readonly useAutoSearchEngineSelection = true;
+
   private get apiKey(): string | undefined {
     return process.env.EXA_API_KEY;
   }
@@ -99,17 +103,15 @@ export class ExaImpl implements SearchServiceImpl {
 
       log('Parsed Exa response: %o', exaResponse);
 
-      const mappedResults = (exaResponse.results || []).map(
-        (result): UniformSearchResult => ({
-          category: body.category || 'general', // Default category
-          content: result.text || '', // Prioritize content, fallback to snippet
-          engines: ['exa'], // Use 'exa' as the engine name
-          parsedUrl: result.url ? new URL(result.url).hostname : '', // Basic URL parsing
-          score: result.score || 0, // Default score to 0 if undefined
-          title: result.title || '',
-          url: result.url,
-        }),
-      );
+      const mappedResults = (exaResponse.results || []).map((result): UniformSearchResult => ({
+        category: body.category || 'general', // Default category
+        content: result.text || '', // Prioritize content, fallback to snippet
+        engines: ['exa'], // Use 'exa' as the engine name
+        parsedUrl: result.url ? new URL(result.url).hostname : '', // Basic URL parsing
+        score: result.score || 0, // Default score to 0 if undefined
+        title: result.title || '',
+        url: result.url,
+      }));
 
       log('Mapped %d results to SearchResult format', mappedResults.length);
 

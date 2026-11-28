@@ -18,6 +18,11 @@ import {
 
 const MAX_LOGGED_ERROR_LENGTH = 500;
 
+/** Matches the abort errors the client web-browsing executor turns into a stopped step. */
+const isAbortError = (error: unknown): boolean =>
+  (error instanceof Error || error instanceof DOMException) &&
+  (error.name === 'AbortError' || error.message.includes('The user aborted a request.'));
+
 /**
  * One-line summary of a document save failure. A Drizzle "Failed query" error
  * embeds every bound parameter (the whole page and its editor JSON) in its
@@ -166,9 +171,18 @@ export class WebBrowsingExecutionRuntime {
   }
 
   async crawlMultiPages(args: CrawlMultiPagesQuery): Promise<BuiltinServerRuntimeOutput> {
-    const response = await this.searchService.crawlPages({
-      urls: args.urls,
-    });
+    let response: Awaited<ReturnType<SearchServiceImpl['crawlPages']>>;
+    try {
+      response = await this.searchService.crawlPages({
+        urls: args.urls,
+      });
+    } catch (e) {
+      // A user abort stays a throw: the client executor turns it into a stopped step.
+      if (isAbortError(e)) throw e;
+      // A refused crawl (e.g. its fee could not be held) is a result the model can relay,
+      // not a failed step.
+      return { content: (e as Error).message, error: e, success: false };
+    }
 
     const { results } = response;
 

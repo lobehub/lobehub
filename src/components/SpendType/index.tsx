@@ -6,6 +6,8 @@ import {
   Bot,
   CircleDotDashed,
   Database,
+  FileText,
+  Globe,
   ImagePlus,
   MessageSquareText,
   Mic,
@@ -23,6 +25,8 @@ const styles = stylex.create({
   speechRecognition: { color: cssVar.colorInfo },
   textToSpeech: { color: cssVar.cyan },
   videoGeneration: { color: cssVar.colorWarning },
+  webCrawl: { color: cssVar.gold },
+  webSearch: { color: cssVar.blue },
 });
 
 export type SpendTypeValue =
@@ -33,7 +37,9 @@ export type SpendTypeValue =
   | 'musicGeneration'
   | 'speechRecognition'
   | 'textToSpeech'
-  | 'videoGeneration';
+  | 'videoGeneration'
+  | 'webCrawl'
+  | 'webSearch';
 
 interface SpendTypeProps {
   /** The readable label — shown on hover, since the cell itself is icon-only. */
@@ -66,6 +72,12 @@ const getIcon = (type: string) => {
     }
     case 'videoGeneration': {
       return Video;
+    }
+    case 'webCrawl': {
+      return FileText;
+    }
+    case 'webSearch': {
+      return Globe;
     }
     default: {
       return CircleDotDashed;

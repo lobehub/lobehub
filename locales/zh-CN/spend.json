@@ -73,6 +73,8 @@
   "table.columns.type.enums.speechRecognition": "语音转写",
   "table.columns.type.enums.textToSpeech": "语音合成",
   "table.columns.type.enums.videoGeneration": "视频生成",
+  "table.columns.type.enums.webCrawl": "网页读取",
+  "table.columns.type.enums.webSearch": "联网搜索",
   "table.columns.type.title": "类型",
   "table.desc": "展示文本生成、嵌入、图像生成等功能的消费详情。",
   "table.empty.clearFilters": "清除筛选",

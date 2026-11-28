@@ -1,6 +1,7 @@
 import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebBrowsingExecutionRuntime } from '@lobechat/builtin-tool-web-browsing/executionRuntime';
+import { RequestTrigger, toAgentShareVisitorIds } from '@lobechat/types';
 
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { SearchService } from '@/server/services/search';
@@ -50,7 +51,24 @@ export const webBrowsingRuntime: ServerRuntimeRegistration = {
             },
           }
         : undefined,
-      searchService: new SearchService({ userChannels }),
+      searchService: new SearchService({
+        // The run's owner pays for the upstream calls; a share visitor run is attributed to
+        // the share. Projected ids only, never the visitor context with its permissions.
+        billing: userId
+          ? {
+              agentShare: context.agentShareVisitor
+                ? toAgentShareVisitorIds(context.agentShareVisitor)
+                : undefined,
+              operationId: context.operationId,
+              toolCallId: context.toolCallId,
+              topicId: context.topicId,
+              trigger: context.agentShareVisitor ? RequestTrigger.AgentShare : undefined,
+              userId,
+              workspaceId: context.workspaceId,
+            }
+          : undefined,
+        userChannels,
+      }),
     });
   },
   identifier: WebBrowsingManifest.identifier,
