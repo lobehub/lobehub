@@ -158,10 +158,23 @@ const errorHandlingLink: TRPCLink<LambdaRouter> = () => {
 const isProxyNetworkFailure = (response: Response) =>
   response.status === 502 && response.headers.has('X-Proxy-Error');
 
+/**
+ * Network error types already toasted during the current outage. While offline,
+ * background polls fail every few seconds; re-firing the toast on each one (even
+ * under the same id) keeps it pinned bottom-right for the whole outage and
+ * brings it back right after the user closes it. That corner holds an in-topic
+ * question card's Submit button, so clicks landed on the toast and the answer
+ * was silently never sent. Toast once per outage; any response that reaches the
+ * server ends the outage.
+ */
+const notifiedNetworkErrorTypes = new Set<string>();
+
 const notifyRemoteServerNetworkError = async (response: Response) => {
   try {
     const data = (await response.clone().json()) as { errorType?: unknown };
     if (!isRemoteServerNetworkError(data.errorType)) return;
+    if (notifiedNetworkErrorTypes.has(data.errorType)) return;
+    notifiedNetworkErrorTypes.add(data.errorType);
 
     const { remoteServerErrorToast } = await import('@/components/Error/remoteServerErrorToast');
     remoteServerErrorToast(data.errorType);
@@ -175,7 +188,10 @@ const linkOptions = {
   fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
     // Ensure credentials are included to send cookies (like mp_token)
     const response = await fetch(input, { ...init, credentials: 'include' });
-    if (isDesktop && isProxyNetworkFailure(response)) void notifyRemoteServerNetworkError(response);
+    if (isDesktop) {
+      if (isProxyNetworkFailure(response)) void notifyRemoteServerNetworkError(response);
+      else notifiedNetworkErrorTypes.clear();
+    }
 
     // Throw while the response is still in hand: past this point @trpc/client
     // calls `res.json()` and, on an HTML error page, drops the response along
