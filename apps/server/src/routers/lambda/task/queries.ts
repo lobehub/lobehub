@@ -13,7 +13,7 @@ export const queriesRouter = router({
   detail: taskProcedure.input(idInput).query(async ({ input, ctx }) => {
     try {
       const task = await resolveTaskOrThrow(ctx.taskModel, input.id);
-      const detail = await ctx.taskService.getTaskDetail(task.id);
+      const detail = await ctx.taskService.getTaskDetail(task.id, task);
       if (!detail) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
       }

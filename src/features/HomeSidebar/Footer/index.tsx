@@ -18,7 +18,6 @@ import {
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
 import { useHelpMenuBugReportItem } from '@/business/client/hooks/useHelpMenuBugReportItem';
 import { openChangelogModal } from '@/components/ChangelogModal';
 import { openFeedbackModal } from '@/components/FeedbackModal';
@@ -79,8 +78,6 @@ const Footer = memo(() => {
   const { t } = useTranslation('common');
   const { analytics } = useAnalytics();
   const { footer } = useNavLayout();
-  const hasActiveWorkspace = useHasActiveWorkspace();
-  const settingLabelKey = hasActiveWorkspace ? 'userPanel.workspaceSetting' : 'userPanel.setting';
   const activeNavKey = useActiveNavKey();
   const isHomeSidebar = activeNavKey === 'home';
   const billboardMenuItems = useBillboardMenuItems();
@@ -122,7 +119,9 @@ const Footer = memo(() => {
             {
               icon: <Icon icon={Settings2} />,
               key: 'setting',
-              label: <WorkspaceLink to="/settings">{t(settingLabelKey)}</WorkspaceLink>,
+              // Opens the active space's own settings; the settings sidebar
+              // card switches to account settings.
+              label: <WorkspaceLink to="/settings">{t('userPanel.setting')}</WorkspaceLink>,
             },
           ]
         : [];
@@ -242,7 +241,6 @@ const Footer = memo(() => {
     handleOpenChangelogModal,
     handleOpenFeedbackModal,
     t,
-    settingLabelKey,
     billboardMenuItems,
     isHomeSidebar,
   ]);
@@ -306,10 +304,10 @@ const Footer = memo(() => {
           {footer.showSettingsEntry && (
             <WorkspaceLink to="/settings">
               <ActionIcon
-                aria-label={t(settingLabelKey)}
+                aria-label={t('userPanel.setting')}
                 icon={SettingsIcon}
                 size={FOOTER_ICON_SIZE}
-                title={t(settingLabelKey)}
+                title={t('userPanel.setting')}
               />
             </WorkspaceLink>
           )}

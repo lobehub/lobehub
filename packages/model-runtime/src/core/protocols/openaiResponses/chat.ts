@@ -65,7 +65,11 @@ export const chatViaResponses = async (
   // conversation are anchored.
   const toolAnchoringMode = responsesTools
     ? undefined
-    : factory.responses?.toolAnchoring?.({ baseURL: runtime.baseURL, model: requestModel });
+    : factory.responses?.toolAnchoring?.({
+        baseURL: runtime.baseURL,
+        model: requestModel,
+        options: runtime._options,
+      });
   const inputMessages = toolAnchoringMode
     ? prepareAnchoredMessages(messages as OpenAIChatMessage[], tools, options?.toolActivationPlan)
     : (messages as OpenAIChatMessage[]);

@@ -7,7 +7,11 @@ import type {
   ToolTransport,
   ToolWorkRegistration,
 } from '@lobechat/agent-runtime';
-import { executeToolWithRetry, selectOperationToolSet } from '@lobechat/agent-runtime';
+import {
+  executeToolWithRetry,
+  previewAgentFileDiscovery,
+  selectOperationToolSet,
+} from '@lobechat/agent-runtime';
 import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import {
@@ -49,7 +53,10 @@ import {
   TOOL_PRICING,
 } from '../executorHelpers';
 import { resolveRunActiveDeviceId } from '../executors/resolveRunActiveDeviceId';
-import { resolveRunProjectSkills } from '../executors/resolveRunProjectSkills';
+import {
+  resolveRunAgentFiles,
+  resolveRunProjectSkills,
+} from '../executors/resolveRunProjectSkills';
 import { resolveToolTimeoutMs } from '../resolveToolTimeout';
 import { buildToolCallHookContext } from './toolCallHookContext';
 
@@ -202,7 +209,8 @@ export class ServerToolTransport implements ToolTransport {
           result: hookResult.result,
         };
       } else if (
-        chatToolPayload.executor === 'client' &&
+        (selectOperationToolSet(context.state).executorMap?.[chatToolPayload.identifier] ??
+          chatToolPayload.executor) === 'client' &&
         typeof streamManager.sendToolExecute === 'function'
       ) {
         log(`[${operationLogId}] Dispatching tool ${context.toolName} to client via Agent Gateway`);
@@ -223,12 +231,17 @@ export class ServerToolTransport implements ToolTransport {
           return this.abortedBeforeLaunch();
 
         const dispatchResult = await dispatchClientTool(chatToolPayload, {
+          userId,
           agentId: context.state.origin?.agentId,
           assistantMessageId: context.parentMessageId,
           documentId: context.state.origin?.documentId,
           groupId: context.state.origin?.groupId,
           operationId,
+          mcpElicitation: Boolean(
+            context.effectiveManifestMap[chatToolPayload.identifier]?.mcpParams,
+          ),
           rootOperationId: operationId,
+          workspaceId: context.state.origin?.workspaceId ?? this.ctx.workspaceId,
           scope: context.state.origin?.scope,
           sourceMessageId: context.state.origin?.sourceMessageId,
           streamManager,
@@ -237,6 +250,16 @@ export class ServerToolTransport implements ToolTransport {
           timeoutMs,
           topicId: context.state.origin?.topicId ?? this.ctx.topicId,
         });
+        if (
+          !dispatchResult.toolMessageId &&
+          context.effectiveManifestMap[chatToolPayload.identifier]?.mcpParams
+        ) {
+          dispatchResult.toolMessageId =
+            (await this.ctx.messageModel.findToolMessageIdByToolCallId(
+              chatToolPayload.id,
+              context.parentMessageId,
+            )) ?? undefined;
+        }
         execution = { attempts: 1, result: dispatchResult };
       } else {
         if (context.toolSource && !chatToolPayload.source) {
@@ -263,8 +286,13 @@ export class ServerToolTransport implements ToolTransport {
         execution = await executeToolWithRetry(
           () =>
             toolExecutionService.executeTool(chatToolPayload, {
+              abortSignal: context.abortSignal,
               activatedSkills: context.activatedSkills as any,
               activeDeviceId: resolveRunActiveDeviceId(context.state),
+              agentFiles: resolveRunAgentFiles(
+                context.state,
+                resolveRunActiveDeviceId(context.state),
+              ),
               activeDeviceScope: context.state.principal?.actor?.deviceScope,
               agentId: context.state.origin?.agentId,
               agentMember: buildServerAgentMemberRunner(
@@ -315,7 +343,11 @@ export class ServerToolTransport implements ToolTransport {
               messageId: context.state.origin?.sourceMessageId,
               operationId,
               projectId: context.state.origin?.projectId,
-              projectSkills: resolveRunProjectSkills(context.state.plan),
+              projectSkills: resolveRunProjectSkills(
+                context.state.plan,
+                context.state.discoveredAgentFiles,
+                resolveRunActiveDeviceId(context.state),
+              ),
               rootOperationId: operationId,
               runSkillIds: context.state.plan?.skills?.skills?.map((skill) => skill.identifier),
               scope: context.state.origin?.scope,
@@ -330,6 +362,7 @@ export class ServerToolTransport implements ToolTransport {
               ),
               taskId: context.state.origin?.taskId,
               threadId: context.state.origin?.threadId,
+              todoCallStreak: context.todoCallStreak,
               toolCallId: chatToolPayload.id,
               enabledToolIds,
               toolManifestMap: context.effectiveManifestMap,
@@ -388,6 +421,15 @@ export class ServerToolTransport implements ToolTransport {
         ...execution.result,
         executionTime: execution.result.executionTime ?? 0,
       };
+      // Hooks review the result as the model will see it: with the agent files
+      // a file tool discovered rendered into the content, and without their
+      // raw payload in the state. An allowed result goes on as executed; the
+      // run renders the real block itself once it is through
+      // (`applyAgentFileDiscovery`), deduped across the batch.
+      const skillsToolAvailable = enabledToolIds.includes('lobe-skills');
+      const reviewedResult = previewAgentFileDiscovery(resultWithExecutionTime, {
+        skillsToolAvailable,
+      });
       // Evaluate the full result before truncation/archive creation. A denied
       // archive must not remain retrievable by the model on a later tool call.
       const originalOperationId = context.toolMessageId
@@ -421,7 +463,7 @@ export class ServerToolTransport implements ToolTransport {
             operationId: originalOperationId,
             includeServerHooks: originalOperationId === this.ctx.operationId,
             toolMessageId: context.toolMessageId,
-            result: resultWithExecutionTime,
+            result: reviewedResult,
             signal: context.abortSignal,
           },
         );
@@ -437,7 +479,7 @@ export class ServerToolTransport implements ToolTransport {
               {
                 ...buildToolCallHookContext(chatToolPayload, context, this.ctx),
                 mocked: toolCallMocked || !!execution.mocked,
-                result: originalControl?.result ?? resultWithExecutionTime,
+                result: reviewedResult,
               },
               context.state.host?.hooks,
               context.abortSignal,
@@ -447,22 +489,24 @@ export class ServerToolTransport implements ToolTransport {
       }
       const executionResult = controlled.blocked
         ? controlled.result
-        : await archiveRuntimeToolResult(
-            { ...controlled.result, executionTime: controlled.result.executionTime ?? 0 },
-            {
-              agentId: context.state.origin?.agentId,
-              canReadArchive: enabledToolIds.includes(AgentDocumentsIdentifier),
-              identifier: chatToolPayload.identifier,
-              limit: context.toolResultMaxLength,
-              serverDB,
-              toolCallId: chatToolPayload.id,
-              topicId: this.ctx.topicId ?? context.state.origin?.topicId,
-              userId,
-              workspaceId: context.state.origin?.workspaceId ?? this.ctx.workspaceId,
-            },
-          );
+        : await archiveRuntimeToolResult(resultWithExecutionTime, {
+            agentId: context.state.origin?.agentId,
+            canReadArchive: enabledToolIds.includes(AgentDocumentsIdentifier),
+            identifier: chatToolPayload.identifier,
+            limit: context.toolResultMaxLength,
+            serverDB,
+            toolCallId: chatToolPayload.id,
+            topicId: this.ctx.topicId ?? context.state.origin?.topicId,
+            userId,
+            workspaceId: context.state.origin?.workspaceId ?? this.ctx.workspaceId,
+          });
 
-      await this.dispatchAfterToolCall(chatToolPayload, context, executionResult, toolCallMocked);
+      await this.dispatchAfterToolCall(
+        chatToolPayload,
+        context,
+        previewAgentFileDiscovery(executionResult, { skillsToolAvailable }),
+        toolCallMocked,
+      );
 
       executeToolSpan.setAttributes(
         buildExecuteToolResultAttributes({

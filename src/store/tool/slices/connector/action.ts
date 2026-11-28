@@ -27,7 +27,10 @@ import type { StoreSetter } from '@/store/types';
 import { ConnectorOAuthError, waitForConnectorOAuth } from '@/utils/connectorOAuth';
 
 import type { ToolStore } from '../../store';
-import { executeLegacyMigrationSave } from './legacyPluginMigration';
+import {
+  executeLegacyMigrationSave,
+  type MigrationConnectionOverrides,
+} from './legacyPluginMigration';
 import {
   agentBoundConnectorsEntity,
   agentBoundConnectorsResource,
@@ -441,8 +444,81 @@ export class ConnectorActionImpl {
         await Promise.all([this.#refreshConnectorLists(), this.#get().refreshPlugins()]);
       },
       syncConnectorTools: (id, payload) => this.#writeConnectorTools(id, {}, payload),
-      uninstallCustomPlugin: (identifier) => this.#get().removeInstalledPluginRecord(identifier),
+      uninstallCustomPlugin: (identifier) => this.#completeLegacyPluginMigration(identifier),
     });
+
+  #completeLegacyPluginMigration = async (identifier: string): Promise<void> => {
+    await lambdaClient.connector.completeLegacyPluginMigration.mutate({ identifier });
+    this.#get().removeInstalledPluginLocalRecord(identifier);
+  };
+
+  /**
+   * Promote a legacy MCP plugin row server-side, preserving its endpoint,
+   * settings and stored credentials. The legacy row is removed only after the
+   * replacement connector has listed its tools; a failed migration of a newly
+   * created connector rolls that connector back.
+   */
+  migrateLegacyPluginToConnector = async (
+    identifier: string,
+    overrides?: MigrationConnectionOverrides,
+    oauthPopup?: Window | null,
+  ): Promise<void> => {
+    const migrated = await lambdaClient.connector.migrateLegacyPlugin.mutate({
+      identifier,
+      ...(overrides ? { overrides } : {}),
+    });
+    try {
+      // A repair that selects OAuth must authorize before the first tool sync:
+      // until the callback stores its account credential there is nothing the
+      // server could sync with. Migration mode has no connected baseline, so
+      // every OAuth save takes this path, including one replacing an expired token.
+      if (overrides?.auth?.type === 'oauth2') {
+        const authorizationUrl = await this.#get().startConnectorOAuth(migrated.id);
+        try {
+          await waitForConnectorOAuth(oauthPopup, migrated.id, authorizationUrl);
+        } catch (error) {
+          const dismissedConnected =
+            error instanceof ConnectorOAuthError &&
+            error.reason === 'dismissed' &&
+            (await this.#refreshConnectorLists()
+              .then(
+                () =>
+                  connectorSelectors.connectorById(migrated.id)(this.#get())?.status ===
+                  'connected',
+              )
+              .catch(() => false));
+          if (!dismissedConnected) throw error;
+        }
+      }
+      await this.#refreshConnectorLists();
+      await this.#writeConnectorTools(
+        migrated.id,
+        { pruneMissingAutoTools: true },
+        connectorSelectors.connectorById(migrated.id)(this.#get()),
+      );
+    } catch (error) {
+      if (migrated.isNew) {
+        await this.#deleteConnectorRecord(migrated.id).catch((rollbackError) => {
+          console.error(
+            '[connector] rollback of legacy migration %s (%s) failed:',
+            migrated.id,
+            identifier,
+            rollbackError,
+          );
+        });
+      }
+      throw error;
+    }
+
+    await this.#completeLegacyPluginMigration(identifier);
+    // The migration itself is complete here. A list refresh failure must not
+    // report it as failed after the legacy row has already been removed.
+    await Promise.all([this.#refreshConnectorLists(), this.#get().refreshPlugins()]).catch(
+      (error) => {
+        console.error('[connector-migration] refreshing lists failed', error);
+      },
+    );
+  };
 
   /** Connect an additional account and refresh all connector lists after authorization. */
   connectConnectorAccount = (

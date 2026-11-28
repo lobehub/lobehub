@@ -5,7 +5,7 @@ import type {
   VerifyCheckItem,
 } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
-import { boolean, index, integer, jsonb, pgTable, text } from 'drizzle-orm/pg-core';
+import { bigint, boolean, index, integer, jsonb, pgTable, text } from 'drizzle-orm/pg-core';
 
 import { amountNumeric, timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
@@ -98,9 +98,9 @@ export const agentOperations = pgTable(
     totalCost: amountNumeric('total_cost'),
     currency: text('currency').default('USD').notNull(),
 
-    totalInputTokens: integer('total_input_tokens'),
-    totalOutputTokens: integer('total_output_tokens'),
-    totalTokens: integer('total_tokens'),
+    totalInputTokens: bigint('total_input_tokens', { mode: 'number' }),
+    totalOutputTokens: bigint('total_output_tokens', { mode: 'number' }),
+    totalTokens: bigint('total_tokens', { mode: 'number' }),
 
     llmCalls: integer('llm_calls'),
     toolCalls: integer('tool_calls'),
@@ -154,6 +154,14 @@ export const agentOperations = pgTable(
     index('agent_operations_running_created_at_idx')
       .on(t.createdAt)
       .where(sql`${t.status} = 'running'`),
+    /**
+     * Parked-run scans of `ParkedInterventionExpiry`, keyed on `created_at`
+     * for the same HOT-update reason. Without it every sweep reads each
+     * `waiting_for_human` row through `agent_operations_status_idx`.
+     */
+    index('agent_operations_waiting_for_human_created_at_idx')
+      .on(t.createdAt)
+      .where(sql`${t.status} = 'waiting_for_human'`),
     index('agent_operations_user_id_created_at_idx').on(t.userId, t.createdAt),
     index('agent_operations_workspace_id_created_at_idx').on(t.workspaceId, t.createdAt),
     index('agent_operations_metadata_idx').using('gin', t.metadata),

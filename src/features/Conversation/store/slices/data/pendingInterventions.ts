@@ -7,6 +7,8 @@ import {
   type UIChatMessage,
 } from '@lobechat/types';
 
+import type { PendingMcpElicitation } from '@/services/mcpElicitation';
+
 export interface PendingIntervention {
   apiName: string;
   /**
@@ -29,6 +31,7 @@ export interface PendingIntervention {
   deadline?: number;
   identifier: string;
   intervention: ToolIntervention & { status: 'pending' };
+  mcpElicitation?: PendingMcpElicitation;
   operationId?: string;
   requestArgs: string;
   toolCallId: string;
@@ -48,6 +51,7 @@ export const isSamePendingInterventionList = (
   a.every(
     (item, i) =>
       item.toolCallId === b[i].toolCallId &&
+      item.batchId === b[i].batchId &&
       item.requestArgs === b[i].requestArgs &&
       item.deadline === b[i].deadline,
   );
@@ -62,6 +66,7 @@ export const getPendingInterventions = (
     if (
       msg.role === 'tool' &&
       msg.pluginIntervention?.status === 'pending' &&
+      !msg.pluginState?.mcpElicitation &&
       msg.plugin &&
       !msg.id.startsWith('tmp_') &&
       // Past the producer's own deadline nobody is waiting for this answer.
@@ -140,7 +145,7 @@ export const getInterventionBatch = (
  * payloads and must be resolved card by card.
  */
 export const canApproveInterventionBatch = (batch: PendingIntervention[]): boolean => {
-  if (batch.length <= 1) return false;
+  if (batch.length <= 1 || batch.some((item) => item.mcpElicitation)) return false;
 
   const hasDurableMember = batch.some(({ batchId, operationId }) => batchId || operationId);
   if (
@@ -170,6 +175,7 @@ const collectPendingTools = (
   for (const tool of tools) {
     if (
       tool.intervention?.status === 'pending' &&
+      !tool.result?.state?.mcpElicitation &&
       tool.result_msg_id &&
       !tool.result_msg_id.startsWith('tmp_') &&
       // Same rule as the standalone tool row; the folded entry mirrors the
@@ -191,3 +197,12 @@ const collectPendingTools = (
     }
   }
 };
+
+/** Merge projections by their durable message, never by a reusable provider call id. */
+export function mergePendingInterventions(
+  selected: PendingIntervention[],
+  mcp: PendingIntervention[],
+) {
+  const messages = new Set(mcp.map((item) => item.toolMessageId));
+  return [...selected.filter((item) => !messages.has(item.toolMessageId)), ...mcp];
+}

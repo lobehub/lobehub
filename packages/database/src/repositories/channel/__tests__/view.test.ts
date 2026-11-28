@@ -445,6 +445,42 @@ describe('Channel public view', () => {
     expect(await listed()).toMatchObject({ mentionCount: 0, unreadCount: 0 });
   });
 
+  it('leaves replies in Threads the caller takes no part in out of the unread count', async () => {
+    const { asMember, asOwner, channel, member } = await fixture.createTeamChannel();
+    const send = (
+      as: typeof asOwner,
+      content: string,
+      options: { mentions?: string[]; threadId?: string } = {},
+    ) => as.send(channel.id, { content, requestKey: content, routing: 'fallback', ...options });
+    const listed = async () => (await asMember.list()).find((item) => item.id === channel.id);
+
+    const root = await send(asOwner, 'Root');
+    const thread = await asOwner.createThread(channel.id, {
+      followerMemberIds: [],
+      rootMessageId: root.id,
+    });
+    await send(asOwner, 'Not for you 1', { threadId: thread.id });
+    await send(asOwner, 'Not for you 2', { threadId: thread.id });
+    // Only the root, on the main conversation, is news to the member.
+    expect(await listed()).toMatchObject({ lastReadSequence: 0, unreadCount: 1 });
+
+    // Writing in a Thread makes its later replies news to the member.
+    const own = await send(asMember, 'On it', { threadId: thread.id });
+    await send(asOwner, 'Thanks', { threadId: thread.id });
+    expect(await listed()).toMatchObject({ lastReadSequence: own.sequence, unreadCount: 1 });
+
+    // An @mention in another Thread makes the member follow it, so all of its replies count.
+    const other = await send(asOwner, 'Other root');
+    const second = await asOwner.createThread(channel.id, {
+      followerMemberIds: [],
+      rootMessageId: other.id,
+    });
+    await send(asOwner, 'Side talk', { threadId: second.id });
+    expect(await listed()).toMatchObject({ mentionCount: 0, unreadCount: 2 });
+    await send(asOwner, 'Look here', { mentions: [member.id], threadId: second.id });
+    expect(await listed()).toMatchObject({ mentionCount: 1, unreadCount: 4 });
+  });
+
   it('lists the newest Thread mention of the caller however far the Channel was read', async () => {
     const { asMember, asOwner, channel, member } = await fixture.createTeamChannel();
     const send = (content: string, mentions: string[] = [], threadId?: string) =>

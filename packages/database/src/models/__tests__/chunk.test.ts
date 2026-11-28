@@ -410,9 +410,8 @@ describe('ChunkModel', () => {
 
       const result = await chunkModel.getChunksTextByFileId(fileId);
 
-      expect(result).toHaveLength(2);
-      expect(result[0].text).toBe('Chunk 1');
-      expect(result[1].text).toBe('Chunk 2');
+      // The query has no ORDER BY, so row order is up to the planner.
+      expect(result.map((chunk) => chunk.text).sort()).toEqual(['Chunk 1', 'Chunk 2']);
     });
   });
 

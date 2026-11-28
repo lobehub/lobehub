@@ -20,7 +20,6 @@ import { topics } from '../../schemas/topic';
 import { works } from '../../schemas/work';
 import type { LobeChatDatabase } from '../../type';
 import { isUserKnowledgeBase } from '../../utils/knowledgeBaseType';
-import { joinTopicAgentsToProjects } from '../../utils/projectTopicAgents';
 import { topicRunStartedAtColumn } from '../../utils/topicRunStartedAt';
 import { notChannelTopic } from '../../utils/topicVisibility';
 import {
@@ -576,17 +575,6 @@ export class ProjectModel {
         ),
       )
       .orderBy(...coordinatorFirst, asc(projectAgents.sortOrder), asc(projectAgents.createdAt));
-  }
-
-  /**
-   * TODO(2026-12-31): remove this runtime backfill. Topics filed before their
-   * agents joined the project on write still leave those agents out of the
-   * members; opening the member list brings them in. Read-only viewers only
-   * look, so their visit changes nothing.
-   */
-  async joinTopicAgents(projectId: string) {
-    if (this.options.readOnly || !(await this.findById(projectId))) return;
-    await joinTopicAgentsToProjects(this.db, { projectId });
   }
 
   async findAccessibleAgent(db: LobeChatDatabase, agentId: string) {

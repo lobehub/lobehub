@@ -49,6 +49,7 @@ import { resolveRunSettings } from './runSettings';
 import { bindRunSlot, claimRunSlot, resolveRunSlotPolicy, type RunSlotClaim } from './runSlot';
 import { traceSendStage } from './sendTracing';
 import { startOperation, type StartOperationInit } from './startOperation';
+import { resolveRunStartingModel } from './topicModelPin';
 import { bindTopicWorkingDirectory } from './topicWorkingDirectory';
 import { setupTurn } from './turnSetup';
 
@@ -325,8 +326,26 @@ export const execAgentTurn = async (
     policy: resolveRunSlotPolicy(params, { agentConfig, workspaceId: deps.workspaceId }),
     userId: deps.userId,
   });
+  // The fee is judged on the model this turn runs on, which a reused topic may pin
+  // over the agent's default; turn setup reuses the topic read here.
+  const startingModel = await resolveRunStartingModel(deps, {
+    agentConfig,
+    modelOverride,
+    providerOverride,
+    resolvedAgentId,
+    topicId: appContext?.topicId,
+  });
   await claimRunFee(runFee, {
+    agentShare: requestedShareGate
+      ? {
+          agentId: requestedShareGate.agentId,
+          shareId: requestedShareGate.shareId,
+          visitorUserId: requestedShareGate.visitorUserId,
+        }
+      : undefined,
     hold: shouldHoldRunFee(params, { workspaceId: deps.workspaceId }),
+    model: startingModel.model,
+    provider: startingModel.provider,
     userId: deps.userId,
   });
 
@@ -390,6 +409,25 @@ export const execAgentTurn = async (
       },
     ),
   );
+
+  const onOperationCreated = async (id: string) => {
+    // Approval continuations execute tools owned by an earlier assistant. Persist
+    // those exact sources before dispatch; provider IDs and client operation IDs
+    // alone cannot authorize an elicitation checkpoint.
+    const sources = approvedToolEntries
+      .filter(({ plugin }) => plugin.type === 'mcp')
+      .map(({ plugin, toolMessageId }) => ({
+        assistantMessageId: approvalOwnerAssistantId ?? resumeParentMessage?.parentId,
+        toolCallId: plugin.toolCallId,
+        toolMessageId,
+      }));
+    if (
+      sources.length &&
+      !(await deps.agentOperationModel.mergeMetadata(id, { mcpInvocationSources: sources }))
+    )
+      throw new Error('Could not persist MCP continuation identity');
+    await params.onOperationCreated?.(id);
+  };
 
   // Deterministic continuation identity for a generic (v2) approval claim.
   // Also consumed by the turn setup below: a crash-safe re-entry must find
@@ -497,6 +535,7 @@ export const execAgentTurn = async (
         reservedOperationId: params.reservedOperationId,
         resolvedAgentId,
         resume,
+        reusedTopic: startingModel.topic,
         runFromHistory,
         selectedSkillIds,
         selectedToolIds,
@@ -629,7 +668,7 @@ export const execAgentTurn = async (
           markTopicRunning: params.markTopicRunning,
           onOperationCreated: async (operationId) => {
             await bindRunFee(runFee, deps.userId, operationId);
-            await params.onOperationCreated?.(operationId);
+            await onOperationCreated(operationId);
           },
           reservedOperationId: params.reservedOperationId,
           parentOperationId,
@@ -855,7 +894,7 @@ export const execAgentTurn = async (
         approvalSourceToolMessageIds,
         autoSkillIds,
         autoStart,
-        onOperationCreated: params.onOperationCreated,
+        onOperationCreated,
         markTopicRunning: params.markTopicRunning,
         // From here the run's completion releases the slot and settles the
         // fee; a run that never started (failed, or created without

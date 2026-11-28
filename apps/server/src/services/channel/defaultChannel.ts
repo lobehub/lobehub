@@ -1,12 +1,16 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 
 import { onAgentCreated } from '@/business/server/channel/onAgentCreated';
+import { PROJECT_DEFAULT_CHANNEL_TITLE } from '@/database/repositories/channel/displayTitle';
 
 import { ChannelService } from './ChannelService';
 import { isChannelEnabled } from './featureGate';
 
-/** Title of the Channel a new workspace or project starts with; members can rename it. */
-export const DEFAULT_CHANNEL_TITLE = 'General';
+/**
+ * Title of the Channel a new workspace or project starts with; members can rename it. Deleting
+ * the project gives a Channel still titled this the project's name.
+ */
+export const DEFAULT_CHANNEL_TITLE = PROJECT_DEFAULT_CHANNEL_TITLE;
 
 export interface DefaultChannelParams {
   /** The scope's main Agent: a workspace's LobeAI, or a project's main agent. */

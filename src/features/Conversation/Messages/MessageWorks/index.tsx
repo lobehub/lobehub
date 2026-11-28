@@ -17,15 +17,16 @@ const styles = stylex.create({ container: { width: '100%' } });
 interface MessageWorkListProps {
   items: WorkSummaryItem[];
   onOpen?: ComponentProps<typeof WorkSummaryCard>['onOpen'];
+  showActions?: boolean;
 }
 
-export const MessageWorkList = memo<MessageWorkListProps>(({ items, onOpen }) => {
+export const MessageWorkList = memo<MessageWorkListProps>(({ items, onOpen, showActions }) => {
   if (items.length === 0) return null;
 
   return (
     <Flexbox className={stylex.props(styles.container).className} gap={8}>
       {items.map((item) => (
-        <WorkSummaryCard item={item} key={item.id} onOpen={onOpen} />
+        <WorkSummaryCard item={item} key={item.id} showActions={showActions} onOpen={onOpen} />
       ))}
     </Flexbox>
   );
@@ -50,7 +51,14 @@ const MessageWorks = memo<MessageWorksProps>(({ rootOperationId }) => {
   const agentShareId = useConversationStore((s) => s.context.agentShareId);
   const handleVisitorOpen = useVisitorWorkOpen();
 
-  return <MessageWorkList items={data} onOpen={agentShareId ? handleVisitorOpen : undefined} />;
+  // A share visitor reads the creator's Works; card actions belong to the creator.
+  return (
+    <MessageWorkList
+      items={data}
+      showActions={!agentShareId}
+      onOpen={agentShareId ? handleVisitorOpen : undefined}
+    />
+  );
 }, isEqual);
 
 MessageWorks.displayName = 'MessageWorks';

@@ -19,6 +19,7 @@ import AuthIcons from '@/components/AuthIcons';
 import InlineErrorText from '@/components/InlineErrorText';
 import AuthCard from '@/features/AuthCard';
 import AuthAgreement from '@/features/AuthShell/AuthAgreement';
+import { isEmbeddedAuth } from '@/features/AuthShell/embedded';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   inlineLink: css`
@@ -114,7 +115,14 @@ export const SignInEmailStep = ({
   const showEmailForm = !disableEmailPassword && !isSocialOnly;
 
   return (
-    <AuthCard title={t('signin.subtitle', { appName: BRANDING_NAME })}>
+    <AuthCard
+      title={
+        // Lobot's window carries no brand: the page reads as Lobot's own sign-in step.
+        isEmbeddedAuth()
+          ? t('signin.embeddedTitle')
+          : t('signin.subtitle', { appName: BRANDING_NAME })
+      }
+    >
       {sessionExpired && (
         <Alert
           showIcon

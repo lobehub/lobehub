@@ -40,11 +40,13 @@
   "OllamaServiceUnavailable": "Il servizio Ollama non è disponibile. Controlla che Ollama sia in esecuzione correttamente o che la configurazione cross-origin di Ollama sia impostata correttamente.",
   "OperationInactivityTimeout": "L'operazione dell'agente è rimasta inattiva troppo a lungo ed è stata terminata. Riprova la richiesta.",
   "PermissionDenied": "Spiacenti, non hai il permesso di accedere a questo servizio. Controlla se la tua chiave ha i diritti di accesso necessari.",
+  "ProviderBaseURLBlocked": "L'endpoint di {{provider}} punta a un indirizzo di rete privato o locale, a cui il server non è autorizzato ad accedere per motivi di sicurezza. Questo indirizzo funziona solo dal tuo dispositivo — usa invece un endpoint raggiungibile pubblicamente.",
   "ProviderBizError": "Errore durante la richiesta al servizio {{provider}}, risolvi il problema o riprova basandoti sulle informazioni seguenti.",
   "ProviderContentPolicyViolation": "Il provider ha bloccato questa richiesta o il suo output a causa della politica sui contenuti. Per favore, rivedi il tuo prompt e riprova.",
   "ProviderNetworkError": "La connessione al provider è scaduta o è stata interrotta. Controlla la tua rete e riprova.",
   "ProviderNoImageGenerated": "Il provider non ha restituito alcuna immagine per questa richiesta. Prova a riformulare la richiesta o scegli un modello che supporti la generazione di immagini.",
   "ProviderServiceUnavailable": "Il provider è temporaneamente sovraccarico o non disponibile. Riprova tra poco.",
+  "ProviderStreamInterrupted": "Il provider ha chiuso la connessione prima di completare la risposta. Di solito è temporaneo, riprova.",
   "QuotaLimitReached": "Spiacenti, l'utilizzo dei token o il numero di richieste ha raggiunto il limite di quota per questa chiave. Aumenta la quota della chiave o riprova più tardi.",
   "RateLimitExceeded": "Spiacenti, l'utilizzo dei token o il numero di richieste ha raggiunto il limite di velocità per questa chiave. Riprova più tardi o aumenta la quota della chiave.",
   "RemoteMediaDownloadTimeout": "Il provider ha superato il tempo limite durante il download di un'immagine o file allegato. Riprova.",
@@ -55,5 +57,6 @@
   "UpstreamGatewayError": "Il gateway o proxy a monte ha restituito un errore. Riprova tra poco; se il problema persiste, controlla la configurazione del proxy / endpoint.",
   "UpstreamHttpError": "Il provider ha restituito un errore HTTP senza ulteriori dettagli. Riprova o controlla la tua richiesta e la configurazione del modello.",
   "UpstreamMalformedResponse": "Il provider ha restituito una risposta malformata che non può essere analizzata. Riprova; se il problema persiste, prova un modello o un provider diverso.",
-  "UserConfigError": "La configurazione del provider non è valida (URL di base errato, variabile di ambiente mancante, restrizione virtual-key, ecc.). Rivedi le impostazioni del provider."
+  "UserConfigError": "La configurazione del provider non è valida (URL di base errato, variabile di ambiente mancante, restrizione virtual-key, ecc.). Rivedi le impostazioni del provider.",
+  "WorkspaceModelRestricted": "Questo modello supera il livello più alto che l'amministratore del tuo spazio di lavoro ti consente. Scegli un modello di livello inferiore oppure chiedi a un amministratore dello spazio di lavoro di aumentare il tuo livello."
 }

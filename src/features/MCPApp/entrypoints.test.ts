@@ -268,4 +268,29 @@ describe('sidebar app entries', () => {
     env.desktop = true;
     expect(offered()).toEqual(['notes', 'tailnet-plugin', 'tailnet', 'lan', 'public']);
   });
+
+  // The server runs a bound connector's entrypoint on its device and relays
+  // its view back, so any client can open it
+  it('offers apps of connectors bound to a device on every client', () => {
+    const open = { title: 'Screen', toolName: 'open' };
+    const connector = (identifier: string, metadata: object | null) => ({
+      id: identifier,
+      identifier,
+      isEnabled: true,
+      mcpConnectionType: 'stdio',
+      metadata,
+      tools: [{ metadata: { threadEntry: open }, permission: 'auto', toolName: 'open' }],
+    });
+    const bound = {
+      ...state,
+      agentConnectors: {},
+      connectors: [connector('poki', { boundDeviceId: 'home-linux' }), connector('loose', null)],
+    } as unknown as ToolStore;
+    const offered = () => selectMcpAppEntrypoints(bound, true).map((item) => item.identifier);
+
+    // An unbound one still opens on the desktop alone: nothing names its device
+    expect(offered()).toEqual(['notes', 'poki']);
+    env.desktop = true;
+    expect(offered()).toEqual(['notes', 'poki', 'loose']);
+  });
 });

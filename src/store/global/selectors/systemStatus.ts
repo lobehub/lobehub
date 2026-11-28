@@ -169,6 +169,16 @@ const taskListFilters = (s: GlobalState) => s.status.taskListFilters ?? EMPTY_TA
 const taskListFilter = (scope: string) => (s: GlobalState) =>
   taskListFilters(s).find((entry) => entry.scope === scope)?.filter;
 
+const EMPTY_TASK_LIST_COLLAPSED_GROUPS: NonNullable<
+  GlobalState['status']['taskListCollapsedGroups']
+> = [];
+
+const taskListCollapsedGroups = (s: GlobalState) =>
+  s.status.taskListCollapsedGroups ?? EMPTY_TASK_LIST_COLLAPSED_GROUPS;
+
+const taskListCollapsedGroupKeys = (scope: string) => (s: GlobalState) =>
+  taskListCollapsedGroups(s).find((entry) => entry.scope === scope)?.keys;
+
 const taskListViewMode = (s: GlobalState) => s.status.taskListViewMode ?? 'list';
 
 // Default the inline composer to collapsed so a populated task list keeps the
@@ -251,7 +261,6 @@ export const DEFAULT_SIDEBAR_ITEMS: string[] = [
   'tasks',
   'goals',
   'project',
-  'dashboard',
   'resource',
   'image',
   'community',
@@ -645,6 +654,12 @@ const isBannerDismissed =
 const tokenDisplayFormatShort = (s: GlobalState) =>
   s.status.tokenDisplayFormatShort !== undefined ? s.status.tokenDisplayFormatShort : true;
 
+/** Whether the home rail last settled empty in `scope` (a cache scope). */
+const homeRailEmpty =
+  (scope: string) =>
+  (s: GlobalState): boolean =>
+    s.status.homeRailEmptyByScope?.[scope] ?? false;
+
 /** The home AgentSelect choice made in `scope` (a cache scope), if any. */
 const homeSelectedAgentId =
   (scope: string) =>
@@ -675,6 +690,7 @@ export const systemStatusSelectors = {
   hiddenSidebarSections,
   hidePWAInstaller,
   homeGoalsCollapsed,
+  homeRailEmpty,
   homeRecentsCount,
   homeSelectedAgentId,
   homeTaskCount,
@@ -701,6 +717,8 @@ export const systemStatusSelectors = {
   taskCreateInlineCollapsed,
   taskKanbanHiddenColumns,
   taskKanbanHiddenPanelCollapsed,
+  taskListCollapsedGroupKeys,
+  taskListCollapsedGroups,
   taskListViewMode,
   taskListFilter,
   taskListFilters,

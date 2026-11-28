@@ -5,6 +5,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 
+import { AGENT_SHARE_SETTINGS_WIDTH } from '@/const/layoutTokens';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 
@@ -107,7 +108,7 @@ const AgentShareSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => (
   <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
     {chrome !== 'body' && <AgentProfileNavSkeleton />}
     <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
-      <WideScreenContainer>
+      <WideScreenContainer minWidth={AGENT_SHARE_SETTINGS_WIDTH}>
         <AgentShareSettingsBodySkeleton />
       </WideScreenContainer>
     </Flexbox>

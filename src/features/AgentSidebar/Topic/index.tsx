@@ -154,7 +154,7 @@ const Topic = memo<TopicProps>(({ expanded, itemKey }) => {
       </ContextMenuTrigger>
       <AccordionPanel contentStyle={{ padding: 0 }}>
         <Suspense fallback={<SkeletonList />}>
-          <Flexbox gap={1} paddingBlock={1}>
+          <Flexbox data-topic-list-root="" gap={1} paddingBlock={1}>
             <List />
           </Flexbox>
         </Suspense>

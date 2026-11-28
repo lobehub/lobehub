@@ -5,7 +5,14 @@ import { collectSteerChains } from '../../store/slices/data/steerChains';
 export interface MessageDeepLink {
   id: string;
   navigationKey: string;
-  onHandled?: () => void;
+  /** Called once the list has centered the target, with the row that renders it. */
+  onHandled?: (target: { displayMessageId: string; id: string }) => void;
+  /**
+   * Treat landing on the owning row as handled when the target never renders
+   * its own element (e.g. a task inside a task group). Without it the link
+   * stays pending so a later render can still reach the exact nested message.
+   */
+  settleOnOwningRow?: boolean;
 }
 
 export interface ResolvedMessageDeepLink extends MessageDeepLink {

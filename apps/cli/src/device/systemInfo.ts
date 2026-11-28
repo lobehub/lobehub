@@ -10,7 +10,7 @@ import { CodexAppServerClient } from '@lobechat/heterogeneous-agents/spawn';
 import { getShellInfo } from '@lobechat/local-file-shell';
 import { CODEX_COLLABORATION_MODE_RUNTIME } from '@lobechat/types';
 
-import { CLI_CONFIG_DIR_NAME } from '../constants/identity';
+import { resolveCliDirName } from '../constants/identity';
 import { cliVersion } from '../pkg';
 import type { BrowserDevice } from '../tools/browser';
 import type { ComputerUseDevice } from '../tools/computerUse';
@@ -120,10 +120,13 @@ export async function collectSystemInfo(
     musicPath: path.join(home, 'Music'),
     picturesPath: path.join(home, 'Pictures'),
     supportedAgentRuntimes: await nativeRuntimes.get(),
+    // Tunneled MCP calls run with their MCP Apps options, and views are read
+    // here (`readMcpUiResource`), so the server keeps a result's view.
+    supportedMcpFeatures: ['apps'],
     // Tunneled MCP calls (stdio / local-network servers) run on this machine.
     supportedToolCallTypes: ['tool', 'mcp'],
     ...(supportedTools.length > 0 && { supportedTools }),
-    userDataPath: path.join(home, CLI_CONFIG_DIR_NAME),
+    userDataPath: path.join(home, resolveCliDirName()),
     videosPath: path.join(home, videosDir),
     workingDirectory: process.cwd(),
   };

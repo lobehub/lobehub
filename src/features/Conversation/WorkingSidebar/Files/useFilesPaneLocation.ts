@@ -1,6 +1,7 @@
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 
 import { filesLocationContextKey, useRememberedFilesLocation } from './useRememberedFilesLocation';
+import { useStagedFilesDirectory } from './useStagedFilesDirectory';
 
 interface FilesPaneLocationParams {
   activeAgentId?: string;
@@ -66,15 +67,20 @@ export const useFilesPaneLocation = ({
   // `workingDirs` are stale, so treating it as settled would replace the
   // conversation's remembered directory before the server confirms the list.
   const devicesSettled = useDeviceStore(deviceSelectors.isDeviceListConfirmed);
+  const staged = useStagedFilesDirectory(activeAgentId, topicId);
   // A sandbox has its own backend, and without a filesystem environment there
   // is nothing this client can read or mutate: never open a remembered path in
   // either case. A device id is still passed while its directory resolves so a
   // same-host saved tree can paint before the device list answers.
-  const canReadFilesystem = !isSandbox && filesystemEnvironmentAvailable;
+  const canReadFilesystem = !isSandbox && (filesystemEnvironmentAvailable || !!staged);
+  // A staged project directory is already final, and remembering it under the
+  // agent's key would replace where the agent's own drafts open.
   const filesLocation = useRememberedFilesLocation(
-    canReadFilesystem ? filesLocationContextKey(topicId, activeAgentId) : undefined,
-    canReadFilesystem ? { deviceId: remoteDeviceId, directory: workingDirectory } : undefined,
-    devicesSettled,
+    canReadFilesystem && !staged ? filesLocationContextKey(topicId, activeAgentId) : undefined,
+    canReadFilesystem
+      ? (staged ?? { deviceId: remoteDeviceId, directory: workingDirectory })
+      : undefined,
+    devicesSettled || !!staged,
   );
 
   return {

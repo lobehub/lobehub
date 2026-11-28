@@ -37,6 +37,12 @@ import { createTaskModal } from '../CreateTaskModal';
 import { useTaskProjectList } from '../features/useTaskProjectList';
 import { ScheduledTaskTable } from '../ScheduledTaskTable';
 import Breadcrumb from '../shared/Breadcrumb';
+import {
+  resolveMyTaskScope,
+  resolveTaskCollection,
+  type TaskCollection,
+  taskCollectionParam,
+} from '../shared/taskCollection';
 import { taskDetailPath } from '../shared/taskDetailPath';
 import { TaskListOriginContext } from '../shared/taskListOrigin';
 import CreateTaskInlineEntry from './CreateTaskInlineEntry';
@@ -65,6 +71,7 @@ import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
 import TaskList from './TaskList';
 import TaskListVisibilityFilter from './TaskListVisibilityFilter';
 import TasksGroupConfig from './TasksGroupConfig';
+import { taskListCollapseScopeKey } from './useTaskListGroupCollapse';
 
 interface TaskCreateActionBehaviorParams {
   canCreateTask: boolean;
@@ -143,42 +150,7 @@ interface AgentTasksPageProps {
   projectId?: string;
 }
 
-export type TaskCollection = 'mine' | 'scheduled' | 'tasks';
-/** "My tasks" sub-view: assigned to me as a member, or created by me. */
-export type MyTaskScope = 'assigned' | 'created';
 const COLLECTION_PAGE_SIZE = TASK_COLLECTION_PAGE_SIZE;
-
-/**
- * Where "My tasks" is offered it is the landing tab, so the bare URL opens it and
- * the ordinary list is addressed as `collection=all` (`collection=tasks` keeps
- * resolving for older links). Scopes without the tab keep the ordinary list as
- * their bare URL.
- */
-export const resolveTaskCollection = (
-  searchParams: URLSearchParams,
-  options: { allowMine?: boolean } = {},
-): TaskCollection => {
-  const value = searchParams.get('collection');
-  if (value === 'scheduled') return 'scheduled';
-  if (value === 'all' || value === 'tasks') return 'tasks';
-  // The "My tasks" tab is only offered where member assignment exists; a deep
-  // link into it from a scope without the tab falls back to ordinary tasks.
-  if (!options.allowMine) return 'tasks';
-  return value === 'mine' || !value ? 'mine' : 'tasks';
-};
-
-/** The `collection` search param that addresses a tab; `undefined` is the bare URL. */
-export const taskCollectionParam = (
-  collection: TaskCollection,
-  options: { allowMine?: boolean } = {},
-): string | undefined => {
-  if (collection === 'scheduled') return 'scheduled';
-  if (!options.allowMine) return undefined;
-  return collection === 'mine' ? undefined : 'all';
-};
-
-export const resolveMyTaskScope = (searchParams: URLSearchParams): MyTaskScope =>
-  searchParams.get('scope') === 'created' ? 'created' : 'assigned';
 
 export const clampCollectionPage = (page: number, total: number): number =>
   Math.min(page, Math.max(1, Math.ceil(total / COLLECTION_PAGE_SIZE)));
@@ -295,9 +267,8 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   // applied server-side by every collection, so paginated pages and board
   // columns count only the matching tasks.
   const filterFields = useTaskFilterFields({ agentId, projectId });
-  const [storedFilter, setFilter] = useTaskListFilter(
-    taskListFilterScopeKey({ agentId, projectId, workspaceId: activeWorkspaceId }),
-  );
+  const pageScope = taskListFilterScopeKey({ agentId, projectId, workspaceId: activeWorkspaceId });
+  const [storedFilter, setFilter] = useTaskListFilter(pageScope);
   const filter = useMemo(
     () =>
       pickOfferedTaskFilter(
@@ -714,6 +685,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
           >
             {isScheduledCollection ? (
               <ScheduledTaskTable
+                collapseScope={taskListCollapseScopeKey(pageScope, 'scheduled')}
                 data={isCollectionListInit || undefined}
                 emptyDescription={filterEmptyDescription}
                 error={collectionSWR.error}
@@ -737,6 +709,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
               />
             ) : (
               <TaskList
+                collapseScope={taskListCollapseScopeKey(pageScope, `mine:${myTaskScope}`)}
                 data={isCollectionListInit || undefined}
                 emptyAction={filterEmptyAction}
                 error={collectionSWR.error ?? projectListError}
@@ -803,6 +776,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
               />
             )}
             <TaskList
+              collapseScope={taskListCollapseScopeKey(pageScope, 'tasks')}
               createScope={groupCreateScope}
               data={isTaskListInit || undefined}
               emptyAction={filterEmptyAction}

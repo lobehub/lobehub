@@ -333,7 +333,9 @@ export const AskCard = ({
                   t('deletedMember'),
                 ),
               })
-            : t('ask.waitingFor', { name: memberName(requester, t('deletedMember')) })}
+            : ask.status === 'closed'
+              ? t('ask.closed')
+              : t('ask.waitingFor', { name: memberName(requester, t('deletedMember')) })}
         </Text>
       )}
     </div>

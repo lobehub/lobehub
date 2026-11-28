@@ -66,6 +66,22 @@ describe('GatewayConnectionService system_info_request', () => {
     });
   });
 
+  /** @example The server keeps a relayed result's MCP Apps view only for a client that serves it. */
+  it('reports that its tunneled MCP calls support MCP Apps views', async () => {
+    getShellInfoMock.mockResolvedValue({ displayName: 'zsh' });
+    const client = createClient();
+
+    await (service as any).handleSystemInfoRequest(client, { requestId: 'req-apps' });
+
+    expect(client.sendSystemInfoResponse).toHaveBeenCalledWith({
+      requestId: 'req-apps',
+      result: {
+        success: true,
+        systemInfo: expect.objectContaining({ supportedMcpFeatures: ['apps'] }),
+      },
+    });
+  });
+
   /** @example A capable bundled CLI enables native app-server runs on a Desktop gateway connection. */
   it('advertises the native runtimes reported by the bundled execution CLI', async () => {
     // ROOT CAUSE:

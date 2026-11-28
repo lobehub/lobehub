@@ -16,7 +16,10 @@ import { ArrowRight } from 'lucide-react';
 import React, { memo, type MouseEvent, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
+import SectionTitle, {
+  sectionItemClassName,
+  useSectionTriggerStyle,
+} from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchAgentLabels } from '@/hooks/useFetchAgentLabels';
@@ -48,16 +51,7 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
   const { createTopLevelMenuItems, isLoading } = useCreateMenuItems();
   const addMenuItems = useMemo(() => createTopLevelMenuItems(), [createTopLevelMenuItems]);
 
-  const handleOpenConfigGroupModal = useCallback(
-    (scope?: 'private' | 'public') => {
-      openConfigGroupModal(scope);
-    },
-    [openConfigGroupModal],
-  );
-
-  const dropdownMenu = useAgentActionsDropdownMenu({
-    openConfigGroupModal: handleOpenConfigGroupModal,
-  });
+  const dropdownMenu = useAgentActionsDropdownMenu({ openConfigGroupModal });
 
   const navigate = useWorkspaceAwareNavigate();
   const handleViewAll = useCallback(
@@ -70,7 +64,7 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
   );
 
   return (
-    <AccordionItem value={itemKey}>
+    <AccordionItem className={sectionItemClassName} value={itemKey}>
       <ContextMenuTrigger items={dropdownMenu}>
         <AccordionHeader>
           <AccordionTrigger style={sectionTriggerStyle}>

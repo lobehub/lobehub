@@ -13,18 +13,16 @@ const numberOption = (value: string) => {
   return result;
 };
 
-const collect = (value: string, previous: string[] = []) => [...previous, value];
-
 /**
  * Operation-scoped: reads stay in the run's Channel (its own conversation, or another Thread of
- * it by `--thread`), and messages go out as the run's requester. Never falls back to the device
+ * it by `--thread`), and an Agent it asks is asked as the run's Agent. Never falls back to the device
  * owner's account.
  */
 export const registerChannelCommand = (program: Command) => {
   const channel = program
     .command('channel')
     .description(
-      'Read the current Agent run’s Channel conversation, message Agents in other Channels, and message people for your requester',
+      'Read the current Agent run’s Channel conversation, and ask Agents in other Channels',
     );
   channel
     .command('history')
@@ -67,6 +65,27 @@ export const registerChannelCommand = (program: Command) => {
       );
     });
   channel
+    .command('react <messageId> <emoji>')
+    .description(
+      'React to a message in this conversation with an emoji, as the running Agent; it posts nothing and notifies nobody',
+    )
+    .option('--remove', 'Remove your reaction instead')
+    .option('--thread <threadId>', 'The Thread `history --thread` returned the message from')
+    .option('--json', 'Print structured JSON')
+    .action(
+      async (messageId: string, emoji: string, options: { remove?: boolean; thread?: string }) => {
+        const client = await getTrpcClient();
+        outputJson(
+          await client.channel.react.mutate({
+            emoji,
+            messageId,
+            remove: options.remove,
+            threadId: options.thread,
+          }),
+        );
+      },
+    );
+  channel
     .command('threads')
     .description('List the Threads of this Channel, newest first, to read one with --thread')
     .option('--active', 'Only Threads where you have a queued or running reply')
@@ -105,21 +124,21 @@ export const registerChannelCommand = (program: Command) => {
   channel
     .command('send <channelId>')
     .description(
-      'Message Agents in another Channel for your requester; they answer there. Not for the current Channel: your final answer is posted there',
+      'Ask one Agent, in the conversation between you two; its answer wakes you there. channelId only hints where the person reaches it',
     )
-    .requiredOption('--agent <agentId>', 'Agent to address (repeatable, up to 5)', collect)
+    .requiredOption('--agent <agentId>', 'Agent to ask')
     .requiredOption('-c, --content <text>', 'The message, self-contained')
     .option('--request-key <key>', 'Reuse to retry without posting twice')
     .option('--json', 'Print structured JSON')
     .action(
       async (
         channelId: string,
-        options: { agent: string[]; content: string; requestKey?: string },
+        options: { agent: string; content: string; requestKey?: string },
       ) => {
         const client = await getTrpcClient();
         outputJson(
           await client.channel.sendMessage.mutate({
-            agentIds: options.agent,
+            agentIds: [options.agent],
             channelId,
             content: options.content,
             requestKey: options.requestKey ?? randomUUID(),
@@ -127,34 +146,4 @@ export const registerChannelCommand = (program: Command) => {
         );
       },
     );
-  channel
-    .command('people')
-    .description('List the people your requester can message one-on-one')
-    .option('--query <text>', 'Match part of a name or @handle')
-    .option('--limit <count>', 'People to return (1–20, default 10)', numberOption)
-    .option('--json', 'Print structured JSON')
-    .action(async (options: { limit?: number; query?: string }) => {
-      const client = await getTrpcClient();
-      outputJson(
-        await client.channel.listPeople.query({ limit: options.limit, query: options.query }),
-      );
-    });
-  channel
-    .command('dm <userId>')
-    .description(
-      'Message a person for your requester, in their one-on-one conversation; the person is notified and nobody answers you there',
-    )
-    .requiredOption('-c, --content <text>', 'The message, self-contained, written for that person')
-    .option('--request-key <key>', 'Reuse to retry without posting twice')
-    .option('--json', 'Print structured JSON')
-    .action(async (userId: string, options: { content: string; requestKey?: string }) => {
-      const client = await getTrpcClient();
-      outputJson(
-        await client.channel.messagePerson.mutate({
-          content: options.content,
-          requestKey: options.requestKey ?? randomUUID(),
-          userId,
-        }),
-      );
-    });
 };

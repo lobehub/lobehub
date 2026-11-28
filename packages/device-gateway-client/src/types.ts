@@ -1,4 +1,6 @@
+import type { McpElicitationCall } from '@lobechat/mcp-elicitation/types';
 import type {
+  AgentRunCredential,
   CodexCollaborationMode,
   DeviceMetricSample,
   HeteroPermissionMode,
@@ -48,6 +50,14 @@ export interface DeviceSystemInfo {
    * `codex-app-server-v1` runs `lh hetero exec --codex-app-server` with native turn provenance.
    */
   supportedAgentRuntimes?: string[];
+  /**
+   * MCP features this client's tunneled MCP calls support; absent on older
+   * clients. `'apps'`: it runs a call with the options of
+   * {@link GatewayMcpCallOptions} and answers the `readMcpUiResource` RPC, so
+   * the server may keep the MCP Apps view a result names and relay the view's
+   * own calls and reads. A client without it gets plain results only.
+   */
+  supportedMcpFeatures?: GatewayMcpFeature[];
   /**
    * Tunneled tool-call kinds this client runs beyond plain `'tool'` calls
    * (e.g. `'mcp'`); absent on older clients. The desktop app runs MCP calls
@@ -166,6 +176,25 @@ export interface AuthExpiredMessage {
   type: 'auth_expired';
 }
 
+/** An MCP feature a device client reports in `supportedMcpFeatures`. */
+export type GatewayMcpFeature = 'apps';
+
+/**
+ * How a tunneled MCP call runs, as `MCPService.callTool` runs one in the
+ * server: whether MCP Apps are on for the user, and whether an MCP App view
+ * (or a thread entrypoint) made it. Sent only to a client that reports `'apps'`
+ * in `supportedMcpFeatures`; an older one ignores the field and runs the call
+ * as a plain model call.
+ */
+export interface GatewayMcpCallOptions {
+  /** An MCP App view's `tools/call`: only tools visible to the app run, media stays inline. */
+  fromApp?: boolean;
+  /** A thread entrypoint's call: only a tool that declares one runs, with `{}`. */
+  fromEntrypoint?: boolean;
+  /** The user's `mcp_apps` flag: the session announces MCP Apps, a result names its view. */
+  mcpApps?: boolean;
+}
+
 /**
  * Stdio MCP connection params forwarded to the device for a tunneled MCP tool
  * call. The cloud server can't spawn the user's local MCP binary, so the
@@ -174,7 +203,10 @@ export interface AuthExpiredMessage {
 export interface GatewayMcpStdioParams {
   args: string[];
   command: string;
+  elicitation?: McpElicitationCall;
   env?: Record<string, string>;
+  /** How the call runs; see {@link GatewayMcpCallOptions}. */
+  mcpCall?: GatewayMcpCallOptions;
   name: string;
   type: 'stdio';
 }
@@ -187,7 +219,10 @@ export interface GatewayMcpStdioParams {
  */
 export interface GatewayMcpHttpParams {
   auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
+  elicitation?: McpElicitationCall;
   headers?: Record<string, string>;
+  /** How the call runs; see {@link GatewayMcpCallOptions}. */
+  mcpCall?: GatewayMcpCallOptions;
   name: string;
   type: 'http';
   url: string;
@@ -384,6 +419,14 @@ export interface AgentRunRequestMessage {
   prompt: string;
   resumeFallbackSystemContext?: string;
   resumeSessionId?: string;
+  /**
+   * Credential the server hands this run instead of installing it on the
+   * device (Claude Code only). The device spawns the run with it, never writes
+   * it to disk, and it outranks an installed credential and account routing.
+   * A secret: never log, persist or echo this field or a message holding it.
+   * Optional — omitted for runs on the device's own login and older servers.
+   */
+  runCredential?: AgentRunCredential;
   /**
    * Static context injected before the user prompt (workspace conventions,
    * selected context). The desktop sends it to `lh hetero exec` as the first

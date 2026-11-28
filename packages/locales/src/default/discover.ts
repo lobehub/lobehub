@@ -21,11 +21,11 @@ export default {
   'assistants.description': 'About this Agent',
   'assistants.detail': 'Details',
   'assistants.details.capabilities.knowledge.desc':
-    'This Agent includes the following Libraries to help answer more questions.',
-  'assistants.details.capabilities.knowledge.title': 'Library',
+    'This Agent includes the following knowledge bases to help answer more questions.',
+  'assistants.details.capabilities.knowledge.title': 'Knowledge Base',
   'assistants.details.capabilities.plugin.desc':
-    'This Agent includes the following Skills to help you complete more tasks.',
-  'assistants.details.capabilities.plugin.title': 'Built-in Skills',
+    'This Agent includes the following tools to help you complete more tasks.',
+  'assistants.details.capabilities.plugin.title': 'Tools',
   'assistants.details.capabilities.title': 'Agent Capabilities',
   'assistants.details.overview.example': 'Agent Demo',
   'assistants.details.overview.title': 'Overview',
@@ -59,7 +59,7 @@ export default {
   'assistants.marketSource.legacy': 'Legacy Marketplace',
   'assistants.marketSource.new': 'New Marketplace',
   'assistants.more': 'More',
-  'assistants.plugins': 'Integrated Skills',
+  'assistants.plugins': 'Integrated Tools',
   'assistants.recentSubmits': 'Recent Updates',
   'assistants.sorts.haveSkills': 'Skilled',
   'assistants.sorts.mostUsage': 'Most Usage',
@@ -85,8 +85,8 @@ export default {
   'assistants.systemRole': 'Agent Profile',
   'assistants.tokenUsage': 'Agent Prompt Token Usage',
   'assistants.try': 'Try',
-  'assistants.withKnowledge': 'This Agent includes Libraries',
-  'assistants.withPlugin': 'This Agent includes Skills',
+  'assistants.withKnowledge': 'This Agent includes knowledge bases',
+  'assistants.withPlugin': 'This Agent includes tools',
   'back': 'Back to Discovery',
   'apps.addMcp': 'Custom',
   'apps.back': 'Back',
@@ -262,8 +262,8 @@ export default {
   'filterBy.other.functionCall': 'Supports Function Calls',
   'filterBy.other.title': 'Other',
   'filterBy.other.vision': 'Supports Visual Recognition',
-  'filterBy.other.withKnowledge': 'Includes Libraries',
-  'filterBy.other.withTool': 'Includes Skills',
+  'filterBy.other.withKnowledge': 'Includes Knowledge Bases',
+  'filterBy.other.withTool': 'Includes Tools',
   'filterBy.pricing': 'Model Pricing',
   'filterBy.timePeriod.all': 'All Time',
   'filterBy.timePeriod.day': 'Last 24 Hours',
@@ -318,11 +318,11 @@ export default {
 
   'home.featuredModels': 'Featured Models',
 
-  'home.featuredPlugins': 'Featured Skills',
+  'home.featuredPlugins': 'Featured Connectors',
 
   'home.featuredProviders': 'Featured Providers',
 
-  'home.featuredTools': 'Featured Skills',
+  'home.featuredTools': 'Recommended Connectors',
 
   'home.more': 'Discover More',
 
@@ -415,9 +415,9 @@ export default {
 
   'mcp.categories.web-search.name': 'Information Retrieval',
 
-  'mcp.details.agents.empty': 'No agents are using this skill yet',
+  'mcp.details.agents.empty': 'No agents are using this connector yet',
   'mcp.details.agents.networkError': 'Failed to load data. Check network and retry.',
-  'mcp.details.agents.title': 'Agents Using This Skill',
+  'mcp.details.agents.title': 'Agents Using This Connector',
 
   'mcp.details.connectionType.hybrid.desc':
     'This service can run locally or in the cloud depending on configuration or usage scenario, offering dual operation capability.',
@@ -446,7 +446,7 @@ export default {
 
   'mcp.details.deployment.connectionType': 'Connection Type',
 
-  'mcp.details.deployment.description': 'Skill Installation and Deployment Method',
+  'mcp.details.deployment.description': 'Connector Installation and Deployment Method',
 
   'mcp.details.deployment.descriptionPlaceholder': 'Optional Description',
 
@@ -474,7 +474,7 @@ export default {
     '- Navigate to **Settings**, then select Cursor settings\n- Choose **MCP** on the left\n- Click **Add New Global MCP Server** at the top right\n- Copy and paste the server configuration into the existing file, then save',
 
   'mcp.details.deployment.platform.steps.lobeChat':
-    '- Open the **LobeHub Desktop** app\n- Go to **Settings** - **Default Agent**\n- Then select **Skill Settings** - **Custom Skills**\n- Click **Quick Import JSON Configuration**\n- Copy and paste the server configuration into the text box, then install',
+    '- Open the **LobeHub Desktop** app\n- Go to **Settings** - **Default Agent**\n- Then select **Connector Settings** - **Custom Connectors**\n- Click **Quick Import JSON Configuration**\n- Copy and paste the server configuration into the text box, then install',
 
   'mcp.details.deployment.platform.steps.openai':
     '- Open your **OpenAI app** or development environment\n- Configure MCP tools in the **Responses API**\n- Add MCP blocks to the **tools** array in API requests\n- Set **server_url** to your MCP server endpoint\n- Include required authentication headers (API key, token, etc.)\n- Use the `allowed_tools` parameter to restrict exposed tools\n- Set `require_approval` to control tool execution approval',
@@ -549,7 +549,7 @@ export default {
 
   'mcp.details.schema.resources.title': 'Resource List',
 
-  'mcp.details.schema.title': 'Skill Features',
+  'mcp.details.schema.title': 'Connector Features',
 
   'mcp.details.schema.tools.desc':
     'Functional interfaces exposed to large language models (LLM) to perform operations',
@@ -641,7 +641,7 @@ export default {
   'mcp.details.scoreLevel.a.desc':
     'This MCP Server has been rigorously validated, providing comprehensive features and a high-quality user experience.',
 
-  'mcp.details.scoreLevel.a.fullTitle': 'Excellent Skill',
+  'mcp.details.scoreLevel.a.fullTitle': 'Excellent Quality',
 
   'mcp.details.scoreLevel.a.title': 'Premium',
 
@@ -663,11 +663,11 @@ export default {
 
   'mcp.details.settings.capabilities.resources': 'Resources',
 
-  'mcp.details.settings.capabilities.title': 'Skill Capabilities',
+  'mcp.details.settings.capabilities.title': 'Connector Capabilities',
 
   'mcp.details.settings.capabilities.tools': 'Tools',
 
-  'mcp.details.settings.configuration.title': 'Skill Configuration',
+  'mcp.details.settings.configuration.title': 'Connector Configuration',
 
   'mcp.details.settings.connection.args': 'Startup Arguments',
 
@@ -681,7 +681,7 @@ export default {
 
   'mcp.details.settings.saveSettings': 'Save Settings',
 
-  'mcp.details.settings.title': 'Skill Settings',
+  'mcp.details.settings.title': 'Connector Settings',
 
   'mcp.details.sidebar.install': 'Install MCP Server',
 
@@ -764,9 +764,9 @@ export default {
 
   'mcp.sorts.installCount': 'Install Count',
 
-  'mcp.sorts.isFeatured': 'Featured Skills',
+  'mcp.sorts.isFeatured': 'Featured Connectors',
 
-  'mcp.sorts.isValidated': 'Validated Skills',
+  'mcp.sorts.isValidated': 'Validated Connectors',
 
   'mcp.sorts.promptsCount': 'Number of Prompts',
 
@@ -913,21 +913,21 @@ export default {
 
   'plugins.builtinTag': 'Built-in',
 
-  'plugins.community': 'Marketplace Skills',
+  'plugins.community': 'Marketplace Connectors',
 
-  'plugins.details.settings.title': 'Skill Settings',
+  'plugins.details.settings.title': 'Connector Settings',
 
-  'plugins.details.summary.title': 'What can you do with this skill?',
+  'plugins.details.summary.title': 'What can you do with this connector?',
 
-  'plugins.details.tools.title': 'Skill Tools',
+  'plugins.details.tools.title': 'Tools',
 
-  'plugins.install': 'Install Skill',
+  'plugins.install': 'Install Connector',
 
   'plugins.installed': 'Installed',
 
   'plugins.legacyTag': 'Legacy',
 
-  'plugins.list': 'Skill List',
+  'plugins.list': 'Connector List',
 
   'plugins.meta.description': 'Description',
 
@@ -939,15 +939,15 @@ export default {
 
   'plugins.more': 'More',
 
-  'plugins.official': 'Official Skills',
+  'plugins.official': 'Official Connectors',
 
   'plugins.recentSubmits': 'Recently Updated',
 
   'plugins.sorts.createdAt': 'Recently Published',
 
-  'plugins.sorts.identifier': 'Skill ID',
+  'plugins.sorts.identifier': 'Connector ID',
 
-  'plugins.sorts.title': 'Skill Name',
+  'plugins.sorts.title': 'Connector Name',
 
   'plugins.suggestions': 'Related Recommendations',
 
@@ -1266,7 +1266,7 @@ export default {
 
   'tab.model': 'Model',
 
-  'tab.plugin': 'Skill',
+  'tab.plugin': 'Connector',
 
   'tab.provider': 'Provider',
 
@@ -1285,7 +1285,7 @@ export default {
 
   'user.favoriteAgents': 'Saved Agents',
 
-  'user.favoritePlugins': 'Saved Skills',
+  'user.favoritePlugins': 'Saved Connectors',
 
   'user.follow': 'Follow',
 
@@ -1412,7 +1412,7 @@ export default {
 
   'user.noFavoriteAgents': 'No saved Agents yet',
 
-  'user.noFavoritePlugins': 'No saved Skills yet',
+  'user.noFavoritePlugins': 'No saved connectors yet',
 
   'user.noGroups.title': 'No Agent Groups yet',
 
@@ -1423,11 +1423,11 @@ export default {
 
   'user.noForkedAgents': 'No forked Agents yet',
 
-  'user.noPlugins': "This user hasn't published any Skills yet",
+  'user.noPlugins': "This user hasn't published any connectors yet",
 
   'user.noSkills': "This user hasn't published any Skills yet",
 
-  'user.plugins': 'Skills',
+  'user.plugins': 'Connectors',
 
   'user.publishedAgents': 'Created Agents',
 

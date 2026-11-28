@@ -2,7 +2,7 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../../../api/client';
-import { isOperationTokenRefusal } from '../../../api/operationTokenFallback';
+import { isOperationTokenRefusal } from '../../../api/operationToken';
 import { outputJson } from '../../../utils/format';
 import { log } from '../../../utils/logger';
 import { assertReportLanguage } from '../language';
@@ -16,9 +16,8 @@ import { assertReportLanguage } from '../language';
  * round's verifier writes it, and `upsertReport` stays off the operation-token
  * allowlist. A token without `acceptance:evidence` is refused one step earlier,
  * on the language check's `user.getUserState`, and is no closer to writing it.
- * A same-account stored login has already been tried by the time the refusal
- * reaches the command (`operationTokenFallbackLink`), so it is final; a bare
- * 401 only got retried. The commands below take the run's own operation id,
+ * A run never retries with the machine's stored login, so the refusal is
+ * final. The commands below take the run's own operation id,
  * which the token is bound to.
  */
 export const reportRefusalGuidance = (runId: string): string[] => {

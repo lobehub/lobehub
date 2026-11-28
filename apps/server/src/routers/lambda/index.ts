@@ -23,6 +23,7 @@ import { workspaceTeamRouter } from '@/business/server/lambda-routers/workspaceT
 import { workspaceUsageRouter } from '@/business/server/lambda-routers/workspaceUsage';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 
+import { a2uiRouter } from './a2ui';
 import { acceptanceRouter } from './acceptance';
 import { acceptanceCommentRouter } from './acceptanceComment';
 import { agentRouter } from './agent';
@@ -88,6 +89,7 @@ import { knowledgeBaseRouter } from './knowledgeBase';
 import { linearRouter } from './linear';
 import { llmGenerationTracingRouter } from './llmGenerationTracing';
 import { marketRouter } from './market';
+import { mcpElicitationRouter } from './mcpElicitation';
 import { meetingRouter } from './meeting';
 import { messageRouter } from './message';
 import { messengerRouter } from './messenger';
@@ -134,6 +136,7 @@ import { workRouter } from './work';
 import { workspaceUserSettingsRouter } from './workspaceUserSettings';
 
 export const lambdaRouter = router({
+  mcpElicitation: mcpElicitationRouter,
   acceptance: acceptanceRouter,
   acceptanceComment: acceptanceCommentRouter,
   agent: agentRouter,
@@ -155,6 +158,7 @@ export const lambdaRouter = router({
   agentRunBoard: agentRunBoardRouter,
   agentSignal: agentSignalRouter,
   agentSteerQueue: agentSteerQueueRouter,
+  a2ui: a2uiRouter,
   artboard: artboardRouter,
   canvas: canvasRouter,
   changelog: changelogRouter,

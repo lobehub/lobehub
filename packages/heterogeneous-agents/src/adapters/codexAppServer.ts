@@ -232,7 +232,8 @@ const toToolResult = (item: ToolItem): ToolResultData => {
                 outputTruncated: true,
               }
             : {}),
-          output: output.output,
+          // `stdout` is the canonical field (see `getRunCommandStdout`);
+          // also writing `output` stored the same text twice.
           stdout: output.output,
           success,
         },
@@ -666,7 +667,6 @@ export class CodexAppServerAdapter {
     return [
       this.toolState(params.itemId, {
         isBackground: false,
-        output,
         stdout: output,
       }),
     ];

@@ -14,6 +14,7 @@ import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import type { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
 import { platformRegistry, resolveConnectionMode } from '../../bot/platforms';
+import { isBotAsleep } from '../botSleep';
 import { buildMessageGatewayRefusalStatus } from '../gatewayMapping';
 import {
   type getMessageGatewayClient,
@@ -209,7 +210,13 @@ export async function buildDesiredConnections(
             );
           }
 
-          if (!allowed) await markGated(platform, provider);
+          if (!allowed) {
+            await markGated(platform, provider);
+          } else if (await isBotAsleep(platform, provider)) {
+            // Asleep for being idle: excluded and disconnected like a gated
+            // bot, but labelled `sleeping` so the owner learns why.
+            allowed = false;
+          }
 
           return { allowed, connectionMode, provider };
         },
@@ -231,7 +238,7 @@ export async function buildDesiredConnections(
       // the sync. The per-id set still reaches the gated-disconnect step.
       if (gatedOnPlatform > 0)
         log(
-          'Gateway sync: %d paid-gated %s provider(s) excluded from desired set',
+          'Gateway sync: %d paid-gated or asleep %s provider(s) excluded from desired set',
           gatedOnPlatform,
           platform,
         );

@@ -86,6 +86,17 @@ vi.mock('@/server/services/market', () => ({
   },
 }));
 
+const { getAllModels, loadModels } = vi.hoisted(() => ({
+  getAllModels: vi.fn(),
+  loadModels: vi.fn(),
+}));
+vi.mock('@/database/models/aiModel', () => ({
+  AiModelModel: class {
+    getAllModels = getAllModels;
+  },
+}));
+vi.mock('@/business/client/model-bank/loadModels', () => ({ loadModels }));
+
 const source = (state: Record<string, unknown> = {}) => ({
   ctx: { serverDB: {}, userId: 'owner-1', workspaceId: 'ws-1' } as never,
   state: state as never,
@@ -462,6 +473,42 @@ describe('createServerContextFactProviders', () => {
 
       expect(doc).toMatchObject({ contentCharCount: 14_100 });
       expect(redisIndexGet).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listEnabledProviders', () => {
+    const card = {
+      abilities: { functionCall: true, reasoning: true, vision: true },
+      displayName: 'DeepSeek V4.1 Flash',
+      id: 'deepseek-flash',
+      providerId: 'deepseek',
+    };
+    const row = (abilities: unknown) => ({
+      abilities,
+      enabled: true,
+      id: 'deepseek-flash',
+      providerId: 'deepseek',
+      type: 'chat',
+    });
+    const listAbilities = async (abilities: unknown) => {
+      getAllModels.mockResolvedValue([row(abilities)]);
+      loadModels.mockResolvedValue([card]);
+      const result = await createServerContextFactProviders(source()).listEnabledProviders!();
+      return result![0].models[0].abilities;
+    };
+
+    it('falls back to the catalog card when the saved abilities are empty', async () => {
+      await expect(listAbilities({})).resolves.toMatchObject({ functionCall: true, vision: true });
+    });
+
+    it('lets a non-empty saved config replace the card, as the run does', async () => {
+      await expect(listAbilities({ functionCall: true, reasoning: true })).resolves.toEqual({
+        audio: false,
+        functionCall: true,
+        reasoning: true,
+        video: false,
+        vision: false,
+      });
     });
   });
 

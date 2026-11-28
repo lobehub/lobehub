@@ -1,6 +1,5 @@
 import { lstat, realpath } from 'node:fs/promises';
 
-import type { AntigravityQuotaParams } from '@lobechat/heterogeneous-agents/quota';
 import {
   copyLocalFiles,
   createLocalDirectory,
@@ -42,9 +41,14 @@ import type {
   CreateDirectoryParams,
   CreateFileParams,
 } from '@lobechat/local-file-shell/types';
-import type { DeviceCliRestartParams } from '@lobechat/types';
+import { AGENT_CREDENTIAL_UNSUPPORTED_MESSAGE, type DeviceCliRestartParams } from '@lobechat/types';
 
-import { getAntigravityQuota } from './antigravityQuota';
+import {
+  assertOutsideAgentCredentialRoot,
+  fileRpcGuardedPaths,
+} from './agentCredentials/pathGuard';
+import { toRedactedAgentCredentialError } from './agentCredentials/redact';
+import { defaultAgentCredentialRootDir } from './agentCredentials/store';
 import { listClaudeCodeMemory } from './claudeCodeMemory';
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
 import { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
@@ -75,6 +79,7 @@ import type {
   ProjectDirectoryListParams,
   ProjectFileIndexParams,
   ProjectFileSearchParams,
+  ReadMcpUiResourceParams,
   ReadTerminalParams,
   ResizeTerminalParams,
   TrashLocalFilesParams,
@@ -96,7 +101,7 @@ export const DEVICE_RPC_METHODS = [
   'initWorkspace',
   'listHeterogeneousAgentModels',
   'listMcpTools',
-  'getAntigravityQuota',
+  'readMcpUiResource',
   'getClaudeCodeQuota',
   'getCodexQuota',
   'getKimiCodeQuota',
@@ -158,6 +163,11 @@ export const DEVICE_RPC_METHODS = [
   'getCliUpdateState',
   'checkCliUpdate',
   'restartCli',
+  // Provider credentials for heterogeneous agents. Server-internal only: the
+  // params carry a secret, so they never come from an LLM-facing tool call.
+  'installAgentCredential',
+  'removeAgentCredential',
+  'checkAgentCredential',
 ] as const;
 
 export type DeviceRpcMethod = (typeof DEVICE_RPC_METHODS)[number];
@@ -170,7 +180,25 @@ export const APP_UPDATE_UNSUPPORTED_MESSAGE = 'This device client does not suppo
 export const CLI_UPDATE_UNSUPPORTED_MESSAGE =
   'This device client does not support remote CLI updates';
 
-/** Why a client that runs no MCP servers rejects `listMcpTools`. */
+export { AGENT_CREDENTIAL_UNSUPPORTED_MESSAGE };
+
+/**
+ * Run an agent-credential handler so its failure can never carry the secret
+ * back over the gateway or into a device / server log.
+ */
+const runAgentCredentialRpc = async <T>(
+  handler: ((params: unknown) => Promise<T>) | undefined,
+  params: unknown,
+): Promise<T> => {
+  if (!handler) throw new Error(AGENT_CREDENTIAL_UNSUPPORTED_MESSAGE);
+  try {
+    return await handler(params);
+  } catch (error) {
+    throw toRedactedAgentCredentialError(error, params);
+  }
+};
+
+/** Why a client that runs no MCP servers rejects `listMcpTools` and `readMcpUiResource`. */
 export const MCP_UNSUPPORTED_MESSAGE = 'This device client does not support MCP servers';
 
 /** Why a client without a recoverable trash (the CLI daemon) rejects `trashLocalFiles`. */
@@ -232,6 +260,16 @@ export const executeDeviceRpc = async (
   params: unknown,
   deps: DeviceControlDeps,
 ): Promise<unknown> => {
+  // No file RPC may read, list or write inside the agent-credential store,
+  // whatever `..` or symlink the path takes to get there.
+  const guardedPaths = fileRpcGuardedPaths(method, params);
+  if (guardedPaths.length > 0) {
+    await assertOutsideAgentCredentialRoot(
+      guardedPaths,
+      deps.agentCredentialRootDir ?? defaultAgentCredentialRootDir(),
+    );
+  }
+
   switch (method) {
     // Remote workspace share: the host owns the gateway connections, so both
     // handlers are host-injected. A host that can't manage a second connection
@@ -264,12 +302,13 @@ export const executeDeviceRpc = async (
       return deps.listMcpTools(params as ListMcpToolsParams);
     }
 
-    case 'getClaudeCodeQuota': {
-      return getClaudeCodeQuota(params as GetClaudeCodeQuotaParams);
+    case 'readMcpUiResource': {
+      if (!deps.readMcpUiResource) throw new Error(MCP_UNSUPPORTED_MESSAGE);
+      return deps.readMcpUiResource(params as ReadMcpUiResourceParams);
     }
 
-    case 'getAntigravityQuota': {
-      return getAntigravityQuota(params as AntigravityQuotaParams);
+    case 'getClaudeCodeQuota': {
+      return getClaudeCodeQuota(params as GetClaudeCodeQuotaParams);
     }
 
     case 'getCodexQuota': {
@@ -640,6 +679,18 @@ export const executeDeviceRpc = async (
     case 'restartCli': {
       if (!deps.restartCli) throw new Error(CLI_UPDATE_UNSUPPORTED_MESSAGE);
       return deps.restartCli(params as DeviceCliRestartParams);
+    }
+
+    case 'installAgentCredential': {
+      return runAgentCredentialRpc(deps.installAgentCredential, params);
+    }
+
+    case 'removeAgentCredential': {
+      return runAgentCredentialRpc(deps.removeAgentCredential, params);
+    }
+
+    case 'checkAgentCredential': {
+      return runAgentCredentialRpc(deps.checkAgentCredential, params);
     }
 
     default: {

@@ -1,6 +1,6 @@
 import { useEditor } from '@lobehub/editor/react';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { Paperclip } from 'lucide-react';
+import { AlignLeftIcon, Paperclip } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,7 +14,8 @@ import { lambdaClient } from '@/libs/trpc/client';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
-import { TASK_INSTRUCTION_EXTRA_PLUGINS } from './taskInstructionPlugins';
+import { TASK_INSTRUCTION_EDITOR_PROPS } from './taskInstructionPlugins';
+import TaskSectionHeader from './TaskSectionHeader';
 import { useTaskInstructionAutosave } from './useTaskInstructionAutosave';
 
 // Stable lock RPC binding for the task resource.
@@ -119,6 +120,20 @@ const TaskInstruction = memo(() => {
 
   return (
     <Flexbox gap={4}>
+      <TaskSectionHeader
+        icon={AlignLeftIcon}
+        title={t('taskDetail.instruction')}
+        extra={
+          showAttach ? (
+            <ActionIcon
+              icon={Paperclip}
+              size={'small'}
+              title={t('upload.action.tooltip')}
+              onClick={handleAttach}
+            />
+          ) : undefined
+        }
+      />
       <EditingIndicator
         holderId={lock.lockedByOther ? lock.holderId : null}
         pending={canEditTask && lock.pending}
@@ -135,26 +150,18 @@ const TaskInstruction = memo(() => {
       >
         <div onFocus={handleFocus}>
           <EditorCanvas
+            {...TASK_INSTRUCTION_EDITOR_PROPS}
             contentRevision={instructionRevision}
             disabled={!canEditTask}
             editable={!lock.lockedByOther && !lock.pending}
             editor={editor}
             editorData={editorData}
             entityId={taskId}
-            extraPlugins={TASK_INSTRUCTION_EXTRA_PLUGINS}
             placeholder={t('taskDetail.instructionPlaceholder')}
             onContentChange={handleContentChange}
           />
         </div>
       </CollapsibleContent>
-      {showAttach && (
-        <ActionIcon
-          icon={Paperclip}
-          size={'small'}
-          title={t('upload.action.tooltip')}
-          onClick={handleAttach}
-        />
-      )}
     </Flexbox>
   );
 });

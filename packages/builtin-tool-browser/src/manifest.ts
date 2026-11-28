@@ -53,10 +53,15 @@ export const BrowserManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Fill a text input, textarea, or contenteditable identified by a snapshot ref, or choose an option of a native select (combobox) by its value or visible label. Set submit=true to press Enter afterwards.',
+        'Fill a text input, textarea, contenteditable or code editor (Monaco, marked [code-editor=monaco] in the snapshot) identified by a snapshot ref, or choose an option of a native select (combobox) by its value or visible label. A code editor edit is read back before it reports success. Set submit=true to press Enter afterwards.',
       name: BrowserApiName.fill,
       parameters: {
         properties: {
+          oldText: {
+            description:
+              'Code editors only: replace this exact passage, which must occur once, with text. Omit to replace the whole document.',
+            type: 'string',
+          },
           ref: {
             description: 'Element ref from the latest snapshot.',
             type: 'string',
@@ -137,7 +142,7 @@ export const BrowserManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Extract the readable text content of the current page (for quoting or summarizing).',
+        'Extract the readable text content of the current page (for quoting or summarizing). Code editors are appended with their exact text.',
       name: BrowserApiName.readPage,
       parameters: {
         properties: {},

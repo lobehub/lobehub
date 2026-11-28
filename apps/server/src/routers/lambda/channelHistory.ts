@@ -5,6 +5,7 @@ import { ChannelError } from '@/database/repositories/channel';
 import { heteroAuthedProcedure } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import type { HeteroOperationCapability } from '@/libs/trpc/utils/internalJwt';
+import { ChannelCardService } from '@/server/services/channel/ChannelCardService';
 import { ChannelHistoryService } from '@/server/services/channel/ChannelHistoryService';
 import { ChannelMessagingService } from '@/server/services/channel/ChannelMessagingService';
 import {
@@ -38,10 +39,9 @@ const operationProcedure = (capability: HeteroOperationCapability) =>
       ] as const;
       const result = await next({
         ctx: {
+          channelCards: new ChannelCardService(...args),
           channelHistory: new ChannelHistoryService(...args),
-          // The token was checked for this capability above; a user's chat turn or an owner's
-          // bot run carries `channel:message` without a Channel of its own.
-          channelMessaging: new ChannelMessagingService(...args, { allowDirectRun: true }),
+          channelMessaging: new ChannelMessagingService(...args),
         },
       });
       if (!result.ok && result.error.cause instanceof ChannelError)
@@ -66,6 +66,20 @@ const historyProcedure = operationProcedure('channel:read');
 const messagingProcedure = operationProcedure('channel:message');
 
 export const channelHistoryProcedures = {
+  /**
+   * The card-drawing guide (`lh card guide`): the component index, or with `components` their full
+   * schemas and examples, so an external runtime learns the catalog on demand.
+   */
+  cardGuide: historyProcedure
+    .input(z.object({ components: z.array(z.string().min(1)).max(8).optional() }).optional())
+    .query(({ ctx, input }) => ctx.channelCards.guide(input?.components)),
+  /**
+   * Validates a card like the builtin `renderUI` and records it under the run, so its reply posts
+   * it. An invalid card returns its errors; the same `surfaceId` again replaces the card.
+   */
+  renderCard: historyProcedure
+    .input(z.object({ operations: z.unknown() }).strict())
+    .mutation(({ ctx, input }) => ctx.channelCards.render(input.operations)),
   readMessages: historyProcedure
     .input(
       z
@@ -111,30 +125,6 @@ export const channelHistoryProcedures = {
         .strict(),
     )
     .query(({ ctx, input }) => ctx.channelMessaging.listChannels(input)),
-  listPeople: messagingProcedure
-    .input(
-      z
-        .object({
-          limit: z.number().int().min(1).max(20).optional(),
-          query: z.string().max(200).optional(),
-        })
-        .strict(),
-    )
-    .query(({ ctx, input }) => ctx.channelMessaging.listPeople(input)),
-  messagePerson: messagingProcedure
-    .input(
-      z
-        .object({
-          content: z.string().min(1),
-          /** Repeat it to retry without posting twice. */
-          requestKey: z.string().min(1).max(100),
-          userId: z.string().min(1),
-        })
-        .strict(),
-    )
-    .mutation(({ ctx, input: { requestKey, ...params } }) =>
-      ctx.channelMessaging.messagePerson(params, `cli:${requestKey}`),
-    ),
   /** Posts a card in the run's own conversation asking its requester to connect a connector. */
   requestConnector: historyProcedure
     .input(
@@ -153,11 +143,24 @@ export const channelHistoryProcedures = {
     .mutation(({ ctx, input: { requestKey, ...params } }) =>
       ctx.channelHistory.requestConnector(params, `cli:${requestKey}`),
     ),
+  /** The run's Agent adds (or with `remove`, removes) its own reaction on a message it can read. */
+  react: historyProcedure
+    .input(
+      z
+        .object({
+          emoji: z.string().min(1).max(32),
+          messageId: z.string().min(1),
+          remove: z.boolean().optional(),
+          threadId: z.string().min(1).optional(),
+        })
+        .strict(),
+    )
+    .mutation(({ ctx, input: { remove, ...params } }) => ctx.channelHistory.react(params, !remove)),
   sendMessage: messagingProcedure
     .input(
       z
         .object({
-          agentIds: z.array(z.string().min(1)).min(1).max(5),
+          agentIds: z.array(z.string().min(1)).length(1),
           channelId: z.string().min(1).optional(),
           content: z.string().min(1),
           /** Repeat it to retry without posting twice. */

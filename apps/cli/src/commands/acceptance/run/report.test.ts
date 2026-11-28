@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import superjson from 'superjson';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { OPERATION_TOKEN_REFUSAL } from '../../../api/operationTokenFallback';
+import { OPERATION_TOKEN_REFUSAL } from '../../../api/operationToken';
 import type * as RefreshModule from '../../../auth/refresh';
 import { getValidToken } from '../../../auth/refresh';
 import type * as SettingsModule from '../../../settings';
@@ -133,11 +133,7 @@ describe('lh acceptance run report upsert with a run operation token', () => {
   );
 
   it.each([
-    [
-      'the round, once the same-account login stood in',
-      'Verify run not found',
-      refusingOperationToken(runNotFound),
-    ],
+    ['a missing round', 'Verify run not found', runNotFound],
     [
       'an UNAUTHORIZED with another message',
       'Operation token is bound to another workspace',
@@ -153,19 +149,23 @@ describe('lh acceptance run report upsert with a run operation token', () => {
     expect(errors).toEqual([]);
   });
 
-  it('writes the report when the stored login of the same account stands in', async () => {
+  /**
+   * Regression: the machine's stored login of the same account used to stand in
+   * for a refused run token. A run now only ever sends its own token.
+   */
+  it('never retries with the stored login, even of the same account', async () => {
     storedLogin('user-1');
     const sent = serve({
       'user.getUserState': userState,
       'verify.upsertReport': refusingOperationToken(written),
     });
 
-    await expect(upsert()).resolves.toBeUndefined();
+    await expect(upsert()).rejects.toThrow('process.exit 1');
 
-    expect(sent['verify.upsertReport']).toEqual([operationToken, jwt({ sub: 'user-1' })]);
-    expect(printed.join('\n')).toContain('vrr_1');
-    expect(process.exit).not.toHaveBeenCalled();
-    expect(errors).toEqual([]);
+    expect(sent['verify.upsertReport']).toEqual([operationToken]);
+    expect(getValidToken).not.toHaveBeenCalled();
+    expect(errors).toEqual(reportRefusalGuidance('vr_missing'));
+    expect(printed).toEqual([]);
   });
 
   it('names only commands and options the CLI parses', async () => {

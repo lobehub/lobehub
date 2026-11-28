@@ -212,10 +212,10 @@ describe('callConnectorToolById — connector bound to a device', () => {
     expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
   });
 
-  it("refuses a view's call: a device result offers no view to call back into", async () => {
+  it("refuses a view's call while MCP Apps are off (see exec.deviceView.test.ts)", async () => {
     await expect(
       call(stdioConnector({ boundDeviceId: 'ws-nas' }), { fromEntrypoint: true }),
-    ).rejects.toHaveProperty('code', 'BAD_REQUEST');
+    ).rejects.toHaveProperty('code', 'FORBIDDEN');
     expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
   });
 });

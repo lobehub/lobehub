@@ -5,6 +5,7 @@ import type {
   ChannelConnectorRequest,
   ChannelConnectorRequestResult,
   ChannelListThreadsParams,
+  ChannelReactParams,
   ChannelReadMessageParams,
   ChannelReadMessagesParams,
   ChannelRequestConnectorParams,
@@ -113,6 +114,14 @@ export class ChannelHistoryService {
   readMessages = async (params: ChannelReadMessagesParams) => {
     await assertChannelEnabled(this.userId);
     return this.repository.readMessages(this.operationId, params);
+  };
+
+  /** The run's Agent reacts in its conversation; other members repaint like after an edit. */
+  react = async (params: ChannelReactParams, add: boolean) => {
+    await assertChannelEnabled(this.userId);
+    const { channelId, ...result } = await this.repository.react(this.operationId, params, add);
+    await notifyChannel(this.db, channelId);
+    return result;
   };
 
   readMessage = async (params: ChannelReadMessageParams) => {

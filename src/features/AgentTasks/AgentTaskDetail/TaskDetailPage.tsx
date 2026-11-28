@@ -20,7 +20,7 @@ import { settingsSelectors } from '@/store/user/selectors';
 import { useHeaderActionSize } from '@/styles/density';
 
 import Breadcrumb from '../shared/Breadcrumb';
-import { useTaskListCrumbTarget } from '../shared/taskListOrigin';
+import { useTaskListRootCrumb } from '../shared/taskListOrigin';
 import TaskDetailCopyActions from './TaskDetailCopyActions';
 import TaskDetailHeaderActions from './TaskDetailHeaderActions';
 import { TASK_DETAIL_PAGE_WIDTH } from './taskDetailLayoutStyles';
@@ -47,7 +47,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
   const { isInitialLoading, isNotFound, error, onRetry } = useActiveTaskDetail(taskId);
   const { bar: findBar, openFind, rootRef: findRootRef } = useTaskFindBar();
   const findHotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.FindInTopic));
-  const allTasksTarget = useTaskListCrumbTarget('/tasks');
+  const taskListTarget = useTaskListRootCrumb();
 
   // A transient fetch failure (network / 500) is not a 404 — keep the URL and
   // offer Reload instead of the terminal "task was deleted" dead-end below.
@@ -77,7 +77,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
             desc={t('taskDetail.notFound.desc')}
             title={t('taskDetail.notFound.title')}
             extra={
-              <WorkspaceLink escape={allTasksTarget.escape} to={allTasksTarget.to}>
+              <WorkspaceLink escape={taskListTarget.escape} to={taskListTarget.to}>
                 <Button type={'primary'}>{t('taskDetail.notFound.backToTasks')}</Button>
               </WorkspaceLink>
             }
@@ -93,12 +93,13 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
         left={
           <>
             <Breadcrumb taskId={taskId} />
-            <TaskDetailHeaderActions />
             {saveStatus === 'saving' || saveStatus === 'failed' ? (
               <AutoSaveHint saveStatus={saveStatus} />
             ) : undefined}
           </>
         }
+        // Every task action sits in one cluster on the right, so the breadcrumb
+        // reads as the page title rather than a row of controls.
         right={
           <>
             <ActionIcon
@@ -109,6 +110,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
               onClick={openFind}
             />
             <TaskDetailCopyActions />
+            <TaskDetailHeaderActions />
             {showTaskAgentPanelToggle ? (
               <ToggleRightPanelButton
                 hideWhenExpanded

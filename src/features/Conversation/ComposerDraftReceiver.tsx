@@ -2,6 +2,8 @@
 
 import { memo, useEffect } from 'react';
 
+import { appendEditorDocument, type EditorDocument } from '@/utils/appendEditorDocument';
+
 import { useComposerDraftBus } from './composerDraftBus';
 import { conversationSelectors, useConversationStore, useConversationStoreApi } from './store';
 
@@ -43,10 +45,17 @@ const ComposerDraftReceiver = memo(() => {
     // behind a debounce, and the last few typed characters would be lost.
     const live: unknown = draft.append ? editor.getMarkdownContent?.() : undefined;
     const current = typeof live === 'string' ? live : storeApi.getState().inputMessage;
-    const text = draft.append && current.trim() ? `${current}\n\n${draft.text}` : draft.text;
+    const appending = !!draft.append && !!current.trim();
+    const text = appending ? `${current}\n\n${draft.text}` : draft.text;
     // setDocument alone does not fire the change handler that keeps
     // inputMessage in sync — Send would stay disabled (see restoreToInput).
-    editor.setDocument('markdown', text);
+    // Rich drafts merge as editor JSON so mentions and image references stay
+    // bound; Markdown is the fallback when either side has no JSON.
+    const currentJSON: unknown = appending ? editor.getJSONState?.() : undefined;
+    if (draft.editorData && !appending) editor.setJSONState(draft.editorData);
+    else if (draft.editorData && currentJSON && typeof currentJSON === 'object')
+      editor.setJSONState(appendEditorDocument(currentJSON as EditorDocument, draft.editorData));
+    else editor.setDocument('markdown', text);
     updateInputMessage(text);
     editor.focus();
     useComposerDraftBus.setState({ draft: null });

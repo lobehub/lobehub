@@ -3,6 +3,7 @@ import { BUILTIN_AGENTS } from '@lobechat/builtin-agents';
 import { DEFAULT_AGENT_CONFIG, DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getPersonalAgentDefaults } from '@/business/server/agentDefaults';
 import { AgentModel } from '@/database/models/agent';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { SessionModel } from '@/database/models/session';
@@ -20,6 +21,10 @@ vi.mock('@/server/services/resourcePermission', () => ({
 
 vi.mock('@/business/agent-share', () => ({
   AGENT_SHARE_ALLOWED_PROVIDERS: ['lobehub'],
+}));
+
+vi.mock('@/business/server/agentDefaults', () => ({
+  getPersonalAgentDefaults: vi.fn(),
 }));
 
 vi.mock('@/envs/app', () => ({
@@ -78,6 +83,9 @@ describe('AgentService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Workspace reads skip the personal layers, so reset unconsumed one-off values too.
+    mockUserModel.getUserSettingsDefaultAgentConfig.mockReset().mockResolvedValue({});
+    vi.mocked(getPersonalAgentDefaults).mockReset().mockResolvedValue(undefined);
     // Setup default UserModel mock
     (UserModel as any).mockImplementation(function () {
       return mockUserModel;
@@ -516,6 +524,32 @@ describe('AgentService', () => {
       });
     });
 
+    it("layers account defaults between the server default and the user's own default", async () => {
+      (parseAgentConfig as any).mockReturnValue({ model: 'server-model', provider: 'server' });
+      vi.mocked(getPersonalAgentDefaults).mockResolvedValueOnce({
+        model: 'account-model',
+        provider: 'account-provider',
+      });
+
+      await expect(service.resolveModelSelection({})).resolves.toEqual({
+        model: 'account-model',
+        provider: 'account-provider',
+      });
+      expect(getPersonalAgentDefaults).toHaveBeenCalledWith(mockUserId);
+
+      vi.mocked(getPersonalAgentDefaults).mockResolvedValueOnce({
+        model: 'account-model',
+        provider: 'account-provider',
+      });
+      mockUserModel.getUserSettingsDefaultAgentConfig.mockResolvedValueOnce({
+        config: { model: 'user-preferred-model', provider: 'user-provider' },
+      });
+      await expect(service.resolveModelSelection({})).resolves.toEqual({
+        model: 'user-preferred-model',
+        provider: 'user-provider',
+      });
+    });
+
     it("keeps the agent's own model over every default", async () => {
       (parseAgentConfig as any).mockReturnValue({ model: 'server-model', provider: 'server' });
       mockUserModel.getUserSettingsDefaultAgentConfig.mockResolvedValueOnce({
@@ -527,17 +561,19 @@ describe('AgentService', () => {
       ).resolves.toEqual({ model: 'claude-3-opus', provider: 'anthropic' });
     });
 
-    it('does not let a workspace agent inherit a personal default model', async () => {
+    it('does not let a workspace agent inherit a personal or account default model', async () => {
       (parseAgentConfig as any).mockReturnValue({});
-      mockUserModel.getUserSettingsDefaultAgentConfig.mockResolvedValueOnce({
+      mockUserModel.getUserSettingsDefaultAgentConfig.mockResolvedValue({
         config: { model: 'user-preferred-model', provider: 'user-provider' },
       });
+      vi.mocked(getPersonalAgentDefaults).mockResolvedValue({ model: 'account-model' });
       const workspaceService = new AgentService(mockDb, mockUserId, mockWorkspaceId);
 
       await expect(workspaceService.resolveModelSelection({})).resolves.toEqual({
         model: DEFAULT_AGENT_CONFIG.model,
         provider: DEFAULT_AGENT_CONFIG.provider,
       });
+      expect(getPersonalAgentDefaults).not.toHaveBeenCalled();
     });
   });
 

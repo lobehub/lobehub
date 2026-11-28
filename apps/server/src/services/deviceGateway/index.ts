@@ -11,6 +11,7 @@ import debug from 'debug';
 import { gatewayEnv } from '@/envs/gateway';
 import { redisService } from '@/server/services/redis';
 
+import * as agentCredentials from './agentCredentials';
 import * as agents from './agents';
 import { resolveDeviceClientKinds } from './clientKinds';
 import * as clientUpdate from './clientUpdate';
@@ -24,6 +25,7 @@ import * as workspace from './workspace';
 
 const log = debug('lobe-server:device-gateway');
 
+export type { AgentCredentialRpcAddress, AgentCredentialRpcResult } from './agentCredentials';
 export { isPathWithinRoot, joinDevicePath } from './paths';
 export { isValidDirectoryName } from '@lobechat/utils/directoryName';
 
@@ -303,10 +305,6 @@ export class DeviceGateway {
     return agents.claudeCodeQuota(this.clientGetter, ...args);
   }
 
-  antigravityQuota(...args: DeviceRpcArgs<typeof agents.antigravityQuota>) {
-    return agents.antigravityQuota(this.clientGetter, ...args);
-  }
-
   codexQuota(...args: DeviceRpcArgs<typeof agents.codexQuota>) {
     return agents.codexQuota(this.clientGetter, ...args);
   }
@@ -479,6 +477,10 @@ export class DeviceGateway {
     return agents.listMcpTools(this.clientGetter, ...args);
   }
 
+  readMcpUiResource(...args: DeviceRpcArgs<typeof agents.readMcpUiResource>) {
+    return agents.readMcpUiResource(this.clientGetter, ...args);
+  }
+
   executeMessageApi(...args: DeviceRpcArgs<typeof agents.executeMessageApi>) {
     return agents.executeMessageApi(this.clientGetter, ...args);
   }
@@ -529,6 +531,18 @@ export class DeviceGateway {
 
   restartCli(...args: DeviceRpcArgs<typeof clientUpdate.restartCli>) {
     return clientUpdate.restartCli(this.clientGetter, ...args);
+  }
+
+  installAgentCredential(...args: DeviceRpcArgs<typeof agentCredentials.installAgentCredential>) {
+    return agentCredentials.installAgentCredential(this.clientGetter, ...args);
+  }
+
+  removeAgentCredential(...args: DeviceRpcArgs<typeof agentCredentials.removeAgentCredential>) {
+    return agentCredentials.removeAgentCredential(this.clientGetter, ...args);
+  }
+
+  checkAgentCredential(...args: DeviceRpcArgs<typeof agentCredentials.checkAgentCredential>) {
+    return agentCredentials.checkAgentCredential(this.clientGetter, ...args);
   }
 
   private getClient(): GatewayHttpClient | null {

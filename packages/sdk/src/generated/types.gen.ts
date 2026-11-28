@@ -2368,6 +2368,15 @@ export type TaskDetail = {
     agentId?: string | null;
     archivedAt?: string | null;
     automationMode?: 'heartbeat' | 'schedule' | null;
+    channelDelivery?: {
+        channelId: string;
+        lastError?: {
+            at: string;
+            code: 'channel_unavailable';
+            message?: string;
+        } | null;
+        threadId?: string | null;
+    };
     checkpoint?: {
         onAgentRequest?: boolean;
         tasks?: {
@@ -15720,10 +15729,25 @@ export type PostApiV1TextGenerationsData = {
          */
         messages?: Array<{
             /**
+             * Plain text, or text and image parts (OpenAI chat format) for a model that takes images. An image is an http(s) URL or a base64 `data:image/...` URL.
+             */
+            content: string | Array<{
+                text: string;
+                type: 'text';
+            } | {
+                image_url: {
+                    detail?: 'auto' | 'low' | 'high';
+                    url: string;
+                };
+                type: 'image_url';
+            }>;
+            role: 'user';
+        } | {
+            /**
              * Plain-text message content.
              */
             content: string;
-            role: 'system' | 'user' | 'assistant';
+            role: 'system' | 'assistant';
         }>;
         /**
          * Model id. Omit to use the platform's default chat model.
@@ -15840,10 +15864,25 @@ export type PostApiV1ObjectsGenerationsData = {
          */
         messages?: Array<{
             /**
+             * Plain text, or text and image parts (OpenAI chat format) for a model that takes images. An image is an http(s) URL or a base64 `data:image/...` URL.
+             */
+            content: string | Array<{
+                text: string;
+                type: 'text';
+            } | {
+                image_url: {
+                    detail?: 'auto' | 'low' | 'high';
+                    url: string;
+                };
+                type: 'image_url';
+            }>;
+            role: 'user';
+        } | {
+            /**
              * Plain-text message content.
              */
             content: string;
-            role: 'system' | 'user' | 'assistant';
+            role: 'system' | 'assistant';
         }>;
         /**
          * Model id. Omit to use the platform's default chat model.

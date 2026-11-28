@@ -4,7 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConnectorModel } from '@/database/models/connector';
 import { createMCPError } from '@/libs/mcp/types';
-import { callConnectorToolById, ConnectorToolCallError } from '@/server/services/connector/exec';
+import {
+  callConnectorToolById,
+  ConnectorToolCallError,
+  readConnectorUiResourceById,
+} from '@/server/services/connector/exec';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
 
 import { connectorRouter } from './connector';
@@ -20,6 +24,7 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
 vi.mock('@/server/services/connector/sync', () => ({ syncConnectorToolsById: vi.fn() }));
 vi.mock('@/server/services/connector/exec', () => ({
   callConnectorToolById: vi.fn(),
+  readConnectorUiResourceById: vi.fn(),
   ConnectorToolCallError: class extends Error {
     constructor(
       public code: string,
@@ -101,5 +106,20 @@ describe('connector MCP connect error propagation', () => {
         .createCaller({ userId: 'test-user' } as never)
         .callTool({ identifier: 'mcp', toolName: 'echo' }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: 'Tool is disabled' });
+  });
+});
+
+describe('connector MCP App views relayed from a device', () => {
+  it('passes the device a view names to its calls and reads', async () => {
+    vi.mocked(callConnectorToolById).mockResolvedValue({ content: 'ok', success: true });
+    vi.mocked(readConnectorUiResourceById).mockResolvedValue({ contents: [] } as never);
+    const caller = connectorRouter.createCaller({ userId: 'test-user' } as never);
+    const relay = { relayDeviceId: 'nas', relayWorkspaceId: 'ws-1' };
+
+    await caller.callTool({ fromApp: true, identifier: 'mcp', toolName: 'echo', ...relay });
+    await caller.readUiResource({ identifier: 'mcp', server: 's', uri: 'ui://mcp/view', ...relay });
+
+    expect(vi.mocked(callConnectorToolById).mock.calls[0][0]).toMatchObject(relay);
+    expect(vi.mocked(readConnectorUiResourceById).mock.calls[0][0]).toMatchObject(relay);
   });
 });

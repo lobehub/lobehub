@@ -890,42 +890,45 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
     if (step === 1 && target) {
       const scanning = scanState.status === 'scanning';
 
+      // Rescan stays mounted (disabled while scanning) so nothing jumps when the scan settles.
+      const rescanButton = !(scanState.status === 'success' && detectedCount === 0) &&
+        scanState.status !== 'error' && (
+          <Button
+            disabled={scanning}
+            icon={<Icon icon={RefreshCw} size={13} />}
+            style={{ flex: 'none' }}
+            type={'fill'}
+            onClick={rescan}
+          >
+            {t('connectAgent.create.refresh')}
+          </Button>
+        );
+
       return (
         <Flexbox gap={8} paddingBlock={'0 8px'}>
-          {/* Rescan stays mounted (disabled while scanning) and the row reserves
-              its height — no jump when the scan settles */}
-          <Flexbox horizontal align={'center'} justify={'space-between'} style={{ minHeight: 28 }}>
-            <SectionLabel>
-              {t(
-                deviceInline
-                  ? 'connectAgent.create.stepAgentsInline'
-                  : 'connectAgent.create.stepAgents',
-                { device: targetLabel },
-              )}
-            </SectionLabel>
-            {!(scanState.status === 'success' && detectedCount === 0) &&
-              scanState.status !== 'error' && (
-                <Button
-                  disabled={scanning}
-                  icon={<Icon icon={RefreshCw} size={13} />}
-                  size={'small'}
-                  type={'text'}
-                  onClick={rescan}
-                >
-                  {t('connectAgent.create.rescan')}
-                </Button>
-              )}
-          </Flexbox>
-
-          {deviceInline && listedDevices.length > 0 && (
+          {/* Inline, the device select names the target, so it replaces the step line. */}
+          {deviceInline ? (
             <DeviceSwitch
               available={available}
+              extra={rescanButton}
               localLabel={localLabel}
               localRow={localRow}
               offline={offline}
               target={target}
               onPick={pickTarget}
             />
+          ) : (
+            <Flexbox
+              horizontal
+              align={'center'}
+              justify={'space-between'}
+              style={{ minHeight: 28 }}
+            >
+              <SectionLabel>
+                {t('connectAgent.create.stepAgents', { device: targetLabel })}
+              </SectionLabel>
+              {rescanButton}
+            </Flexbox>
           )}
 
           {scanning && (

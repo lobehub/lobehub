@@ -358,6 +358,12 @@ export const RedisKeys = {
     agentDocumentIndex: (topicId: string, threadId: string | undefined, agentId: string): string =>
       `agent_document_index:v1:${topicId}:${threadId ?? 'main'}:${agentId}`,
     /**
+     * The skill-index snapshot one conversation renders `<available_skills>` from, and its change notes.
+     * Full key: lobechat:skill_index:v1:{topicId}:{threadId|main}:{agentId}
+     */
+    skillIndex: (topicId: string, threadId: string | undefined, agentId: string): string =>
+      `skill_index:v1:${topicId}:${threadId ?? 'main'}:${agentId}`,
+    /**
      * Digest of the body the last projection of a page's collaboration room wrote.
      * Full key: lobechat:page_projection:v1:{documentId}
      */
@@ -380,6 +386,22 @@ export const RedisKeys = {
      */
     deviceSystemInfo: (userId: string, pool: string, deviceId: string): string =>
       `device_system_info:v1:${userId}:${pool}:${deviceId}`,
+    /**
+     * The MCP features a device client reports for tunneled MCP calls.
+     * Full key: sendPathCache:mcp_device_features:v1:{userId}:{pool}:{deviceId}:{clientKinds}
+     */
+    mcpDeviceFeatures: (
+      userId: string,
+      pool: string,
+      deviceId: string,
+      clientKinds: string,
+    ): string => `mcp_device_features:v1:${userId}:${pool}:${deviceId}:${clientKinds}`,
+    /**
+     * The device a connector's MCP App view is relayed to, as last resolved.
+     * Full key: sendPathCache:mcp_relay_target:v1:{userId}:{pool}:{connectorId}:{deviceId}
+     */
+    mcpRelayTarget: (userId: string, pool: string, connectorId: string, deviceId: string): string =>
+      `mcp_relay_target:v1:${userId}:${pool}:${connectorId}:${deviceId}`,
     /**
      * One connected LobeHub skill's live tool list, per connection identity.
      * Full key: sendPathCache:lobehub_skill_tools:v1:{userId}:{providerId}:{identity}

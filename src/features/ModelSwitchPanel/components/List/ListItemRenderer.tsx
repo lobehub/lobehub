@@ -42,7 +42,7 @@ interface ListItemRendererProps {
   onBeforeModelSelect?: (modelId: string, providerId: string) => boolean | Promise<boolean>;
   onClose: () => void;
   onModelChange: (modelId: string, providerId: string) => void;
-  onRestrictedModelClick?: () => void;
+  onRestrictedModelClick?: (modelId: string, providerId: string) => void;
   subscribeScroll?: (cb: () => void) => () => void;
 }
 
@@ -155,6 +155,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
         );
       }
 
+      case 'featured-model-item':
       case 'provider-model-item': {
         const key = menuKey(item.provider.id, item.model.id);
         const isActive = key === activeKey;
@@ -173,7 +174,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                   e.preventDefault();
                   setDetailOpen(false);
                   if (restricted) {
-                    onRestrictedModelClick?.();
+                    onRestrictedModelClick?.(item.model.id, item.provider.id);
                     onClose();
                     return;
                   }
@@ -182,9 +183,11 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               >
                 <ModelRowRender
                   activeEffortLabel={activeSecondaryText}
+                  badge={item.type === 'featured-model-item' ? item.badge : undefined}
                   isActive={isActive}
                   model={item.model}
                   newLabel={newLabel}
+                  pricePlaceholder={item.type === 'featured-model-item' ? '—' : undefined}
                   provider={item.provider.id}
                   proBadgeLabel={
                     restricted ? getRestrictedLabel?.(item.model.id, item.provider.id) : undefined
@@ -222,7 +225,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                   e.preventDefault();
                   setDetailOpen(false);
                   if (restricted) {
-                    onRestrictedModelClick?.();
+                    onRestrictedModelClick?.(item.data.model.id, singleProvider.id);
                     onClose();
                     return;
                   }

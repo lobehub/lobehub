@@ -31,20 +31,22 @@ export const getNewAgentPlugins = (
   ];
 };
 
-/** Shared by AgentService and execution snapshots: system → server → personal → Agent. */
+/** Shared by AgentService and execution snapshots: system → server → account → personal → Agent. */
 export const mergeAgentDefaultConfig = (
   agent: Record<string, unknown>,
   options: {
+    /** Account-level defaults (personal scope only), applied below the user's own defaults. */
+    accountDefault?: PartialDeep<LobeAgentConfig>;
     serverDefault?: PartialDeep<LobeAgentConfig>;
     userDefault?: unknown;
     workspaceId?: string | null;
   },
 ): LobeAgentConfig => {
   const base = merge(DEFAULT_AGENT_CONFIG, options.serverDefault ?? {});
-  // Shared Agents must never inherit the requesting member's personal defaults.
-  const userConfig = options.workspaceId
-    ? {}
-    : ((options.userDefault as { config?: PartialDeep<LobeAgentConfig> } | undefined)?.config ??
-      {});
-  return merge(merge(base, userConfig), cleanObject(agent));
+  // Shared Agents must never inherit the requesting member's personal or account defaults.
+  if (options.workspaceId) return merge(base, cleanObject(agent));
+
+  const userConfig =
+    (options.userDefault as { config?: PartialDeep<LobeAgentConfig> } | undefined)?.config ?? {};
+  return merge(merge(merge(base, options.accountDefault ?? {}), userConfig), cleanObject(agent));
 };

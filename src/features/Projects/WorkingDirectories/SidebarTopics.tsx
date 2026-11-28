@@ -146,6 +146,7 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
               );
               startTopic({
                 agentId: coordinatorAgentId,
+                auto: true,
                 directoryId: picked.kind === 'directory' ? picked.id : undefined,
               });
             }}
@@ -153,7 +154,7 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
         </Flexbox>
       </AccordionHeader>
       <AccordionPanel contentStyle={{ padding: 0 }}>
-        <Flexbox gap={1} paddingBlock={1}>
+        <Flexbox data-topic-list-root="" gap={1} paddingBlock={1}>
           {request.error || directoriesRequest.error ? (
             <AsyncError
               error={request.error || directoriesRequest.error}

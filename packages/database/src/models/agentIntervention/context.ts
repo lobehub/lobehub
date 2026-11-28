@@ -1,4 +1,4 @@
-import { and, asc, eq, getTableColumns, isNull } from 'drizzle-orm';
+import { and, asc, eq, getTableColumns, inArray, isNull } from 'drizzle-orm';
 
 import {
   type AgentInterventionItem,
@@ -13,9 +13,19 @@ import type { LobeChatDatabase } from '../../type';
  */
 export interface AgentInterventionContext {
   db: LobeChatDatabase;
+  family?: AgentInterventionFamily;
   userId: string;
   workspaceId?: string;
 }
+
+export type AgentInterventionFamily = 'agent' | 'mcp';
+
+export const agentInterventionSources = ['runtime', 'heterogeneous'] as const;
+
+export const familyFilter = (
+  column: typeof agentInterventions.source | typeof agentInterventionResolutions.source,
+  family: AgentInterventionFamily = 'agent',
+) => (family === 'mcp' ? eq(column, 'mcp') : inArray(column, agentInterventionSources));
 
 const {
   customExecutionAttempt: _customExecutionAttempt,
@@ -32,6 +42,7 @@ export { publicResolutionColumns };
 export const ownership = (ctx: AgentInterventionContext) =>
   and(
     eq(agentInterventions.userId, ctx.userId),
+    familyFilter(agentInterventions.source, ctx.family),
     ctx.workspaceId
       ? eq(agentInterventions.workspaceId, ctx.workspaceId)
       : isNull(agentInterventions.workspaceId),
@@ -40,13 +51,17 @@ export const ownership = (ctx: AgentInterventionContext) =>
 export const resolutionOwnership = (ctx: AgentInterventionContext) =>
   and(
     eq(agentInterventionResolutions.userId, ctx.userId),
+    familyFilter(agentInterventionResolutions.source, ctx.family),
     ctx.workspaceId
       ? eq(agentInterventionResolutions.workspaceId, ctx.workspaceId)
       : isNull(agentInterventionResolutions.workspaceId),
   );
 
 export const ownerOnly = (ctx: AgentInterventionContext) =>
-  eq(agentInterventions.userId, ctx.userId);
+  and(
+    eq(agentInterventions.userId, ctx.userId),
+    familyFilter(agentInterventions.source, ctx.family),
+  );
 
 export const reload = async (
   ctx: AgentInterventionContext,

@@ -1,6 +1,23 @@
 import { type UIChatMessage } from '@lobechat/types';
 
+import { type CompressedHistoryPage } from '../../../ChatList/utils/compressedHistory';
+
 export interface DataState {
+  /**
+   * A later group's member page, requested from its gap row, failed. Kept
+   * apart from `earlierMessagesError` so the gap shows the failure and
+   * retries that group, while the top-of-list row keeps paging the oldest one.
+   */
+  compressedHistoryError?: { error: unknown; groupId: string };
+
+  /**
+   * Older members of compression groups loaded on scroll, past the newest
+   * slice the group node carries, keyed by group id. Kept apart from the
+   * transcript rows so a head refetch (which returns the node with only its
+   * newest slice again) does not drop history the reader already paged in.
+   */
+  compressedHistoryPages: Record<string, CompressedHistoryPage>;
+
   /**
    * Raw messages from DB (before parsing)
    * Order is preserved from database fetch
@@ -68,6 +85,7 @@ export interface DataState {
 }
 
 export const dataInitialState: DataState = {
+  compressedHistoryPages: {},
   dbMessages: [],
   displayMessages: [],
   hasLaterMessages: false,

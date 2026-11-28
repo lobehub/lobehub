@@ -1,5 +1,5 @@
 import type { McpAppDisplayMode } from '@lobechat/const/mcpApp';
-import type { SendMessageParams } from '@lobechat/types';
+import type { LobeTool, SendMessageParams } from '@lobechat/types';
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
 
@@ -46,6 +46,8 @@ export interface McpAppState {
     string,
     { content: string; identifier: string; scope: string; sent?: string; title: string }
   >;
+  /** Session-only plugin manifests learned by runtime discovery; never persisted. */
+  discoveredPluginManifests: Record<string, LobeTool['manifest']>;
   discoveryAttempts: Record<string, number>;
   entries: Record<string, McpAppEntryState>;
   hosts: Record<string, McpAppConversationHost>;
@@ -55,6 +57,7 @@ export interface McpAppState {
 }
 export const initialState: McpAppState = {
   discoveryAttempts: {},
+  discoveredPluginManifests: {},
   contexts: {},
   entries: {},
   hosts: {},

@@ -43,8 +43,8 @@ export default {
   'notFound.check': 'Please check if your URL is correct.',
   'notFound.desc': "We couldn't find the page you were looking for.",
   'notFound.title': 'Entered Unknown Territory?',
-  'pluginSettings.desc': 'Complete the following configuration to start using this skill',
-  'pluginSettings.title': '{{name}} Skill Settings',
+  'pluginSettings.desc': 'Complete the following configuration to start using this connector',
+  'pluginSettings.title': '{{name}} Connector Settings',
   'response.400':
     'Sorry, the server does not understand your request. Please make sure your request parameters are correct.',
   'response.401':
@@ -168,31 +168,31 @@ export default {
     'The selected model and related models are temporarily unavailable due to content safety restrictions. Access is expected to resume at {{time}}. You can use a different model meanwhile.',
   'response.NoOpenAIAPIKey': 'OpenAI API Key is empty, please add a custom OpenAI API Key',
   'response.PluginApiNotFound':
-    "Sorry, the API does not exist in the skill's manifest. Please check if your request method matches the skill manifest API",
+    "Sorry, the API does not exist in the connector's manifest. Please check if your request method matches the connector manifest API",
   'response.PluginApiParamsError':
-    'Sorry, the input parameter validation for the skill request failed. Please check if the input parameters match the API description',
+    'Sorry, the input parameter validation for the tool request failed. Please check if the input parameters match the API description',
   'response.PluginFailToTransformArguments':
-    'Sorry, the skill failed to parse the arguments. Please try regenerating the agent message or switch to a more powerful AI model with Tools Calling capability and try again',
+    'Sorry, the tool call arguments could not be parsed. Please try regenerating the agent message or switch to a more powerful AI model with Tools Calling capability and try again',
   'response.PluginGatewayError':
-    'Sorry, there was an error with the skill gateway. Please check if the skill gateway configuration is correct.',
+    'Sorry, there was an error with the connector gateway. Please check if the connector gateway configuration is correct.',
   'response.PluginManifestInvalid':
-    "Sorry, the skill's manifest validation failed. Please check if the manifest format is correct",
+    "Sorry, the connector's manifest validation failed. Please check if the manifest format is correct",
   'response.PluginManifestNotFound':
-    "Sorry, the server could not find the skill's manifest file (manifest.json). Please check if the skill manifest file address is correct",
+    "Sorry, the server could not find the connector's manifest file (manifest.json). Please check if the connector manifest file address is correct",
   'response.PluginMarketIndexInvalid':
-    'Sorry, the skill index validation failed. Please check if the index file format is correct',
+    'Sorry, the connector index validation failed. Please check if the index file format is correct',
   'response.PluginMarketIndexNotFound':
-    'Sorry, the server could not find the skill index. Please check if the index address is correct',
+    'Sorry, the server could not find the connector index. Please check if the index address is correct',
   'response.PluginMetaInvalid':
-    "Sorry, the skill's metadata validation failed. Please check if the skill metadata format is correct",
+    "Sorry, the connector's metadata validation failed. Please check if the connector metadata format is correct",
   'response.PluginMetaNotFound':
-    "Sorry, the skill was not found in the index. Please check the skill's configuration information in the index",
+    "Sorry, the connector was not found in the index. Please check the connector's configuration information in the index",
   'response.PluginOpenApiInitError':
     'Sorry, the OpenAPI client failed to initialize. Please check if the OpenAPI configuration information is correct.',
   'response.PluginServerError':
-    'Skill server request returned an error. Please check your skill manifest file, skill configuration, or server implementation based on the error information below',
+    'Connector server request returned an error. Please check your connector manifest file, connector configuration, or server implementation based on the error information below',
   'response.PluginSettingsInvalid':
-    'This skill needs to be correctly configured before it can be used. Please check if your configuration is correct',
+    'This connector needs to be correctly configured before it can be used. Please check if your configuration is correct',
   'response.ProviderContentModeration':
     'Content policy check failed. Revise your prompt and try again.',
   'response.ProviderContentModerationWarning':

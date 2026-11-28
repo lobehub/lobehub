@@ -25,8 +25,30 @@ export interface LLMMockConfig {
 
 export interface ChatMessage {
   content: string;
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'tool';
 }
+
+/** One tool call of a mocked reply; `arguments` is the JSON string the model would emit. */
+export interface MockToolCall {
+  arguments: string;
+  id: string;
+  name: string;
+}
+
+/**
+ * A scripted reply chosen from the whole request, for flows that need more
+ * than one text answer per user message (tool calls, then a final answer).
+ */
+export interface MockReply {
+  /** Overrides `streamChunkSize` for this reply. */
+  chunkSize?: number;
+  /** Overrides `streamDelay` for this reply. */
+  delayMs?: number;
+  text?: string;
+  toolCalls?: MockToolCall[];
+}
+
+export type MockResponder = (messages: ChatMessage[]) => MockReply | undefined;
 
 interface LLMStreamPlan {
   chunks: string[];
@@ -35,6 +57,12 @@ interface LLMStreamPlan {
 }
 
 const LLM_MOCK_BINDING = '__lobehubE2ELLMMock';
+
+/**
+ * Page global counting mocked streams still sending chunks, so a test can wait
+ * for a reply that streams in a chat the user is not looking at.
+ */
+export const LLM_ACTIVE_STREAMS_GLOBAL = '__lobehubE2ELLMActiveStreams';
 
 // ============================================
 // Default Configuration
@@ -56,7 +84,11 @@ const defaultConfig: LLMMockConfig = {
  * Build SSE formatted response chunks
  * Follows LobeChat's actual streaming format
  */
-export function buildSSEChunks(content: string, chunkSize: number): string[] {
+export function buildSSEChunks(
+  content: string,
+  chunkSize: number,
+  toolCalls: MockToolCall[] = [],
+): string[] {
   const chunks: string[] = [];
   const id = `msg_mock_${Date.now()}`;
 
@@ -79,8 +111,28 @@ export function buildSSEChunks(content: string, chunkSize: number): string[] {
     chunks.push(`id: ${id}\nevent: text\ndata: ${JSON.stringify(chunk)}\n\n`);
   }
 
+  // Each tool call streams as two deltas, the way providers send the name
+  // first and the arguments after; `parseToolCalls` joins them by index.
+  toolCalls.forEach((call, index) => {
+    const half = Math.ceil(call.arguments.length / 2);
+    const delta = (args: string, withName: boolean) => [
+      {
+        function: { arguments: args, ...(withName ? { name: call.name } : {}) },
+        id: call.id,
+        index,
+        type: 'function',
+      },
+    ];
+    chunks.push(
+      `id: ${id}\nevent: tool_calls\ndata: ${JSON.stringify(delta(call.arguments.slice(0, half), true))}\n\n`,
+      `id: ${id}\nevent: tool_calls\ndata: ${JSON.stringify(delta(call.arguments.slice(half), false))}\n\n`,
+    );
+  });
+
   // Stop event
-  chunks.push(`id: ${id}\nevent: stop\ndata: "end_turn"\n\n`);
+  chunks.push(
+    `id: ${id}\nevent: stop\ndata: ${JSON.stringify(toolCalls.length > 0 ? 'tool_use' : 'end_turn')}\n\n`,
+  );
 
   // Usage event
   const usageData = {
@@ -107,6 +159,7 @@ export class LLMMockManager {
   private config: LLMMockConfig;
   private customResponseFragments: Map<string, string> = new Map();
   private customResponses: Map<string, string> = new Map();
+  private responders: MockResponder[] = [];
 
   constructor(config: Partial<LLMMockConfig> = {}) {
     this.config = { ...defaultConfig, ...config };
@@ -125,6 +178,15 @@ export class LLMMockManager {
    */
   setResponseContaining(userMessageFragment: string, response: string): void {
     this.customResponseFragments.set(userMessageFragment.toLowerCase().trim(), response);
+  }
+
+  /**
+   * Register a responder that sees the whole request and may script a reply
+   * with tool calls. Responders run before the per-message responses; the first
+   * one returning a reply wins.
+   */
+  addResponder(responder: MockResponder): void {
+    this.responders.push(responder);
   }
 
   /**
@@ -149,6 +211,7 @@ export class LLMMockManager {
   clearResponses(): void {
     this.customResponses.clear();
     this.customResponseFragments.clear();
+    this.responders = [];
   }
 
   /**
@@ -245,22 +308,30 @@ export class LLMMockManager {
                 cancelled = true;
               },
               start(controller) {
+                window.__lobehubE2ELLMActiveStreams = (window.__lobehubE2ELLMActiveStreams || 0) + 1;
                 void (async () => {
                   try {
+                    // Chunk i is due at startedAt + i * streamDelay, like bytes from a
+                    // server that keeps sending while the page is busy. Relative
+                    // delays would stretch the stream whenever rendering blocks the
+                    // main thread, making the pace depend on the app under test.
+                    const startedAt = performance.now();
                     for (let index = 0; index < plan.chunks.length; index += 1) {
                       if (cancelled) return;
                       if (request.signal.aborted) throw request.signal.reason || abortError();
 
-                      controller.enqueue(encoder.encode(plan.chunks[index]));
+                      const dueIn = startedAt + index * plan.streamDelay - performance.now();
+                      if (dueIn > 0) await wait(dueIn, request.signal);
+                      if (cancelled) return;
 
-                      if (index < plan.chunks.length - 1) {
-                        await wait(plan.streamDelay, request.signal);
-                      }
+                      controller.enqueue(encoder.encode(plan.chunks[index]));
                     }
 
                     if (!cancelled) controller.close();
                   } catch (error) {
                     if (!cancelled) controller.error(error);
+                  } finally {
+                    window.__lobehubE2ELLMActiveStreams -= 1;
                   }
                 })();
               },
@@ -292,15 +363,22 @@ export class LLMMockManager {
 
     console.log(`   🤖 LLM Request intercepted (${messages.length} messages)`);
 
-    const responseContent = this.getResponse(messages);
-    const chunks = buildSSEChunks(responseContent, this.config.streamChunkSize);
+    const scripted = this.responders.map((responder) => responder(messages)).find(Boolean);
+    const responseContent = scripted ? (scripted.text ?? '') : this.getResponse(messages);
+    const chunks = buildSSEChunks(
+      responseContent,
+      scripted?.chunkSize ?? this.config.streamChunkSize,
+      scripted?.toolCalls,
+    );
 
-    console.log(`   ✅ LLM Response streaming (${responseContent.length} chars)`);
+    console.log(
+      `   ✅ LLM Response streaming (${responseContent.length} chars, ${scripted?.toolCalls?.length ?? 0} tool calls)`,
+    );
 
     return {
       chunks,
       responseDelay: this.config.responseDelay,
-      streamDelay: this.config.streamDelay,
+      streamDelay: scripted?.delayMs ?? this.config.streamDelay,
     };
   }
 

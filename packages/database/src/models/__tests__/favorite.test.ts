@@ -40,7 +40,7 @@ afterEach(async () => {
 });
 
 describe('FavoriteModel', () => {
-  it('appends new favorites in the order they were added', async () => {
+  it('puts each new favorite at the top', async () => {
     await personalModel.add(topic('tpc_1'));
     await personalModel.add(topic('tpc_2'));
     await personalModel.add({
@@ -51,8 +51,23 @@ describe('FavoriteModel', () => {
     });
 
     const items = await personalModel.query();
-    expect(items.map((item) => item.targetId)).toEqual(['tpc_1', 'tpc_2', '/projects']);
-    expect(items[0]).toMatchObject({ icon: null, path: '/agent/agt_a/tpc_1', type: 'topic' });
+    expect(items.map((item) => item.targetId)).toEqual(['/projects', 'tpc_2', 'tpc_1']);
+    expect(items[2]).toMatchObject({ icon: null, path: '/agent/agt_a/tpc_1', type: 'topic' });
+  });
+
+  it('keeps a dragged order and still puts the next favorite on top', async () => {
+    const a = await personalModel.add(topic('tpc_a'));
+    const b = await personalModel.add(topic('tpc_b'));
+    const c = await personalModel.add(topic('tpc_c'));
+
+    await personalModel.reorder([a.id, c.id, b.id]);
+    await personalModel.add(topic('tpc_d'));
+    // Refreshing an existing favorite does not move it to the top.
+    await personalModel.add(topic('tpc_b', 'Renamed'));
+
+    const items = await personalModel.query();
+    expect(items.map((item) => item.targetId)).toEqual(['tpc_d', 'tpc_a', 'tpc_c', 'tpc_b']);
+    expect(items[3].title).toBe('Renamed');
   });
 
   it('refreshes an existing favorite in place instead of duplicating it', async () => {
@@ -62,7 +77,7 @@ describe('FavoriteModel', () => {
 
     const items = await personalModel.query();
     expect(items).toHaveLength(2);
-    expect(items[0]).toMatchObject({
+    expect(items[1]).toMatchObject({
       icon: '🚀',
       path: '/group/cg_a/tpc_1',
       targetId: 'tpc_1',
@@ -129,16 +144,18 @@ describe('FavoriteModel', () => {
 
     const items = await personalModel.query();
     expect(items.map((item) => [item.targetId, item.status])).toEqual([
-      ['task_personal', 'running'],
-      ['tpc_1', undefined],
-      ['task_ws', undefined],
-      ['task_gone', undefined],
       ['task_trashed', undefined],
+      ['task_gone', undefined],
+      ['task_ws', undefined],
+      ['tpc_1', undefined],
+      ['task_personal', 'running'],
     ]);
 
     await serverDB.update(tasks).set({ status: 'completed' });
-    expect((await personalModel.query())[0].status).toBe('completed');
-    expect((await workspaceModel.query())[0].status).toBe('completed');
+    const statusOf = (rows: Awaited<ReturnType<FavoriteModel['query']>>, targetId: string) =>
+      rows.find((row) => row.targetId === targetId)?.status;
+    expect(statusOf(await personalModel.query(), 'task_personal')).toBe('completed');
+    expect(statusOf(await workspaceModel.query(), 'task_ws')).toBe('completed');
   });
 
   it('keeps personal, workspace and other members’ favorites apart', async () => {
@@ -150,8 +167,8 @@ describe('FavoriteModel', () => {
 
     expect((await personalModel.query()).map((item) => item.targetId)).toEqual(['tpc_personal']);
     expect((await workspaceModel.query()).map((item) => item.targetId)).toEqual([
-      'tpc_ws',
       'tpc_personal',
+      'tpc_ws',
     ]);
   });
 
@@ -223,7 +240,7 @@ describe('FavoriteModel', () => {
     expect((await personalModel.query()).map((item) => item.targetId)).toEqual(['tpc_2']);
   });
 
-  it('reorders, keeping unlisted favorites after the listed ones', async () => {
+  it('reorders, keeping favorites added since the caller read the list on top', async () => {
     const a = await personalModel.add(topic('tpc_a'));
     const b = await personalModel.add(topic('tpc_b'));
     const c = await personalModel.add(topic('tpc_c'));
@@ -231,7 +248,7 @@ describe('FavoriteModel', () => {
 
     await personalModel.reorder([c.id, foreign.id, a.id]);
 
-    expect((await personalModel.query()).map((item) => item.id)).toEqual([c.id, a.id, b.id]);
+    expect((await personalModel.query()).map((item) => item.id)).toEqual([b.id, c.id, a.id]);
     expect((await workspaceModel.query()).map((item) => item.id)).toEqual([foreign.id]);
   });
 

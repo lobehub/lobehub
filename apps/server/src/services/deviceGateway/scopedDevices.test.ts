@@ -1,7 +1,9 @@
 import type { LobeChatDatabase } from '@lobechat/database';
+import { MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  markSeen: vi.fn(),
   queryDeviceList: vi.fn(),
   queryPersonal: vi.fn(),
   queryWorkspaceDevices: vi.fn(),
@@ -10,6 +12,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/database/models/device', () => ({
   DeviceModel: vi.fn().mockImplementation(function () {
     return {
+      markSeen: mocks.markSeen,
       queryPersonal: mocks.queryPersonal,
       queryWorkspaceDevices: mocks.queryWorkspaceDevices,
     };
@@ -25,6 +28,7 @@ const { getScopedOnlineDevices } = await import('./scopedDevices');
 const serverDB = {} as unknown as LobeChatDatabase;
 const row = (deviceId: string) => ({
   deviceId,
+  id: `row-${deviceId}`,
   friendlyName: null,
   hostname: `${deviceId}-db`,
   lastSeenAt: new Date('2026-09-09T00:00:00.000Z'),
@@ -47,6 +51,18 @@ describe('getScopedOnlineDevices', () => {
     mocks.queryPersonal.mockResolvedValue([]);
     mocks.queryWorkspaceDevices.mockResolvedValue([]);
     mocks.queryDeviceList.mockResolvedValue([]);
+  });
+
+  it('records registered devices the gateway reports online as seen', async () => {
+    // Before: lastSeenAt kept the registration time while a session stayed open,
+    // so a device that dropped a minute ago read "last connected 2 months ago".
+    mocks.queryPersonal.mockResolvedValue([row('online'), row('offline')]);
+    mocks.queryDeviceList.mockResolvedValue([live('online')]);
+
+    await getScopedOnlineDevices(serverDB, 'user-1');
+
+    expect(mocks.markSeen).toHaveBeenCalledTimes(1);
+    expect(mocks.markSeen).toHaveBeenCalledWith(['row-online'], expect.any(Date), expect.any(Date));
   });
 
   /**
@@ -74,6 +90,22 @@ describe('getScopedOnlineDevices', () => {
     ]);
     expect(result[0]).toMatchObject({ online: true, scope: 'workspace' });
     expect(result[1]).toMatchObject({ online: false, scope: 'workspace' });
+  });
+
+  it('marks managed cloud devices so the device tool treats them as always online', async () => {
+    mocks.queryPersonal.mockResolvedValue([
+      { ...row('cloud-asleep'), identitySource: MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE },
+      { ...row('desktop'), identitySource: 'machine-id' },
+    ]);
+
+    const result = await getScopedOnlineDevices(serverDB, 'user-1');
+
+    // `online` stays the live presence routing reads.
+    expect(result.find((d) => d.deviceId === 'cloud-asleep')).toMatchObject({
+      managed: true,
+      online: false,
+    });
+    expect(result.find((d) => d.deviceId === 'desktop')).not.toHaveProperty('managed');
   });
 
   /**

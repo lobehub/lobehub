@@ -110,3 +110,47 @@ describe('McpCtr.listToolsForGateway', () => {
     expect(client.disconnect).not.toHaveBeenCalled();
   });
 });
+
+describe('McpCtr.readUiResourceForGateway', () => {
+  let ctr: McpCtr;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clientParams.length = 0;
+    ctr = new McpCtr(mockApp);
+  });
+
+  it("reads a stdio server's view on the pooled session its calls reuse", async () => {
+    const resource = { contents: [{ text: '<p>view</p>', uri: 'ui://files/view' }] };
+    const client = {
+      ...makeClient(),
+      getProtocolEra: vi.fn(() => 'legacy'),
+      listResources: vi.fn().mockResolvedValue([]),
+      readResource: vi.fn().mockResolvedValue(resource),
+    };
+    mcpClientMocks.mockReturnValue(client);
+    const params = {
+      args: ['mcp.js'],
+      command: 'node',
+      env: { TOKEN: 't' },
+      name: 'files',
+      type: 'stdio' as const,
+    };
+
+    await expect(ctr.readUiResourceForGateway({ params, uri: 'ui://files/view' })).resolves.toEqual(
+      resource,
+    );
+    expect(client.readResource).toHaveBeenCalledWith('ui://files/view');
+    expect(clientParams[0]).toMatchObject(params);
+  });
+
+  it('refuses anything but a ui:// resource', async () => {
+    await expect(
+      ctr.readUiResourceForGateway({
+        params: { name: 'nas', type: 'http', url: 'https://nas.tail1234.ts.net/mcp' },
+        uri: 'file:///etc/passwd',
+      }),
+    ).rejects.toThrow();
+    expect(mcpClientMocks).not.toHaveBeenCalled();
+  });
+});

@@ -1,6 +1,20 @@
+import type { AgentShareVisitorIds } from '@lobechat/types';
+
 export interface HoldAgentRunFeeParams {
+  /**
+   * Set on a shared Agent's visitor run, so the deployment pays the fee from what funds that
+   * share's visitor runs.
+   */
+  agentShare?: AgentShareVisitorIds;
   /** The run's operation id, or a provisional id later moved with {@link rebindAgentRunFee}. */
   holderId: string;
+  /**
+   * The model the run starts on. An external agent passes the model it runs (for example
+   * `claude-code` / `anthropic`); absent only when the caller knows no model.
+   */
+  model?: string;
+  /** Provider of {@link model}. */
+  provider?: string;
   userId: string;
 }
 

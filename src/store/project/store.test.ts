@@ -379,6 +379,19 @@ describe('project store replicas', () => {
       expect(useProjectStore.getState().projectDetailMap.launch).toBeUndefined();
     });
 
+    it("refetches the Channel list after a delete, so the project's Channels show standalone", async () => {
+      seed();
+      await waitSeeded();
+      vi.mocked(projectService.delete).mockResolvedValue(ok(project('p1')) as any);
+      vi.mocked(projectService.listAll).mockResolvedValue(ok([project('p2')]) as any);
+      mocks.refreshChannelList.mockResolvedValue(undefined);
+      mocks.enableChannels = true;
+
+      await act(() => useProjectStore.getState().deleteProject('p1'));
+
+      await waitFor(() => expect(mocks.refreshChannelList).toHaveBeenCalledTimes(1));
+    });
+
     it('drops a removed member from the page at once, then reconciles with the server', async () => {
       const original = seed();
       await waitSeeded();

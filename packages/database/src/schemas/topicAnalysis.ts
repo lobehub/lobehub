@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  bigint,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 import { amountNumeric, timestamps, timestamptz } from './_helpers';
 import { topics } from './topic';
@@ -44,9 +53,9 @@ export const topicAnalyses = pgTable(
     // the topic's running totals drifting after the analysis. NULL = not measured.
     topicModel: text('topic_model'),
     topicProvider: text('topic_provider'),
-    totalTokens: integer('total_tokens'),
-    totalInputTokens: integer('total_input_tokens'),
-    totalOutputTokens: integer('total_output_tokens'),
+    totalTokens: bigint('total_tokens', { mode: 'number' }),
+    totalInputTokens: bigint('total_input_tokens', { mode: 'number' }),
+    totalOutputTokens: bigint('total_output_tokens', { mode: 'number' }),
     totalCost: amountNumeric('total_cost'),
     llmCalls: integer('llm_calls'),
     toolCalls: integer('tool_calls'),

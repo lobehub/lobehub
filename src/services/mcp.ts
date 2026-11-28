@@ -10,6 +10,7 @@ import {
   isSyncedMcpToolVisibleTo,
   type McpServerAddress,
 } from '@lobechat/const/mcpApp';
+import type { McpElicitationCall } from '@lobechat/mcp-elicitation/types';
 import { resolveConnectorLinkParam } from '@lobechat/mecha';
 import {
   type ChatToolPayload,
@@ -236,16 +237,21 @@ class MCPService {
     payload: ChatToolPayload,
     {
       agentId,
+      elicitation,
       fromMcpApp,
       fromEntrypoint,
       linkId,
       onThisDevice,
+      relayDeviceId,
+      relayWorkspaceId,
       server,
       signal,
+      clientRuntime,
       topicId,
     }: {
       /** Resolve connectors the way this agent's conversation does (agent-owned first). */
       agentId?: string;
+      elicitation?: McpElicitationCall;
       /**
        * The call is an MCP App view's `tools/call`, not the model's:
        * - only tools whose `_meta.ui.visibility` includes "app" run, which the
@@ -265,9 +271,17 @@ class MCPService {
        * `localhost` from this machine's.
        */
       onThisDevice?: boolean;
+      /**
+       * With `fromMcpApp`: the device the view's result was relayed from
+       * (`mcpApp.relayDeviceId`). Its calls go through the server, back to
+       * that device, from any client.
+       */
+      relayDeviceId?: string;
+      relayWorkspaceId?: string;
       /** With `fromMcpApp`: the server the view came from; its calls reach no other. */
       server?: string;
       signal?: AbortSignal;
+      clientRuntime?: boolean;
       topicId?: string;
     },
   ): Promise<MCPToolCallResult | undefined> {
@@ -280,6 +294,13 @@ class MCPService {
     const { identifier, arguments: args, apiName } = payload;
     // Calls run on this machine announce MCP Apps only under the user's flag
     const mcpApps = isMcpAppsOn();
+    const trpc = await import('@/libs/trpc/client');
+    const executionClient = elicitation
+      ? trpc.createWorkspaceLambdaClient(elicitation.workspaceId ?? null)
+      : trpc.lambdaClient;
+    const executionTools = elicitation
+      ? trpc.createWorkspaceToolsClient(elicitation.workspaceId ?? null)
+      : toolsClient;
     if (fromEntrypoint && !mcpApps) throw new Error('Interactive views are turned off');
 
     // Connector-first: HTTP connectors use their server-held credentials.
@@ -291,14 +312,69 @@ class MCPService {
     // original executor path. The route follows the row the server resolves for
     // this conversation: a private stdio row the conversation may not use must
     // not send its call over IPC when the server runs a shared HTTP row.
+    const runDurableClientTool = async () => {
+      if (!elicitation) throw new Error('Client MCP invocation has no durable identity');
+      let enqueueUnconfirmed = true;
+      let observationFailures = 0;
+      while (!signal?.aborted && Date.now() < elicitation.deadline + 60_000) {
+        if (enqueueUnconfirmed) {
+          try {
+            await executionClient.mcpElicitation.startClientTool.mutate(elicitation.identity, {
+              signal,
+            });
+            enqueueUnconfirmed = false;
+          } catch (error) {
+            const status = toRecord(toRecord(error)?.data)?.httpStatus;
+            if (signal?.aborted || (typeof status === 'number' && status >= 400 && status < 500))
+              throw error;
+            // The enqueue may have committed before its ACK was lost. Await its
+            // exact saved result; an empty long poll retries the same fenced outbox.
+          }
+        }
+        try {
+          const outcome = await executionClient.mcpElicitation.clientToolOutcome.query(
+            elicitation.identity,
+            { signal },
+          );
+          observationFailures = 0;
+          if (outcome) return { ...outcome, contentFinalized: true } as MCPToolCallResult;
+        } catch (error) {
+          const status = toRecord(toRecord(error)?.data)?.httpStatus;
+          if (
+            signal?.aborted ||
+            (typeof status === 'number' &&
+              status >= 400 &&
+              status < 500 &&
+              status !== 408 &&
+              status !== 429)
+          )
+            throw error;
+          // A failed read says nothing about the worker's result. Retry observation only.
+          console.warn('MCP outcome observation failed; awaiting the durable result', error);
+          const delay = Math.min(
+            10_000,
+            500 * 2 ** Math.min(observationFailures++, 5),
+            elicitation.deadline + 60_000 - Date.now(),
+          );
+          if (delay > 0) await new Promise<void>((resolve) => setTimeout(resolve, delay));
+        }
+      }
+      throw new Error(
+        signal?.aborted
+          ? 'The user aborted a request.'
+          : 'MCP invocation did not finish before its deadline',
+      );
+    };
     const installPlugin = pluginSelectors.getInstalledPluginById(identifier)(s);
     const customPlugin = pluginSelectors.getCustomPluginById(identifier)(s);
 
-    const plugin = installPlugin || customPlugin;
+    let plugin = installPlugin || customPlugin;
     // An unfinished marketplace install (an interrupted reinstall over a plugin
     // row, a late OAuth callback after a cancel) is not routed to: its tool rows
     // may not match its endpoint. A plugin row still serves the call.
-    const resolved = await resolveRunConnector(identifier, { agentId, topicId });
+    const resolved = elicitation
+      ? await executionClient.connector.resolveForRun.query({ agentId, identifier, topicId })
+      : await resolveRunConnector(identifier, { agentId, topicId });
     const connector =
       resolved && isMarketplaceInstallRunnable(resolved, !!plugin) ? resolved : undefined;
 
@@ -308,8 +384,8 @@ class MCPService {
     const isConnector = connector
       ? connector.isEnabled && hasCallableMcpEndpoint(connector)
       : !!agentId && !plugin;
+    if (connector && !connector.isEnabled) throw new Error('Connector is disabled');
     if (isConnector) {
-      const { lambdaClient } = await import('@/libs/trpc/client');
       // An HTTP server only this machine reaches (localhost / LAN, or set to
       // connect through the device) runs here over IPC, as its tool list was
       // read here: the server would have to tunnel it back to this device. A
@@ -318,8 +394,11 @@ class MCPService {
         connector?.mcpConnectionType !== 'stdio' &&
         !!connector?.mcpServerUrl &&
         isDeviceOnlyMcpEndpoint(connectorMcpEndpoint(connector));
-      // A connector bound to another device runs there, through the server
+      // A connector bound to another device runs there, through the server,
+      // as does a view relayed from a device
+      const relayed = !!fromMcpApp && !!relayDeviceId;
       const runsHere =
+        !relayed &&
         connector &&
         isDesktop &&
         !runsOnAnotherDevice(connectorDeviceBinding(connector)?.deviceId) &&
@@ -339,7 +418,7 @@ class MCPService {
       // the current binding: a connector rebound to another device since this
       // projection loaded runs there, through the server.
       const detail = runsHere
-        ? await lambdaClient.connector.getForRun.query({ agentId, identifier, topicId })
+        ? await executionClient.connector.getForRun.query({ agentId, identifier, topicId })
         : undefined;
       const reboundElsewhere =
         !!detail && runsOnAnotherDevice(connectorDeviceBinding(detail)?.deviceId);
@@ -358,7 +437,7 @@ class MCPService {
           // The token of the row this conversation runs, read in its scope: a
           // private agent's own topic may run its owner's personal connector
           const http = await resolveLocalConnectorHttpParams(detail, (id) =>
-            lambdaClient.connector.getLocalCallToken.mutate({
+            executionClient.connector.getLocalCallToken.mutate({
               id,
               linkId: account.linkId,
               run: { agentId, identifier, topicId },
@@ -369,6 +448,7 @@ class MCPService {
           throwIfAborted(signal);
           const result = await ensureElectronIpc().mcp.callTool(
             serializeMcpIpcPayload({
+              elicitation: elicitation ? { ...elicitation, relayResult: true } : undefined,
               args: safeParseJSON(account.args) ?? {},
               http,
               mcpApps,
@@ -401,6 +481,7 @@ class MCPService {
         try {
           const serialized = await ensureElectronIpc().mcp.callTool(
             serializeMcpIpcPayload({
+              elicitation: elicitation ? { ...elicitation, relayResult: true } : undefined,
               args: safeParseJSON(args) ?? {},
               env: config.env,
               ...(fromMcpApp && { fromApp: true }),
@@ -440,14 +521,18 @@ class MCPService {
           }
         }
       }
+      if (clientRuntime && elicitation && connector?.mcpConnectionType !== 'cloud')
+        return runDurableClientTool();
       try {
-        return (await lambdaClient.connector.callTool.mutate(
+        return (await executionClient.connector.callTool.mutate(
           {
             agentId,
             linkId,
             args,
+            elicitation,
             // The server checks the view's server against the connector it resolves
             ...(fromMcpApp && { fromApp: true, server }),
+            ...(relayed && { relayDeviceId, ...(relayWorkspaceId && { relayWorkspaceId }) }),
             ...(fromEntrypoint && { fromEntrypoint: true, agentId }),
             identifier,
             toolName: apiName,
@@ -471,8 +556,13 @@ class MCPService {
       }
     }
 
-    if (!plugin) return;
+    if (!plugin && elicitation) {
+      plugin = (await executionClient.plugin.getPlugins.query()).find(
+        (entry) => entry.identifier === identifier,
+      );
+    }
 
+    if (!plugin) return;
     const connection = plugin.customParams?.mcp;
     const configured = buildPluginMcpParams(plugin, identifier);
     const { pluginSettings } = configured;
@@ -500,6 +590,13 @@ class MCPService {
             type: 'http',
             url: params.url,
           }));
+    if (
+      clientRuntime &&
+      elicitation &&
+      (connection?.type === 'http' || connection?.type === 'stdio') &&
+      !(isDesktop && (isStdio || isLocalHttp))
+    )
+      return runDurableClientTool();
     const isCustomPlugin = !!customPlugin;
 
     // Build meta for server-side reporting
@@ -517,6 +614,7 @@ class MCPService {
     };
 
     const data = {
+      elicitation,
       // For desktop IPC, always pass a record/object for tool "arguments"
       // (IPC layer serializes the whole payload into a JSON envelope).
       args: isDesktop && isStdio ? (safeParseJSON(args) ?? {}) : args,
@@ -559,7 +657,7 @@ class MCPService {
         // Server will automatically get user access token from database
         // and format the result to MCPToolCallResult
         // Server-side also handles telemetry reporting
-        result = await toolsClient.market.callCloudMcpEndpoint.mutate({
+        result = await executionTools.market.callCloudMcpEndpoint.mutate({
           apiParams,
           identifier,
           meta,
@@ -568,7 +666,11 @@ class MCPService {
       } else if (isDesktop && isStdio) {
         // For desktop and stdio, use IPC (main process)
         // Note: IPC doesn't support AbortSignal yet
-        const serialized = serializeMcpIpcPayload({ ...data, mcpApps });
+        const serialized = serializeMcpIpcPayload({
+          ...data,
+          mcpApps,
+          elicitation: elicitation ? { ...elicitation, relayResult: true } : undefined,
+        });
         const serializedResult = await ensureElectronIpc().mcp.callTool(serialized as any);
         result = await markLocalView(deserializeMcpIpcPayload(serializedResult) as any);
       } else if (isLocalHttp) {
@@ -585,7 +687,7 @@ class MCPService {
         result = await markLocalView(deserializeMcpIpcPayload(serializedResult) as any);
       } else {
         // For other types, use the toolsClient
-        result = await toolsClient.mcp.callTool.mutate(data, { signal });
+        result = await executionTools.mcp.callTool.mutate(data, { signal });
       }
 
       return result;
@@ -632,6 +734,8 @@ class MCPService {
       linkId,
       toolArguments,
       onThisDevice = false,
+      relayDeviceId,
+      relayWorkspaceId,
       server,
       topicId,
     }: {
@@ -645,6 +749,12 @@ class MCPService {
        * server-side `localhost` from this machine's.
        */
       onThisDevice?: boolean;
+      /**
+       * The device the result was relayed from (`mcpApp.relayDeviceId`): the
+       * server reads the view there, for any client.
+       */
+      relayDeviceId?: string;
+      relayWorkspaceId?: string;
       server?: string;
       /**
        * The conversation the result belongs to. The server resolves the
@@ -706,6 +816,21 @@ class MCPService {
       pluginSelectors.getCustomPluginById(identifier)(s);
     const connectorServes = serves(resolved, !!plugin);
     const connector = connectorServes ? resolved : undefined;
+
+    // A result relayed from a device has its view read there, by the server
+    if (connector && relayDeviceId) {
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      return (await lambdaClient.connector.readUiResource.query({
+        agentId,
+        identifier,
+        linkId,
+        relayDeviceId,
+        ...(relayWorkspaceId && { relayWorkspaceId }),
+        server,
+        topicId,
+        uri,
+      })) as ReadResourceResult;
+    }
 
     // Stdio connectors run on a desktop app, never on the server, so only the
     // desktop can read their view: it spawns the same command over IPC.

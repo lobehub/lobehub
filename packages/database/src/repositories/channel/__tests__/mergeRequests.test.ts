@@ -126,6 +126,72 @@ describe('Requests one person sends in a row while the Agent is busy', () => {
   });
 });
 
+describe('Follow-ups one person sends in a row while the Agent is busy', () => {
+  /** A team Channel whose one Agent is busy, with requests routed to it by decision. */
+  const decidedRequests = async () => {
+    const team = await fixture.createTeamChannel();
+    // Routing asks the workspace who the sender is.
+    await db.insert(workspaceMembers).values({
+      role: 'owner',
+      userId: fixture.ownerId,
+      workspaceId: fixture.workspaceId,
+    });
+    const agent = await fixture.addAgent(team.channel.id, 'Agent');
+
+    const ask = async (content: string, kind?: 'followup' | 'mention') => {
+      const message = await team.asOwner.send(team.channel.id, {
+        content,
+        requestKey: content,
+        routing: 'decision',
+      });
+      const input = await routing.claim(team.channel.id, message.id);
+      await execution.resolveRouting(team.channel.id, message.id, input!.attempt, {
+        memberIds: [agent.id],
+        reason: 'test',
+        status: 'assigned',
+        ...(kind && { wakes: { [agent.id]: { kind, reason: 'followup-window' } } }),
+      });
+      const job = (await jobsOf(db, message.id)).find(({ memberId }) => memberId === agent.id)!;
+      return { job, message };
+    };
+
+    const first = await ask('first');
+    await execution.claim(team.channel.id, first.job.id, lease);
+    return { ask, channel: team.channel, first };
+  };
+
+  it('merges the ones a follow-up window wakes as owed answers', async () => {
+    const { ask, channel, first } = await decidedRequests();
+    const second = await ask('second', 'mention');
+    const third = await ask('third');
+    const fourth = await ask('fourth', 'mention');
+
+    await finish(channel.id, first.job.id);
+    const claim = await execution.claim(channel.id, second.job.id, lease);
+
+    expect(claim?.job.manifest?.requestMessageIds).toEqual([
+      second.message.id,
+      third.message.id,
+      fourth.message.id,
+    ]);
+    expect((await jobById(db, third.job.id)).status).toBe('merged');
+    expect((await jobById(db, fourth.job.id)).status).toBe('merged');
+  });
+
+  it('keeps an optional follow-up, which may stay silent, its own run', async () => {
+    const { ask, channel, first } = await decidedRequests();
+    const second = await ask('second');
+    const optional = await ask('optional', 'followup');
+
+    await finish(channel.id, first.job.id);
+    const claim = await execution.claim(channel.id, second.job.id, lease);
+
+    expect(claim?.job.manifest?.requestMessageId).toBe(second.message.id);
+    expect(claim?.job.manifest?.requestMessageIds).toBeUndefined();
+    expect((await jobById(db, optional.job.id)).status).toBe('queued');
+  });
+});
+
 describe('a deferred follow-up whose request an earlier run answers', () => {
   it('waits for the merged answer and then reads it', async () => {
     const team = await fixture.createTeamChannel();

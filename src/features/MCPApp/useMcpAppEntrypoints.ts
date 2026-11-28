@@ -5,6 +5,7 @@ import { getRunConnectors, refreshRunConnectors } from '@/services/runConnectors
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { refreshMcpAppDiscovery } from '@/store/mcpApp/discovery';
+import { useMcpAppStore } from '@/store/mcpApp/store';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { getToolStoreState, useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
@@ -38,6 +39,7 @@ export const useMcpAppEntrypoints = (agentId?: string, topicId?: string) => {
     s.connectors,
     s.agentConnectors,
   ]);
+  const discoveredPluginManifests = useMcpAppStore((s) => s.discoveredPluginManifests);
   useEffect(() => {
     if (!enabled) return;
     const state = getToolStoreState();
@@ -72,20 +74,31 @@ export const useMcpAppEntrypoints = (agentId?: string, topicId?: string) => {
     for (const plugin of pluginsConfirmed ? plugins : []) {
       const config = plugin.customParams?.mcp;
       if (!config || plugin.manifest?.mcpAppEntrypoints !== undefined) continue;
-      refreshMcpAppDiscovery(`plugin:${plugin.identifier}`, async () => {
-        const [{ mcpService }, { pluginService }] = await Promise.all([
-          import('@/services/mcp'),
-          import('@/services/plugin'),
-        ]);
+      refreshMcpAppDiscovery(`plugin:${plugin.identifier}`, async (isCurrent) => {
+        const { mcpService } = await import('@/services/mcp');
         // Same params as the plugin's tool calls: its settings carry credentials
         const manifest = await mcpService.getPluginMcpManifest(plugin);
-        if (!manifest) return;
-        await pluginService.updatePluginManifest(plugin.identifier, manifest);
-        await state.refreshPlugins();
+        if (!manifest || !isCurrent()) return;
+        useMcpAppStore.setState(
+          (s) => ({
+            discoveredPluginManifests: {
+              ...s.discoveredPluginManifests,
+              [plugin.identifier]: manifest,
+            },
+          }),
+          false,
+          'mcpApp/pluginManifestDiscovered',
+        );
       });
     }
   }, [enabled, plugins, pluginsConfirmed, connectors, agentConnectors, agentId]);
-  return selectMcpAppEntrypoints(getToolStoreState(), enabled, agentId, runRows).filter(
+  return selectMcpAppEntrypoints(
+    getToolStoreState(),
+    enabled,
+    agentId,
+    runRows,
+    discoveredPluginManifests,
+  ).filter(
     // The agent disables a connector, not one row's tool prefix
     (entry) =>
       !getDisabledPluginIds(agentPlugins).includes(entry.connectorIdentifier ?? entry.identifier),

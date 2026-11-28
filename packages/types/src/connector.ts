@@ -1,3 +1,109 @@
+import type { ConnectorVisibility } from './apiKey';
+
+/**
+ * Composio runtime config carried on `user_connectors.metadata.composio`.
+ *
+ * This is the source of truth for running a Composio connector at runtime
+ * (manifest building + tool execution), replacing the reverse lookup into
+ * `user_installed_plugins.customParams.composio`. `connectedAccountId` is the
+ * only field strictly required to execute a tool; the rest support connection
+ * management and list display.
+ */
+export interface ComposioConnectorMetadata {
+  appSlug: string;
+  authConfigId: string;
+  connectedAccountId: string;
+  /**
+   * The user entity that LINKED this connected account
+   * (`connectedAccounts.link(linkedByUserId, …)`). This is the Composio entity
+   * the account is bound to and MUST be passed as `userId` when executing tools —
+   * NOT the caller (a workspace member runs another user's connector) and NOT the
+   * row creator (`user_connectors.userId`), which can diverge when a workspace
+   * owner reconnects a member-created connector. Absent on rows created before
+   * this field existed; runtime falls back to the row creator for those.
+   */
+  linkedByUserId?: string;
+  redirectUrl?: string;
+  /** 'PENDING' | 'ACTIVE' | 'FAILED' — Composio-side connection status */
+  status: string;
+}
+
+/**
+ * Typed shape of the `metadata` column. Keeps an index signature so existing
+ * ad-hoc keys (e.g. `customHeaders`) and future extensions stay valid.
+ */
+export interface ConnectorMetadata {
+  [key: string]: unknown;
+  avatar?: string;
+  /**
+   * Stdio / device-routed HTTP only: the device this connector always runs on,
+   * through the device gateway. Absent means the device is picked automatically
+   * (the run's device, else the newest capable personal one). A personal
+   * connector binds one of its owner's personal devices, a workspace connector
+   * a public device of its workspace. Never falls back: an offline bound device
+   * fails the call (`connectorDeviceBinding` in `@lobechat/utils/mcpEndpoint`).
+   */
+  boundDeviceId?: string;
+  /** Protocol capabilities learned when connector tools are synchronized. */
+  capabilities?: { events?: { supported: boolean } };
+  composio?: ComposioConnectorMetadata;
+  /**
+   * HTTP only: `device` reaches the MCP server from the user's device through
+   * the device gateway, whatever its address looks like (Tailscale MagicDNS,
+   * `.local`, intranet DNS). Absent means `auto`: decided by the address
+   * (`shouldConnectViaDevice` in `@lobechat/utils/mcpEndpoint`).
+   */
+  connectVia?: 'device';
+  customHeaders?: Record<string, string>;
+  description?: string;
+  /**
+   * "Mount" reference lock: a base (user-owned) connector referenced by an
+   * agent via the "挂载/Linked" flow. The row stays user-owned (`agent_id`
+   * NULL) and keeps syncing with the user's edits, but resolves for this agent
+   * and is locked so no other agent can mount the same connector. Cleared on
+   * unmount. Distinct from `agent_id` (which is full agent ownership — Copy /
+   * Connect-new).
+   */
+  mountedByAgentId?: string;
+}
+
+/** What inserting a `user_connectors` row takes; columns with a default are optional. */
+export interface UserConnectorInsert {
+  accessedAt?: Date;
+  agentId?: string | null;
+  createdAt?: Date;
+  credentials?: string | null;
+  id?: string;
+  identifier: string;
+  isEnabled?: boolean;
+  mcpConnectionType?: string | null;
+  mcpServerUrl?: string | null;
+  mcpStdioConfig?: {
+    args?: string[];
+    command: string;
+    env?: Record<string, string>;
+  } | null;
+  metadata?: ConnectorMetadata | null;
+  name: string;
+  oidcConfig?: ConnectorOIDCConfig | null;
+  sourceType: string;
+  status: string;
+  tokenExpiresAt?: Date | null;
+  updatedAt?: Date;
+  userId: string;
+  visibility?: ConnectorVisibility;
+  workspaceId?: string | null;
+}
+
+/**
+ * Connector fields a legacy-plugin migration may write. Ownership, primary key
+ * and creation/update timestamps are server-owned and intentionally absent.
+ */
+export type UserConnectorMigrationPayload = Omit<
+  UserConnectorInsert,
+  'createdAt' | 'id' | 'updatedAt' | 'userId'
+>;
+
 export type ConnectorLinkStatus = 'connected' | 'error';
 export type ConnectorAuthKind = 'oauth2' | 'bearer' | 'apikey' | 'header' | 'none';
 

@@ -1,8 +1,8 @@
 /**
  * @vitest-environment happy-dom
  */
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { MouseEvent, ReactNode } from 'react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { KeyboardEvent, MouseEvent, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TopicListScopeContext } from '../../TopicListScope';
@@ -14,6 +14,7 @@ const scopedTopicMock = vi.hoisted(() => ({
 }));
 const useTopicNavigationMock = vi.hoisted(() => vi.fn());
 const prefetchMessagesMock = vi.hoisted(() => vi.fn());
+const useTopicItemDropdownMenuMock = vi.hoisted(() => vi.fn(() => ({ dropdownMenu: () => [] })));
 const activeTopicIdMock = vi.hoisted(() => ({ value: undefined as string | undefined }));
 const agentRuntimeRunningMock = vi.hoisted(() => ({ value: false }));
 const runningStartTimeMock = vi.hoisted(() => ({ value: undefined as number | undefined }));
@@ -22,6 +23,12 @@ const onlyMineMock = vi.hoisted(() => ({ value: false }));
 const currentUserIdMock = vi.hoisted(() => ({ value: 'user-1' as string | undefined }));
 const hasDraftMock = vi.hoisted(() => ({ value: false }));
 const isDesktopMock = vi.hoisted(() => ({ value: false }));
+const renameMock = vi.hoisted(() => ({
+  autoRename: vi.fn(),
+  canRename: true,
+  openRename: vi.fn(),
+  saveTitle: vi.fn(),
+}));
 const electronTabMocks = vi.hoisted(() => ({
   activateTab: vi.fn(),
   addNewTab: vi.fn(),
@@ -70,8 +77,12 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
     icon,
     onClick,
     onDoubleClick,
+    onKeyDown,
+    onPointerEnter,
     slots,
+    tabIndex,
     title,
+    ...rest
   }: {
     actions?: ReactNode | (() => ReactNode);
     active?: boolean;
@@ -81,6 +92,10 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
     icon?: ReactNode;
     onClick?: (event: MouseEvent) => void;
     onDoubleClick?: (event: MouseEvent) => void;
+    onKeyDown?: (event: KeyboardEvent<HTMLElement>) => void;
+    onPointerEnter?: () => void;
+    tabIndex?: number;
+    [key: `data-${string}`]: unknown;
     slots?: { iconBelow?: ReactNode; titlePrefix?: ReactNode };
     title?: ReactNode;
   }) => (
@@ -88,8 +103,12 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
       data-active={String(active)}
       data-href={href}
       data-testid="nav-item"
+      data-topic-row={(rest as Record<string, unknown>)['data-topic-row'] as string | undefined}
+      tabIndex={tabIndex}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
+      onKeyDown={onKeyDown}
+      onPointerEnter={onPointerEnter}
     >
       <div data-testid="nav-item-leading">
         {icon}
@@ -101,7 +120,7 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
       </div>
       {description}
       {extra}
-      {typeof actions === 'function' ? actions() : actions}
+      <div data-nav-item-actions="">{typeof actions === 'function' ? actions() : actions}</div>
     </div>
   ),
 }));
@@ -194,12 +213,21 @@ vi.mock('./metaCardData', async (importOriginal) => {
   };
 });
 vi.mock('./Actions', () => ({
-  default: ({ showInlineArchive }: { showInlineArchive?: boolean }) => (
-    <div data-show-inline-archive={String(!!showInlineArchive)} data-testid="topic-actions" />
+  default: ({
+    onRename,
+    showInlineArchive,
+  }: {
+    onRename?: () => void;
+    showInlineArchive?: boolean;
+  }) => (
+    <div data-show-inline-archive={String(!!showInlineArchive)} data-testid="topic-actions">
+      <button data-testid="menu-rename" type="button" onClick={onRename} />
+    </div>
   ),
 }));
+vi.mock('./useRenameTopic', () => ({ useRenameTopic: () => renameMock }));
 vi.mock('./useDropdownMenu', () => ({
-  useTopicItemDropdownMenu: () => ({ dropdownMenu: [] }),
+  useTopicItemDropdownMenu: useTopicItemDropdownMenuMock,
 }));
 // The row only decides *whether* to mount the thread list; the list itself has
 // its own tests (`ThreadList/*.test.ts`), so stub it to a marker here.
@@ -324,6 +352,20 @@ describe('TopicItem active state', () => {
     render(<TopicItem id="tpc_test" title="Topic" />);
 
     expect(screen.getByTestId('nav-item')).toHaveAttribute('data-active', 'false');
+  });
+
+  it('mounts the right-click menu only once the row is reached', () => {
+    useTopicItemDropdownMenuMock.mockClear();
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    // A mounted menu hook re-renders on every navigation, so idle rows must not mount one.
+    expect(useTopicItemDropdownMenuMock).not.toHaveBeenCalled();
+
+    fireEvent.pointerEnter(screen.getByTestId('nav-item'));
+
+    expect(useTopicItemDropdownMenuMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'tpc_test', title: 'Topic' }),
+    );
   });
 
   it('prefixes the cmd-click href with the active workspace slug', () => {
@@ -652,5 +694,220 @@ describe('TopicItem double click on desktop', () => {
     expect(electronTabMocks.addTab).not.toHaveBeenCalled();
     expect(electronTabMocks.addNewTab).not.toHaveBeenCalled();
     expect(electronTabMocks.activateTab).not.toHaveBeenCalled();
+  });
+});
+
+describe('TopicItem inline rename', () => {
+  beforeEach(() => {
+    renameMock.canRename = true;
+    renameMock.autoRename.mockClear();
+    renameMock.saveTitle.mockClear();
+    useTopicNavigationMock.mockReturnValue({
+      focusTopicPopup: vi.fn().mockResolvedValue(false),
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+      urlTopicId: undefined,
+    });
+  });
+
+  const startEditing = () => {
+    render(<TopicItem id="tpc_test" title="Topic" />);
+    fireEvent.doubleClick(screen.getByTestId('nav-item-title'));
+    return screen.getByRole('textbox') as HTMLInputElement;
+  };
+
+  it('turns the title into a selected input in place on double click', () => {
+    const input = startEditing();
+
+    expect(input.value).toBe('Topic');
+    expect(document.activeElement).toBe(input);
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, 'Topic'.length]);
+    expect(screen.queryByTestId('nav-item')).not.toBeInTheDocument();
+  });
+
+  it('saves the trimmed title on Enter and leaves edit mode', () => {
+    const input = startEditing();
+
+    fireEvent.change(input, { target: { value: '  Renamed  ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(renameMock.saveTitle).toHaveBeenCalledTimes(1);
+    expect(renameMock.saveTitle).toHaveBeenCalledWith('Renamed');
+    expect(screen.queryByTestId('topic-title-editor')).not.toBeInTheDocument();
+  });
+
+  it('saves when the input loses focus', () => {
+    const input = startEditing();
+
+    fireEvent.change(input, { target: { value: 'Renamed' } });
+    fireEvent.blur(input);
+
+    expect(renameMock.saveTitle).toHaveBeenCalledWith('Renamed');
+  });
+
+  it('discards the edit on Escape', () => {
+    const input = startEditing();
+
+    fireEvent.change(input, { target: { value: 'Renamed' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+
+    expect(renameMock.saveTitle).not.toHaveBeenCalled();
+    expect(screen.getByTestId('nav-item')).toBeInTheDocument();
+  });
+
+  it('saves nothing for an empty title', () => {
+    const input = startEditing();
+
+    fireEvent.change(input, { target: { value: '   ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(renameMock.saveTitle).not.toHaveBeenCalled();
+  });
+
+  it('saves nothing for an unchanged title', () => {
+    const input = startEditing();
+
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(renameMock.saveTitle).not.toHaveBeenCalled();
+  });
+
+  it('generates a title with the auto-rename button instead of saving the typed one', () => {
+    const input = startEditing();
+    fireEvent.change(input, { target: { value: 'Typed' } });
+
+    fireEvent.click(screen.getByRole('button'));
+
+    expect(renameMock.autoRename).toHaveBeenCalledTimes(1);
+    expect(renameMock.saveTitle).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('topic-title-editor')).not.toBeInTheDocument();
+  });
+
+  it('edits in place from the menu Rename', () => {
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    fireEvent.click(screen.getByTestId('menu-rename'));
+
+    expect(screen.getByTestId('topic-title-editor')).toBeInTheDocument();
+  });
+
+  it('ignores a double click on the trailing actions', () => {
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    fireEvent.doubleClick(screen.getByTestId('topic-actions'));
+
+    expect(screen.queryByTestId('topic-title-editor')).not.toBeInTheDocument();
+  });
+
+  it('does not edit without edit permission', () => {
+    renameMock.canRename = false;
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    fireEvent.doubleClick(screen.getByTestId('nav-item-title'));
+
+    expect(screen.queryByTestId('topic-title-editor')).not.toBeInTheDocument();
+  });
+});
+
+describe('TopicItem keyboard', () => {
+  const navigateToTopic = vi.fn();
+
+  beforeEach(() => {
+    renameMock.canRename = true;
+    renameMock.saveTitle.mockClear();
+    navigateToTopic.mockClear();
+    useTopicNavigationMock.mockReturnValue({
+      focusTopicPopup: vi.fn().mockResolvedValue(false),
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic,
+      routeTopicId: undefined,
+      urlTopicId: undefined,
+    });
+  });
+
+  const focusRow = () => {
+    const row = screen.getByTestId('nav-item');
+    row.focus();
+    return row;
+  };
+
+  it('makes the row focusable', () => {
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    expect(focusRow()).toHaveFocus();
+  });
+
+  it('renames on F2 and returns focus to the row on Enter', () => {
+    render(<TopicItem id="tpc_test" title="Topic" />);
+    fireEvent.keyDown(focusRow(), { key: 'F2' });
+
+    const input = screen.getByRole('textbox') as HTMLInputElement;
+    expect(input).toHaveFocus();
+    fireEvent.change(input, { target: { value: 'Renamed' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(renameMock.saveTitle).toHaveBeenCalledWith('Renamed');
+    expect(screen.getByTestId('nav-item')).toHaveFocus();
+  });
+
+  it('renames on Enter', () => {
+    render(<TopicItem id="tpc_test" title="Topic" />);
+    fireEvent.keyDown(focusRow(), { key: 'Enter' });
+
+    expect(screen.getByRole('textbox')).toHaveFocus();
+    expect(navigateToTopic).not.toHaveBeenCalled();
+  });
+
+  it('opens the topic on Space', () => {
+    render(<TopicItem id="tpc_test" title="Topic" />);
+    fireEvent.keyDown(focusRow(), { key: ' ' });
+
+    expect(navigateToTopic).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('topic-title-editor')).not.toBeInTheDocument();
+  });
+
+  it('returns focus to the row after Escape', () => {
+    render(<TopicItem id="tpc_test" title="Topic" />);
+    fireEvent.keyDown(focusRow(), { key: 'F2' });
+
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
+
+    expect(screen.getByTestId('nav-item')).toHaveFocus();
+  });
+
+  it('leaves focus where a blur moved it', () => {
+    render(
+      <>
+        <TopicItem id="tpc_test" title="Topic" />
+        <input data-testid="elsewhere" />
+      </>,
+    );
+    fireEvent.keyDown(focusRow(), { key: 'F2' });
+
+    // Moving focus blurs the editor, which saves and closes it.
+    act(() => screen.getByTestId('elsewhere').focus());
+
+    expect(screen.queryByTestId('topic-title-editor')).not.toBeInTheDocument();
+    expect(screen.getByTestId('elsewhere')).toHaveFocus();
+  });
+
+  it('does not rename on F2 without edit permission', () => {
+    renameMock.canRename = false;
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    fireEvent.keyDown(focusRow(), { key: 'F2' });
+
+    expect(screen.queryByTestId('topic-title-editor')).not.toBeInTheDocument();
+  });
+
+  it('opens the default topic row on Enter', () => {
+    render(<TopicItem title="Default" />);
+
+    fireEvent.keyDown(focusRow(), { key: 'Enter' });
+
+    expect(navigateToTopic).toHaveBeenCalledTimes(1);
   });
 });

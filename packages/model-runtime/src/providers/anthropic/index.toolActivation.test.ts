@@ -5,6 +5,10 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ChatStreamPayload } from '../../types';
 import { LobeAnthropicAI } from './index';
 
+// Pricing lookup loads the model list; inside the Cloud superproject that resolves to a
+// module needing Redis, so stub it the way the OpenAI anchoring tests do.
+vi.mock('@lobechat/business-model-bank/model-config', () => ({ loadModels: async () => [] }));
+
 beforeEach(() => vi.stubEnv('ANTHROPIC_ENABLE_INLINE_TOOLS', '1'));
 afterEach(() => {
   vi.unstubAllEnvs();

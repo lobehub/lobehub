@@ -1,4 +1,10 @@
 import type { DeviceControlDeps } from '@lobechat/device-control';
+import {
+  checkAgentCredential,
+  defaultAgentCredentialRootDir,
+  installAgentCredential,
+  removeAgentCredential,
+} from '@lobechat/device-control/agent-credentials';
 import { app as electronApp } from 'electron';
 
 import type { App } from '@/core/App';
@@ -23,6 +29,12 @@ export const createDesktopDeviceControlDeps = (app: App): DeviceControlDeps => {
   const localFileCtr = () => app.getController(LocalFileCtr);
   const service = () => app.getService(GatewayConnectionService);
 
+  // Provider credentials for heterogeneous agent runs. The store is shared with
+  // `lh connect` on this machine, and `executeGatewayAgentRun` applies it.
+  const credentialStore = () => ({
+    rootDir: defaultAgentCredentialRootDir(electronApp.getPath('home')),
+  });
+
   return {
     approveProjectRoot: async (root) => {
       try {
@@ -34,6 +46,12 @@ export const createDesktopDeviceControlDeps = (app: App): DeviceControlDeps => {
     // Workspace share (server-driven enroll/unenroll RPCs): the service owns
     // the gateway connections, so both handlers route straight to it.
     enrollWorkspace: (params) => service().enrollWorkspace(params),
+    // File RPCs refuse paths inside the store (and moving the trees around it).
+    // The terminal and agent tools are not file RPCs and are not covered.
+    agentCredentialRootDir: credentialStore().rootDir,
+    checkAgentCredential: (params) => checkAgentCredential(params, credentialStore()),
+    installAgentCredential: (params) => installAgentCredential(params, credentialStore()),
+    removeAgentCredential: (params) => removeAgentCredential(params, credentialStore()),
     getLocalFilePreview: (params) => localFileCtr().getLocalFilePreview(params),
     readExternalAssetForPublish: (params) => localFileCtr().readExternalAssetForPublish(params),
     copyAssetForPublish: (params) => localFileCtr().copyAssetForPublish(params),
@@ -42,6 +60,8 @@ export const createDesktopDeviceControlDeps = (app: App): DeviceControlDeps => {
       app.getController(HeterogeneousAgentCtr).listModels(params),
     // A server that can't reach an MCP server itself lists its tools here
     listMcpTools: (params) => app.getController(McpCtr).listToolsForGateway(params),
+    // ...and reads the MCP Apps view of a result its call produced here
+    readMcpUiResource: (params) => app.getController(McpCtr).readUiResourceForGateway(params),
     searchProjectFiles: (params) => localFileCtr().searchProjectFiles(params),
     // Remote "delete" goes to this machine's trash (`shell.trashItem`), same
     // as the local Files tree, so it stays recoverable.

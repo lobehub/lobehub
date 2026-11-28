@@ -40,11 +40,13 @@
   "OllamaServiceUnavailable": "Usługa Ollama jest niedostępna. Proszę sprawdzić, czy Ollama działa poprawnie lub czy konfiguracja cross-origin Ollama jest ustawiona poprawnie.",
   "OperationInactivityTimeout": "Operacja agenta była zbyt długo nieaktywna i została zakończona. Proszę spróbować ponownie.",
   "PermissionDenied": "Przepraszamy, nie masz uprawnień do korzystania z tej usługi. Proszę sprawdzić, czy Twój klucz ma odpowiednie prawa dostępu.",
+  "ProviderBaseURLBlocked": "Punkt końcowy {{provider}} wskazuje na prywatny lub lokalny adres sieciowy, do którego serwer nie może się łączyć ze względów bezpieczeństwa. Ten adres działa tylko z Twojego urządzenia — zamiast tego użyj publicznie dostępnego punktu końcowego.",
   "ProviderBizError": "Błąd podczas żądania usługi {{provider}}, proszę rozwiązać problem lub spróbować ponownie na podstawie poniższych informacji.",
   "ProviderContentPolicyViolation": "Dostawca zablokował to zapytanie lub jego wynik ze względu na politykę dotyczącą treści. Proszę zmodyfikować swoje zapytanie i spróbować ponownie.",
   "ProviderNetworkError": "Połączenie z dostawcą zostało przerwane lub przekroczono limit czasu. Proszę sprawdzić swoje połączenie sieciowe i spróbować ponownie.",
   "ProviderNoImageGenerated": "Dostawca nie zwrócił obrazu dla tego żądania. Spróbuj sformułować żądanie inaczej lub wybierz model obsługujący generowanie obrazów.",
   "ProviderServiceUnavailable": "Dostawca jest tymczasowo przeciążony lub niedostępny. Proszę spróbować ponownie za chwilę.",
+  "ProviderStreamInterrupted": "Dostawca zamknął połączenie przed zakończeniem odpowiedzi. Zwykle jest to tymczasowe, spróbuj ponownie.",
   "QuotaLimitReached": "Przepraszamy, wykorzystanie tokenów lub liczba żądań osiągnęły limit przydziału dla tego klucza. Proszę zwiększyć przydział klucza lub spróbować ponownie później.",
   "RateLimitExceeded": "Przepraszamy, wykorzystanie tokenów lub liczba żądań osiągnęły limit szybkości dla tego klucza. Proszę spróbować ponownie później lub zwiększyć przydział klucza.",
   "RemoteMediaDownloadTimeout": "Dostawca przekroczył limit czasu podczas pobierania załączonego obrazu lub pliku. Spróbuj ponownie.",
@@ -55,5 +57,6 @@
   "UpstreamGatewayError": "Bramka upstream lub proxy zwróciły błąd. Proszę spróbować ponownie za chwilę; jeśli problem będzie się powtarzał, sprawdź konfigurację proxy / punktu końcowego.",
   "UpstreamHttpError": "Dostawca zwrócił błąd HTTP bez dodatkowych szczegółów. Proszę spróbować ponownie, lub sprawdzić swoje żądanie i konfigurację modelu.",
   "UpstreamMalformedResponse": "Dostawca zwrócił nieprawidłową odpowiedź, której nie można było przetworzyć. Proszę spróbować ponownie; jeśli problem będzie się powtarzał, spróbuj użyć innego modelu lub dostawcy.",
-  "UserConfigError": "Konfiguracja dostawcy jest nieprawidłowa (nieprawidłowy podstawowy URL, brakująca zmienna środowiskowa, ograniczenie wirtualnego klucza itp.). Proszę sprawdzić ustawienia dostawcy."
+  "UserConfigError": "Konfiguracja dostawcy jest nieprawidłowa (nieprawidłowy podstawowy URL, brakująca zmienna środowiskowa, ograniczenie wirtualnego klucza itp.). Proszę sprawdzić ustawienia dostawcy.",
+  "WorkspaceModelRestricted": "Ten model przekracza najwyższy poziom, jaki może Ci przydzielić administrator przestrzeni roboczej. Wybierz model niższego poziomu lub poproś administratora przestrzeni roboczej o podniesienie Twojego poziomu."
 }

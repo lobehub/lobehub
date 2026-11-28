@@ -47,6 +47,12 @@ describe('createInitialSystemStatus', () => {
     expect(createInitialSystemStatus().topicOnlyMineByAgent).toEqual({ agt_a: true, agt_b: false });
   });
 
+  it('restores the per-scope empty-rail answer that decides the first Home layout', () => {
+    seed({ homeRailEmptyByScope: { 'user_1:personal': true, 'user_1:ws_a': 'yes' } });
+
+    expect(createInitialSystemStatus().homeRailEmptyByScope).toEqual({ 'user_1:personal': true });
+  });
+
   it('drops a malformed persisted only-mine filter', () => {
     seed({ topicOnlyMineByAgent: { agt_a: 'yes', agt_b: true } });
     expect(createInitialSystemStatus().topicOnlyMineByAgent).toEqual({ agt_b: true });

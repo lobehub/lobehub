@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { McpInputRequiredError } from '@lobechat/mcp-elicitation';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MCPClient } from '../client';
@@ -7,13 +8,16 @@ import { startNegotiationServers } from './fixtures/negotiationServers';
 describe('HTTP protocol negotiation against SDK v2 servers', () => {
   let servers: Awaited<ReturnType<typeof startNegotiationServers>>;
   const clients: MCPClient[] = [];
-  const clientAt = (path: string) => {
-    const client = new MCPClient({
-      name: 'negotiation-test',
-      type: 'http',
-      url: servers.url + path,
-      auth: { type: 'oauth2', accessToken: 'fixture-connector-token' },
-    });
+  const clientAt = (path: string, elicitationEnabled = false) => {
+    const client = new MCPClient(
+      {
+        name: 'negotiation-test',
+        type: 'http',
+        url: servers.url + path,
+        auth: { type: 'oauth2', accessToken: 'fixture-connector-token' },
+      },
+      { elicitationEnabled },
+    );
     clients.push(client);
     return client;
   };
@@ -96,13 +100,12 @@ describe('HTTP protocol negotiation against SDK v2 servers', () => {
     expect(servers.requests.map((r) => r.method)).toEqual(['server/discover']);
   });
 
-  it('completes an input_required call as a readable failed result without continuation', async () => {
-    const client = clientAt('/modern');
+  it('preserves an input_required checkpoint instead of swallowing user interaction', async () => {
+    const client = clientAt('/modern', true);
     await client.initialize();
-    await expect(client.callTool('needs_input', {})).resolves.toMatchObject({
-      isError: true,
-      content: [{ type: 'text', text: expect.stringContaining('requires user input') }],
-    });
+    await expect(
+      client.callTool('needs_input', {}, { host: { request: vi.fn() } }),
+    ).rejects.toBeInstanceOf(McpInputRequiredError);
     expect(servers.requests.filter((r) => r.method === 'tools/call')).toHaveLength(1);
   });
 });

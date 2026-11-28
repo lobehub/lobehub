@@ -42,6 +42,7 @@ export {
   estimateChatOutputTokens,
   estimateOpenAIChatInputTokens,
   type EstimateOpenAIChatInputTokensOptions,
+  type EstimatePromptCacheInput,
 } from './utils/estimateChatCost';
 export {
   type ImageSinglePriceParams,

@@ -15,7 +15,6 @@ import path from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { getAntigravityQuota } from '../antigravityQuota';
 import {
   APP_UPDATE_UNSUPPORTED_MESSAGE,
   CLI_UPDATE_UNSUPPORTED_MESSAGE,
@@ -74,21 +73,7 @@ const makeDeps = (): DeviceControlDeps => ({
   })),
 });
 
-vi.mock('../antigravityQuota', () => ({
-  getAntigravityQuota: vi.fn(async () => ({ status: 'ok', groups: [] })),
-}));
-
 describe('executeDeviceRpc', () => {
-  it('routes Antigravity quota RPCs through the shared host sampler', async () => {
-    const params = { command: '/custom/agy', env: { AGY_PROFILE: 'fixture' }, force: true };
-    expect(DEVICE_RPC_METHODS).toContain('getAntigravityQuota');
-    await expect(executeDeviceRpc('getAntigravityQuota', params, makeDeps())).resolves.toEqual({
-      status: 'ok',
-      groups: [],
-    });
-    expect(getAntigravityQuota).toHaveBeenCalledWith(params);
-  });
-
   it.each(['getCliUpdateState', 'checkCliUpdate', 'restartCli'])(
     'rejects missing CLI handler %s with a stable reason',
     async (method) => {
@@ -438,6 +423,29 @@ describe('executeDeviceRpc', () => {
       executeDeviceRpc(
         'listMcpTools',
         { params: { name: 'x', type: 'http', url: 'http://x' } },
+        makeDeps(),
+      ),
+    ).rejects.toThrow(MCP_UNSUPPORTED_MESSAGE);
+  });
+
+  it("routes an MCP App view's resource read to the host MCP client", async () => {
+    const deps = makeDeps();
+    const resource = { contents: [{ text: '<p>view</p>', uri: 'ui://app/view' }] };
+    deps.readMcpUiResource = vi.fn(async () => resource);
+    const params = {
+      params: { args: ['server.mjs'], command: 'node', name: 'app', type: 'stdio' as const },
+      uri: 'ui://app/view',
+    };
+
+    await expect(executeDeviceRpc('readMcpUiResource', params, deps)).resolves.toEqual(resource);
+    expect(deps.readMcpUiResource).toHaveBeenCalledWith(params);
+  });
+
+  it('rejects an MCP App resource read on a client that runs no MCP servers', async () => {
+    await expect(
+      executeDeviceRpc(
+        'readMcpUiResource',
+        { params: { name: 'x', type: 'http', url: 'http://x' }, uri: 'ui://x' },
         makeDeps(),
       ),
     ).rejects.toThrow(MCP_UNSUPPORTED_MESSAGE);

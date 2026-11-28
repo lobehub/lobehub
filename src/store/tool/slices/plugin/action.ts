@@ -128,9 +128,13 @@ export class PluginActionImpl {
     await this.#get().refreshPlugins();
   };
 
+  removeInstalledPluginLocalRecord = (identifier: string): void => {
+    this.#installedPlugins.removeEntity(identifier);
+  };
+
   removeInstalledPluginRecord = async (identifier: string): Promise<void> => {
     await pluginService.uninstallPlugin(identifier);
-    this.#installedPlugins.removeEntity(identifier);
+    this.removeInstalledPluginLocalRecord(identifier);
   };
 
   updateInstallLoadingState = (id: string, loading: boolean | undefined): void => {
@@ -147,29 +151,6 @@ export class PluginActionImpl {
       false,
       'updateInstallError',
     );
-  };
-
-  updateInstallMcpPlugin = async (id: string, value: any): Promise<void> => {
-    // The server replaces `customParams` as a whole: merge onto the full record,
-    // never the display projection (which has no connection parameters).
-    if (!this.#hasServerRecords()) await this.#loadServerRecords();
-
-    const installedPlugin = pluginSelectors.getInstalledPluginById(id)(this.#get());
-
-    if (!installedPlugin) return;
-
-    const customParams = {
-      ...installedPlugin.customParams,
-      mcp: merge(installedPlugin.customParams?.mcp, value),
-    };
-
-    await this.#installedPlugins.optimistic(
-      INSTALLED_PLUGINS_KEY,
-      (plugins) => plugins.map((p) => (p.identifier === id ? { ...p, customParams } : p)),
-      () => pluginService.updatePlugin(id, { customParams: { mcp: customParams.mcp } }),
-    );
-
-    await this.#get().refreshPlugins();
   };
 
   updatePluginSettings = async <T>(
@@ -221,7 +202,7 @@ export class PluginActionImpl {
   /**
    * The `ui://` resource (HTML view) an MCP App tool result renders with, read
    * from `server`, the one the tool ran on, as `agentId`'s runs resolve it, and
-   * where it ran (`onThisDevice`). `toolArguments` carry the account the tool
+   * where it ran (`onThisDevice`, or the device the server relayed it from). `toolArguments` carry the account the tool
    * ran as when its connector holds several. The HTML is only the view's: it
    * stays in this request's cache, not in the store.
    */
@@ -232,6 +213,8 @@ export class PluginActionImpl {
       agentId,
       linkId,
       onThisDevice = false,
+      relayDeviceId,
+      relayWorkspaceId,
       server,
       toolArguments,
       topicId,
@@ -240,6 +223,8 @@ export class PluginActionImpl {
       /** The account the view acts as, when its arguments cannot name one. */
       linkId?: string;
       onThisDevice?: boolean;
+      relayDeviceId?: string;
+      relayWorkspaceId?: string;
       server?: string;
       toolArguments?: string;
       topicId?: string;
@@ -250,6 +235,8 @@ export class PluginActionImpl {
         agentId,
         linkId,
         onThisDevice,
+        relayDeviceId,
+        relayWorkspaceId,
         server,
         toolArguments,
         topicId,
@@ -259,6 +246,8 @@ export class PluginActionImpl {
           agentId,
           linkId,
           onThisDevice,
+          relayDeviceId,
+          relayWorkspaceId,
           server,
           toolArguments,
           topicId,

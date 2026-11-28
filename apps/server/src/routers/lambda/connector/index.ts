@@ -73,6 +73,7 @@ import { resolveVisibilityChange, resolveWriteVisibility } from '../_helpers/con
 import { upsertConnectorEntry } from '../_helpers/upsertConnectorEntry';
 import { connectorAccountProcedures } from './accounts';
 import { connectorAgentScopeRouter } from './agentScope';
+import { legacyMigrationRouter } from './legacyMigrationRouter';
 import { connectorProcedure, connectorWriteProcedure } from './procedures';
 import { connectorRunRouter } from './run';
 
@@ -1048,5 +1049,6 @@ const connectorCoreRouter = router({
 export const connectorRouter = mergeRouters(
   connectorCoreRouter,
   connectorAgentScopeRouter,
+  legacyMigrationRouter,
   connectorRunRouter,
 );

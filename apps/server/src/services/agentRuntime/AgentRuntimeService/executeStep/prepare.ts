@@ -140,10 +140,12 @@ export async function prepareStepInput(
     const resumeParentMessageId = deps.resolveAsyncToolResumeParentMessageId(
       refreshed,
       pendingTools,
+      currentState.pendingToolMessageIds,
     );
     currentState = structuredClone(currentState);
     currentState.messages = refreshed;
     currentState.pendingToolsCalling = [];
+    currentState.pendingToolMessageIds = undefined;
     currentState.status = 'running';
     currentState.interruption = undefined;
     // Whatever ran while this operation was parked is invisible from
@@ -206,6 +208,7 @@ export async function prepareStepInput(
     currentState = structuredClone(currentState);
     currentState.messages = refreshed;
     currentState.pendingToolsCalling = [];
+    currentState.pendingToolMessageIds = undefined;
     currentState.status = 'done';
     currentState.interruption = undefined;
     currentState.lastModified = new Date().toISOString();

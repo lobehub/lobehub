@@ -12,6 +12,19 @@ export interface RouteAttemptIdentity {
   routerId?: string;
 }
 
+/**
+ * A routed chat attempt that reached a terminal empty or interrupted outcome without visible
+ * output and was replaced by a retry or fallback. None of its stream callbacks ran, so this is
+ * the only report of any usage the upstream may still bill.
+ */
+export interface DiscardedChatAttempt extends RouteAttemptIdentity {
+  durationMs: number;
+  /** Raw provider finish reason, e.g. Gemini `MALFORMED_RESPONSE`. */
+  finishReason?: string;
+  outcome: 'empty' | 'interrupted';
+  usage?: ModelUsage;
+}
+
 /** Second `onUsage` argument, filled by RouterRuntime for the attempt that reported the usage. */
 export interface UsageReportContext {
   routeAttempt?: RouteAttemptIdentity;

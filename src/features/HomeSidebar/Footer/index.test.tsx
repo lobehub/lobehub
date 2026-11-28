@@ -176,7 +176,9 @@ afterEach(() => {
 
 describe('Footer settings entry', () => {
   // Settings is a frequent destination, so the compact footer gives it its own
-  // icon instead of burying it in the Help menu.
+  // icon instead of burying it in the Help menu. It opens the `/settings`
+  // index, which lands on the current space's own settings (Workspace ›
+  // General, or the personal space's first tab), not account settings.
   it('shows Settings as its own icon, not inside the Help menu', async () => {
     const user = userEvent.setup();
     await renderFooter({ hideGitHub: false });

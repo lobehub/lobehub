@@ -35,8 +35,11 @@ export interface BrowserScreenshotState {
    */
   dataUrl?: string;
   height?: number;
-  /** Stored artifacts, `{ fileId, mediaType, url }` — the shared tool-image contract. */
-  images?: { fileId: string; mediaType: string; url: string }[];
+  /**
+   * The shared tool-image contract the context engine sends to the model:
+   * stored artifacts with a `fileId`, or the local executor's inline capture.
+   */
+  images?: { fileId?: string; mediaType: string; url: string }[];
   /** Accessible URL of the stored capture. */
   url?: string;
   width?: number;
@@ -57,6 +60,8 @@ export interface BrowserClickArgs {
 }
 
 export interface BrowserFillArgs {
+  /** Code editors only: replace this exact passage instead of the whole text. */
+  oldText?: string;
   ref: string;
   submit?: boolean;
   text: string;

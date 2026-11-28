@@ -125,12 +125,28 @@ export const compressContext =
         { resolveAssetUrls: true },
       );
 
+      // A thread page also shows the main-conversation rows it branched from (and
+      // their summaries), read back with `threadId: null`. They belong to the main
+      // conversation, so a thread compaction leaves them alone. A row without the
+      // field is left to the server, which scopes the group by its stored thread.
+      const inConversation = (message: (typeof dbMessages)[number]) =>
+        !threadId || message.threadId === undefined || message.threadId === threadId;
+      // Only a group whose members all sit in this conversation can be superseded: the
+      // server refuses to merge any other (e.g. one an earlier thread compaction mixed
+      // with main-conversation rows), so its summary must not enter the new one either.
       const sourceCompressionGroups = dbMessages.filter(
-        (message) => message.role === 'compressedGroup' && Boolean(message.id),
+        (message) =>
+          message.role === 'compressedGroup' &&
+          Boolean(message.id) &&
+          message.threadId !== undefined &&
+          (message.threadId ?? null) === (threadId ?? null),
       );
       const sourceGroupIds = sourceCompressionGroups
         .map((message) => message.id)
         .filter((id): id is string => Boolean(id));
+      const hasPersistedSummaries = dbMessages.some(
+        (message) => message.role === 'compressedGroup',
+      );
       const persistedExistingSummary = sourceCompressionGroups
         .map((message) => (typeof message.content === 'string' ? message.content.trim() : ''))
         .filter(Boolean)
@@ -141,6 +157,7 @@ export const compressContext =
           (message) =>
             message.role !== 'compressedGroup' &&
             Boolean(message.id) &&
+            inConversation(message) &&
             !preservedMessageIds.has(message.id),
         )
         .map((message) => message.id);
@@ -174,7 +191,9 @@ export const compressContext =
       createdGroupId = compressionResult.messageGroupId;
 
       const compressionPayload = await compression.buildPrompt({
-        existingSummary: persistedExistingSummary || existingSummary,
+        // The payload summary joins every summary on the page, out-of-scope ones included,
+        // so it only stands in when the page holds no persisted summary at all.
+        existingSummary: hasPersistedSummaries ? persistedExistingSummary : existingSummary,
         messages: compressionResult.messagesToSummarize,
       });
 
@@ -244,6 +263,11 @@ export const compressContext =
       }
 
       newState.messages = compressedMessages;
+      // Mid-run agent files live only in the tool result that found them, and
+      // the summary may have replaced it. Forget them so the next file tool in
+      // those directories shows them again; the start-of-run ones are in the
+      // system prompt and unaffected.
+      newState.discoveredAgentFiles = undefined;
 
       if (summaryResult.usage) {
         const { usage, cost } = UsageCounter.accumulateLLM({

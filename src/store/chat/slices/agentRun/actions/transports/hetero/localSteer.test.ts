@@ -5,6 +5,7 @@ import { messageService } from '@/services/message';
 import type { QueuedMessage } from '@/store/chat/slices/operation/types';
 import type { ChatStore } from '@/store/chat/store';
 
+import { watchSteerRestart } from '../../lifecycle/steerRestart';
 import { createLocalSteer, startLocalSteer, supportsLocalSteer } from './localSteer';
 
 vi.mock('@/services/electron/heterogeneousAgent', () => ({
@@ -13,6 +14,7 @@ vi.mock('@/services/electron/heterogeneousAgent', () => ({
 vi.mock('@/services/message', () => ({ messageService: { createMessage: vi.fn() } }));
 const mode = vi.hoisted(() => ({ value: 'steer' as 'queue' | 'steer' }));
 vi.mock('../../lifecycle/followUpMode', () => ({ getFollowUpMode: () => mode.value }));
+vi.mock('../../lifecycle/steerRestart', () => ({ watchSteerRestart: vi.fn(async () => {}) }));
 
 const queued = (
   id: string,
@@ -239,6 +241,10 @@ describe('createLocalSteer', () => {
       }),
     );
     expect(h.getQueue().map((m) => m.id)).toEqual(['q1']);
+    // With "restart agents that can't steer" on, the run is stopped instead.
+    expect(watchSteerRestart).toHaveBeenCalledWith(
+      expect.objectContaining({ contextKey: 'key', operationId: 'op-1' }),
+    );
   });
 
   it('never resends a steer whose delivery is unknown', async () => {
@@ -359,6 +365,16 @@ describe('startLocalSteer', () => {
     expect(pi).toBeDefined();
     codex?.settle();
     pi?.settle();
+  });
+
+  it('marks a runtime with no native steer and watches it for a restart', () => {
+    mode.value = 'steer';
+    vi.mocked(watchSteerRestart).mockClear();
+
+    expect(start('opencode')).toBeUndefined();
+    expect(watchSteerRestart).toHaveBeenCalledWith(
+      expect.objectContaining({ contextKey: 'key', operationId: 'op-1' }),
+    );
   });
 
   it('leaves a Claude Code run started in Queue mode queued: it was not spawned to take messages', () => {

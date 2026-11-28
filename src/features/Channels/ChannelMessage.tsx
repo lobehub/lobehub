@@ -36,12 +36,16 @@ import UserAvatar from '@/features/User/UserAvatar';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
+import { actionMessagePreview, readActionMessage } from './actionMessage';
+import { ActionMessageCard } from './ActionMessageCard';
 import { AskCard } from './AskCard';
 import { authorAvatar, isCurrentUserAuthor, memberName } from './memberName';
 import { CHANNEL_MENTION_TAG, remarkChannelMentions } from './mentionMarkdown';
 import { MessageAttachments } from './MessageAttachments';
 import { channelMessageTime, channelTimeFormatters } from './messagePresentation';
 import { MessageRoutingStatus } from './MessageReceipts';
+import { MessageSurfaces } from './MessageSurfaces';
+import PostedForLabel from './PostedForLabel';
 import { ReplyFailureCard } from './ReplyFailure';
 import { showsReplyQuote } from './replyQuote';
 import type { ReplyTopic } from './ReplyTopicPanel';
@@ -119,7 +123,9 @@ export const ChannelMessage = ({
   const timeFormats = useMemo(() => channelTimeFormatters(i18n.language), [i18n.language]);
   const date = new Date(message.createdAt);
   // Unassigned requests keep their identity row and recovery affordance.
-  const compact = continuation && !isRoot && message.routingStatus !== 'unassigned';
+  // A post for someone outside this Channel keeps its header, which says whom it is for.
+  const compact =
+    continuation && !isRoot && message.routingStatus !== 'unassigned' && !message.postedFor;
   // A continuation sits under its header, so its hover stamp only needs the clock.
   const timestamp = (
     <time
@@ -153,7 +159,20 @@ export const ChannelMessage = ({
   const sourceTopicId = message.sourceTopicId;
   // A question card shows its options itself; the text fallback after the Agent's words is for
   // clients that cannot render it.
-  const body = message.ask ? message.content.slice(0, message.ask.bodyLength) : message.content;
+  // A card's text form follows the reply's own words in `content`; only the words are shown.
+  const body = message.ask
+    ? message.content.slice(0, message.ask.bodyLength)
+    : message.surfaces?.length
+      ? message.content.slice(0, message.surfacesBodyLength ?? message.content.length)
+      : message.content;
+  // A reply sent from a card's button reads as the form it submitted, not the payload it carries.
+  const submittedAction =
+    message.author.type === 'user' && body.includes('<a2ui_action>')
+      ? readActionMessage(
+          body,
+          detail.messages.find((entry) => entry.id === message.replyToId)?.surfaces,
+        )
+      : undefined;
   // A direct conversation is a chat with one Agent; folding its answers only adds a click.
   const collapsible = !detail.channel.agentId;
   // Long messages stay open by default; folding one is an explicit choice from "more".
@@ -234,7 +253,6 @@ export const ChannelMessage = ({
         placement="left"
         showHeader={!compact}
         style={{ paddingInlineStart: 48 }}
-        titleAddon={timestamp}
         avatar={{
           avatar: authorAvatar(message.author),
           title: message.author.name || t('deletedMember'),
@@ -317,7 +335,7 @@ export const ChannelMessage = ({
                   <Text ellipsis as="span" fontSize={12} type="secondary">
                     {message.replyTo.author.name || t('deletedMember')}
                     {': '}
-                    {message.replyTo.content || t('reply.attachment')}
+                    {actionMessagePreview(message.replyTo.content) || t('reply.attachment')}
                   </Text>
                 </Button>
               ) : (
@@ -328,7 +346,10 @@ export const ChannelMessage = ({
             {message.fileIds.length > 0 && (
               <MessageAttachments attachments={detail.attachments} fileIds={message.fileIds} />
             )}
-            {body &&
+            {submittedAction ? (
+              <ActionMessageCard fields={submittedAction.fields} title={submittedAction.title} />
+            ) : (
+              body &&
               (collapsible ? (
                 <CollapsibleContent
                   hideCollapseToggle
@@ -342,7 +363,11 @@ export const ChannelMessage = ({
                 </CollapsibleContent>
               ) : (
                 <MessageText content={body} names={mentionNames} />
-              ))}
+              ))
+            )}
+            {!!message.surfaces?.length && (
+              <MessageSurfaces detail={detail} message={message} threadId={threadId} />
+            )}
             {message.ask && <AskCard ask={message.ask} detail={detail} message={message} />}
             {!!message.works?.length && <ReplyWorks works={message.works} />}
             {failures?.map((job) => (
@@ -356,6 +381,16 @@ export const ChannelMessage = ({
               />
             )}
           </Flexbox>
+        }
+        titleAddon={
+          message.postedFor ? (
+            <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
+              {timestamp}
+              <PostedForLabel postedFor={message.postedFor} />
+            </Flexbox>
+          ) : (
+            timestamp
+          )
         }
       />
       {hasToolbar && (

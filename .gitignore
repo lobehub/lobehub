@@ -163,6 +163,7 @@ docs/superpowers/
 
 # Local Ryugi artifacts and specifications
 .ryugi/
+.artideck/
 docs/ryugi/
 .heerogeneous-tracing
 

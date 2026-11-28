@@ -24,6 +24,7 @@ import {
   type SignatureScopeKind,
 } from '../../utils/signatureScope';
 import { assertToolLimits } from '../../utils/validateToolLimits';
+import { resolveAnthropicEffort } from '../anthropic/modelId';
 import { isResponsesAPIModel } from '../openai/modelId';
 
 const COPILOT_BASE_URL = 'https://api.githubcopilot.com';
@@ -228,6 +229,8 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
 
         const anthropicPayload = await buildDefaultAnthropicPayload({
           ...(rest as ChatStreamPayload),
+          // The Messages API reads only `effort`; map the unified `reasoning_effort` like the Anthropic adapter.
+          effort: resolveAnthropicEffort(model, rest.effort, rest.reasoning_effort),
           model,
         });
 

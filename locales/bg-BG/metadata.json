@@ -10,16 +10,12 @@
   "discover.mcp.title": "Пазар на MCP сървъри",
   "discover.models.description": "Разгледайте водещи AI модели OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek",
   "discover.models.title": "Пазар на модели",
-  "discover.plugins.description": "Разгледайте диаграми, академични инструменти, генериране на изображения/видео/глас и работни потоци — добавете умения към вашите агенти.",
-  "discover.plugins.title": "Пазар на умения",
   "discover.providers.description": "Разгледайте водещи доставчици на модели OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
   "discover.providers.title": "Пазар на доставчици",
   "discover.search": "Търсене",
   "discover.title": "Пазар",
   "image.description": "{{appName}} ви предлага най-доброто изживяване с GPT Image, Flux, Midjourney и Stable Diffusion",
   "image.title": "AI Изкуство",
-  "plugins.description": "Търсене, диаграми, академични инструменти, генериране на изображения/видео/глас, работни потоци — добавете умения към вашите агенти.",
-  "plugins.title": "Пазар на умения",
   "welcome.description": "{{appName}} ви предлага най-доброто потребителско изживяване с ChatGPT, Claude, Gemini и OLLaMA.",
   "welcome.title": "Добре дошли в {{appName}} · За съвместни агенти"
 }

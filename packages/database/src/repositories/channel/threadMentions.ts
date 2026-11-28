@@ -75,3 +75,68 @@ export const channelMentionCounts = async (
     .groupBy(channelMessages.channelId);
   return new Map(rows.map(({ channelId, count }) => [channelId, count]));
 };
+
+/**
+ * Unread messages for each member, keyed by Channel and counted from the member's read position:
+ * the main conversation, plus Threads the member takes part in (follows, started, or has written
+ * in), plus any message that @mentions them. Replies in other Threads are not news to the member,
+ * so they neither raise the count nor, through it, a client's notification.
+ */
+export const channelUnreadCounts = async (
+  db: LobeChatDatabase,
+  memberIds: string[],
+): Promise<Map<string, number>> => {
+  if (!memberIds.length) return new Map();
+  const rows = await db
+    .select({ channelId: channelMessages.channelId, count: sql<number>`count(*)::int` })
+    .from(channelMessages)
+    .innerJoin(channelMembers, eq(channelMembers.channelId, channelMessages.channelId))
+    .where(
+      and(
+        inArray(channelMembers.id, memberIds),
+        sql`${channelMessages.sequence} > coalesce(${channelMembers.lastReadSequence}, 0)`,
+        sql`(
+          ${channelMessages.threadId} IS NULL
+          OR ${channelMessages.mentions} @> jsonb_build_array(${channelMembers.id}::text)
+          OR EXISTS (
+            SELECT 1 FROM ${channelThreads} t
+            WHERE t.channel_id = ${channelMessages.channelId}
+              AND t.id = ${channelMessages.threadId}
+              AND t.is_deleted IS NOT TRUE
+              AND (
+                t.follower_member_ids @> jsonb_build_array(${channelMembers.id}::text)
+                OR (
+                  ${channelMembers.userId} IS NOT NULL
+                  AND EXISTS (
+                    SELECT 1 FROM ${channelMessages} own
+                    WHERE own.channel_id = t.channel_id
+                      AND (own.id = t.root_message_id OR own.thread_id = t.id)
+                      AND own.user_id = ${channelMembers.userId}
+                  )
+                )
+              )
+          )
+        )`,
+      ),
+    )
+    .groupBy(channelMessages.channelId);
+  return new Map(rows.map(({ channelId, count }) => [channelId, count]));
+};
+
+/**
+ * The unread and unread-@mention counts of each Channel in the caller's list, from the same read
+ * position; only Channels with messages past it are scanned.
+ */
+export const channelReadCounts = async (
+  db: LobeChatDatabase,
+  rows: { channel: { sequence: number }; lastReadSequence: number | null; memberId: string }[],
+) => {
+  const memberIds = rows
+    .filter(({ channel, lastReadSequence }) => channel.sequence > (lastReadSequence ?? 0))
+    .map(({ memberId }) => memberId);
+  const [mentionCountOf, unreadCountOf] = await Promise.all([
+    channelMentionCounts(db, memberIds),
+    channelUnreadCounts(db, memberIds),
+  ]);
+  return { mentionCountOf, unreadCountOf };
+};

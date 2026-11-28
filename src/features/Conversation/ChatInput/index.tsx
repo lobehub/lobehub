@@ -40,7 +40,9 @@ import { fileChatSelectors, useFileStore } from '@/store/file';
 import { buildMessageContextSelections } from '../../ChatInput/utils/contextSelections';
 import WideScreenContainer from '../../WideScreenContainer';
 import { usePendingInterventions } from '../hooks/usePendingInterventions';
+import { useRecoverClientMcpSteps } from '../hooks/useRecoverClientMcpSteps';
 import InterventionBar from '../InterventionBar';
+import { McpElicitationConnectionError } from '../InterventionBar/McpElicitationForm';
 import {
   dataSelectors,
   messageStateSelectors,
@@ -48,6 +50,7 @@ import {
   useConversationStoreApi,
 } from '../store';
 import TodoProgress from '../TodoProgress';
+import IdleCacheNotice from './IdleCacheNotice';
 import InputCompletionErrorAlert from './InputCompletionErrorAlert';
 import LinkedGoalTray from './LinkedGoalTray';
 import OpStatusTray from './OpStatusTray';
@@ -212,6 +215,7 @@ const ChatInput = memo<ChatInputProps>(
     onEditorReady,
     skipScrollMarginWithList,
   }) => {
+    useRecoverClientMcpSteps();
     const { t } = useTranslation('chat');
     // ConversationStore state
     const storeApi = useConversationStoreApi();
@@ -556,10 +560,16 @@ const ChatInput = memo<ChatInputProps>(
         {/* Keep the chat input mounted while an intervention panel is showing —
             unmounting would wipe the Lexical editor's in-memory document. */}
         <div style={{ display: hasPendingInterventions ? 'none' : 'contents' }}>
+          <McpElicitationConnectionError />
           {sendMessageErrorMsg && (
             <SendErrorAlert errorMessage={sendMessageErrorMsg} onClose={clearSendMessageError} />
           )}
-          {businessAlerts}
+          {/* A refused send already says what to do next; a second notice with its
+              own buttons beside it would compete for the same decision. */}
+          {!sendMessageErrorMsg && businessAlerts}
+          {/* About the next reply's cost, so it sits closest to the input. A send-area
+              cost estimate should step aside while it shows: both would price the same send. */}
+          {!sendMessageErrorMsg && <IdleCacheNotice />}
           <Flexbox
             paddingInline={12}
             ref={overlayRef}

@@ -20,8 +20,10 @@ import { serverDatabase, telemetry } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { mcpService } from '@/server/services/mcp';
 import { processContentBlocks } from '@/server/services/mcp/contentProcessor';
+import { McpElicitationService } from '@/server/services/mcp/elicitation/McpElicitationService';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
+import { McpElicitationCallSchema } from '../lambda/_schema/mcpElicitation';
 import { scheduleToolCallReport } from './_helpers';
 
 // Define Zod schemas for MCP Client parameters
@@ -136,6 +138,7 @@ export const mcpRouter = router({
     .use(requireWorkspaceRoleWhenScoped('member'))
     .input(
       z.object({
+        elicitation: McpElicitationCallSchema.optional(),
         args: z.any(), // Arguments for the tool call
         /** An MCP App view's `tools/call`: only tools visible to the app run. */
         fromApp: z.boolean().optional(),
@@ -212,6 +215,20 @@ export const mcpRouter = router({
       }
       // ── End permission gate ───────────────────────────────────────────────
 
+      const call = input.elicitation;
+      const interactions = new McpElicitationService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+      if (call) {
+        if (
+          call.identity.identifier !== input.params.name ||
+          call.identity.apiName !== input.toolName
+        )
+          throw new Error('MCP interaction identity mismatch');
+        await interactions.assertIdentity(call.identity);
+      }
       const startTime = Date.now();
       let success = true;
       let errorCode: string | undefined;
@@ -226,6 +243,17 @@ export const mcpRouter = router({
 
         // Pass the validated params, toolName, args, and bound processContentBlocks to the service
         result = await mcpService.callTool({
+          elicitation: call
+            ? {
+                host: interactions.createLegacyHost(
+                  call.identity,
+                  Math.min(call.deadline, Date.now() + 120_000),
+                ),
+                interactive: true,
+                timeoutMs: Math.max(1, Math.min(call.deadline - Date.now(), 120_000)),
+                scope: JSON.stringify([ctx.userId, ctx.workspaceId]),
+              }
+            : undefined,
           argsStr: input.args,
           clientParams: input.params,
           fromApp: input.fromApp,

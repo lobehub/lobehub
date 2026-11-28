@@ -510,8 +510,10 @@ export class ProjectDirectoryRepository {
   /**
    * Reorder the project's execution environments — its device folders and the
    * cloud sandbox (`'sandbox'`) — into the given order, which is the priority
-   * a new conversation follows. Ids that are not this project's folders are
-   * refused rather than ignored, so a stale list cannot silently half-apply.
+   * a new conversation follows. The order must name every folder and the
+   * sandbox exactly once: an unknown id, a duplicate or an omission is refused
+   * rather than half-applied, since an omitted runner would keep its old place
+   * and tie with the ones that moved.
    */
   async reorderExecutionEnvironments(projectId: string, order: string[]) {
     const project = await this.assertManageableProject(projectId);
@@ -532,6 +534,15 @@ export class ProjectDirectoryRepository {
         if (owned.length !== new Set(directoryIds).size)
           throw new ProjectDirectoryError('BAD_REQUEST', 'Unknown project directory in order');
       }
+      const all = await db
+        .select({ id: projectWorkingDirectories.id })
+        .from(projectWorkingDirectories)
+        .where(eq(projectWorkingDirectories.projectId, projectId));
+      if (new Set(order).size !== order.length || order.length !== all.length + 1)
+        throw new ProjectDirectoryError(
+          'BAD_REQUEST',
+          'The order must list every runner, including the sandbox, exactly once',
+        );
       for (const [index, id] of order.entries()) {
         if (id === 'sandbox')
           await db
@@ -659,18 +670,7 @@ export class ProjectDirectoryRepository {
         this.workspaceId,
       ).resolve(directoryId, topic.projectId);
       if (directory.id === topic.projectWorkingDirectoryId) return topic;
-      if (topic.agentId) {
-        const [agent] = await db
-          .select()
-          .from(agents)
-          .where(and(eq(agents.id, topic.agentId), buildWorkspaceWhere(this.scope(), agents)));
-        if (
-          !agent ||
-          (agent.agencyConfig?.executionTargetSelectionPolicy === 'fixed' &&
-            agent.agencyConfig.boundDeviceId !== directory.deviceId)
-        )
-          throw new ProjectDirectoryError('FORBIDDEN', 'Agent cannot use this execution target');
-      }
+      await this.assertAgentCanUseDevice(db, topic.agentId, directory.deviceId);
       const [updated] = await db
         .update(topics)
         .set({
@@ -681,5 +681,124 @@ export class ProjectDirectoryRepository {
         .returning();
       return updated;
     });
+  }
+
+  /**
+   * Ask for a project conversation to move to another of its project's
+   * folders when its next turn starts. The caller is inside a running turn
+   * (the Project tool), which `moveTopic` refuses: moving under it would run
+   * the rest of the turn on one machine while the topic says another. So the
+   * target is recorded and `applyPendingTopicMove` makes the move at the
+   * start of the next turn. Choosing the folder it is already in cancels a
+   * pending move.
+   */
+  async requestTopicMove(topicId: string, directoryId: string) {
+    return this.db.transaction(async (tx) => {
+      const db = tx as LobeChatDatabase;
+      const [topic] = await db
+        .select()
+        .from(topics)
+        .where(
+          and(
+            eq(topics.id, topicId),
+            buildWorkspaceWhere(this.scope(), topics),
+            isNull(topics.deletedAt),
+          ),
+        )
+        .for('update');
+      if (!topic) throw new ProjectDirectoryError('NOT_FOUND', 'Topic not found or access denied');
+      if (!topic.projectId)
+        throw new ProjectDirectoryError('BAD_REQUEST', 'Topic is not in a project');
+      const directory = await new ProjectWorkingDirectoryModel(
+        db,
+        this.userId,
+        this.workspaceId,
+      ).resolve(directoryId, topic.projectId);
+      await this.assertAgentCanUseDevice(db, topic.agentId, directory.deviceId);
+      const { pendingProjectWorkingDirectoryId: _pending, ...rest } = topic.metadata ?? {};
+      const [updated] = await db
+        .update(topics)
+        .set({
+          metadata:
+            directory.id === topic.projectWorkingDirectoryId
+              ? rest
+              : { ...rest, pendingProjectWorkingDirectoryId: directory.id },
+        })
+        .where(eq(topics.id, topicId))
+        .returning();
+      return { directory, topic: updated };
+    });
+  }
+
+  /**
+   * Make the move `requestTopicMove` recorded, at the start of a turn and
+   * before the turn resolves where it runs. Only the turn holding the topic's
+   * start reservation calls this, so the reservation is its own and does not
+   * count as in flight; a run still live on the topic (a send that supersedes
+   * one) keeps the move pending for a later turn. Dropped when the folder is
+   * gone or the agent may no longer use its device. Returns the topic as it
+   * now stands.
+   */
+  async applyPendingTopicMove(topicId: string) {
+    return this.db.transaction(async (tx) => {
+      const db = tx as LobeChatDatabase;
+      const [topic] = await db
+        .select()
+        .from(topics)
+        .where(
+          and(
+            eq(topics.id, topicId),
+            buildWorkspaceWhere(this.scope(), topics),
+            isNull(topics.deletedAt),
+          ),
+        )
+        .for('update');
+      const pendingId = topic?.metadata?.pendingProjectWorkingDirectoryId;
+      if (!topic || !pendingId || topic.status === 'running' || topic.metadata?.runningOperation)
+        return topic;
+      const { pendingProjectWorkingDirectoryId: _pending, ...rest } = topic.metadata ?? {};
+      const directory = topic.projectId
+        ? await new ProjectWorkingDirectoryModel(db, this.userId, this.workspaceId)
+            .resolve(pendingId, topic.projectId)
+            .catch(() => undefined)
+        : undefined;
+      const usable =
+        directory &&
+        (await this.assertAgentCanUseDevice(db, topic.agentId, directory.deviceId).then(
+          () => true,
+          () => false,
+        ));
+      const [updated] = await db
+        .update(topics)
+        .set(
+          directory && usable
+            ? {
+                metadata: pinTopicToDirectory(rest, directory.deviceId, directory.path),
+                projectWorkingDirectoryId: directory.id,
+              }
+            : { metadata: rest },
+        )
+        .where(eq(topics.id, topicId))
+        .returning();
+      return updated;
+    });
+  }
+
+  private async assertAgentCanUseDevice(
+    db: LobeChatDatabase,
+    agentId: string | null,
+    deviceId: string,
+  ) {
+    if (!agentId) return;
+    const [agent] = await db
+      .select()
+      .from(agents)
+      .where(and(eq(agents.id, agentId), buildWorkspaceWhere(this.scope(), agents)));
+    if (
+      !agent ||
+      (agent.agencyConfig?.executionTargetSelectionPolicy === 'fixed' &&
+        agent.agencyConfig.boundDeviceId !== deviceId)
+    )
+      throw new ProjectDirectoryError('FORBIDDEN', 'Agent cannot use this execution target');
   }
 }

@@ -8,9 +8,8 @@ import { log } from '../utils/logger';
 export function registerLegacyPluginCommand(program: Command) {
   const plugin = program
     .command('legacy-plugin')
-    .alias('plugin')
     .description(
-      'Manage legacy 1.0 plugins (user_installed_plugins). Add new MCP servers with lh connector add',
+      'List, search, or uninstall legacy 1.0 plugins (user_installed_plugins). Add MCP servers with lh connector add',
     );
 
   // ── list ──────────────────────────────────────────────
@@ -120,40 +119,16 @@ export function registerLegacyPluginCommand(program: Command) {
       console.log(`${pc.green('✓')} Uninstalled plugin ${pc.bold(id)}`);
     });
 
-  // ── update ────────────────────────────────────────────
+  plugin.on('command:*', (operands: string[]) => {
+    if (operands[0] !== 'update') {
+      plugin.unknownCommand();
+      return;
+    }
 
-  plugin
-    .command('update <id>')
-    .description('Update plugin settings or manifest')
-    .option('--manifest <json>', 'New manifest JSON')
-    .option('--settings <json>', 'New settings JSON')
-    .action(async (id: string, options: { manifest?: string; settings?: string }) => {
-      const input: Record<string, any> = { id };
-
-      if (options.manifest) {
-        try {
-          input.manifest = JSON.parse(options.manifest);
-        } catch {
-          log.error('Invalid manifest JSON.');
-          process.exit(1);
-        }
-      }
-      if (options.settings) {
-        try {
-          input.settings = JSON.parse(options.settings);
-        } catch {
-          log.error('Invalid settings JSON.');
-          process.exit(1);
-        }
-      }
-
-      if (!options.manifest && !options.settings) {
-        log.error('No changes specified. Use --manifest or --settings.');
-        process.exit(1);
-      }
-
-      const client = await getTrpcClient();
-      await client.plugin.updatePlugin.mutate(input as any);
-      console.log(`${pc.green('✓')} Updated plugin ${pc.bold(id)}`);
-    });
+    const uninstall = operands[1] ? ` ${operands[1]}` : ' <id>';
+    log.error(
+      `\`lh legacy-plugin update\` is not supported because legacy plugins cannot be edited in place. To replace one, recreate its MCP server with \`lh connector add\`, verify the connector tools, then uninstall the legacy plugin with \`lh legacy-plugin uninstall${uninstall}\`.`,
+    );
+    process.exit(1);
+  });
 }

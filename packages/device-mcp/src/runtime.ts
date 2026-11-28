@@ -4,6 +4,7 @@ import {
   lacksUiResourceMeta,
   withListingUiMeta,
 } from '@lobechat/const/mcpApp';
+import type { McpElicitationContinuation, McpElicitationHost } from '@lobechat/mcp-elicitation';
 
 import type { MCPClient } from './client';
 import {
@@ -42,6 +43,7 @@ export interface DeviceMcpRuntimeOptions {
 
 /** Whether MCP Apps are announced on the session a call runs on. */
 export interface McpSessionOptions {
+  elicitationEnabled?: boolean;
   /** Announce MCP Apps on the session: the user has the `mcp_apps` flag. */
   mcpApps?: boolean;
 }
@@ -51,6 +53,11 @@ export interface McpCallOptions extends McpSessionOptions {
   /** An MCP App view's `tools/call`: only tools visible to the app run. */
   fromApp?: boolean;
   fromEntrypoint?: boolean;
+  interaction?: {
+    host: McpElicitationHost;
+    signal: AbortSignal;
+    continuation?: McpElicitationContinuation;
+  };
   /** This call's deadline, e.g. the one a tunneled call carries. */
   timeoutMs?: number;
 }
@@ -139,11 +146,15 @@ export class DeviceMcpRuntime {
   }
 
   /** A fresh, unpooled session. The caller owns it and must disconnect it. */
-  async createClient(params: MCPClientParams, { mcpApps = false }: McpSessionOptions = {}) {
+  async createClient(
+    params: MCPClientParams,
+    { mcpApps = false, elicitationEnabled = false }: McpSessionOptions = {},
+  ) {
     const { MCPClient } = await loadMcpClient();
     const client = new MCPClient(params, {
       clientName: this.options.clientName,
       mcpApps,
+      ...(elicitationEnabled && { elicitationEnabled }),
       toolTimeoutMs: this.options.toolTimeoutMs,
     });
     await client.initialize();
@@ -191,6 +202,30 @@ export class DeviceMcpRuntime {
     }
   }
 
+  /** Sessions that announce MCP Apps, or elicitation, and ones that don't are pooled apart. */
+  private poolKey(
+    params: MCPClientParams,
+    { mcpApps = false, elicitationEnabled = false }: McpSessionOptions,
+  ) {
+    return `${elicitationEnabled ? 'elicitation:' : ''}${serializeMcpClientParams(params)}${mcpApps ? '#mcp-apps' : ''}`;
+  }
+
+  /**
+   * The session an MCP App view's reads and calls run on: the one its tool
+   * ran on, so the view sees the state that call established. An agent run's
+   * call carries an interaction host and runs on the session that announces
+   * elicitation; a view's never does, so it reuses that session while it is
+   * pooled instead of starting a second process. Otherwise the MCP Apps one.
+   */
+  private async acquireViewClient(params: MCPClientParams): Promise<MCPClient> {
+    const interactiveKey = this.poolKey(params, { elicitationEnabled: true, mcpApps: true });
+    const interactive = this.pool.get(interactiveKey);
+    if (!interactive) return this.acquireClient(params, { mcpApps: true });
+
+    this.lastUsedAt.set(interactiveKey, Date.now());
+    return interactive;
+  }
+
   /**
    * Return a pooled client for the given params, creating (and caching) a new
    * one when the pool has no healthy entry. Callers must NOT disconnect the
@@ -198,10 +233,9 @@ export class DeviceMcpRuntime {
    */
   async acquireClient(
     params: MCPClientParams,
-    { mcpApps = false }: McpSessionOptions = {},
+    { mcpApps = false, elicitationEnabled = false }: McpSessionOptions = {},
   ): Promise<MCPClient> {
-    // Sessions that announce MCP Apps and ones that don't are pooled apart
-    const key = `${serializeMcpClientParams(params)}${mcpApps ? '#mcp-apps' : ''}`;
+    const key = this.poolKey(params, { elicitationEnabled, mcpApps });
 
     // Every acquire refreshes the session's idle clock (fire-and-forget —
     // reaping must never delay or fail the tool call it runs alongside).
@@ -218,7 +252,10 @@ export class DeviceMcpRuntime {
     const inFlight = this.initialization.get(key);
     if (inFlight) return inFlight;
 
-    const creating = this.createClient(params, { mcpApps })
+    const creating = this.createClient(params, {
+      mcpApps,
+      ...(elicitationEnabled && { elicitationEnabled }),
+    })
       .then((client) => {
         this.clientKeys.set(client, key);
         this.pool.set(key, client);
@@ -353,7 +390,7 @@ export class DeviceMcpRuntime {
       isStaleSessionError(error) || isDeadTransportError(error);
 
     // Views are read only while MCP Apps are on, on a session that announces them
-    const client = await this.acquireClient(params, { mcpApps: true });
+    const client = await this.acquireViewClient(params);
     try {
       return await read(client);
     } catch (error) {
@@ -366,7 +403,7 @@ export class DeviceMcpRuntime {
         },
       );
       await this.evictClient(params, client);
-      const retryClient = await this.acquireClient(params, { mcpApps: true });
+      const retryClient = await this.acquireViewClient(params);
       try {
         return await read(retryClient);
       } catch (retryError) {
@@ -423,7 +460,13 @@ export class DeviceMcpRuntime {
     params: MCPClientParams,
     toolName: string,
     args: Record<string, unknown>,
-    { fromApp = false, fromEntrypoint = false, mcpApps = false, timeoutMs }: McpCallOptions,
+    {
+      fromApp = false,
+      fromEntrypoint = false,
+      mcpApps = false,
+      timeoutMs,
+      interaction,
+    }: McpCallOptions,
   ): Promise<McpToolOutput> {
     if (
       fromEntrypoint &&
@@ -472,9 +515,9 @@ export class DeviceMcpRuntime {
       ? (await client.getToolUiMeta(toolName))?.preferredModelDisplayMode
       : undefined;
     const raw = (
-      timeoutMs === undefined
+      timeoutMs === undefined && !interaction
         ? await client.callTool(toolName, args)
-        : await client.callTool(toolName, args, { timeoutMs })
+        : await client.callTool(toolName, args, { timeoutMs, ...interaction })
     ) as ToolCallResult;
     // A view gets the tool's own MCP result: its media stays base64
     // `data`, not the uploaded keys the chat stores and renders
@@ -541,8 +584,16 @@ export class DeviceMcpRuntime {
           }
         });
 
+      // A view's call runs where its tool did (see acquireViewClient)
+      const acquire = () =>
+        mcpApps && !options.interaction && (options.fromApp || options.fromEntrypoint)
+          ? this.acquireViewClient(params)
+          : this.acquireClient(params, {
+              mcpApps,
+              ...(options.interaction && { elicitationEnabled: true }),
+            });
       try {
-        return await runOn(await this.acquireClient(params, { mcpApps }));
+        return await runOn(await acquire());
       } catch (firstError) {
         const failedClient = (firstError as { ranOnClient?: MCPClient })?.ranOnClient;
         if (!isStaleSessionError(firstError, failedClient?.getProtocolEra())) {
@@ -574,7 +625,7 @@ export class DeviceMcpRuntime {
         // Route replacement creation through acquireClient: it single-flights
         // per key, so two concurrent calls that shared the same stale client
         // and both failed build ONE replacement process.
-        const retryClient = await this.acquireClient(params, { mcpApps });
+        const retryClient = await acquire();
         try {
           return await runOn(retryClient);
         } catch (retryError) {

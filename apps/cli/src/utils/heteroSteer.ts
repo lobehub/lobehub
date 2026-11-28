@@ -136,15 +136,32 @@ const isMainStreamStart = (event: { data?: any; type: string }) =>
  * `aiAgent.reportHeteroControlResult`. A child run takes no follow-ups, but
  * keeps polling for control messages when the server delivers them.
  *
- * Without a server context or a live session, events pass through unchanged.
+ * Without a server context, events pass through unchanged. A run whose session
+ * takes no input marks its first main `stream_start` with `liveSteer: false`,
+ * so the client knows for certain this run cannot be steered.
  */
 export async function* withHeteroSteer<E extends { data?: any; type: string }>(
   handle: SteerableHandle & { events: AsyncIterable<E> },
   context: HeteroSteerContext | undefined | false,
 ): AsyncGenerator<E> {
   const send = handle.sendUserMessage;
-  if (!context || !send) {
+  if (!context) {
     yield* handle.events;
+    return;
+  }
+  if (!send) {
+    // The session takes no input: say so once, so the client knows this run's
+    // queue waits for its end (or, as the user chose, restarts it) instead of
+    // waiting for a live steer that never comes.
+    let marked = false;
+    for await (const event of handle.events) {
+      if (!marked && isMainStreamStart(event)) {
+        marked = true;
+        yield { ...event, data: { ...event.data, liveSteer: false } };
+        continue;
+      }
+      yield event;
+    }
     return;
   }
 

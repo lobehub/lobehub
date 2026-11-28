@@ -19,8 +19,14 @@ import { OPEN_JOB_STATUSES } from './writer';
  *
  * Returns the jobs whose writer is still held: the caller must stop them physically.
  */
+/** A shared card and an Agent's drawn cards are the message's payload: they go with the text. */
 const omitCard = (metadata: ChannelMessageMetadata | null) => {
-  const { card: _card, ...rest } = metadata ?? {};
+  const {
+    card: _card,
+    surfaces: _surfaces,
+    surfacesBodyLength: _surfacesBodyLength,
+    ...rest
+  } = metadata ?? {};
   return rest;
 };
 
@@ -106,7 +112,7 @@ export const deleteMessage = async (
     .set({
       content: '',
       mentions: [],
-      // A shared card is the message's payload, so it goes with the text.
+      // Cards are the message's payload, so they go with the text.
       metadata: { ...omitCard(message.metadata), deletedAt: new Date().toISOString() },
       // A late decision model answer must not route a deleted message.
       ...(message.routingStatus === 'pending' && {

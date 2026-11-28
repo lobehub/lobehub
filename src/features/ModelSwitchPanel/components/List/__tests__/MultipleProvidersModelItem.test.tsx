@@ -190,6 +190,7 @@ describe('MultipleProvidersModelItem', () => {
     fireEvent.click(screen.getByText('Claude Opus 4.7'));
 
     expect(onRestrictedModelClick).toHaveBeenCalledTimes(1);
+    expect(onRestrictedModelClick).toHaveBeenCalledWith('claude-opus-4-7', 'lobehub');
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onModelChange).not.toHaveBeenCalled();
     expect(screen.getByTestId('model-pro-badge')).toHaveTextContent('pro');

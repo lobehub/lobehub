@@ -5,9 +5,8 @@ export default {
   'agentViewAll.groupBy.noFolder': 'No category',
   'alert.cloud.action': 'Try now',
   'alert.cloud.desc':
-    'All registered users get ${{credit}} of free usage per month—no setup needed. Includes global cloud sync and advanced web search.',
-  'alert.cloud.descOnMobile':
-    'All registered users get ${{credit}} of free usage per month—no setup needed.',
+    'All registered users get ${{credit}} of free usage—no setup needed. Includes global cloud sync and advanced web search.',
+  'alert.cloud.descOnMobile': 'All registered users get ${{credit}} of free usage—no setup needed.',
   'alert.cloud.title': '{{name}} beta is live',
   'agentViewAll.addToSidebar': 'Show in my sidebar',
   'agentViewAll.empty': 'No agents yet',
@@ -165,7 +164,7 @@ export default {
 
   'cmdk.newAgentTeam': 'Create New Group',
 
-  'cmdk.newLibrary': 'Create New Library',
+  'cmdk.newLibrary': 'Create New Knowledge Base',
 
   'cmdk.newPage': 'Create New Page',
   'cmdk.newTask': 'Create New Task',
@@ -180,7 +179,7 @@ export default {
 
   'cmdk.painting': 'Image',
 
-  'cmdk.resource': 'Docs',
+  'cmdk.resource': 'Library',
 
   'cmdk.search.agent': 'Agent',
 
@@ -208,9 +207,9 @@ export default {
 
   'cmdk.search.goals': 'Goals',
 
-  'cmdk.search.knowledgeBase': 'Library',
+  'cmdk.search.knowledgeBase': 'Knowledge Base',
 
-  'cmdk.search.knowledgeBases': 'Libraries',
+  'cmdk.search.knowledgeBases': 'Knowledge Bases',
 
   'cmdk.search.loading': 'Searching...',
 
@@ -225,8 +224,8 @@ export default {
   'cmdk.search.messages': 'Messages',
   'cmdk.search.page': 'Page',
   'cmdk.search.pages': 'Pages',
-  'cmdk.search.plugin': 'Skill',
-  'cmdk.search.plugins': 'Skills',
+  'cmdk.search.plugin': 'Connector',
+  'cmdk.search.plugins': 'Connectors',
   'cmdk.search.searchMore': 'Search more {{type}}',
   'cmdk.search.searching': 'Search Results',
   'cmdk.search.task': 'Task',
@@ -294,6 +293,7 @@ export default {
   'goToTarget': 'Go to target',
   'duplicate': 'Duplicate',
   'edit': 'Edit',
+  'editInNewTopic': 'Edit in new topic',
   'errors.invalidFileFormat': 'Invalid file format',
   'errors.unimplementedType': 'Unimplemented type. Please check the reducer.',
   'export': 'Export Configuration',
@@ -451,8 +451,6 @@ export default {
   'gotIt': 'Got it',
   'more': 'More',
   'navPanel.agent': 'Agents',
-  'navPanel.createPrivateFolder': 'New private category',
-  'navPanel.managePrivateFolders': 'Manage private categories',
   'navPanel.privateTooltip': 'Private · only you can see this',
   'navPanel.customizeSidebar': 'Customize Sidebar',
   'navPanel.openMenu': 'Open menu',
@@ -461,7 +459,7 @@ export default {
   'navPanel.resetDefault': 'Reset to Default',
   'navPanel.hidden': 'Hidden',
   'navPanel.hideSection': 'Hide Section',
-  'navPanel.library': 'Library',
+  'navPanel.library': 'Knowledge Base',
   'navPanel.moveDown': 'Move Down',
   'navPanel.pinned': 'Pinned',
   'navPanel.privateAgents': 'Private',
@@ -505,7 +503,7 @@ export default {
   'visibilityConfirm.makePrivate.itemReferences':
     'Existing message attachments and references will show as unavailable',
   'visibilityConfirm.makePrivate.itemLibrary':
-    'It stays in the library you filed it in — other members just stop seeing it there',
+    'It stays in the knowledge base you filed it in — other members just stop seeing it there',
   'visibilityConfirm.makePrivate.itemLoaded':
     'Content others have already loaded can’t be pulled back',
   'visibilityConfirm.publish.itemVisible': 'All workspace members will see this immediately',
@@ -630,13 +628,13 @@ export default {
   'tab.generation': 'Generation',
   'tab.goals': 'Goals',
   'tab.home': 'Home',
-  'tab.knowledgeBase': 'Library',
+  'tab.knowledgeBase': 'Knowledge Base',
   'tab.marketplace': 'Marketplace',
   'tab.me': 'Me',
   'tab.memory': 'Memory',
   'tab.music': 'Music',
   'tab.pages': 'Pages',
-  'tab.resource': 'Docs',
+  'tab.resource': 'Library',
   'tab.search': 'Search',
   'tab.setting': 'Settings',
   'tab.tasks': 'Tasks',

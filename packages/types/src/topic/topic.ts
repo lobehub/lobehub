@@ -1,5 +1,5 @@
 import type { AiModelReasoningConfig } from 'model-bank';
-import { AiModelReasoningConfigSchema } from 'model-bank/aiModel';
+import { AiModelReasoningConfigWriteSchema } from 'model-bank/aiModel';
 import { z } from 'zod';
 
 import type { HeterogeneousRuntimeConfigField } from '../agent/heterogeneousRuntimeConfig';
@@ -376,6 +376,12 @@ export interface ChatTopicMetadata {
    * the client-writable metadata schema. See `./ownedWorktree`.
    */
   ownedWorktrees?: OwnedWorktree[];
+  /**
+   * A project folder this conversation moves to when its next turn starts —
+   * set by the Project tool's `switchRunner`, which runs inside a turn and so
+   * cannot move the conversation under it. Server-only; cleared once applied.
+   */
+  pendingProjectWorkingDirectoryId?: string;
   /** Measured dominant provider by token volume — see {@link ChatTopicMetadata.model}. */
   provider?: string;
   /**
@@ -809,7 +815,7 @@ export const chatTopicMetadataUpdateSchema = z.object({
     .optional(),
   provider: z.string().optional(),
   lastSettledOperationId: z.string().optional(),
-  reasoningConfig: AiModelReasoningConfigSchema.optional(),
+  reasoningConfig: AiModelReasoningConfigWriteSchema.optional(),
   repos: z.array(z.string()).optional(),
   // Runtime state and hooks are server-owned; clients may only clear a stale marker.
   runningOperation: z.null().optional(),

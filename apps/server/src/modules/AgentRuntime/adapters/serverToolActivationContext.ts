@@ -3,9 +3,11 @@ import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { AgentAccountIdentifier } from '@lobechat/builtin-tool-agent-account';
 import {
   generateToolsFromManifest,
+  renderPlaceholderTemplate,
   renderToolInstructions,
   type ResolvedToolSet,
 } from '@lobechat/context-engine';
+import { createVariableGenerators } from '@lobechat/mecha';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
 import type { ResolveToolActivationContext, ToolActivationContext } from '@lobechat/types';
 
@@ -34,6 +36,12 @@ export function createToolActivationResolver(
   const resolve: ResolveToolActivationContext = async () => {
     const additions: ToolActivationContext['additions'] = [];
     const deferred = new Set<string>();
+    const variableGenerators = createVariableGenerators({
+      model: input.model,
+      provider: input.provider,
+      timezone: input.userTimezone,
+      variables: input.additionalVariables,
+    });
     const visibleResults = new Set(
       canonicalMessages
         .filter((message) => message.role === 'tool')
@@ -57,9 +65,10 @@ export function createToolActivationResolver(
           input.agentAccountContext.inbox.unreadCount > 0)
       )
         return;
-      const instructions = renderToolInstructions([manifest]);
-      // A templated manifest must keep the context engine's variable hydration.
-      if (instructions.includes('{{')) continue;
+      const instructions = renderPlaceholderTemplate(
+        renderToolInstructions([manifest]),
+        variableGenerators,
+      );
       additions.push({
         afterToolCallId: activation.afterToolCallId,
         instructions,

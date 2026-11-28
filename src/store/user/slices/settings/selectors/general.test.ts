@@ -112,6 +112,22 @@ describe('settingsSelectors', () => {
     });
   });
 
+  describe('restartUnsteerableRun', () => {
+    it('should default to off', () => {
+      expect(userGeneralSettingsSelectors.restartUnsteerableRun(initialState as UserStore)).toBe(
+        false,
+      );
+    });
+
+    it('should read the stored setting', () => {
+      const s: UserState = merge(initialState, {
+        settings: { general: { restartUnsteerableRun: true } },
+      });
+
+      expect(userGeneralSettingsSelectors.restartUnsteerableRun(s as UserStore)).toBe(true);
+    });
+  });
+
   describe('enablePasteAutoConvert', () => {
     it('should default to true when unset', () => {
       expect(userGeneralSettingsSelectors.enablePasteAutoConvert(initialState as UserStore)).toBe(

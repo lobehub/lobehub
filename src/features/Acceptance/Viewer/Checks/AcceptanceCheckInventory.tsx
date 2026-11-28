@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useIsHydrated } from '@/hooks/useIsHydrated';
 import { verifyService } from '@/services/verify';
 import { useVerifyStore } from '@/store/verify';
 
@@ -114,6 +115,7 @@ const AcceptanceCheckInventory = ({
 }: AcceptanceCheckInventoryProps) => {
   const { t } = useTranslation('verify');
   const { md = true } = useResponsive();
+  const hydrated = useIsHydrated();
   const { acceptanceId, embedded } = useAcceptanceScope();
   const routeBase = useAcceptanceRouteBase();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
@@ -161,14 +163,16 @@ const AcceptanceCheckInventory = ({
   const [urlSeed, setUrlSeed] = useState<{ acceptanceId: string; filter: CheckFilter }>();
 
   const seedChecks = data?.checks ?? [];
-  if (data && seedChecks.length > 0 && !seededIds.has(acceptanceId)) {
+  // Viewport-dependent disclosure state must wait until after hydration, so
+  // the server and the browser's first render agree and never read window.
+  if (hydrated && data && seedChecks.length > 0 && !seededIds.has(acceptanceId)) {
     setSeededIds(new Set(seededIds).add(acceptanceId));
     setExpanded(
       new Set(
         seedChecks
           .filter(
             (check) =>
-              window.matchMedia('(min-width: 768px)').matches &&
+              md &&
               userReviewState(check) !== 'accepted' &&
               (isException(check) || hasVisualEvidence(check)),
           )

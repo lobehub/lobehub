@@ -8,6 +8,11 @@ export interface ModelPricingContext {
 
 /** Request-scoped data available to dynamic model router resolution. */
 export interface RouterRuntimeRequestContext {
+  /**
+   * Caller metadata of the request being routed (for example its topic id), so a router can
+   * derive per-request channel options such as a sticky-session header.
+   */
+  metadata?: Record<string, unknown>;
   model?: string;
   pricingContext?: ModelPricingContext;
 }
@@ -303,6 +308,13 @@ export const AgentRuntimeErrorType = {
   UserConfigError: 'UserConfigError',
   /** Gateway watchdog killed an idle agent operation — harness-side. */
   OperationInactivityTimeout: 'OperationInactivityTimeout',
+  /**
+   * A server-side LLM call was still streaming when its step invocation was
+   * about to be killed by the host, so the harness stopped it. Deterministic
+   * enough (long thinking at high effort) that re-running the step would burn
+   * the same tokens again, so it is not retried.
+   */
+  LlmStepTimeout: 'LlmStepTimeout',
 
   InvalidOllamaArgs: 'InvalidOllamaArgs',
   /**

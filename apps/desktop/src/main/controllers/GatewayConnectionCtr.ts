@@ -22,7 +22,7 @@ import {
   resolveRemotePlatformCommand,
   resolveRemotePlatformRuntime,
 } from '@lobechat/heterogeneous-agents/scanHost';
-import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
+import { LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
 import { managedProcessEnvironment, spawnManaged } from '@lobechat/utils/managedProcess';
 
 import { withEmbeddedCliEnv } from '@/modules/cliEmbedding';
@@ -45,10 +45,12 @@ import {
   postDeviceRegistration,
   requestWorktreeCleanupDrain,
 } from './gatewayDeviceServerCalls';
+import { createGatewayLocalSystemService } from './gatewayLocalSystemService';
 import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import { ControllerModule, createProtocolHandler, IpcMethod } from './index';
 import LocalFileCtr from './LocalFileCtr';
 import McpCtr from './McpCtr';
+import { executeMcpGatewayCall } from './mcpGatewayCall';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 import ShellCommandCtr from './ShellCommandCtr';
 
@@ -389,24 +391,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
    */
   private getLocalSystemRuntime(): LocalSystemExecutionRuntime {
     if (!this.localSystemRuntime) {
-      const local = this.localFileCtr;
-      const shell = this.shellCommandCtr;
-      const service: ILocalSystemService = {
-        editLocalFile: (p) => local.handleEditFile(p),
-        getCommandOutput: (p) => shell.handleGetCommandOutput(p),
-        globFiles: (p) => local.handleGlobFiles(p),
-        grepContent: (p) => local.handleGrepContent(p),
-        killCommand: (p) => shell.handleKillCommand(p),
-        listLocalFiles: (p) => local.listLocalFiles(p),
-        moveLocalFiles: (p) => local.handleMoveFiles(p),
-        readLocalFile: (p) => local.readFile(p),
-        readLocalFiles: (p) => local.readFiles(p),
-        renameLocalFile: (p) => local.handleRenameFile(p),
-        runCommand: (p) => shell.handleRunCommand(p),
-        searchLocalFiles: (p) => local.handleLocalFilesSearch(p),
-        writeFile: (p) => local.handleWriteFile(p),
-      };
-      this.localSystemRuntime = new LocalSystemExecutionRuntime(service);
+      this.localSystemRuntime = new LocalSystemExecutionRuntime(
+        createGatewayLocalSystemService(this.localFileCtr, this.shellCommandCtr),
+      );
     }
     return this.localSystemRuntime;
   }
@@ -569,26 +556,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
     identifier: string;
     params: GatewayMcpParams;
   }): Promise<BuiltinServerRuntimeOutput> {
-    const { apiName, arguments: args, params } = mcpCall;
-
-    if (params.type === 'http') {
-      return this.mcpCtr.runHttpMcpTool(
-        { auth: params.auth, headers: params.headers, name: params.name, url: params.url },
-        apiName,
-        args,
-      );
-    }
-
-    return this.mcpCtr.runStdioMcpTool({
-      args,
-      env: params.env,
-      params: {
-        args: params.args,
-        command: params.command,
-        name: params.name,
-      },
-      toolName: apiName,
-    });
+    return executeMcpGatewayCall(this.mcpCtr, mcpCall);
   }
 
   private async executeMessageApi(

@@ -63,6 +63,7 @@ import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
 import { collaborationRoutes } from './collaborationRoutes';
+import { legacySettingsTabRedirects, legacyWorkspaceBillingRoute } from './legacySettingsRoutes';
 
 export { ResourceCategorySkeleton };
 
@@ -342,8 +343,13 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
   // Settings routes (personal-only — never mirrored under /:workspaceSlug)
   {
     children: [
+      // Settings lead with the personal space's own set (its first tab);
+      // account settings sit behind the sidebar's bottom card.
       {
-        element: redirectElement('/settings/profile'),
+        element: dynamicElement(
+          () => import('@/routes/(main)/settings/_index'),
+          'Desktop > Settings > Index',
+        ),
         index: true,
       },
       // Provider routes with nested structure
@@ -416,6 +422,8 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
       ...legacySettingsMarketplaceRedirects,
       // Sandbox storage moved to Docs (`/resource/sandbox-storage`).
       { element: <LegacySandboxStorageRedirect />, path: 'drive' },
+      // Retired tab keys (`agent`, `image`, `common`, …) open their replacement.
+      ...legacySettingsTabRedirects,
       // Devices list and detail are explicit routes so the page title resolves
       // without a `:tab` param; their skeleton comes from the devices tab entry.
       {
@@ -531,17 +539,8 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         errorElement: <ErrorBoundary />,
         path: 'settings',
       },
-      // Legacy `/:slug/billing/*` URLs — redirect to the corresponding
-      // `/:slug/settings/*` page. Kept for deep-links and bookmarks.
-      {
-        children: [
-          { element: redirectElement('../settings/plans'), path: 'plans' },
-          { element: redirectElement('../settings/usage'), path: 'usage' },
-          { element: redirectElement('../settings/credits'), path: 'credits' },
-          { element: redirectElement('../settings/billing'), path: 'billing' },
-        ],
-        path: 'billing',
-      },
+      // Legacy `/:slug/billing/*` URLs open the matching `/:slug/settings/*` page.
+      legacyWorkspaceBillingRoute,
     ],
     element: dynamicLayout(
       () => import('@/routes/(main)/[workspaceSlug]/_layout'),

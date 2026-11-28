@@ -452,6 +452,7 @@ const SkillList = memo<SkillListProps>(
     const renderCommunityMCPs = () => [
       ...visibleCommunityMCPs.map((plugin) => (
         <McpSkillItem
+          isLegacyPlugin
           author={plugin.author}
           avatar={plugin.avatar}
           identifier={plugin.identifier}
@@ -500,6 +501,7 @@ const SkillList = memo<SkillListProps>(
       }),
       ...visibleCustomMCPs.map((plugin) => (
         <McpSkillItem
+          isLegacyPlugin
           author={plugin.author}
           avatar={plugin.avatar}
           identifier={plugin.identifier}

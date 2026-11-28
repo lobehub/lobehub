@@ -8,6 +8,7 @@ import {
   accordionStyles,
   AccordionTrigger,
   ActionIcon,
+  Center,
   ContextMenuTrigger,
   cx,
   type DropdownItem,
@@ -16,8 +17,17 @@ import {
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { Archive, ArrowDownUp, Compass, Hash, MoreHorizontal, Plus } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import {
+  Archive,
+  ArrowDownUp,
+  ChevronDown,
+  ChevronRight,
+  Compass,
+  Hash,
+  MoreHorizontal,
+  Plus,
+} from 'lucide-react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -25,8 +35,12 @@ import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspa
 import AsyncError from '@/components/AsyncError';
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import NavItem from '@/features/NavPanel/components/NavItem';
-import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
+import SectionTitle, {
+  sectionItemClassName,
+  useSectionTriggerStyle,
+} from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { useNavItemMetrics } from '@/features/NavPanel/density';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
@@ -42,9 +56,11 @@ import { openCreateChannel } from './CreateChannel';
 import { matchChannel, matchChannelThread } from './paths';
 import { sortChannels } from './sortChannels';
 import { threadTitle } from './threadTitle';
+import { duplicateTitleHints } from './titleHints';
 import { useChannelEvents } from './useChannelEvents';
 import { useChannelMenu } from './useChannelMenu';
 import { useChannelsEnabled } from './useChannelsEnabled';
+import { useChannelThreadFold } from './useChannelThreadFold';
 import { useThreadMenu } from './useThreadMenu';
 
 // The connector runs down from the centre of the Channel's icon (row paddingInline + half
@@ -89,6 +105,8 @@ const styles = stylex.create({
   // The first thread reaches up under the Channel's icon.
   firstElbow: { insetBlockStart: -8 },
   channel: { position: 'relative' },
+  // Muted like the role tag after an Agent's name in the same sidebar.
+  titleHint: { marginInlineStart: 6, fontSize: 12, opacity: 0.6 },
   // An unread Channel gets a pill on the row's leading edge and a title one step brighter, the
   // way Discord marks it; an @mention adds a count badge. The accordion panel clips anything
   // outside the row, so the pill sits in the row's own inline padding.
@@ -122,9 +140,11 @@ const styles = stylex.create({
 
 const ChannelThreads = ({
   channelId,
+  detail,
   projectId,
+  shown,
   threadId,
-}: {
+}: Pick<ReturnType<typeof useChannelThreadFold>, 'detail' | 'shown'> & {
   channelId: string;
   projectId: string | null;
   threadId: string | null;
@@ -133,12 +153,6 @@ const ChannelThreads = ({
   const navigate = useWorkspaceAwareNavigate();
   const slug = useActiveWorkspaceSlug();
   const threadMenu = useThreadMenu();
-  // The open Channel's page already loads this view; the sidebar only reads it.
-  const detail = useChannelStore(channelSelectors.detail({ channelId, threadId: null }));
-  // Archived threads stay reachable from their root message, out of the sidebar.
-  const shown = (detail?.threads ?? [])
-    .map((thread, index) => ({ index, thread }))
-    .filter(({ thread }) => thread.status !== 'archived' || thread.id === threadId);
   if (!detail || !shown.length) return null;
 
   return (
@@ -188,7 +202,149 @@ const ChannelThreads = ({
   );
 };
 
+interface ChannelRowProps {
+  activeChannelId: string | undefined;
+  activeThreadId: string | null;
+  channel: ChannelListItem;
+  /** Set when another Channel in the list has the same name; see `duplicateTitleHints`. */
+  hint?: string;
+  menuItems: ReturnType<typeof useChannelMenu>;
+}
+
+/**
+ * A Channel row and, while it is open, its threads. Pointing at or focusing a row whose
+ * threads are listed swaps its `#` for a chevron that folds them away; the fold is kept per
+ * Channel on this device.
+ */
+const ChannelRow = ({
+  activeChannelId,
+  activeThreadId,
+  channel,
+  hint,
+  menuItems,
+}: ChannelRowProps) => {
+  const { t } = useTranslation('channel');
+  const navigate = useWorkspaceAwareNavigate();
+  const slug = useActiveWorkspaceSlug();
+  const metrics = useNavItemMetrics();
+  const [pointed, setPointed] = useState(false);
+  const [focused, setFocused] = useState(false);
+
+  const path = CHANNEL_URL(channel.id, null, channel.projectId);
+  const open = activeChannelId === channel.id;
+  const {
+    current,
+    detail,
+    expanded,
+    foldable,
+    shown,
+    toggle: toggleFold,
+  } = useChannelThreadFold(channel.id, open, activeThreadId);
+  // The open Channel is being read; its count clears once the read receipt lands.
+  const unread = !open && (channel.unreadCount ?? 0) > 0;
+  const mentions = open ? 0 : (channel.mentionCount ?? 0);
+  // A project Channel the caller can read but has not joined: dimmed, with no member actions.
+  const joined = channel.joined !== false;
+
+  // The chevron takes the `#`'s slot, so the title never shifts. The `#` is drawn at 14px: the
+  // glyph fills its whole box, so it reads larger than other nav icons at 18px.
+  let toggle: ReactNode;
+  if (foldable && (pointed || focused)) {
+    const label = t(expanded ? 'collapseThreads' : 'expandThreads');
+    toggle = (
+      <Center flex="none" height={metrics.iconBox} width={metrics.iconBox}>
+        <ActionIcon
+          aria-expanded={expanded}
+          aria-label={label}
+          icon={expanded ? ChevronDown : ChevronRight}
+          size="small"
+          title={label}
+          onClick={(event) => {
+            // The chevron sits inside the row's link; folding must not open the Channel.
+            event.preventDefault();
+            event.stopPropagation();
+            toggleFold();
+          }}
+        />
+      </Center>
+    );
+  }
+
+  return (
+    <Flexbox
+      {...stylex.props(styles.channel)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false);
+      }}
+      // Keyboard focus only: a click also focuses the row's link, which would pin the chevron.
+      onFocus={(event) => setFocused(event.target.matches(':focus-visible'))}
+    >
+      {unread && <span aria-hidden {...stylex.props(styles.unreadPill)} />}
+      <NavItem
+        active={current}
+        aria-current={current ? 'page' : undefined}
+        contextMenuItems={joined ? () => menuItems(channel) : undefined}
+        data-channel-id={channel.id}
+        href={buildWorkspaceAwarePath(path, slug)}
+        icon={toggle ? undefined : Hash}
+        iconSize={14}
+        slots={toggle ? { iconPostfix: toggle } : undefined}
+        titleColor={unread ? cssVar.colorText : joined ? undefined : cssVar.colorTextTertiary}
+        actions={
+          joined
+            ? () => (
+                <DropdownMenu items={menuItems(channel)}>
+                  <ActionIcon
+                    icon={MoreHorizontal}
+                    size="small"
+                    title={t('more', { ns: 'common' })}
+                  />
+                </DropdownMenu>
+              )
+            : undefined
+        }
+        extra={
+          mentions > 0 ? (
+            <span
+              aria-label={t('unreadMentions', { count: mentions })}
+              {...stylex.props(styles.mentionBadge)}
+              // NavItem stops clicks inside `extra`; the badge still opens the Channel.
+              onClick={() => navigate(path)}
+            >
+              {mentions > 99 ? '99+' : mentions}
+            </span>
+          ) : undefined
+        }
+        title={
+          hint ? (
+            <>
+              {channel.title}
+              <span {...stylex.props(styles.titleHint)}>{hint}</span>
+            </>
+          ) : (
+            channel.title
+          )
+        }
+        onClick={() => navigate(path)}
+        onPointerEnter={() => setPointed(true)}
+        onPointerLeave={() => setPointed(false)}
+      />
+      {expanded && (
+        <ChannelThreads
+          channelId={channel.id}
+          detail={detail}
+          projectId={channel.projectId}
+          shown={shown}
+          threadId={activeThreadId}
+        />
+      )}
+    </Flexbox>
+  );
+};
+
 interface ChannelSectionProps {
+  /** Class for the section's `AccordionItem`, for hosts that space sections by expanded state. */
+  itemClassName?: string;
   /** The accordion item value; the parent `AccordionRoot` owns the expanded state. */
   itemKey?: string;
   /**
@@ -208,15 +364,15 @@ interface ChannelSectionProps {
  * Channel's threads nested under it.
  */
 const EnabledChannelSection = ({
+  itemClassName,
   itemKey = 'channels',
   layoutMenuItems,
   projectId,
 }: ChannelSectionProps) => {
-  const { t } = useTranslation('channel');
+  const { t, i18n } = useTranslation('channel');
   const sectionTriggerStyle = useSectionTriggerStyle();
   const { pathname } = useActiveLocation();
   const navigate = useWorkspaceAwareNavigate();
-  const slug = useActiveWorkspaceSlug();
   const sync = channelActions.useFetchList();
   const allChannels = useChannelStore(channelSelectors.list);
   const sort = useGlobalStore(systemStatusSelectors.channelListSort);
@@ -225,6 +381,11 @@ const EnabledChannelSection = ({
     const scoped = channelsInScope(allChannels, projectId);
     return scoped && sortChannels(scoped, sort);
   }, [allChannels, projectId, sort]);
+  const separator = t('autoTitle.separator');
+  const hints = useMemo(
+    () => duplicateTitleHints(channels ?? [], { locale: i18n.language, separator }),
+    [channels, i18n.language, separator],
+  );
   useChannelEvents();
 
   const [showArchived, setShowArchived] = useState(false);
@@ -269,65 +430,16 @@ const EnabledChannelSection = ({
     },
   ];
 
-  const renderChannel = (channel: ChannelListItem) => {
-    const path = CHANNEL_URL(channel.id, null, channel.projectId);
-    const open = activeChannelId === channel.id;
-    // The open Channel is being read; its count clears once the read receipt lands.
-    const unread = !open && (channel.unreadCount ?? 0) > 0;
-    const mentions = open ? 0 : (channel.mentionCount ?? 0);
-    // A project Channel the caller can read but has not joined: dimmed, with no member actions.
-    const joined = channel.joined !== false;
-    return (
-      <Flexbox key={channel.id} {...stylex.props(styles.channel)}>
-        {unread && <span aria-hidden {...stylex.props(styles.unreadPill)} />}
-        <NavItem
-          active={open && !activeThreadId}
-          aria-current={open && !activeThreadId ? 'page' : undefined}
-          contextMenuItems={joined ? () => menuItems(channel) : undefined}
-          data-channel-id={channel.id}
-          href={buildWorkspaceAwarePath(path, slug)}
-          title={channel.title}
-          titleColor={unread ? cssVar.colorText : joined ? undefined : cssVar.colorTextTertiary}
-          actions={
-            joined
-              ? () => (
-                  <DropdownMenu items={menuItems(channel)}>
-                    <ActionIcon
-                      icon={MoreHorizontal}
-                      size="small"
-                      title={t('more', { ns: 'common' })}
-                    />
-                  </DropdownMenu>
-                )
-              : undefined
-          }
-          extra={
-            mentions > 0 ? (
-              <span
-                aria-label={t('unreadMentions', { count: mentions })}
-                {...stylex.props(styles.mentionBadge)}
-                // NavItem stops clicks inside `extra`; the badge still opens the Channel.
-                onClick={() => navigate(path)}
-              >
-                {mentions > 99 ? '99+' : mentions}
-              </span>
-            ) : undefined
-          }
-          onClick={() => navigate(path)}
-          icon={Hash}
-          // The glyph fills its whole box, so it reads larger than other nav icons at 18px.
-          iconSize={14}
-        />
-        {open && (
-          <ChannelThreads
-            channelId={channel.id}
-            projectId={channel.projectId}
-            threadId={activeThreadId}
-          />
-        )}
-      </Flexbox>
-    );
-  };
+  const renderChannel = (channel: ChannelListItem) => (
+    <ChannelRow
+      activeChannelId={activeChannelId}
+      activeThreadId={activeThreadId}
+      channel={channel}
+      hint={hints.get(channel.id)}
+      key={channel.id}
+      menuItems={menuItems}
+    />
+  );
   // Archived channels leave the active list but stay one click away; an open one stays visible.
   const active = channels?.filter((channel) => channel.status !== 'archived') ?? [];
   const archived = channels?.filter((channel) => channel.status === 'archived') ?? [];
@@ -394,7 +506,7 @@ const EnabledChannelSection = ({
   );
 
   return (
-    <AccordionItem value={itemKey}>
+    <AccordionItem className={itemClassName} value={itemKey}>
       {layoutMenuItems ? (
         <ContextMenuTrigger items={layoutMenuItems}>{header}</ContextMenuTrigger>
       ) : (
@@ -441,7 +553,10 @@ export const ChannelSection = (props: ChannelSectionProps) =>
 const ChannelList = ({ layoutMenuItems }: Pick<ChannelSectionProps, 'layoutMenuItems'>) =>
   useChannelsEnabled() ? (
     <AccordionRoot defaultValue={['channels']} indicatorPlacement="inline">
-      <EnabledChannelSection layoutMenuItems={layoutMenuItems} />
+      <EnabledChannelSection
+        itemClassName={sectionItemClassName}
+        layoutMenuItems={layoutMenuItems}
+      />
     </AccordionRoot>
   ) : null;
 

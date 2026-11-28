@@ -9,6 +9,7 @@ import { sx } from '@/styles/sx';
 
 import { revealStyles } from '../../../ChatItem/revealStyles';
 import { type MessageActionsConfig } from '../../../types';
+import ActionRowSpacer from '../../components/ActionRowSpacer';
 import {
   MessageActionBar,
   type MessageActionContext,
@@ -21,6 +22,7 @@ const DEFAULT_BAR: MessageActionSlot[] = ['regenerate', 'edit', 'copy'];
 const DEFAULT_MENU: MessageActionSlot[] = [
   'edit',
   'copy',
+  'editInNewTopic',
   'comments',
   'branching',
   'divider',
@@ -74,7 +76,9 @@ const Actions = memo<ActionsProps>(({ id, data, disableEditing }) => {
 
   return (
     <Flexbox horizontal align={'center'}>
-      {!disableEditing && (
+      {disableEditing ? (
+        <ActionRowSpacer />
+      ) : (
         <Flexbox align={'flex-start'} role="menubar" {...stylex.props(revealStyles.menubar)}>
           {actionBarHolder}
         </Flexbox>

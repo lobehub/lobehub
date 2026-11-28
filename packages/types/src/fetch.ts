@@ -13,7 +13,10 @@ export const ChatErrorType = {
   WorkspaceSubscriptionInactive: 'WorkspaceSubscriptionInactive', // Workspace's paid subscription has lapsed — view-only for non-primary members; spend blocked until renewed
   ShareMessageLimitExceeded: 'ShareMessageLimitExceeded', // Visitor hit shareConfig.maxMessagesPerVisitor on this shared agent
   ShareSpendLimitExceeded: 'ShareSpendLimitExceeded', // Shared agent reached shareConfig.monthlySpendLimit for the current month — recovers on the next reset
+  ShareFundingExhausted: 'ShareFundingExhausted', // Shared agent's visitor-run funds ran out: its visitor tips are spent and its owner's own monthly limit is reached — a new tip lets it run again
   SharePromptTooLong: 'SharePromptTooLong', // Visitor's message to a shared agent is longer than SHARE_VISITOR_PROMPT_MAX_LENGTH
+  ShareAttachmentTooLarge: 'ShareAttachmentTooLarge', // Visitor's turn to a shared agent carries more than SHARE_VISITOR_MAX_FILES_PER_TURN files or one above SHARE_VISITOR_MAX_FILE_SIZE
+  ShareFileStorageExceeded: 'ShareFileStorageExceeded', // A shared agent's visitor attachments would exceed shareConfig.maxFileStorage (0 turns them off) or the creator's own storage
   ShareHeterogeneousAgentUnsupported: 'ShareHeterogeneousAgentUnsupported', // This agent configuration is not supported for shared visitors
   ShareHeteroDeviceUnavailable: 'ShareHeteroDeviceUnavailable', // The shared local CLI agent's device is offline or not set — visitor can retry later
   ChannelAttachmentUnavailable: 'ChannelAttachmentUnavailable', // A Channel send names a file the sender cannot attach there (e.g. uploaded in another workspace) — resending the same files never succeeds

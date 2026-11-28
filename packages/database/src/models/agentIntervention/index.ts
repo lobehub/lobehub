@@ -1,7 +1,8 @@
 import { AgentInterventionRepository } from '../../repositories/agentIntervention';
+import { completeResolution } from '../../repositories/agentIntervention/resolution';
 import type { AgentInterventionItem, AgentInterventionResolutionItem } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import type { AgentInterventionContext } from './context';
+import type { AgentInterventionContext, AgentInterventionFamily } from './context';
 import * as creation from './creation';
 import * as customExecution from './customExecution';
 import * as locate from './locate';
@@ -20,6 +21,7 @@ import type {
   CompleteAgentInterventionCustomExecutionParams,
   CreateAgentInterventionBatchParams,
   CreateAgentInterventionBatchWithSupersessionParams,
+  StandardIntervention,
 } from './types';
 
 export {
@@ -52,7 +54,11 @@ export type {
 } from './types';
 export { hashAgentInterventionRequestRevision } from './utils';
 
-export class AgentInterventionModel {
+type Scoped<Family extends AgentInterventionFamily, T> = Family extends 'mcp'
+  ? T
+  : StandardIntervention<T>;
+
+export class AgentInterventionModel<Family extends AgentInterventionFamily = 'agent'> {
   /** The scope handed to the helper modules in this directory. */
   private readonly ctx: AgentInterventionContext;
 
@@ -64,9 +70,15 @@ export class AgentInterventionModel {
    */
   private readonly repository: AgentInterventionRepository;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
-    this.ctx = { db, userId, workspaceId };
-    this.repository = new AgentInterventionRepository(db, userId, workspaceId);
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string, family?: Family) {
+    this.ctx = { db, userId, workspaceId, family };
+    this.repository = new AgentInterventionRepository(db, userId, workspaceId, family);
+  }
+
+  private scoped<T>(result: Promise<T>): Promise<Scoped<Family, T>> {
+    // The database predicates scope every read and mutation, and creation
+    // validates the pairing between the producer source and its detail.
+    return result as Promise<Scoped<Family, T>>;
   }
 
   /**
@@ -76,7 +88,7 @@ export class AgentInterventionModel {
   static locateByReviewTokenHash = (
     db: LobeChatDatabase,
     reviewTokenHash: string,
-  ): Promise<AgentInterventionLocator | undefined> =>
+  ): Promise<StandardIntervention<AgentInterventionLocator> | undefined> =>
     locate.locateByReviewTokenHash(db, reviewTokenHash);
 
   /**
@@ -100,14 +112,14 @@ export class AgentInterventionModel {
     operationId: string,
     toolCallId: string,
     callback?: { batchId?: string; interventionId?: string },
-  ): Promise<AgentInterventionLocator | undefined> =>
+  ): Promise<StandardIntervention<AgentInterventionLocator> | undefined> =>
     locate.locateByOperationAndToolCall(db, operationId, toolCallId, callback);
 
   /** System-only owner/workspace recovery for post-claim delivery callbacks. */
   static locateByResolutionRequestId = (
     db: LobeChatDatabase,
     resolutionRequestId: string,
-  ): Promise<AgentInterventionResolutionLocator | undefined> =>
+  ): Promise<StandardIntervention<AgentInterventionResolutionLocator> | undefined> =>
     locate.locateByResolutionRequestId(db, resolutionRequestId);
 
   /**
@@ -129,8 +141,10 @@ export class AgentInterventionModel {
     customExecution.completeCustomExecution(this.ctx, params, now);
 
   /** Creates and seals a complete batch in one transaction. */
-  createBatch = (params: CreateAgentInterventionBatchParams): Promise<AgentInterventionItem[]> =>
-    creation.createBatch(this.ctx, params);
+  createBatch = (
+    params: CreateAgentInterventionBatchParams,
+  ): Promise<Scoped<Family, AgentInterventionItem[]>> =>
+    this.scoped(creation.createBatch(this.ctx, params));
 
   /**
    * Atomically replaces the still-pending remainder of a runtime batch after a
@@ -140,22 +154,27 @@ export class AgentInterventionModel {
    */
   createBatchWithSupersession = (
     params: CreateAgentInterventionBatchWithSupersessionParams,
-  ): Promise<AgentInterventionBatchSupersessionResult> =>
-    this.repository.createBatchWithSupersession(params);
+  ): Promise<Scoped<Family, AgentInterventionBatchSupersessionResult>> =>
+    this.scoped(this.repository.createBatchWithSupersession(params));
 
-  findById = (id: string): Promise<AgentInterventionItem | undefined> =>
-    lookup.findById(this.ctx, id);
+  findById = (id: string): Promise<Scoped<Family, AgentInterventionItem | undefined>> =>
+    this.scoped(lookup.findById(this.ctx, id));
 
   /** Owner-only cold-start lookup used before restoring a workspace header. */
-  findByIdForOwner = (id: string): Promise<AgentInterventionItem | undefined> =>
-    lookup.findByIdForOwner(this.ctx, id);
+  findByIdForOwner = (id: string): Promise<Scoped<Family, AgentInterventionItem | undefined>> =>
+    this.scoped(lookup.findByIdForOwner(this.ctx, id));
 
   /** Legacy owner-auth token lookup. Workspace collaborators use the system locator + ACL. */
-  findByReviewTokenHash = (reviewTokenHash: string): Promise<AgentInterventionItem | undefined> =>
-    lookup.findByReviewTokenHash(this.ctx, reviewTokenHash);
+  findByReviewTokenHash = (
+    reviewTokenHash: string,
+  ): Promise<Scoped<Family, AgentInterventionItem | undefined>> =>
+    this.scoped(lookup.findByReviewTokenHash(this.ctx, reviewTokenHash));
 
-  findBatch = (operationId: string, batchId: string): Promise<AgentInterventionBatchState> =>
-    lookup.findBatch(this.ctx, operationId, batchId);
+  findBatch = (
+    operationId: string,
+    batchId: string,
+  ): Promise<Scoped<Family, AgentInterventionBatchState>> =>
+    this.scoped(lookup.findBatch(this.ctx, operationId, batchId));
 
   /**
    * Atomically validates a complete sealed Review snapshot and claims one,
@@ -164,33 +183,39 @@ export class AgentInterventionModel {
    */
   claimBatch = (
     params: ClaimAgentInterventionBatchParams,
-  ): Promise<AgentInterventionBatchMutationResult> => this.repository.claimBatch(params);
+  ): Promise<Scoped<Family, AgentInterventionBatchMutationResult>> =>
+    this.scoped(this.repository.claimBatch(params));
 
   markResolutionPublished = (
     resolutionRequestId: string,
     publishedAt = new Date(),
-  ): Promise<AgentInterventionBatchMutationResult> =>
-    resolution.markResolutionPublished(this.ctx, resolutionRequestId, publishedAt);
+  ): Promise<Scoped<Family, AgentInterventionBatchMutationResult>> =>
+    this.scoped(resolution.markResolutionPublished(this.ctx, resolutionRequestId, publishedAt));
 
   /** Publish failed before consumption; conditionally reopens only this claim. */
   rollbackResolution = (
     resolutionRequestId: string,
-  ): Promise<AgentInterventionBatchMutationResult> =>
-    this.repository.rollbackResolution(resolutionRequestId);
+  ): Promise<Scoped<Family, AgentInterventionBatchMutationResult>> =>
+    this.scoped(this.repository.rollbackResolution(resolutionRequestId));
 
   /** Runtime rows become terminal once the continuation has durably started. */
   completeRuntimeResolution = (
     resolutionRequestId: string,
     continuationStartedAt = new Date(),
-  ): Promise<AgentInterventionBatchMutationResult> =>
-    this.repository.completeRuntimeResolution(resolutionRequestId, continuationStartedAt);
+  ): Promise<Scoped<Family, AgentInterventionBatchMutationResult>> =>
+    this.scoped(
+      this.repository.completeRuntimeResolution(resolutionRequestId, continuationStartedAt),
+    );
 
   /** Heterogeneous rows become terminal only after the matching producer ACK. */
   acknowledgeProducerResolution = (
     resolutionRequestId: string,
     producerAckAt = new Date(),
-  ): Promise<AgentInterventionBatchMutationResult> =>
-    this.repository.acknowledgeProducerResolution(resolutionRequestId, producerAckAt);
+  ): Promise<Scoped<Family, AgentInterventionBatchMutationResult>> =>
+    this.scoped(this.repository.acknowledgeProducerResolution(resolutionRequestId, producerAckAt));
+
+  completeMcpResolution = (resolutionRequestId: string) =>
+    completeResolution(this.ctx, resolutionRequestId, 'mcp', new Date());
 
   /** Timeout/session teardown of every still-open item in one sealed batch. */
   markBatchTerminal = (
@@ -198,18 +223,18 @@ export class AgentInterventionModel {
     batchId: string,
     status: 'session_ended' | 'timed_out',
     at = new Date(),
-  ): Promise<AgentInterventionItem[]> =>
-    lookup.markBatchTerminal(this.ctx, operationId, batchId, status, at);
+  ): Promise<Scoped<Family, AgentInterventionItem[]>> =>
+    this.scoped(lookup.markBatchTerminal(this.ctx, operationId, batchId, status, at));
 
   /** Late heterogeneous ACK is audited without overwriting timeout/session outcome. */
   recordProducerAck = (
     resolutionRequestId: string,
     producerAckAt = new Date(),
-  ): Promise<AgentInterventionBatchMutationResult> =>
-    resolution.recordProducerAck(this.ctx, resolutionRequestId, producerAckAt);
+  ): Promise<Scoped<Family, AgentInterventionBatchMutationResult>> =>
+    this.scoped(resolution.recordProducerAck(this.ctx, resolutionRequestId, producerAckAt));
 
   findResolutionByRequestId = (
     resolutionRequestId: string,
-  ): Promise<AgentInterventionResolutionItem | undefined> =>
-    resolution.findResolutionByRequestId(this.ctx, resolutionRequestId);
+  ): Promise<Scoped<Family, AgentInterventionResolutionItem | undefined>> =>
+    this.scoped(resolution.findResolutionByRequestId(this.ctx, resolutionRequestId));
 }

@@ -124,6 +124,66 @@ describe('ComposerDraftReceiver', () => {
     expect(useComposerDraftBus.getState().draft).toBeNull();
   });
 
+  it('restores persisted editor JSON when the draft carries it', () => {
+    const editorData = { root: { children: [] } };
+    queueDraftForMainComposer('rich text', { agentId: 'agt_inbox' }, { editorData });
+    const setJSONState = vi.fn();
+    mocks.editor = { focus: vi.fn(), setDocument: vi.fn(), setJSONState } as typeof mocks.editor;
+    render(<ComposerDraftReceiver />);
+
+    expect(setJSONState).toHaveBeenCalledWith(editorData);
+    expect(mocks.editor!.setDocument).not.toHaveBeenCalled();
+    expect(mocks.updateInputMessage).toHaveBeenCalledWith('rich text');
+  });
+
+  // Regression: appending through Markdown flattened image references and
+  // mentions in both the existing draft and the added message.
+  it('merges rich drafts as editor JSON when appending to existing content', () => {
+    const existing = { root: { children: [{ id: 'old' }], type: 'root' } };
+    const added = { root: { children: [{ id: 'new' }] } };
+    queueDraftForMainComposer(
+      'added',
+      { agentId: 'agt_inbox' },
+      { append: true, editorData: added },
+    );
+    const setJSONState = vi.fn();
+    mocks.editor = {
+      focus: vi.fn(),
+      getJSONState: () => existing,
+      getMarkdownContent: () => 'old draft',
+      setDocument: vi.fn(),
+      setJSONState,
+    } as typeof mocks.editor;
+    render(<ComposerDraftReceiver />);
+
+    expect(setJSONState).toHaveBeenCalledWith({
+      root: { children: [{ id: 'old' }, { id: 'new' }], type: 'root' },
+    });
+    expect(mocks.editor!.setDocument).not.toHaveBeenCalled();
+    expect(mocks.updateInputMessage).toHaveBeenCalledWith('old draft\n\nadded');
+  });
+
+  it('uses the added editor JSON as-is when the composer is empty', () => {
+    const added = { root: { children: [{ id: 'new' }] } };
+    queueDraftForMainComposer(
+      'added',
+      { agentId: 'agt_inbox' },
+      { append: true, editorData: added },
+    );
+    const setJSONState = vi.fn();
+    mocks.editor = {
+      focus: vi.fn(),
+      getJSONState: () => ({ root: { children: [] } }),
+      getMarkdownContent: () => '  ',
+      setDocument: vi.fn(),
+      setJSONState,
+    } as typeof mocks.editor;
+    render(<ComposerDraftReceiver />);
+
+    expect(setJSONState).toHaveBeenCalledWith(added);
+    expect(mocks.updateInputMessage).toHaveBeenCalledWith('added');
+  });
+
   // Regression: right after navigating, the conversation is still on the
   // previously active topic; the switch to the new topic clears the input.
   it('holds a queued draft until the conversation reaches the target new topic', () => {

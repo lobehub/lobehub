@@ -6,7 +6,14 @@
  * contact card keeps its earlier `metadata.card`, and the error card `metadata.replyError`. `content` always holds a plain-text fallback, so
  * a client that does not know a kind, the model's history and search all still read it as text.
  */
-export const CHANNEL_MESSAGE_KINDS = ['text', 'contact', 'ask', 'error', 'deviceGrant'] as const;
+export const CHANNEL_MESSAGE_KINDS = [
+  'text',
+  'contact',
+  'ask',
+  'error',
+  'deviceGrant',
+  'agentAccess',
+] as const;
 
 /**
  * - `text`: an ordinary message.
@@ -15,6 +22,7 @@ export const CHANNEL_MESSAGE_KINDS = ['text', 'contact', 'ask', 'error', 'device
  * - `error`: a reply that failed, shown as a card in its slot (`metadata.replyError`); the reply
  *   that later succeeds replaces it and its kind.
  * - `deviceGrant`: an Agent's request to use a device (`metadata.deviceGrant`).
+ * - `agentAccess`: an Agent asking its owner to let someone use it (`metadata.agentAccess`).
  */
 export type ChannelMessageKind = (typeof CHANNEL_MESSAGE_KINDS)[number];
 
@@ -62,7 +70,22 @@ export interface ChannelAskedUser {
   status: 'posts_with_reply';
 }
 
-export type ChannelAskStatus = 'answered' | 'pending';
+/**
+ * - `pending`: waiting for the requester.
+ * - `answered`: the requester answered from the card.
+ * - `closed`: the run it held moved on without the card's answer (answered in the topic, timed
+ *   out, or ended); it can no longer be answered.
+ */
+export type ChannelAskStatus = 'answered' | 'closed' | 'pending';
+
+/**
+ * A question a heterogeneous Agent (Claude Code on a device) asked while its run is blocked on it.
+ * The answer goes back to that run instead of waking the Agent with a new request.
+ */
+export interface ChannelAskIntervention {
+  operationId: string;
+  toolCallId: string;
+}
 
 /** `metadata.ask` of an `ask` message. */
 export interface ChannelAsk extends ChannelAskInput {
@@ -79,6 +102,8 @@ export interface ChannelAsk extends ChannelAskInput {
    * questions, which a client rendering the card does not show again.
    */
   bodyLength: number;
+  /** Set when a blocked run asked it: the answer resumes that run. */
+  intervention?: ChannelAskIntervention;
   /** The member whose request the Agent was answering: the only one who may answer. */
   requesterMemberId: string;
   status: ChannelAskStatus;
@@ -122,7 +147,14 @@ export const channelMessageAsk = (
     bodyLength: typeof raw.bodyLength === 'number' && raw.bodyLength >= 0 ? raw.bodyLength : 0,
     questions: questions as ChannelAskQuestion[],
     requesterMemberId: raw.requesterMemberId,
-    status: raw.status === 'answered' ? 'answered' : 'pending',
+    status: raw.status === 'answered' || raw.status === 'closed' ? raw.status : 'pending',
+    ...(isString(raw.intervention?.operationId) &&
+      isString(raw.intervention?.toolCallId) && {
+        intervention: {
+          operationId: raw.intervention.operationId,
+          toolCallId: raw.intervention.toolCallId,
+        },
+      }),
     ...(answer &&
       answers &&
       isString(answer.memberId) &&
@@ -173,6 +205,23 @@ export const channelAskAnswerText = (
       return questions.length > 1 ? `${question.question}\n${value}` : value;
     })
     .join('\n\n');
+
+/**
+ * The answer in the shape a blocked heterogeneous run reads from its question card: each
+ * question's text maps to its pick (an array for multiple choice), the person's own words taking
+ * the place of a pick or joining the picked ones.
+ */
+export const channelAskInterventionResult = (
+  { questions }: ChannelAskInput,
+  answers: ChannelAskAnswerItem[],
+): Record<string, string | string[]> =>
+  Object.fromEntries(
+    questions.map((question, index) => {
+      const { other, selected } = answers[index] ?? { selected: [] };
+      const picked = [...selected, ...(other?.trim() ? [other.trim()] : [])];
+      return [question.question, question.multiSelect ? picked : (picked[0] ?? '')];
+    }),
+  );
 
 /**
  * Checks an answer against its questions: picked labels must be options, a single-choice

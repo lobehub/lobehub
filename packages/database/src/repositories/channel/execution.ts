@@ -3,9 +3,14 @@ import type {
   ChannelAsk,
   ChannelContextMessage,
   ChannelJobStatus,
+  ChannelMessageSurface,
   ChannelReplyError,
 } from '@lobechat/types';
-import { channelAskFallbackText, channelMessageReplyError } from '@lobechat/types';
+import {
+  channelAskFallbackText,
+  channelMessageReplyError,
+  channelSurfacesText,
+} from '@lobechat/types';
 import { and, asc, desc, eq, gt, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 
 import type { ChannelJobItem } from '../../schemas';
@@ -21,7 +26,7 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import type { ChannelClaim, ChannelClaimOptions } from './claim';
-import { claimJob } from './claim';
+import { claimJob, notAwaitingAccess } from './claim';
 import { activeMembers, appendMessage, deliver } from './delivery';
 import { ChannelError } from './error';
 import { countManifestMessages, readManifestMessages } from './manifest';
@@ -228,7 +233,7 @@ export class ChannelExecutionRepository {
    * cannot crowd out the other members, and one busy branch never holds back another.
    */
   candidates = async (channelId: string, limit = 100) => {
-    const [inFlight, heads] = await Promise.all([
+    const [inFlight, heads, awaitingAccess] = await Promise.all([
       this.db
         .select()
         .from(channelJobs)
@@ -247,7 +252,13 @@ export class ChannelExecutionRepository {
         .selectDistinctOn([channelJobs.memberId, channelJobs.threadId], { job: channelJobs })
         .from(channelJobs)
         .innerJoin(channelMessages, eq(channelMessages.id, channelJobs.messageId))
-        .where(and(eq(channelJobs.channelId, channelId), eq(channelJobs.status, 'queued')))
+        .where(
+          and(
+            eq(channelJobs.channelId, channelId),
+            eq(channelJobs.status, 'queued'),
+            notAwaitingAccess(),
+          ),
+        )
         // Same order as the head check in claimJob.
         .orderBy(
           channelJobs.memberId,
@@ -255,11 +266,25 @@ export class ChannelExecutionRepository {
           asc(channelMessages.sequence),
           asc(channelJobs.createdAt),
         ),
+      // Out of the queue order while their requester waits for the Agent owner's answer, so each
+      // is tried on its own: the answer moves it on.
+      this.db
+        .select()
+        .from(channelJobs)
+        .where(
+          and(
+            eq(channelJobs.channelId, channelId),
+            eq(channelJobs.status, 'queued'),
+            eq(channelJobs.blockedCode, 'access_request_pending'),
+          ),
+        )
+        .orderBy(asc(channelJobs.createdAt))
+        .limit(limit),
     ]);
     return {
-      heads: heads
-        .map(({ job }) => job)
-        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
+      heads: [...heads.map(({ job }) => job), ...awaitingAccess].sort(
+        (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+      ),
       inFlight,
     };
   };
@@ -521,7 +546,12 @@ export class ChannelExecutionRepository {
    * Publishes the saved draft as the member's reply and completes the job. Idempotent: a
    * second call returns the same message id.
    */
-  publish = async (channelId: string, jobId: string): Promise<string> =>
+  publish = async (
+    channelId: string,
+    jobId: string,
+    /** Cards the run drew; they go out with its reply and keep their text in its content. */
+    surfaces: ChannelMessageSurface[] = [],
+  ): Promise<string> =>
     withChannelLock(this.db, channelId, async (tx) => {
       const job = await claimed(tx, channelId, jobId);
       if (job.publishedMessageId) return job.publishedMessageId;
@@ -552,9 +582,26 @@ export class ChannelExecutionRepository {
             status: 'pending',
           }
         : undefined;
+      const carded = !!ask || surfaces.length > 0;
       const published = {
-        content: ask ? [body, channelAskFallbackText(ask)].filter(Boolean).join('\n\n') : job.draft,
-        ...(ask && { kind: 'ask' as const, metadata: { ask } }),
+        // Cards keep a text form after the reply's own words, read by everything that can't
+        // draw them (previews, notifications, an Agent reading history); views show only the body.
+        content: carded
+          ? [
+              body,
+              surfaces.length > 0 ? channelSurfacesText(surfaces) : '',
+              ask ? channelAskFallbackText(ask) : '',
+            ]
+              .filter(Boolean)
+              .join('\n\n')
+          : job.draft,
+        ...(ask && { kind: 'ask' as const }),
+        ...(carded && {
+          metadata: {
+            ...(ask && { ask }),
+            ...(surfaces.length > 0 && { surfaces, surfacesBodyLength: body.length }),
+          },
+        }),
       };
       // A card from an earlier failure of this job is replaced by the reply, in the same slot.
       const reply =

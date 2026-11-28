@@ -56,6 +56,7 @@ import { isAgentSignalEnabledForUser } from '@/server/services/agentSignal/featu
 import { resolveUnsupportedMessageApis } from '@/server/services/bot/platforms/messageCapabilities';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
+import { buildPluginMcpParams } from '@/server/services/mcp/pluginParams';
 
 import { buildAllowedBuiltinTools } from '../../deviceToolRegistry';
 import { applyFrozenEvalManifests } from '../../evalGate/frozenManifests';
@@ -161,6 +162,9 @@ export const discoverTools = async (
   const toolSourceMap: Record<string, ToolSource> = {};
   const toolExecutorMap: Record<string, ToolExecutor> = {};
   let onlineDevices: DeviceAttachment[] = [];
+  // Managed cloud devices without a live connection: always online for the
+  // model (listed in the device tool's prompt), not for routing.
+  let sleepingCloudDevices: DeviceAttachment[] = [];
   let activeDeviceId: string | undefined;
   let activeDeviceScope: 'personal' | 'workspace' | undefined;
   let executionPlan: ExecutionPlan | undefined;
@@ -439,9 +443,14 @@ export const discoverTools = async (
     // PENDING/EXPIRED row through here exposes the full tool schema with no
     // Composio source, so every call falls to the builtin executor and fails
     // as "not implemented".
-    let pluginsWithoutConnectors = installedPlugins.filter(
-      (p) => !connectorIdentifierSet.has(p.identifier) && !p.customParams?.composio,
-    );
+    let pluginsWithoutConnectors = installedPlugins
+      .filter((p) => !connectorIdentifierSet.has(p.identifier) && !p.customParams?.composio)
+      .map((plugin) => {
+        const mcpParams = buildPluginMcpParams(plugin);
+        return mcpParams && plugin.manifest
+          ? { ...plugin, manifest: { ...plugin.manifest, type: 'mcp' as const, mcpParams } }
+          : plugin;
+      });
     log('execAgent: got %d connector manifests', connectorManifests.length);
 
     // 5b. Get model abilities from model-bank for function calling support check
@@ -495,7 +504,7 @@ export const discoverTools = async (
     const gatewayConfigured = deviceGateway.isConfigured;
     const agentBoundDeviceId = agentConfig.agencyConfig?.boundDeviceId;
     const boundDeviceId = topicBoundDeviceId || agentBoundDeviceId;
-    onlineDevices = await toolReads.devicePool;
+    ({ online: onlineDevices, sleepingCloud: sleepingCloudDevices } = await toolReads.devicePool);
     const deviceOnline = onlineDevices.length > 0;
 
     const toolsContext: ServerAgentToolsContext = {
@@ -882,7 +891,7 @@ export const discoverTools = async (
   if (canUseDevice && toolManifestMap[RemoteDeviceManifest.identifier]) {
     toolManifestMap[RemoteDeviceManifest.identifier] = {
       ...toolManifestMap[RemoteDeviceManifest.identifier],
-      systemRole: generateSystemPrompt(onlineDevices),
+      systemRole: generateSystemPrompt([...onlineDevices, ...sleepingCloudDevices]),
     };
   }
 

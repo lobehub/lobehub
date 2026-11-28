@@ -8,6 +8,7 @@ import { mergeQueuedMessages, type QueuedMessage } from '@/store/chat/slices/ope
 import { type ChatStore, useChatStore } from '@/store/chat/store';
 
 import { getFollowUpMode } from '../../lifecycle/followUpMode';
+import { watchSteerRestart } from '../../lifecycle/steerRestart';
 import { canSteerClientRun } from '../client/clientSteer';
 
 const log = debug('lobe-store:local-steer');
@@ -109,6 +110,7 @@ export const createLocalSteer = (options: LocalSteerOptions) => {
   const markUnsupported = () => {
     stopped = true;
     get().updateOperationMetadata(operationId, { liveSteer: false, steerUnsupported: true });
+    void watchSteerRestart({ context, contextKey, get, operationId });
   };
 
   let startupTimer: ReturnType<typeof setTimeout> | undefined;
@@ -301,7 +303,8 @@ export type LocalSteer = ReturnType<typeof createLocalSteer>;
 /**
  * Set up steering for a local heterogeneous run when the Follow-up behavior is
  * Steer. A runtime with no native steer is marked instead, so the tray says
- * its queue waits for the run end.
+ * its queue waits for the run end, or — with "restart agents that can't steer"
+ * on — the run is stopped and restarted with what waits (`watchSteerRestart`).
  */
 export const startLocalSteer = (
   options: Omit<LocalSteerOptions, 'subscribe'> & {
@@ -311,9 +314,10 @@ export const startLocalSteer = (
 ): LocalSteer | undefined => {
   const mode = getFollowUpMode();
 
-  const { contextKey, get, operationId } = options;
+  const { context, contextKey, get, operationId } = options;
   if (!supportsLocalSteer(options.agentType, { codexAppServer: options.codexAppServer })) {
     get().updateOperationMetadata(operationId, { steerUnsupported: true });
+    void watchSteerRestart({ context, contextKey, get, operationId });
     return;
   }
   // Claude Code keeps its input open in every mode, but a run takes messages

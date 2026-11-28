@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 
 import StepStatusBox from '@/features/Conversation/components/StepStatusBox';
 
-import { hasToolResultBody } from '../toolResultBody';
+import { hasToolResultBody, isPendingMcpToolResult } from '../toolResultBody';
 
 interface StatusIndicatorProps {
   intervention?: ToolIntervention;
@@ -42,7 +42,7 @@ const StatusIndicator = memo<StatusIndicatorProps>(
     const hasError = !!result?.error;
     const hasSuccessResult = hasToolResultBody(result);
     const hasResult = hasSuccessResult || hasError;
-    const isPending = intervention?.status === 'pending';
+    const isPending = intervention?.status === 'pending' || isPendingMcpToolResult(result);
     const isReject = intervention?.status === 'rejected';
     const isAbort = intervention?.status === 'aborted';
 

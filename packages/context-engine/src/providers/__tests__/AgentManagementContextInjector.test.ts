@@ -67,6 +67,51 @@ describe('AgentManagementContextInjector', () => {
       expect(result.metadata.agentManagementContextInjected).toBe(true);
     });
 
+    it('renders vision, video and audio explicitly and explains absent abilities', async () => {
+      const injector = new AgentManagementContextInjector({
+        enabled: true,
+        context: {
+          availableProviders: [
+            {
+              id: 'deepseek',
+              name: 'DeepSeek',
+              models: [
+                {
+                  abilities: { functionCall: true, reasoning: true, vision: true },
+                  id: 'deepseek-flash',
+                  name: 'DeepSeek V4.1 Flash',
+                },
+                {
+                  abilities: { functionCall: true, reasoning: true },
+                  id: 'deepseek-v4-pro',
+                  name: 'DeepSeek V4 Pro',
+                },
+                { id: 'custom-no-metadata', name: 'Custom' },
+              ],
+            },
+          ],
+        },
+      });
+
+      const result = await injector.process(
+        createContext([{ role: 'user', content: 'create an agent' }]),
+      );
+      const content = result.messages[0].content as string;
+
+      expect(content).toContain(
+        '<model id="deepseek-flash" vision="true" video="false" audio="false" functionCall="true" reasoning="true">',
+      );
+      expect(content).toContain(
+        '<model id="deepseek-v4-pro" vision="false" video="false" audio="false" functionCall="true" reasoning="true">',
+      );
+      expect(content).toContain(
+        '<model id="custom-no-metadata" vision="false" video="false" audio="false">',
+      );
+      expect(content).toContain('absent (`functionCall`, `reasoning`, `files`) means unknown');
+      expect(content).toContain('not delivered in this workspace');
+      expect(content).toContain('lh model list <provider> --json');
+    });
+
     it('names the current agent and the available ones by name and title', async () => {
       const injector = new AgentManagementContextInjector({
         enabled: true,

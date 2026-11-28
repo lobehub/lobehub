@@ -199,7 +199,10 @@ export const redactCreatorPrivateBlob = <T>(value: T): T => {
 const VISITOR_SAFE_ERROR_TYPES = new Set<string>([
   ChatErrorType.ShareMessageLimitExceeded,
   ChatErrorType.ShareSpendLimitExceeded,
+  ChatErrorType.ShareFundingExhausted,
   ChatErrorType.SharePromptTooLong,
+  ChatErrorType.ShareAttachmentTooLarge,
+  ChatErrorType.ShareFileStorageExceeded,
   ChatErrorType.ShareHeterogeneousAgentUnsupported,
   ChatErrorType.ShareHeteroDeviceUnavailable,
   ChatErrorType.AgentShareProviderNotSupported,

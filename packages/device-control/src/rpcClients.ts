@@ -12,8 +12,9 @@ import type { DeviceRpcMethod } from './dispatch';
  * handler for them (no recoverable trash, no self-update), so a call that lands
  * on `lh connect` is rejected.
  *
- * `listMcpTools` is not listed: both clients run MCP servers, and the server
- * passes the client `resolveMcpClientKinds` picked for the device.
+ * `listMcpTools` and `readMcpUiResource` are not listed: both clients run MCP
+ * servers, and the server passes the client `resolveMcpClientKinds` picked for
+ * the device.
  */
 const DESKTOP_ONLY_RPC_METHODS: ReadonlySet<string> = new Set<DeviceRpcMethod>([
   'trashLocalFiles',

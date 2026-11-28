@@ -297,7 +297,7 @@ const TaskDetailHeaderActions = memo(() => {
         onClick={() => void toggleArchive()}
       />
       <DropdownMenu items={menuItems}>
-        <ActionIcon icon={MoreHorizontal} size={'small'} />
+        <ActionIcon icon={MoreHorizontal} size={headerActionSmallSize} />
       </DropdownMenu>
     </>
   );

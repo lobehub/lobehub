@@ -13,6 +13,7 @@ import {
 import type { LobeChatDatabase } from '../../type';
 import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
+import { agentAccessCards } from './agentAccess';
 import { isAgentAuthored } from './author';
 import { channelUserNameSql } from './nickname';
 import { isOpeningAck } from './openingAck';
@@ -48,11 +49,15 @@ const attachmentsByMessage = async (db: LobeChatDatabase, messageIds: string[]) 
  * preview stopped at the main conversation reads as nothing new. Trashed Threads are skipped.
  * A Thread is named by its title, else the first line of the message it branched from. The
  * sender and attachments come along, so a list can read "Me: [Image]". An Agent's pre-run
- * acknowledgement is marked `opening`, so a client can show it without announcing it.
+ * acknowledgement is marked `opening`, so a client can show it without announcing it. An Agent's
+ * access request card carries its request's current status for the Agent's owner, so their list
+ * can read "Allowed …" once they answered instead of the stored request text.
  */
 export const channelLastMessages = async (
   db: LobeChatDatabase,
   channelIds: string[],
+  /** The person reading the list; only the Agent's owner gets an access request's status. */
+  viewerUserId?: string,
 ): Promise<Map<string, ChannelLastMessage>> => {
   if (!channelIds.length) return new Map();
   const root = alias(channelMessages, 'thread_root');
@@ -68,6 +73,7 @@ export const channelLastMessages = async (
       content: sql<string>`left(${channelMessages.content}, ${LIST_PREVIEW_LENGTH})`,
       createdAt: channelMessages.createdAt,
       id: channelMessages.id,
+      metadata: channelMessages.metadata,
       opening: sql<boolean>`coalesce(${isOpeningAck}, false)`.mapWith(Boolean),
       routingStatus: channelMessages.routingStatus,
       threadId: channelMessages.threadId,
@@ -102,10 +108,13 @@ export const channelLastMessages = async (
     )
     .orderBy(channelMessages.channelId, desc(channelMessages.sequence));
 
-  const attachmentsOf = await attachmentsByMessage(
-    db,
-    latest.map(({ id }) => id),
-  );
+  const [attachmentsOf, accessCards] = await Promise.all([
+    attachmentsByMessage(
+      db,
+      latest.map(({ id }) => id),
+    ),
+    agentAccessCards(db, latest, viewerUserId),
+  ]);
 
   return new Map(
     latest.map((row) => {
@@ -113,6 +122,7 @@ export const channelLastMessages = async (
       return [
         row.channelId,
         {
+          agentAccess: accessCards.get(row.id) ?? null,
           attachments: attachmentsOf.get(row.id) ?? null,
           author: {
             id: isAgent ? row.agentId : row.userId,

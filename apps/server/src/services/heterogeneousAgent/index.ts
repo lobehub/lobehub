@@ -14,6 +14,10 @@ import { type ChatMessageError, ThreadStatus, ThreadType } from '@lobechat/types
 import debug from 'debug';
 
 import {
+  type AgentOutputSecretDetection,
+  onAgentOutputSecretsDetected,
+} from '@/business/server/agentOutputSecrets';
+import {
   AgentOperationModel,
   type HeteroIngestRejectionMarker,
   type HeteroIngestRejectionReason,
@@ -29,14 +33,17 @@ import type { OperationCompletionShareVisitor } from '@/server/services/agentRun
 import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 import { createDefaultSnapshotStore } from '@/server/services/agentRuntime/snapshotStore';
 import { releaseHeteroSteers } from '@/server/services/aiAgent/steerQueue/hetero';
+import { mirrorInterventionsToChannel } from '@/server/services/channel/interventionAsk';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 import { instantiateVerifyPlanOnStart } from '@/server/services/verify';
+import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import {
   HeterogeneousPersistenceHandler,
   StaleHeteroOperationError,
 } from './HeterogeneousPersistenceHandler';
 import { HeteroTraceRecorder } from './HeteroTraceRecorder';
+import { redactOutputSecrets } from './outputSecrets';
 import { settlePermissionModeReport } from './permissionModeReport';
 
 const log = debug('lobe-server:hetero-agent-service');
@@ -98,6 +105,9 @@ export interface HeterogeneousFinishParams {
 }
 
 type HeterogeneousFinishError = NonNullable<HeterogeneousFinishParams['error']>;
+
+const isInterventionEvent = (event: AgentStreamEvent) =>
+  event.type === 'agent_intervention_request' || event.type === 'agent_intervention_response';
 
 /**
  * A producer's clean `agent_runtime_end` must stay off the stream: heteroFinish
@@ -269,8 +279,30 @@ export class HeterogeneousAgentService {
       });
   }
 
+  /** Hand credentials found in a batch to the deployment, after the response. */
+  private reportOutputSecrets(
+    detection: Omit<AgentOutputSecretDetection, 'userId' | 'workspaceId'>,
+  ) {
+    log(
+      'heteroIngest: redacted %d credential(s) op=%s',
+      detection.secrets.length,
+      detection.operationId,
+    );
+    const { userId, workspaceId } = this;
+    afterUnscoped(() =>
+      onAgentOutputSecretsDetected({
+        ...detection,
+        userId,
+        ...(workspaceId ? { workspaceId } : {}),
+      }),
+    );
+  }
+
   async heteroIngest(params: HeterogeneousIngestParams): Promise<HeterogeneousIngestResult> {
-    const { agentType, assistantMessageId, events, operationId, topicId } = params;
+    const { agentType, assistantMessageId, operationId, topicId } = params;
+    // Credentials the agent printed never reach the DB, the trace or the stream.
+    const { events, secrets } = redactOutputSecrets(params.events);
+    if (secrets.length > 0) this.reportOutputSecrets({ agentType, operationId, secrets, topicId });
 
     log(
       'heteroIngest: user=%s topic=%s op=%s type=%s count=%d',
@@ -307,6 +339,11 @@ export class HeterogeneousAgentService {
       }
       throw err;
     }
+
+    // A run answering a Channel request asks its questions there too. Before publishing, so a
+    // topic card refetched on the request event already knows it is asked in the Channel.
+    if (events.some(isInterventionEvent))
+      await mirrorInterventionsToChannel(this.db, { events, operationId, topicId });
 
     // Publish only events not yet delivered to the stream. The publish gate
     // (`publishedKeys`, peer of the persistence dedupe) makes a BatchIngester
@@ -427,9 +464,15 @@ export class HeterogeneousAgentService {
     const rejection =
       reportedResult === 'success' ? await this.readIngestRejection(operationId) : undefined;
     const result: HeterogeneousFinishResult = rejection ? 'error' : reportedResult;
+    // The CLI sends its terminal error on its own, apart from the ingested
+    // events: redact it the same way before it is logged, stored or published.
+    const reported = params.error ? redactOutputSecrets([params.error]) : undefined;
+    if (reported?.secrets.length) {
+      this.reportOutputSecrets({ agentType, operationId, secrets: reported.secrets, topicId });
+    }
     const error = rejection
       ? buildIngestRejectionError(rejection)
-      : normalizeHeterogeneousFinishError(agentType, params.error);
+      : normalizeHeterogeneousFinishError(agentType, reported?.events[0]);
 
     if (rejection) {
       log(

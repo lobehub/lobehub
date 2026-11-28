@@ -925,6 +925,19 @@ export default {
   'channel.statusConnected': 'Connected',
   'channel.statusDisconnected': 'Disconnected',
   'channel.statusDormant': 'Dormant',
+  'channel.statusSleeping': 'Asleep',
+  'channel.sleep.title.waking': 'This bot fell asleep from disuse. Waking it up…',
+  'channel.sleep.title.woke': 'This bot fell asleep from disuse and has been woken up',
+  'channel.sleep.title.failed':
+    "This bot is asleep and couldn't be woken up. Refresh the page to try again.",
+  'channel.sleep.desc':
+    'Free plan bots go to sleep after two weeks without use; paid plans extend that to a month.',
+  'channel.sleep.descWithWebhook':
+    'Free plan bots go to sleep after two weeks without use; paid plans extend that to a month. Switch to Webhook mode to keep it always on.',
+  'channel.sleep.descLongest':
+    'Bots go to sleep after a month without use. Opening this page wakes it up.',
+  'channel.sleep.descLongestWithWebhook':
+    'Bots go to sleep after a month without use. Opening this page wakes it up; switch to Webhook mode to keep it always on.',
   'channel.statusFailed': 'Failed',
   'channel.statusQueued': 'Queued',
   'channel.statusStarting': 'Starting',
@@ -954,6 +967,8 @@ export default {
   'share.settings.limits.monthlySpendLimit': 'Monthly spend cap',
   'share.settings.limits.monthlySpendLimitHint':
     'Visitor runs stop once this month’s spend on this Agent reaches the cap. Resets on the 1st of each month (UTC).',
+  'share.settings.limits.monthlySpendLimitTipsHint':
+    'Caps what you pay for visitor runs each month. Visitors’ tips are spent first and don’t count toward it; set 0 to run on tips only. Resets on the 1st of each month (UTC).',
   'share.settings.limits.monthlySpendLimitUnit': 'USD',
   'share.settings.limits.saved': 'Limits saved',
   'share.settings.limits.title': 'Limits',
@@ -1082,10 +1097,23 @@ export default {
   'share.settings.permissions.visitorConversations.view': 'View conversations',
   'share.settings.permissions.visitorConversations.visitors_one': '{{count}} visitor',
   'share.settings.permissions.visitorConversations.visitors_other': '{{count}} visitors',
+  'share.settings.profile.demoCases.item': 'Example {{number}}',
+  'share.settings.profile.featuredWorks.select': 'Feature',
+  'share.settings.profile.featuredWorks.selected': 'Selected: {{count}} / 100',
   'share.settings.skills.autoGranted': 'Open automatically because this Agent can use it',
   'share.settings.tabs.access': 'Access',
   'share.settings.tabs.profile': 'Public profile',
   'share.settings.tabs.stats': 'Stats',
+  'share.settings.tips.desc':
+    'Visitors can tip this Agent $5, $10 or $20. Tips pay for visitor runs before your own credits. They can’t be withdrawn, expire 6 months after they’re given, and are lost if you permanently delete the Agent.',
+  'share.settings.tips.emptyForfeit':
+    'The Agents being deleted still hold {{amount}} in visitor tips. Emptying the trash forfeits them, and they can’t be refunded.',
+  'share.settings.tips.enabled': 'Show the tip button',
+  'share.settings.tips.enabledHint':
+    'Turning it off only hides the button. Tips already given keep paying for visitor runs.',
+  'share.settings.tips.purgeForfeit':
+    'This Agent still holds {{amount}} in visitor tips. Deleting it permanently forfeits them, and they can’t be refunded.',
+  'share.settings.tips.title': 'Visitor tips',
   'share.settings.title': 'Share Agent',
   'share.settings.tools.autoGranted': 'Open automatically because it’s turned on in this Agent',
   'share.settings.usage.conversations': 'Topics',
@@ -1104,6 +1132,16 @@ export default {
   'share.settings.usage.spendOfLimit': '${{spend}} of ${{limit}}',
   'share.settings.usage.spendOfLimitCredits': '{{spend}} of {{limit}}',
   'share.settings.usage.title': 'Usage',
+  'share.settings.usage.tips.balance': 'Tips left',
+  'share.settings.usage.tips.balanceHint': 'Spent on visitor runs before your own credits.',
+  'share.settings.usage.tips.desc':
+    'What visitors have tipped this Agent. You never see who tipped.',
+  'share.settings.usage.tips.lifetime': 'Tipped in total',
+  'share.settings.usage.tips.lifetimeHint': 'Refunded and disputed tips excluded.',
+  'share.settings.usage.tips.loadFailed': 'Tips could not be loaded',
+  'share.settings.usage.tips.monthSpend': 'Paid by tips this month',
+  'share.settings.usage.tips.monthSpendHint': 'Not counted toward your monthly spend cap.',
+  'share.settings.usage.tips.title': 'Tips',
   'share.settings.usage.views': 'Page views',
   'share.settings.usage.viewsHint': 'Repeat views included. Your own previews are excluded.',
   'share.settings.usage.visitors': 'Users',
@@ -1233,6 +1271,20 @@ export default {
   'share.visitor.profile.terms.visibilityCreator':
     'The creator has turned on topic access and may read the messages in your topics.',
   'share.visitor.profile.terms.visibilityPrivate': 'Only you can see your topics.',
+  'share.visitor.tip.action': 'Tip',
+  'share.visitor.tip.checkoutFailed': 'Couldn’t open the payment page. Please try again.',
+  'share.visitor.tip.confirmFailed':
+    'We couldn’t confirm your tip yet. If it doesn’t show up soon, contact support.',
+  'share.visitor.tip.continue': 'Leave a tip',
+  'share.visitor.tip.desc':
+    'Your tip pays for the conversations visitors have with this Agent, yours included. Tips can’t be withdrawn and expire 6 months after payment.',
+  'share.visitor.tip.processing': 'Your payment is processing. The tip is added once it clears.',
+  'share.visitor.tip.refunded':
+    'This Agent was deleted before your payment went through, so it has been refunded.',
+  'share.visitor.tip.thanks': 'Thanks for your tip! The Agent can keep replying to visitors.',
+  'share.visitor.tip.tipped': 'You’ve tipped {{amount}} so far',
+  'share.visitor.tip.title': 'Tip this Agent',
+  'share.visitor.tip.unavailable': 'This Agent isn’t accepting tips right now.',
   'share.visitor.topBar.home': 'Go to my LobeHub',
   'share.visitor.upload.creatorStorageBlocked':
     "This Agent's upload space is full. Ask its creator to free up room or raise the cap.",
@@ -1250,7 +1302,7 @@ export default {
   'transfer.confirm.desc':
     'This will move the agent and all associated data (topics, messages, files, etc.) to the target workspace.',
   'transfer.confirm.warning': "Some links won't move:",
-  'transfer.confirm.plugins': 'Custom plugins may not be available in the target workspace',
+  'transfer.confirm.plugins': 'Custom connectors may not be available in the target workspace',
   'transfer.confirm.chatGroups': 'Multi-agent group associations will be removed',
   'transfer.confirm.botChannels': 'Bot connections may need to be refreshed after moving',
   'transfer.success': 'Agent moved successfully',
@@ -1359,7 +1411,6 @@ export default {
   'share.settings.profile.saveError': 'Could not save. Your draft is preserved. Try again.',
   'share.settings.profile.invalid':
     'Each example needs a task prompt. Keep at most 20 examples and 100 featured works.',
-  'share.settings.profile.demoCases.item': 'Example {{number}}',
   'share.settings.profile.demoCases.promptLabel': 'Task prompt (required)',
   'share.settings.profile.demoCases.promptHint':
     'Shown as the example title. Clicking it fills the visitor’s chat input without sending.',
@@ -1380,18 +1431,38 @@ export default {
   'share.settings.profile.featuredWorks.title': 'Featured works',
   'share.settings.profile.featuredWorks.desc':
     'Choose this agent’s works to showcase. Visitor works are never included.',
-  'share.settings.profile.featuredWorks.selected': 'Selected: {{count}} / 100',
-  'share.settings.profile.featuredWorks.select': 'Feature',
   'share.settings.profile.featuredWorks.withdraw': 'Remove',
   'share.settings.profile.featuredWorks.empty':
     'No eligible works yet. Create a work with this agent first.',
   'share.settings.profile.featuredWorks.loadFailed': 'Could not load works. Try again.',
   'share.settings.profile.featuredWorks.reload': 'Retry',
   'share.settings.profile.featuredWorks.loadMore': 'Load more works',
+  'share.workFeatured.feature': 'Show on share page',
+  'share.workFeatured.unfeature': 'Remove from share page',
+  'share.workFeatured.featured': 'Now shown on the share page',
+  'share.workFeatured.onPage': 'On share page',
+  'share.workFeatured.unfeatured': 'Removed from the share page',
+  'share.workFeatured.limit': 'Up to 100 Works on the share page',
+  'share.workFeatured.failed': 'Couldn’t update the share page. Try again.',
   'share.settings.profile.featuredWorks.unavailable': 'Unavailable work',
   'share.settings.profile.unsaved':
     'You have unsaved changes. Visitors will only see them after you save.',
   'share.settings.profile.upToDate': 'Visitors see the saved content.',
+  'share.settings.profile.demoCases.untitled': 'No task prompt yet',
+  'share.settings.profile.discard': 'Discard changes',
+  'share.settings.profile.featuredWorks.pick': 'Choose works',
+  'share.settings.profile.featuredWorks.pickConfirm': 'Done',
+  'share.settings.profile.featuredWorks.pickTitle': 'Choose featured works',
+  'share.settings.profile.preview.desktop': 'Desktop',
+  'share.settings.profile.preview.draft': 'Draft',
+  'share.settings.profile.preview.loadFailed': 'Could not load the preview.',
+  'share.settings.profile.preview.mobile': 'Mobile',
+  'share.settings.profile.preview.open': 'Open the published page',
+  'share.settings.profile.preview.published': 'Published',
+  'share.settings.profile.preview.retry': 'Retry',
+  'share.settings.profile.preview.show': 'Preview',
+  'share.settings.profile.preview.title': 'Visitor preview',
+  'share.settings.profile.preview.unsaved': 'Unsaved changes',
   'webhook.actions.delete': 'Delete',
   'webhook.actions.deliveries': 'Recent calls',
   'webhook.actions.edit': 'Edit',

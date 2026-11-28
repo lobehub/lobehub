@@ -10,16 +10,12 @@
   "discover.mcp.title": "MCP Sunucusu Pazar Yeri",
   "discover.models.description": "OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek gibi yaygın yapay zeka modellerini keşfedin",
   "discover.models.title": "Model Pazar Yeri",
-  "discover.plugins.description": "Grafikler, akademik araçlar, görsel/video/ses üretimi ve iş akışları—Ajanlarınıza Yetenekler ekleyin.",
-  "discover.plugins.title": "Beceri Pazar Yeri",
   "discover.providers.description": "OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter gibi önde gelen model sağlayıcılarını keşfedin",
   "discover.providers.title": "Sağlayıcı Pazar Yeri",
   "discover.search": "Ara",
   "discover.title": "Pazar Yeri",
   "image.description": "{{appName}}, GPT Image, Flux, Midjourney ve Stable Diffusion ile en iyi deneyimi sunar",
   "image.title": "Yapay Zeka Sanatı",
-  "plugins.description": "Arama, grafikler, akademik araçlar, görsel/video/ses üretimi, iş akışları—Ajanlarınıza Yetenekler ekleyin.",
-  "plugins.title": "Beceri Pazar Yeri",
   "welcome.description": "{{appName}}, ChatGPT, Claude, Gemini ve OLLaMA için en iyi kullanıcı arayüzü deneyimini sunar.",
   "welcome.title": "{{appName}}'e Hoş Geldiniz · İş Birlikçi Ajanlar İçin"
 }

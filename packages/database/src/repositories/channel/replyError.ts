@@ -41,7 +41,14 @@ export interface ChannelReplyErrorFacts {
   deviceId: string | null;
   job: Pick<
     ChannelJobItem,
-    'acceptedAt' | 'id' | 'messageId' | 'operationId' | 'status' | 'threadId' | 'topicId'
+    | 'acceptedAt'
+    | 'blockedCode'
+    | 'id'
+    | 'messageId'
+    | 'operationId'
+    | 'status'
+    | 'threadId'
+    | 'topicId'
   >;
   operation: {
     error: AgentOperationError | null;
@@ -156,6 +163,8 @@ export const readReplyErrorFacts = async (
     deviceId: row.deviceId,
     job: {
       acceptedAt: job.acceptedAt,
+      // A failed job keeps a code only when it never ran: its owner declined its requester.
+      blockedCode: job.blockedCode,
       id: job.id,
       messageId: job.messageId,
       operationId: job.operationId,

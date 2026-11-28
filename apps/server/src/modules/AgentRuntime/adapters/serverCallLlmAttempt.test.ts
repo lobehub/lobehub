@@ -1,7 +1,9 @@
 import type { AgentEvent, BlobStore } from '@lobechat/agent-runtime';
 import { ToolNameResolver } from '@lobechat/context-engine';
 import type { ChatMethodOptions, ModelRuntime } from '@lobechat/model-runtime';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { runWithInvocationDeadline } from '@/server/utils/invocationDeadline';
 
 import type { RuntimeExecutorContext } from '../context';
 import { formatErrorForState } from '../formatErrorForState';
@@ -26,13 +28,19 @@ vi.mock('@lobechat/model-runtime', async () => {
     await import('../../../../../../packages/model-runtime/src/errors/modelRefusal');
   const { consumeStreamUntilDone } =
     await import('../../../../../../packages/model-runtime/src/utils/consumeStream');
+  const { cacheTTLToSeconds } =
+    await import('../../../../../../packages/model-runtime/src/core/protocols/anthropicMessages/resolveCacheTTL');
+  const { resolveImplicitCacheTTLSeconds } =
+    await import('../../../../../../packages/model-runtime/src/utils/implicitCacheTTL');
 
   return {
+    cacheTTLToSeconds,
     consumeStreamUntilDone,
     isEmptyModelCompletion,
     isModelRefusalFinishReason,
     ModelEmptyError,
     ModelRefusalError,
+    resolveImplicitCacheTTLSeconds,
   };
 });
 
@@ -69,6 +77,8 @@ const createAttempt = (
   attemptOverrides?: {
     clientIp?: string;
     agentShareVisitorIds?: { agentId: string; shareId: string; visitorUserId: string };
+    enforceInvocationDeadline?: boolean;
+    model?: string;
     userAgent?: string;
   },
   abortSignal?: AbortSignal,
@@ -192,6 +202,84 @@ describe('ServerCallLlmAttempt', () => {
       2,
       expect.objectContaining({ chunkType: 'tools_calling' }),
     );
+  });
+
+  it('records the requested prompt-cache lifetime from the completion pricing options', async () => {
+    vi.useFakeTimers({ now: 1_700_000_000_000, toFake: ['Date'] });
+    try {
+      const { attempt } = createAttempt(async ({ callback }) => {
+        await callback?.onText?.('Answer');
+        await callback?.onCompletion?.({
+          pricingOptions: { lookupParams: { ttl: '1h' } },
+          text: '',
+          usage: { totalOutputTokens: 1 },
+        });
+      });
+
+      await attempt.execute();
+
+      expect(attempt.snapshot().promptCache).toEqual({
+        requestStartedAt: 1_700_000_000_000,
+        ttlSeconds: 3600,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('records no prompt-cache lifetime when the request did not ask for caching', async () => {
+    const { attempt } = createAttempt(async ({ callback }) => {
+      await callback?.onText?.('Answer');
+      await callback?.onCompletion?.({ text: '', usage: { totalOutputTokens: 1 } });
+    });
+
+    await attempt.execute();
+
+    expect(attempt.snapshot().promptCache).toBeUndefined();
+  });
+
+  it('records the implicit cache lifetime of a family whose reply read from cache', async () => {
+    vi.useFakeTimers({ now: 1_700_000_000_000, toFake: ['Date'] });
+    try {
+      const { attempt } = createAttempt(
+        async ({ callback }) => {
+          await callback?.onText?.('Answer');
+          await callback?.onCompletion?.({
+            text: '',
+            usage: { inputCachedTokens: 9000, totalInputTokens: 10_000, totalOutputTokens: 1 },
+          });
+        },
+        undefined,
+        { model: 'gpt-6.2-sol' },
+      );
+
+      await attempt.execute();
+
+      expect(attempt.snapshot().promptCache).toEqual({
+        requestStartedAt: 1_700_000_000_000,
+        ttlSeconds: 3600,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('records no implicit lifetime when the reply shows the channel did not cache', async () => {
+    const { attempt } = createAttempt(
+      async ({ callback }) => {
+        await callback?.onText?.('Answer');
+        await callback?.onCompletion?.({
+          text: '',
+          usage: { totalInputTokens: 10_000, totalOutputTokens: 1 },
+        });
+      },
+      undefined,
+      { model: 'gpt-6.2-sol' },
+    );
+
+    await attempt.execute();
+
+    expect(attempt.snapshot().promptCache).toBeUndefined();
   });
 
   it('forwards clientIp / userAgent into the chat call metadata when provided', async () => {
@@ -748,5 +836,78 @@ describe('ServerCallLlmAttempt', () => {
         },
       }),
     );
+  });
+
+  describe('invocation deadline', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /** Stream some output, then hang until the call is aborted. */
+    const streamUntilAborted =
+      (onAbort: 'end' | 'throw') =>
+      async ({ callback, signal }: ChatMethodOptions) => {
+        await callback?.onThinking?.('Long reasoning');
+        await callback?.onText?.('Partial answer');
+        await new Promise<void>((resolve, reject) => {
+          signal?.addEventListener('abort', () =>
+            onAbort === 'throw' ? reject(signal.reason) : resolve(),
+          );
+        });
+      };
+
+    const runNearDeadline = async (attempt: { execute: () => Promise<void> }) => {
+      // 100s left: the call must stop 60s before the host kills the invocation.
+      const run = runWithInvocationDeadline(Date.now() + 100_000, () => attempt.execute());
+      const settled = run.catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(39_999);
+      await vi.advanceTimersByTimeAsync(1);
+      return settled;
+    };
+
+    it('stops a still-streaming call before the host kills the invocation', async () => {
+      const { attempt, handleChatStreamError } = createAttempt(
+        streamUntilAborted('throw'),
+        undefined,
+        { enforceInvocationDeadline: true },
+      );
+
+      const error = await runNearDeadline(attempt);
+
+      expect(error).toMatchObject({ errorType: 'LlmStepTimeout', provider: 'test-provider' });
+      // Partial output stays available so it can be kept on the message.
+      expect(attempt.snapshot()).toMatchObject({
+        content: 'Partial answer',
+        thinkingContent: 'Long reasoning',
+      });
+      expect(recordModelCompletionFailureMock).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'stream_error' }),
+      );
+      expect(handleChatStreamError).not.toHaveBeenCalled();
+    });
+
+    it('does not treat a stream that ends cleanly on abort as a completed turn', async () => {
+      const { attempt } = createAttempt(streamUntilAborted('end'), undefined, {
+        enforceInvocationDeadline: true,
+      });
+
+      const error = await runNearDeadline(attempt);
+
+      expect(error).toMatchObject({ errorType: 'LlmStepTimeout' });
+    });
+
+    it('leaves the call alone when deadline enforcement is off', async () => {
+      const { attempt, chat } = createAttempt(async ({ callback }) => {
+        await callback?.onText?.('Answer');
+      });
+
+      await runWithInvocationDeadline(Date.now() + 100_000, () => attempt.execute());
+
+      expect(chat.mock.calls[0][1]?.signal).toBeUndefined();
+    });
   });
 });

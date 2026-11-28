@@ -12,6 +12,7 @@ import {
 import { createProjectMainAgent } from '../../models/projectMainAgent';
 import { projectAgents, projectCompletionReviews } from '../../schemas/project';
 import type { LobeChatDatabase } from '../../type';
+import { nameChannelsAfterDeletedProject } from '../channel/displayTitle';
 import { ProjectEnvironmentRepository } from '../projectEnvironment';
 
 /**
@@ -108,7 +109,9 @@ export class ProjectRepository {
   /**
    * Deletes a project and retires a coordinator provisioned for it: a virtual,
    * non-builtin agent no other project still uses. Reusable agents (user agents,
-   * LobeAI) stay with their sessions intact.
+   * LobeAI) stay with their sessions intact. Its Channels stay as standalone
+   * ones; those still titled `General` take the project's name first, so they
+   * remain recognizable outside it.
    */
   async delete(id: string) {
     return this.db.transaction(async (tx) => {
@@ -117,6 +120,7 @@ export class ProjectRepository {
       const project = await projectModel.findManageableById(id);
       if (!project) return null;
 
+      await nameChannelsAfterDeletedProject(db, id, project.name);
       // Also releases the project's environment (see `ProjectModel.delete`).
       const deleted = await projectModel.delete(id);
       // Asked after the delete, so this project no longer counts as one still using it.

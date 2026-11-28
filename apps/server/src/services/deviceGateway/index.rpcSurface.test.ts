@@ -75,22 +75,6 @@ const repo = { name: 'repo', owner: 'owner' };
 const env = { TOKEN: 'x' };
 
 const cases: RpcCase[] = [
-  {
-    address: address(30_000),
-    call: (g) =>
-      g.antigravityQuota({
-        ...base,
-        command: '/bin/agy',
-        env: { AGY_PROFILE: 'test' },
-        force: true,
-      }),
-    failure: UNDEFINED,
-    name: 'antigravityQuota',
-    payload: {
-      method: 'getAntigravityQuota',
-      params: { command: '/bin/agy', env: { AGY_PROFILE: 'test' }, force: true },
-    },
-  },
   // ─── git reads ───
   {
     address: address(15_000),

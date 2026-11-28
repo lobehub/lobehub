@@ -82,6 +82,12 @@ export interface McpAppViewProps {
     preferred?: 'inline' | 'fullscreen';
     retireOnRemove: () => boolean;
   };
+  /**
+   * The device the server relayed the result from (`mcpApp.relayDeviceId`):
+   * the view is read, and calls, through the server, on that device.
+   */
+  relayDeviceId?: string;
+  relayWorkspaceId?: string;
   resourceUri: string;
   /** Tool call result envelope (`{ content, state, success }`). */
   result: { content: string; state?: any };
@@ -104,6 +110,8 @@ const McpAppView = memo<McpAppViewProps>(
     linkId,
     presentation,
     onThisDevice = false,
+    relayDeviceId,
+    relayWorkspaceId,
     resourceUri,
     result,
     server,
@@ -125,6 +133,8 @@ const McpAppView = memo<McpAppViewProps>(
       agentId,
       linkId,
       onThisDevice,
+      relayDeviceId,
+      relayWorkspaceId,
       server,
       toolArguments: args,
       topicId,
@@ -186,6 +196,8 @@ const McpAppView = memo<McpAppViewProps>(
       isDark,
       linkId,
       onThisDevice,
+      relayDeviceId,
+      relayWorkspaceId,
       result,
       sendMessage,
       server,
