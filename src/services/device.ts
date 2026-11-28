@@ -5,7 +5,11 @@ import type {
   DeviceScope,
 } from '@lobechat/types';
 
-import { createWorkspaceLambdaClient, lambdaClient } from '@/libs/trpc/client';
+import {
+  createKeepaliveLambdaClient,
+  createWorkspaceLambdaClient,
+  lambdaClient,
+} from '@/libs/trpc/client';
 import { type TopicListItem } from '@/services/topic';
 
 type DeviceClient = typeof lambdaClient.device;
@@ -14,6 +18,15 @@ type DeviceClient = typeof lambdaClient.device;
 export interface DeviceRunningTopic extends TopicListItem {
   user: DeviceEnroller | null;
 }
+
+/**
+ * The client a terminal call goes through. A caller that knows the device's
+ * scope pins it, so a personal device's shell is reached even while a
+ * workspace is active; without one the call follows the active workspace.
+ */
+let personalClient: ReturnType<typeof createWorkspaceLambdaClient> | undefined;
+const terminalClient = (scope?: DeviceScope) =>
+  scope === 'personal' ? (personalClient ??= createWorkspaceLambdaClient(null)) : lambdaClient;
 
 /**
  * Single chokepoint for the `device` TRPC router. Components, hooks and stores
@@ -193,24 +206,48 @@ class DeviceService {
    * `closeTerminal` to end it. Polling rather than streaming is deliberate —
    * see `@lobechat/device-control`'s terminal types.
    */
-  createTerminalSession(input: Parameters<DeviceClient['createTerminalSession']['mutate']>[0]) {
-    return lambdaClient.device.createTerminalSession.mutate(input);
+  createTerminalSession(
+    input: Parameters<DeviceClient['createTerminalSession']['mutate']>[0],
+    scope?: DeviceScope,
+  ) {
+    return terminalClient(scope).device.createTerminalSession.mutate(input);
   }
 
-  writeTerminal(input: Parameters<DeviceClient['writeTerminal']['mutate']>[0]) {
-    return lambdaClient.device.writeTerminal.mutate(input);
+  writeTerminal(
+    input: Parameters<DeviceClient['writeTerminal']['mutate']>[0],
+    scope?: DeviceScope,
+  ) {
+    return terminalClient(scope).device.writeTerminal.mutate(input);
   }
 
-  readTerminal(input: Parameters<DeviceClient['readTerminal']['mutate']>[0]) {
-    return lambdaClient.device.readTerminal.mutate(input);
+  readTerminal(input: Parameters<DeviceClient['readTerminal']['mutate']>[0], scope?: DeviceScope) {
+    return terminalClient(scope).device.readTerminal.mutate(input);
   }
 
-  resizeTerminal(input: Parameters<DeviceClient['resizeTerminal']['mutate']>[0]) {
-    return lambdaClient.device.resizeTerminal.mutate(input);
+  resizeTerminal(
+    input: Parameters<DeviceClient['resizeTerminal']['mutate']>[0],
+    scope?: DeviceScope,
+  ) {
+    return terminalClient(scope).device.resizeTerminal.mutate(input);
   }
 
-  closeTerminal(input: Parameters<DeviceClient['closeTerminal']['mutate']>[0]) {
-    return lambdaClient.device.closeTerminal.mutate(input);
+  closeTerminal(
+    input: Parameters<DeviceClient['closeTerminal']['mutate']>[0],
+    options: { scope?: DeviceScope } = {},
+  ) {
+    return terminalClient(options.scope).device.closeTerminal.mutate(input);
+  }
+
+  /**
+   * A `closeTerminal` that still arrives after the page is gone, for ending a
+   * shell from `pagehide`, when an ordinary request is cancelled with the tab.
+   * Prepare it while the page is alive: only a call made from the ready closer
+   * starts its request before the page unloads.
+   */
+  async prepareCloseTerminalOnUnload(scope?: DeviceScope) {
+    const client = await createKeepaliveLambdaClient(scope === 'personal' ? null : undefined);
+    return (input: Parameters<DeviceClient['closeTerminal']['mutate']>[0]) =>
+      client.device.closeTerminal.mutate(input);
   }
 
   /** The device's recent CPU / memory / load history, bucketed for charting. */

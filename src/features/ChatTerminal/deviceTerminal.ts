@@ -1,4 +1,4 @@
-import type { DeviceClient } from '@lobechat/types';
+import type { DeviceClient, DeviceScope } from '@lobechat/types';
 import debug from 'debug';
 
 import { deviceService } from '@/services/device';
@@ -42,6 +42,12 @@ const decodeBase64 = (base64: string): string => {
   return new TextDecoder().decode(bytes);
 };
 
+type UnloadCloser = (input: {
+  client?: DeviceClient;
+  deviceId: string;
+  id: string;
+}) => Promise<unknown>;
+
 interface DeviceTerminalInfo {
   /** The device client hosting the shell; every later call is kept on it. */
   client?: DeviceClient;
@@ -84,6 +90,10 @@ export class DeviceTerminalSession {
   private constructor(
     readonly deviceId: string,
     readonly info: DeviceTerminalInfo,
+    /** Pins every call to the device's scope; absent follows the active workspace. */
+    private readonly scope?: DeviceScope,
+    /** Ends the shell from `pagehide` (see {@link disposeOnUnload}); absent if it failed to prepare. */
+    private readonly closeOnUnload?: UnloadCloser,
   ) {}
 
   /**
@@ -94,12 +104,23 @@ export class DeviceTerminalSession {
   static async open(
     deviceId: string,
     params: { cols: number; cwd?: string; rows: number },
+    options: { scope?: DeviceScope } = {},
   ): Promise<DeviceTerminalSession> {
-    const info = (await deviceService.createTerminalSession({
-      ...params,
-      deviceId,
-    })) as DeviceTerminalInfo;
-    const session = new DeviceTerminalSession(deviceId, info);
+    // The unload closer is prepared alongside the shell and the session is only
+    // handed out once both are ready, so a page closed right after the shell
+    // opens still ends it. A closer that fails to prepare is not fatal:
+    // `disposeOnUnload` then falls back to an ordinary close.
+    const [info, closeOnUnload] = await Promise.all([
+      deviceService.createTerminalSession(
+        { ...params, deviceId },
+        options.scope,
+      ) as Promise<DeviceTerminalInfo>,
+      deviceService.prepareCloseTerminalOnUnload(options.scope).catch((error): undefined => {
+        log('preparing the unload close failed: %O', error);
+        return undefined;
+      }),
+    ]);
+    const session = new DeviceTerminalSession(deviceId, info, options.scope, closeOnUnload);
     // Registered before the first poll so input typed during the initial read
     // is not dropped.
     xtermManager.setSessionSink(info.id, session.sink);
@@ -127,7 +148,7 @@ export class DeviceTerminalSession {
     },
     resize: (sessionId, cols, rows) => {
       void deviceService
-        .resizeTerminal({ ...this.target, cols, id: sessionId, rows })
+        .resizeTerminal({ ...this.target, cols, id: sessionId, rows }, this.scope)
         .catch((error) => log('resizeTerminal %s failed: %O', sessionId, error));
     },
     write: (sessionId, data) => {
@@ -147,11 +168,10 @@ export class DeviceTerminalSession {
       while (this.pendingInput) {
         const batch = this.pendingInput;
         this.pendingInput = '';
-        await deviceService.writeTerminal({
-          ...this.target,
-          data: encodeBase64(batch),
-          id: sessionId,
-        });
+        await deviceService.writeTerminal(
+          { ...this.target, data: encodeBase64(batch), id: sessionId },
+          this.scope,
+        );
       }
     } catch (error) {
       // The batch is dropped rather than retried: a persistent failure here
@@ -165,17 +185,47 @@ export class DeviceTerminalSession {
 
   /** Stop polling and end the shell on the device. Safe to call twice. */
   async dispose(): Promise<void> {
-    if (this.disposed) return;
+    if (!this.stop()) return;
+    try {
+      await deviceService.closeTerminal(
+        { ...this.target, id: this.info.id },
+        { scope: this.scope },
+      );
+    } catch (error) {
+      log('closeTerminal %s failed: %O', this.info.id, error);
+    }
+  }
+
+  /**
+   * End the shell while the page itself is going away (`pagehide`). The close
+   * goes out as a keepalive request, which the browser still delivers after the
+   * tab closes; an ordinary one is cancelled with the page, and the shell would
+   * live on until the device's idle sweep. Must be called synchronously from the
+   * event: the request has to start before the page is torn down. Safe to call
+   * after `dispose`.
+   */
+  disposeOnUnload(): void {
+    if (!this.stop()) return;
+    const input = { ...this.target, id: this.info.id };
+    // Without a prepared closer the ordinary close is the best left: it may
+    // still go out before the page is gone.
+    const request = this.closeOnUnload
+      ? this.closeOnUnload(input)
+      : deviceService.closeTerminal(input, { scope: this.scope });
+    void request.catch((error) =>
+      log('closeTerminal %s on unload failed: %O', this.info.id, error),
+    );
+  }
+
+  /** Stop polling; `false` when the session was already stopped. */
+  private stop(): boolean {
+    if (this.disposed) return false;
     this.disposed = true;
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = undefined;
     }
-    try {
-      await deviceService.closeTerminal({ ...this.target, id: this.info.id });
-    } catch (error) {
-      log('closeTerminal %s failed: %O', this.info.id, error);
-    }
+    return true;
   }
 
   private async poll(): Promise<void> {
@@ -185,11 +235,10 @@ export class DeviceTerminalSession {
       // Drain until the device has nothing left rather than returning one chunk
       // per interval, so a burst (a build log) is not paced by the poll.
       for (;;) {
-        const result = await deviceService.readTerminal({
-          ...this.target,
-          cursor: this.cursor,
-          id: this.info.id,
-        });
+        const result = await deviceService.readTerminal(
+          { ...this.target, cursor: this.cursor, id: this.info.id },
+          this.scope,
+        );
 
         this.cursor = result.nextCursor;
         if (result.chunk) {

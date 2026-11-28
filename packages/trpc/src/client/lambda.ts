@@ -374,19 +374,19 @@ export const lambdaClient = createTRPCClient<LambdaRouter>({
  * `null` pins the personal scope: the workspace header is dropped even while a
  * workspace is active.
  */
-export const createWorkspaceLambdaClient = (workspaceId: string | null) => {
-  const scopedLinkOptions = {
-    ...linkOptions,
-    headers: async () => {
-      const headers = (await linkOptions.headers()) as Record<string, string>;
-      // Same contract as the cloud business headers slot / the server's
-      // `WORKSPACE_ID_HEADER` (src/app/(backend)/webapi/_utils/workspace.ts).
-      if (workspaceId) return { ...headers, 'X-Workspace-Id': workspaceId };
+/** The shared headers with the workspace header pinned to `workspaceId` (`null`: personal). */
+const pinWorkspaceHeaders = (workspaceId: string | null) => async () => {
+  const headers = (await linkOptions.headers()) as Record<string, string>;
+  // Same contract as the cloud business headers slot / the server's
+  // `WORKSPACE_ID_HEADER` (src/app/(backend)/webapi/_utils/workspace.ts).
+  if (workspaceId) return { ...headers, 'X-Workspace-Id': workspaceId };
 
-      const { 'X-Workspace-Id': _, ...personal } = headers;
-      return personal;
-    },
-  };
+  const { 'X-Workspace-Id': _, ...personal } = headers;
+  return personal;
+};
+
+export const createWorkspaceLambdaClient = (workspaceId: string | null) => {
+  const scopedLinkOptions = { ...linkOptions, headers: pinWorkspaceHeaders(workspaceId) };
   return createTRPCClient<LambdaRouter>({
     links: [
       errorHandlingLink,
@@ -406,6 +406,35 @@ export const createWorkspaceLambdaClient = (workspaceId: string | null) => {
  */
 export const scopedLambdaClient = (workspaceId?: string | null) =>
   workspaceId === undefined ? lambdaClient : createWorkspaceLambdaClient(workspaceId);
+
+/**
+ * A lambda client whose requests outlive the page: each call is one unbatched
+ * `fetch` with `keepalive`, which the browser still delivers after the tab
+ * closes. For the last word a page owes the server on `pagehide`, such as ending
+ * a remote shell; an ordinary request sent then is cancelled with the page.
+ * Scoped like {@link scopedLambdaClient}.
+ *
+ * Create it while the page is alive and keep it: the headers are resolved here,
+ * once. The shared headers resolver loads modules on demand, and a fetch
+ * that waits on it from `pagehide` starts after the page is gone and is never
+ * sent. With them in hand, a call reaches `fetch` within the same task.
+ */
+export const createKeepaliveLambdaClient = async (workspaceId?: string | null) => {
+  const headers = await (workspaceId === undefined
+    ? linkOptions.headers()
+    : pinWorkspaceHeaders(workspaceId)());
+  return createTRPCClient<LambdaRouter>({
+    links: [
+      errorHandlingLink,
+      httpLink({
+        ...linkOptions,
+        fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+          linkOptions.fetch(input, { ...init, keepalive: true }),
+        headers,
+      }),
+    ],
+  });
+};
 
 export const lambdaQuery = createTRPCReact<LambdaRouter>();
 
