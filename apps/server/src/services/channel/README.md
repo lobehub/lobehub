@@ -57,6 +57,11 @@ groups merge field by field), parsed by the shared bot-wake schema.
   not a candidate at all. Only an @mention reaches it: not routing, the paired-Agent shortcut, the
   all-candidate fallback or a reply to its message; it cannot post on its own either. Muting stops
   its open jobs. The Agent of a direct conversation cannot be muted.
+- **Unavailable**: the deployment's dispatch policy (`@/business/server/agentDispatchPolicy`, read
+  through `AgentAvailabilityService` as the sender) keeps it from unaddressed work: by default
+  offline or out of quota. Routing, the decision model and the all-candidate fallback skip it;
+  being named in the text or @mentioned still reaches it. If availability cannot be read,
+  nobody is benched.
 - **Quiet**: the member stayed silent `maxSilentWakes` times since it last answered; routing may still
   choose it, but not wake it on a hunch.
 

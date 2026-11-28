@@ -14,6 +14,7 @@ import {
 import type { LobeChatDatabase } from '@/database/type';
 import { resolveProviderRelay } from '@/server/modules/AgentRuntime/llmRelay/resolveLlmExecutionSite';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { AgentAvailabilityService } from '@/server/services/agentAvailability';
 import { createWakeClassify } from '@/server/services/conversationWake/classify';
 import { createWakeDutyJudge } from '@/server/services/conversationWake/dutyJudge';
 import { redisService } from '@/server/services/redis';
@@ -30,6 +31,9 @@ export const CHANNEL_ROUTING_TIMEOUT_MS = 10_000;
 
 /** Model calls the members' own rules may make per channel and UTC hour (classifier + duties). */
 export const CHANNEL_WAKE_MODEL_CALLS_PER_HOUR = 300;
+
+/** Every member that could take the message is benched by the dispatch policy. */
+const UNAVAILABLE_REASON = 'Every Agent that could answer is offline or unavailable';
 
 /** Why routing woke a member it was unsure about: it may stay silent. */
 const UNCERTAIN_WAKE: ChannelJobWake = { kind: 'followup', reason: 'routing-uncertain' };
@@ -223,7 +227,8 @@ export class ChannelRoutingService {
         const input = await this.routing.claim(channelId, id);
         if (!input) return;
         const trace: ChannelRoutingTrace = {};
-        const decision = await this.decide(channelId, input, trace);
+        const unavailable = await this.unavailableMembers(input);
+        const decision = await this.decide(channelId, input, trace, unavailable);
         const applied = await this.executions.resolveRouting(
           channelId,
           id,
@@ -249,14 +254,16 @@ export class ChannelRoutingService {
     channelId: string,
     input: RoutingInput,
     trace: ChannelRoutingTrace = {},
+    unavailable: ReadonlySet<string> = new Set(),
   ): Promise<ChannelRoutingDecision> {
     if (!input.candidates.length) return { reason: 'No Agent can answer here', status: 'skipped' };
-    if (input.fallback)
-      return {
-        memberIds: input.candidates.map(({ memberId }) => memberId),
-        reason: 'No decision model configured',
-        status: 'assigned',
-      };
+    const available = (memberId: string) => !unavailable.has(memberId);
+    if (input.fallback) {
+      const memberIds = input.candidates.map(({ memberId }) => memberId).filter(available);
+      return memberIds.length
+        ? { memberIds, reason: 'No decision model configured', status: 'assigned' }
+        : { reason: UNAVAILABLE_REASON, status: 'skipped' };
+    }
     // Never silently drop candidates or truncate the actual request before classifying it.
     if (input.candidates.length > 20 || input.message.length > 12_000 || !input.message.trim())
       return { reason: 'Use an explicit mention for this message', status: 'unassigned' };
@@ -278,14 +285,17 @@ export class ChannelRoutingService {
             members.map(({ initiation, memberId }) => [memberId, toChannelJobWake(initiation!)]),
           );
         const ids = (members: MemberWakeJudgement[]) => members.map(({ memberId }) => memberId);
-        const claimed = judgements.filter(({ initiation }) => initiation);
+        const woken = judgements.filter(({ initiation }) => initiation);
         // Called by name: those members, and nobody needs to arbitrate. The first one named leads.
+        // Being named is being addressed, so the dispatch policy is not asked.
         const named = byNamedOrder(
-          claimed.filter(({ initiation }) => initiation!.reason === 'named-in-text'),
+          woken.filter(({ initiation }) => initiation!.reason === 'named-in-text'),
           input,
         );
         if (named.length)
           return assignWithPrimary('Named in the message', ids(named), wakes(named));
+        // Past this point the Channel picks the responder: only members the policy lets take work.
+        const claimed = woken.filter(({ memberId }) => available(memberId));
         if (claimed.length === 1)
           return {
             memberIds: [claimed[0].memberId],
@@ -296,9 +306,15 @@ export class ChannelRoutingService {
 
         // Top-down where the members' rules leave a choice: several claim the message, or none
         // does and the decision model picks among those whose rules allow it.
-        const pool = claimed.length ? claimed : judgements.filter(({ excluded }) => !excluded);
+        const eligible = judgements.filter(({ excluded }) => !excluded);
+        const pool = claimed.length
+          ? claimed
+          : eligible.filter(({ memberId }) => available(memberId));
         if (!pool.length)
-          return { reason: 'Every Agent here waits to be addressed', status: 'skipped' as const };
+          return {
+            reason: eligible.length ? UNAVAILABLE_REASON : 'Every Agent here waits to be addressed',
+            status: 'skipped' as const,
+          };
         const candidates = input.candidates.filter(({ memberId }) =>
           pool.some((judgement) => judgement.memberId === memberId),
         );
@@ -400,7 +416,9 @@ export class ChannelRoutingService {
         messageId: input.messageId,
         error: error instanceof Error ? error.name : 'DecisionError',
       });
-      const claimed = byOwnRules(judgements.filter(({ initiation }) => initiation));
+      const claimed = byOwnRules(
+        judgements.filter(({ initiation, memberId }) => initiation && available(memberId)),
+      );
       // The members' own rules already decided: a failed arbitration must not drop them.
       if (claimed.length) {
         const decision = assignWithPrimary(
@@ -422,6 +440,32 @@ export class ChannelRoutingService {
       };
     } finally {
       controller.abort();
+    }
+  }
+
+  /**
+   * Members the deployment's dispatch policy keeps from unaddressed work (offline, out of quota,
+   * or whatever a resource scheduler decides), as the sender sees them: device bindings and quota
+   * are per requester. An unreadable availability benches nobody: routing then runs as before.
+   */
+  private async unavailableMembers(input: RoutingInput): Promise<Set<string>> {
+    try {
+      const availability = await new AgentAvailabilityService(
+        this.db,
+        input.userId,
+        input.workspaceId ?? undefined,
+      ).getAvailability(input.candidates.map(({ agentId }) => agentId));
+      return new Set(
+        input.candidates
+          .filter(({ agentId }) => availability[agentId]?.dispatchable === false)
+          .map(({ memberId }) => memberId),
+      );
+    } catch (error) {
+      console.error('[channel:routing]', {
+        error: error instanceof Error ? error.name : 'AvailabilityError',
+        messageId: input.messageId,
+      });
+      return new Set();
     }
   }
 
