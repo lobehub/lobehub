@@ -1,0 +1,62 @@
+---
+title: Using MartLLM in LobeHub
+description: Configure a MartLLM API key in LobeHub and fetch the models it lists.
+tags:
+  - LobeHub
+  - MartLLM
+  - API Key
+  - OpenAI-compatible
+---
+
+# Using MartLLM in LobeHub
+
+[MartLLM](https://martllm.com) is a marketplace API for AI models. One API key reaches the models third-party providers offer there, through an OpenAI-compatible endpoint at `https://api.martllm.com/v1`. MartLLM is not the official API of any model maker: each request is sent to a third-party provider that serves the requested model.
+
+This guide walks through using MartLLM in LobeHub:
+
+<Steps>
+  ### Step 1: Get a MartLLM API key
+
+  - Sign up at [martllm.com/signup](https://martllm.com/signup) with your email (a 6-digit code) or with Google
+  - Add prepaid credit. Accounts start at $0 and there is no subscription
+  - Create an API key in the dashboard and copy it
+
+  ### Step 2: Configure MartLLM in LobeHub
+
+  - Open **Settings → AI Provider** and find `MartLLM`
+  - Turn the provider on and paste your API key
+  - Leave **API Proxy URL** empty to use `https://api.martllm.com/v1`
+  - Click **Fetch Models** to read the current model list, then enable the models you want
+
+  <Callout type={'info'}>
+    Model ids are shaped like `maker/model`, for example `anthropic/claude-haiku-4.5` or
+    `deepseek/deepseek-v3.2`. The list changes with what providers offer, so fetch it rather than
+    typing ids from memory. You can also browse it at [martllm.com/models](https://martllm.com/models).
+  </Callout>
+
+  ### Step 3: Start a conversation
+
+  Pick a MartLLM model in the model switcher and send a message.
+
+  <Callout type={'warning'}>
+    Requests are billed against your MartLLM credit. A request costs what the provider that served
+    it charged, so the price of a model can change. See the [MartLLM docs](https://martllm.com/docs/quickstart)
+    for how billing works.
+  </Callout>
+</Steps>
+
+## Self-hosting
+
+To offer MartLLM to every user of a self-hosted deployment, set the key on the server:
+
+```bash
+MARTLLM_API_KEY=your_martllm_api_key
+```
+
+`MARTLLM_PROXY_URL` and `MARTLLM_MODEL_LIST` are optional; see [model provider environment variables](/docs/self-hosting/environment-variables/model-provider#martllm).
+
+## Troubleshooting
+
+- **401 Unauthorized**: check that the API key was copied in full.
+- **A model is missing**: click **Fetch Models** again; the list follows what providers currently offer.
+- **Out of credit**: add credit in the MartLLM dashboard.

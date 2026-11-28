@@ -40,6 +40,7 @@ import { LobeLMStudioAI } from './providers/lmstudio';
 import { LobeHubAI } from './providers/lobehub';
 import { LobeLongCatAI } from './providers/longcat';
 import { LobeMagpieAI } from './providers/magpie';
+import { LobeMartLLMAI } from './providers/martllm';
 import { LobeMetaAI } from './providers/meta';
 import { LobeMinimaxAI } from './providers/minimax';
 import { LobeMinimaxCodingPlanAI } from './providers/minimaxCodingPlan';
@@ -132,6 +133,7 @@ export const providerRuntimeMap = {
   lobehub: LobeHubAI,
   longcat: LobeLongCatAI,
   magpie: LobeMagpieAI,
+  martllm: LobeMartLLMAI,
   meta: LobeMetaAI,
   minimax: LobeMinimaxAI,
   minimaxcodingplan: LobeMinimaxCodingPlanAI,

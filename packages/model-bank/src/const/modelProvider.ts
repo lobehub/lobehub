@@ -41,6 +41,7 @@ export enum ModelProvider {
   LobeHub = 'lobehub',
   LongCat = 'longcat',
   Magpie = 'magpie',
+  MartLLM = 'martllm',
   Meta = 'meta',
   Minimax = 'minimax',
   MinimaxCodingPlan = 'minimaxcodingplan',
