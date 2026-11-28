@@ -39,7 +39,7 @@ Use this skill when the bug or feature lives in the external CLI agent pipeline,
 
 ## Default Debug Order
 
-1. Prove whether the raw CLI output is correct before touching UI code. The app records every real session — read the most recent one via `cat .heerogeneous-tracing/.last-live-trace` rather than hand-rolling a `claude -p` repro (see references/debug-workflow\.md §2).
+1. Prove whether the raw CLI output is correct before touching UI code. The app records every real session — read the most recent one via `cat .heerogeneous-tracing/.last-live-trace` rather than hand-rolling a `claude -p` repro (see references/debug-workflow.md §2).
 2. If raw output is correct, compare it with adapter output. In dev, `executeHeterogeneousAgent` exposes `window.__HETERO_AGENT_TRACE`.
 3. If adapted events look correct, inspect `persistToolBatch`, `persistToolResult`, step transitions, and subagent routing.
 4. Turn the repro into a focused test before fixing.
@@ -100,11 +100,12 @@ Regression coverage must include a clean environment, conflicting ancestor ident
 - Wrong terminal-error guide (e.g. "usage limit reached" shown for a network drop):
   a classifier is branching on a structured field whose mere presence isn't its meaning.
   Grep the field across all event states in a real trace before trusting it — see
-  references/debug-workflow\.md §8 (CC `rate_limit_info` rides on `status: "allowed"` too).
+  references/debug-workflow.md §8 (CC `rate_limit_info` rides on `status: "allowed"` too).
 
 ## References
 
 - For commands, trace capture, invariants, and focused test commands, read [references/debug-workflow.md](./references/debug-workflow.md).
+- When a change can move gateway-mode Claude Code latency (CLI ingest batching, `spawnAgent` startup, server `heteroIngest`, intervention delivery), run `bun run bench:cc-gateway --agent <agentId>` in `apps/cli` against a connected device before and after, and compare with `apps/cli/scripts/bench/ccGatewayLatency/budgets.ts`, which defines each metric and records the baseline.
 - Live official-model compatibility checks are available only through explicit
   user invocation of `/testing-heterogeneous-agents` in Claude Code or
   `$testing-heterogeneous-agents` in Codex. Do not automatically load or run that

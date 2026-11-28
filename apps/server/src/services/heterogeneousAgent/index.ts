@@ -299,7 +299,7 @@ export class HeterogeneousAgentService {
   }
 
   async heteroIngest(params: HeterogeneousIngestParams): Promise<HeterogeneousIngestResult> {
-    const { agentType, assistantMessageId, operationId, topicId } = params;
+    const { agentType, operationId, topicId } = params;
     // Credentials the agent printed never reach the DB, the trace or the stream.
     const { events, secrets } = redactOutputSecrets(params.events);
     if (secrets.length > 0) this.reportOutputSecrets({ agentType, operationId, secrets, topicId });
@@ -318,6 +318,30 @@ export class HeterogeneousAgentService {
       log('heteroIngest: ignore terminal or missing operation op=%s', operationId);
       return this.rejectIngest(operationId, 'operation-not-running', events.length);
     }
+
+    // Record the execution trace WHILE the batch is persisted and published,
+    // and answer only once it is written. The device sends its next batch only
+    // after this one is acked, so every R2 round trip here delayed everything
+    // the agent printed after it: ~0.7s per batch, ~1.7s when the partial had
+    // to be re-read. The write still completes on the request (#19736: the
+    // next batch may land on another instance and must read it). A batch the
+    // CLI redelivers after a failure below has already been folded, so the
+    // recorder recognizes it by fingerprint instead of relying on running
+    // last. A batch persistence then refuses as stale stays in the trace: it
+    // is what the superseded run printed. `appendBatch` never rejects.
+    const tracing = this.traceRecorder.appendBatch(operationId, events);
+    try {
+      return await this.persistAndPublish(params, events);
+    } finally {
+      await tracing;
+    }
+  }
+
+  private async persistAndPublish(
+    params: HeterogeneousIngestParams,
+    events: AgentStreamEvent[],
+  ): Promise<HeterogeneousIngestResult> {
+    const { assistantMessageId, operationId, topicId } = params;
 
     // Persist FIRST, then publish — the renderer's gateway handler triggers
     // `fetchAndReplaceMessages` on stream_start / tool_end / step_complete,
@@ -376,16 +400,6 @@ export class HeterogeneousAgentService {
         type: event.type,
       });
       this.persistenceHandler.markEventPublished(operationId, event);
-    }
-
-    // Accumulate the execution-trace snapshot LAST. The recorder has no
-    // per-event idempotency, so it must run only after every step that can throw
-    // and trigger a BatchIngester retry of this same batch — otherwise a publish
-    // failure above would re-fold these events and double-count the snapshot.
-    // Gating on the publish gate also skips the pure-redelivery batch (full
-    // success whose response was lost), which would otherwise double-fold here.
-    if (unpublished.length > 0) {
-      await this.traceRecorder.appendBatch(operationId, events);
     }
 
     return { accepted: true };

@@ -159,41 +159,28 @@ describe('S3SnapshotStore.loadPartial', () => {
     expect(result).toEqual(partial);
   });
 
-  it('falls back to legacy uncompressed .json when .json.zst is missing', async () => {
-    const partial = { operationId: 'op_legacy_1' };
+  it('answers a run with no partial yet after a single read', async () => {
+    // Regression: a miss was retried against the pre-zstd `.json` key, a
+    // second S3 round trip on the first step of every run.
     getFileByteArray.mockRejectedValueOnce(new Error('NoSuchKey'));
-    getFileContent.mockResolvedValueOnce(JSON.stringify(partial));
-
-    const store = new S3SnapshotStore();
-    const result = await store.loadPartial('op_legacy_1');
-
-    expect(getFileByteArray).toHaveBeenCalledWith('agent-traces/_partial/op_legacy_1.json.zst');
-    expect(getFileContent).toHaveBeenCalledWith('agent-traces/_partial/op_legacy_1.json');
-    expect(result).toEqual(partial);
-  });
-
-  it('returns null when neither key exists', async () => {
-    getFileByteArray.mockRejectedValueOnce(new Error('NoSuchKey'));
-    getFileContent.mockRejectedValueOnce(new Error('NoSuchKey'));
 
     const store = new S3SnapshotStore();
     expect(await store.loadPartial('op_missing')).toBeNull();
+    expect(getFileByteArray).toHaveBeenCalledTimes(1);
+    expect(getFileContent).not.toHaveBeenCalled();
   });
 });
 
 describe('S3SnapshotStore.removePartial', () => {
-  it('deletes both the .json.zst and legacy .json keys', async () => {
+  it('deletes the .json.zst key', async () => {
     const store = new S3SnapshotStore();
     await store.removePartial('op_remove_1');
 
-    const keys = deleteFile.mock.calls.map(([k]) => k);
-    expect(keys).toContain('agent-traces/_partial/op_remove_1.json.zst');
-    expect(keys).toContain('agent-traces/_partial/op_remove_1.json');
-    expect(deleteFile).toHaveBeenCalledTimes(2);
+    expect(deleteFile.mock.calls).toEqual([['agent-traces/_partial/op_remove_1.json.zst']]);
   });
 
-  it('does not throw when one delete fails (allSettled)', async () => {
-    deleteFile.mockRejectedValueOnce(new Error('NoSuchKey')).mockResolvedValueOnce(undefined);
+  it('does not throw when the delete fails', async () => {
+    deleteFile.mockRejectedValueOnce(new Error('NoSuchKey'));
 
     const store = new S3SnapshotStore();
     await expect(store.removePartial('op_partial_err')).resolves.toBeUndefined();

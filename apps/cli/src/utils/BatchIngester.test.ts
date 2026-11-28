@@ -46,7 +46,7 @@ describe('BatchIngester', () => {
     const ingester = new BatchIngester(sink);
 
     ingester.push(makeEvent(1));
-    await vi.advanceTimersByTimeAsync(250); // flush timer → [1] starts sending, blocked
+    await vi.advanceTimersByTimeAsync(100); // flush timer → [1] starts sending, blocked
 
     ingester.push(makeEvent(2));
     await vi.advanceTimersByTimeAsync(300);
@@ -57,6 +57,64 @@ describe('BatchIngester', () => {
     await ingester.drain();
 
     expect(batches).toEqual([[1], [2, 3]]);
+  });
+
+  it('sends 100ms after an idle start, keeping a burst printed together in one request', async () => {
+    // Regression: an idle ingester held its first event for 250ms, and every
+    // idle start pays it: the run's first event, and the tool call an approval
+    // card waits on. Claude Code asks for permission ~50ms after announcing
+    // the call; the two must still leave together.
+    const batches: number[][] = [];
+    const sink: IngestSink = {
+      finish: vi.fn(async () => {}),
+      ingest: vi.fn(async (events) => {
+        batches.push(numbers(events));
+        return { accepted: true };
+      }),
+    };
+    const ingester = new BatchIngester(sink);
+
+    ingester.push(makeEvent(1)); // tool_start
+    await vi.advanceTimersByTimeAsync(50);
+    ingester.push(makeEvent(2)); // permission request
+    await vi.advanceTimersByTimeAsync(49);
+    expect(batches).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(batches).toEqual([[1, 2]]);
+  });
+
+  it('asks the caller for held-back data right before each batch is cut', async () => {
+    const batches: number[][] = [];
+    let releaseFirst!: () => void;
+    const firstAck = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const sink: IngestSink = {
+      finish: vi.fn(async () => {}),
+      ingest: vi.fn(async (events) => {
+        batches.push(numbers(events));
+        if (batches.length === 1) await firstAck;
+        return { accepted: true };
+      }),
+    };
+    let held: number | undefined;
+    const ingester: BatchIngester = new BatchIngester(sink, undefined, undefined, () => {
+      if (held === undefined) return;
+      ingester.push(makeEvent(held));
+      held = undefined;
+    });
+
+    held = 1;
+    ingester.requestFlush();
+    await vi.advanceTimersByTimeAsync(100);
+    // Replaced twice while the first request is in flight: only the latest leaves.
+    held = 2;
+    held = 3;
+    releaseFirst();
+    await ingester.drain();
+
+    expect(batches).toEqual([[1], [3]]);
   });
 
   it('does not send later batches while the head batch remains unacknowledged', async () => {

@@ -358,7 +358,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
       options.topic!,
       process.env.LOBEHUB_ASSISTANT_MESSAGE_ID,
     );
-    serverIngester = new CoalescingBatchIngester(sink, undefined, (error) => {
+    serverIngester = new CoalescingBatchIngester(sink, (error) => {
       // The server has stopped storing this run's events (its topic marker was
       // settled underneath it, or the operation is already terminal) and every
       // later batch would be discarded the same way. Waiting for `drain()` to

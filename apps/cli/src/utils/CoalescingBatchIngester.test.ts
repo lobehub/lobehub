@@ -120,13 +120,12 @@ describe('CoalescingBatchIngester', () => {
     });
   });
 
-  it('flushes a pending snapshot on the debounce timer without needing a following event', async () => {
+  it('sends a pending snapshot after the idle window without needing a following event', async () => {
     const { batches, ingest, sink } = createSink();
     const ingester = new CoalescingBatchIngester(sink);
 
     ingester.push(textEvent('streaming…'));
-    await vi.advanceTimersByTimeAsync(200); // snapshot debounce
-    await vi.advanceTimersByTimeAsync(250); // batch flush interval
+    await vi.advanceTimersByTimeAsync(100);
 
     expect(ingest).toHaveBeenCalledTimes(1);
     expect(batches[0][0].data).toMatchObject({
@@ -134,6 +133,45 @@ describe('CoalescingBatchIngester', () => {
       snapshotMode: 'replace',
       snapshotSeq: 1,
     });
+  });
+
+  it('streams a long answer while it is being written instead of holding it until a pause', async () => {
+    // Regression: the snapshot debounce restarted on every delta, and Claude
+    // Code streams a delta every few tens of ms, so nothing of a long answer
+    // left the device until the answer was finished.
+    const batches: AgentStreamEvent[][] = [];
+    const sink: IngestSink = {
+      finish: vi.fn(async () => {}),
+      ingest: vi.fn(async (events: AgentStreamEvent[]) => {
+        batches.push([...events]);
+        await new Promise((resolve) => setTimeout(resolve, 400)); // server round trip
+        return { accepted: true };
+      }),
+    };
+    const ingester = new CoalescingBatchIngester(sink);
+
+    for (let i = 0; i < 100; i++) {
+      ingester.push(textEvent(`w${i} `));
+      await vi.advanceTimersByTimeAsync(30);
+    }
+    const sentWhileStreaming = batches.length;
+    const drained = ingester.drain();
+    await vi.advanceTimersByTimeAsync(1000);
+    await drained;
+
+    // 3s of streaming at one request per 400ms round trip.
+    expect(sentWhileStreaming).toBeGreaterThanOrEqual(6);
+    // Every request carries one snapshot: the text as it stood when it left.
+    const snapshots = batches.map((batch) => {
+      expect(batch).toHaveLength(1);
+      return batch[0].data as { content: string; snapshotSeq: number };
+    });
+    expect(snapshots.map((s) => s.snapshotSeq)).toEqual(snapshots.map((_, i) => i + 1));
+    for (let i = 1; i < snapshots.length; i++)
+      expect(snapshots[i].content.startsWith(snapshots[i - 1].content)).toBe(true);
+    expect(snapshots.at(-1)!.content).toBe(
+      Array.from({ length: 100 }, (_, i) => `w${i} `).join(''),
+    );
   });
 
   it('resets the per-message accumulator at stream boundaries (no cross-message duplication)', async () => {

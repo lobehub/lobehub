@@ -29,19 +29,27 @@ export class CoalescingBatchIngester {
   private readonly batcher: BatchIngester;
   private nextReasoningSnapshotSeq = 0;
   private nextTextSnapshotSeq = 0;
+  // At most ONE kind is pending at a time: a delta of the other kind flushes
+  // it first (see push).
   private pendingReasoningEvent: AgentStreamEvent | undefined;
   private pendingTextEvent: AgentStreamEvent | undefined;
-  // Shared debounce: at most ONE kind is pending at a time — a delta of the
-  // other kind flushes it first (see push) — so one timer covers both.
-  private timer: ReturnType<typeof setTimeout> | null = null;
 
+  /**
+   * Pending snapshots join the queue when a batch is cut, not on a timer of
+   * their own. A debounce that restarted on every delta held a long answer on
+   * the device until Claude Code paused or finished, because deltas arrive
+   * every few tens of ms while it streams. Now each request carries the
+   * text as it stands when the request leaves, one snapshot per round trip.
+   */
   constructor(
     sink: IngestSink,
-    private readonly snapshotFlushMs = 200,
     /** Forwarded to {@link BatchIngester}: the stream is unrecoverable. */
     onFatal?: (error: Error) => void,
   ) {
-    this.batcher = new BatchIngester(sink, undefined, onFatal);
+    this.batcher = new BatchIngester(sink, undefined, onFatal, () => {
+      this.flushPendingReasoningSnapshot();
+      this.flushPendingTextSnapshot();
+    });
   }
 
   push(event: AgentStreamEvent): void {
@@ -52,7 +60,6 @@ export class CoalescingBatchIngester {
       this.accumulatedText = '';
       this.pendingReasoningEvent = undefined;
       this.pendingTextEvent = undefined;
-      this.clearTimer();
       return;
     }
 
@@ -77,7 +84,7 @@ export class CoalescingBatchIngester {
       this.flushPendingReasoningSnapshot();
       this.accumulatedText += event.data.content;
       this.pendingTextEvent = event;
-      this.armTimer();
+      this.batcher.requestFlush();
       return;
     }
 
@@ -85,7 +92,7 @@ export class CoalescingBatchIngester {
       this.flushPendingTextSnapshot();
       this.accumulatedReasoning += event.data.reasoning;
       this.pendingReasoningEvent = event;
-      this.armTimer();
+      this.batcher.requestFlush();
       return;
     }
 
@@ -131,25 +138,8 @@ export class CoalescingBatchIngester {
     );
   }
 
-  private armTimer(): void {
-    if (this.timer) clearTimeout(this.timer);
-    this.timer = setTimeout(() => {
-      this.timer = null;
-      this.flushPendingReasoningSnapshot();
-      this.flushPendingTextSnapshot();
-    }, this.snapshotFlushMs);
-  }
-
-  private clearTimer(): void {
-    if (this.timer) {
-      clearTimeout(this.timer);
-      this.timer = null;
-    }
-  }
-
   private flushPendingTextSnapshot() {
     if (!this.pendingTextEvent) return;
-    this.clearTimer();
 
     const baseEvent = this.pendingTextEvent;
     this.pendingTextEvent = undefined;
@@ -166,7 +156,6 @@ export class CoalescingBatchIngester {
 
   private flushPendingReasoningSnapshot() {
     if (!this.pendingReasoningEvent) return;
-    this.clearTimer();
 
     const baseEvent = this.pendingReasoningEvent;
     this.pendingReasoningEvent = undefined;

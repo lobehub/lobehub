@@ -345,13 +345,10 @@ describe('HeterogeneousAgentService', () => {
       ).rejects.toThrow('redis down');
     });
 
-    it('republishes nothing and skips the trace fold when an identical batch is redelivered', async () => {
+    it('republishes nothing when an identical batch is redelivered', async () => {
       // Response lost after a fully successful attempt → the CLI BatchIngester
-      // redelivers the same batch. Live subscribers must not see duplicates,
-      // and the execution-trace snapshot must not double-fold.
-      const appendBatch = vi
-        .spyOn(HeteroTraceRecorder.prototype, 'appendBatch')
-        .mockResolvedValue();
+      // redelivers the same batch. Live subscribers must not see duplicates
+      // (the trace side lives in ingestTrace.test.ts).
       const { manager, published, service } = createService();
       const events: AgentStreamEvent[] = [
         buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'hi' }),
@@ -365,8 +362,6 @@ describe('HeterogeneousAgentService', () => {
 
       expect(manager.publishStreamEvent).toHaveBeenCalledTimes(2);
       expect(published).toHaveLength(2);
-      expect(appendBatch).toHaveBeenCalledTimes(1);
-      appendBatch.mockRestore();
     });
 
     it('a retried batch resumes publishing from the first unpublished event (no duplicates, no loss)', async () => {
@@ -374,9 +369,6 @@ describe('HeterogeneousAgentService', () => {
       // latched, the tail is not. The retry must publish ONLY the tail —
       // republishing the head would duplicate live events, skipping the tail
       // would lose them.
-      const appendBatch = vi
-        .spyOn(HeteroTraceRecorder.prototype, 'appendBatch')
-        .mockResolvedValue();
       const published: any[] = [];
       let failOnSecondPublish = true;
       const manager: Partial<IStreamEventManager> = {
@@ -412,9 +404,6 @@ describe('HeterogeneousAgentService', () => {
         'stream_chunk',
         'agent_runtime_end',
       ]);
-      // The recorder folds once — on the attempt that delivered new events.
-      expect(appendBatch).toHaveBeenCalledTimes(1);
-      appendBatch.mockRestore();
     });
 
     it('persists before publishing — DB is the source of truth fetchAndReplace reads', async () => {

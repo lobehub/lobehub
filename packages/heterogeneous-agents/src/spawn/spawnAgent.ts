@@ -450,7 +450,10 @@ const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
 };
 
 const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals, detached: boolean): void => {
-  if (!proc.pid || proc.killed) return;
+  // Skip only a process that has exited. `proc.killed` turns true as soon as
+  // `proc.kill()` delivers any signal, so it would swallow a SIGKILL sent to a
+  // process still ignoring the SIGTERM before it.
+  if (!proc.pid || proc.exitCode != null || proc.signalCode != null) return;
 
   // On Windows the spawn `detached` flag has different semantics; fall back
   // to a direct signal. Tree-kill via `taskkill` is what the desktop
@@ -481,6 +484,30 @@ const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals, detached: b
   }
 };
 
+/** How long a process started for an input that then failed gets to honor SIGTERM. */
+const STARTUP_ABORT_GRACE_MS = 5000;
+
+/** SIGTERM a process whose input never arrived; SIGKILL it if it outlives the grace. */
+const stopStartedProcess = async (
+  proc: ChildProcess,
+  exit: Promise<unknown>,
+  detached: boolean,
+): Promise<void> => {
+  killProcessTree(proc, 'SIGTERM', detached);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const exited = await Promise.race([
+    exit.then(
+      () => true,
+      () => true,
+    ),
+    new Promise<boolean>((resolve) => {
+      timer = setTimeout(() => resolve(false), STARTUP_ABORT_GRACE_MS);
+    }),
+  ]);
+  clearTimeout(timer);
+  if (!exited) killProcessTree(proc, 'SIGKILL', detached);
+};
+
 /**
  * Spawn an external agent CLI (Amp, Claude Code, CodeBuddy, Codex, Cursor,
  * Factory Droid, Kimi Code, OpenCode, Pi, Qoder, or TRAE) and yield its stream as unified
@@ -493,8 +520,10 @@ const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals, detached: b
  * a smaller environment where the minimal surface is correct.
  *
  * Returns a Promise because image normalization (URL fetch / file read) is
- * async; the spawn itself happens after the input plan is resolved so a
- * failed image fetch surfaces before the child starts.
+ * async. Claude Code starts while its images download (its argv never
+ * depends on them); every other agent spawns once the input plan resolves.
+ * Either way a failed image fetch rejects this Promise, after stopping a
+ * child already started for it.
  */
 export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgentHandle> => {
   if (options.agentType === 'trae') return spawnTraeAcpAgent(options);
@@ -532,11 +561,19 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
           version: options.commandVersion,
         })
       : { args: [], prompt: options.prompt };
-  const promptPlan = await buildAgentInput(
-    options.agentType,
-    lobeHubCli.prompt,
-    options.inputOptions,
-  );
+  const pendingInput = buildAgentInput(options.agentType, lobeHubCli.prompt, options.inputOptions);
+  // Claude Code reads images inline from its stream-json stdin, so its argv
+  // never depends on them (`buildClaudeCompatibleStdin` returns no args).
+  // Start it while they download: it runs its SessionStart hooks and loads
+  // its config meanwhile, and prints `system:init` only once it has read the
+  // first message anyway. On a dispatched run, fetching one screenshot (~2s)
+  // used to finish before a ~2.5s Claude Code boot could start.
+  const promptPlan: CliInputPlan =
+    options.agentType === 'claude-code'
+      ? { args: [], stdin: pendingInput.then((plan) => plan.stdin) }
+      : await pendingInput;
+  // Mark it handled now: it can settle before `spawnCliAgent` awaits it.
+  void Promise.resolve(promptPlan.stdin).catch(() => {});
   const inputPlan = { ...promptPlan, args: [...lobeHubCli.args, ...promptPlan.args] };
   const childEnv: NodeJS.ProcessEnv = getHeterogeneousAgentSpawnEnv(
     options.agentType,
@@ -559,12 +596,18 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   }
 };
 
+/** {@link AgentInputPlan} whose stdin may still be downloading its images. */
+interface CliInputPlan {
+  args: string[];
+  stdin: Promise<string> | string;
+}
+
 /** One-shot JSONL CLI spawn; `spawnAgent` owns the Codex JWT file around it. */
 const spawnCliAgent = async (
   options: SpawnAgentOptions,
   command: string,
   cwd: string,
-  inputPlan: Awaited<ReturnType<typeof buildAgentInput>>,
+  inputPlan: CliInputPlan,
   childEnv: NodeJS.ProcessEnv,
   codexJwtFile: CodexJwtFile | undefined,
 ): Promise<SpawnAgentHandle> => {
@@ -708,10 +751,32 @@ const spawnCliAgent = async (
       wake();
     });
   }
-  if (claudeLive) {
-    claudeLive.send(inputPlan.stdin);
+  let stdinPayload: string | undefined;
+  try {
+    // Stop waiting for the images once the process is gone: on a connected
+    // device the wrapper's process group delivers a cancel straight to it,
+    // and the caller must see that exit now, not when the download ends.
+    stdinPayload = await Promise.race([
+      inputPlan.stdin,
+      exit.then(
+        () => undefined,
+        () => undefined,
+      ),
+    ]);
+  } catch (error) {
+    // An image never downloaded: stop the process started for it, then fail
+    // from `spawnAgent` exactly as when the download ran before the spawn.
+    killedByUs = true;
+    claudeLive?.close();
+    await stopStartedProcess(proc, exit, detached);
+    throw error;
+  }
+  if (stdinPayload === undefined) {
+    // Exited before its input was ready; the handle reports how.
+  } else if (claudeLive) {
+    claudeLive.send(stdinPayload);
   } else if (proc.stdin) {
-    proc.stdin.write(inputPlan.stdin, () => {
+    proc.stdin.write(stdinPayload, () => {
       proc.stdin?.end();
     });
   }

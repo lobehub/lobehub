@@ -9,6 +9,8 @@ import debug from 'debug';
 
 import { buildFinalSnapshotKey } from '@/server/modules/AgentTracing';
 
+import { eventKey } from './HeterogeneousPersistenceHandler/operationState';
+
 const log = debug('lobe-server:hetero-trace-recorder');
 
 export interface HeteroFinalizeParams {
@@ -48,6 +50,33 @@ interface HeteroSessionUsage {
   totalOutputTokens?: number;
   totalTokens?: number;
 }
+
+/** Fields the recorder keeps on the partial for itself; finalize never copies them. */
+interface HeteroPartial extends Partial<ExecutionSnapshot> {
+  /**
+   * Length of the current main message's text and reasoning as of its latest
+   * `replace` snapshot. The CLI sends the message's whole text so far once per
+   * request; only what a snapshot adds beyond this is appended to the step.
+   * Reset on `stream_start` / `stream_end`, where the CLI restarts its own
+   * accumulator.
+   */
+  heteroSnapshotLength?: { content: number; reasoning: number };
+  /**
+   * Fingerprints of the latest batches folded in, newest last. `heteroIngest`
+   * records a batch while it persists and publishes it, so a batch whose
+   * persistence failed has already been folded when the CLI redelivers it.
+   * Kept on the partial rather than in memory so the redelivery is recognized
+   * on whichever instance it lands.
+   */
+  heteroTracedBatches?: string[];
+}
+
+/** Redelivery follows the failed attempt directly, so a short history suffices. */
+const TRACED_BATCHES_MAX = 16;
+
+/** The CLI redelivers a failed batch as the same slice of its queue. */
+const batchFingerprint = (events: AgentStreamEvent[]): string =>
+  `${events.length}:${eventKey(events[0])}:${eventKey(events.at(-1)!)}`;
 
 const num = (v: unknown): number | undefined => (typeof v === 'number' ? v : undefined);
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
@@ -115,23 +144,30 @@ export class HeteroTraceRecorder {
   }
 
   /** Fold a batch of events into per-stepIndex steps, accumulating into the
-   * partial snapshot. Best-effort: tracing must never break ingest. */
+   * partial snapshot. A batch folded before (see {@link HeteroPartial}) is
+   * skipped. Best-effort: tracing must never break ingest, so this never
+   * rejects. */
   async appendBatch(operationId: string, events: AgentStreamEvent[]): Promise<void> {
     if (!this.store || events.length === 0) return;
 
     try {
       const cached = partialCache.get(operationId);
-      const fold = (partial: Partial<ExecutionSnapshot>) => {
+      const fingerprint = batchFingerprint(events);
+      const fold = (partial: HeteroPartial): HeteroPartial | undefined => {
+        const traced = partial.heteroTracedBatches ?? [];
+        if (traced.includes(fingerprint)) return undefined;
         if (!partial.steps) partial.steps = [];
         if (!partial.startedAt) partial.startedAt = events[0].timestamp;
 
         const byIndex = new Map<number, StepSnapshot>();
         for (const s of partial.steps) byIndex.set(s.stepIndex, s);
         for (const event of events) this.applyEvent(partial, byIndex, event);
+        partial.heteroTracedBatches = [...traced, fingerprint].slice(-TRACED_BATCHES_MAX);
         return partial;
       };
 
       const partial = fold(cached?.partial ?? (await this.store.loadPartial(operationId)) ?? {});
+      if (!partial) return;
       const result = await this.store.savePartial(operationId, partial, {
         expected: cached?.token,
       });
@@ -141,6 +177,7 @@ export class HeteroTraceRecorder {
         // read theirs, and fold this batch's events into it instead.
         partialCache.delete(operationId);
         const fresh = fold((await this.store.loadPartial(operationId)) ?? {});
+        if (!fresh) return;
         const retry = await this.store.savePartial(operationId, fresh);
         rememberPartial(operationId, fresh, retry?.token);
         return;
@@ -240,7 +277,7 @@ export class HeteroTraceRecorder {
   }
 
   private applyEvent(
-    partial: Partial<ExecutionSnapshot>,
+    partial: HeteroPartial,
     byIndex: Map<number, StepSnapshot>,
     event: AgentStreamEvent,
   ): void {
@@ -272,11 +309,27 @@ export class HeteroTraceRecorder {
     step.executionTimeMs = step.completedAt - step.startedAt;
 
     switch (event.type) {
+      case 'stream_start':
+      case 'stream_end': {
+        partial.heteroSnapshotLength = { content: 0, reasoning: 0 };
+        break;
+      }
       case 'stream_chunk': {
+        // Appending a `replace` snapshot whole would repeat every earlier
+        // snapshot of the message. Appending only its new tail (rather than
+        // overwriting the step) keeps subagent text folded into the same step
+        // and any earlier message of that step.
+        const added = (kind: 'content' | 'reasoning', text: string): string => {
+          if (data.snapshotMode !== 'replace') return text;
+          const length = (partial.heteroSnapshotLength ??= { content: 0, reasoning: 0 });
+          const tail = text.slice(length[kind]);
+          length[kind] = Math.max(length[kind], text.length);
+          return tail;
+        };
         if (data.chunkType === 'text' && typeof data.content === 'string') {
-          step.content = (step.content ?? '') + data.content;
+          step.content = (step.content ?? '') + added('content', data.content);
         } else if (data.chunkType === 'reasoning' && typeof data.reasoning === 'string') {
-          step.reasoning = (step.reasoning ?? '') + data.reasoning;
+          step.reasoning = (step.reasoning ?? '') + added('reasoning', data.reasoning);
         } else if (data.chunkType === 'tools_calling' && Array.isArray(data.toolsCalling)) {
           step.stepType = 'call_tool';
           step.toolsCalling = data.toolsCalling.map((t: any) => ({

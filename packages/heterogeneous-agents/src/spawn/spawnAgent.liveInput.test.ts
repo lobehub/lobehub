@@ -466,6 +466,133 @@ describe('spawnAgent live input (Claude Code)', () => {
     fake.exit(0);
   });
 
+  it('starts Claude Code while an attached image is still downloading', async () => {
+    // Regression: the image was fetched and base64-encoded before Claude Code
+    // was spawned, so a dispatched run with one screenshot paid the download
+    // (~2s) and then Claude Code's whole boot (~2.5s) back to back.
+    const fake = createLiveProc();
+    nextFakeProc = fake.proc;
+    let respond!: (response: Response) => void;
+    const fetcher = vi.fn(() => new Promise<Response>((resolve) => (respond = resolve)));
+
+    const spawning = spawnAgent({
+      agentType: 'claude-code',
+      inputOptions: { fetcher: fetcher as unknown as typeof fetch },
+      liveInput: true,
+      operationId: 'op-image',
+      prompt: [
+        { text: 'what is this?', type: 'text' },
+        { source: { type: 'url', url: 'https://files.example/shot.png' }, type: 'image' },
+      ],
+    });
+    await tick();
+
+    expect(spawnCalls).toHaveLength(1);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fake.stdinLines).toEqual([]);
+
+    respond(new Response(Buffer.from('png-bytes'), { headers: { 'content-type': 'image/png' } }));
+    await spawning;
+    await tick();
+
+    expect(fake.stdinLines[0].message.content).toEqual([
+      { text: 'what is this?', type: 'text' },
+      {
+        source: {
+          data: Buffer.from('png-bytes').toString('base64'),
+          media_type: 'image/png',
+          type: 'base64',
+        },
+        type: 'image',
+      },
+    ]);
+    fake.exit(0);
+  });
+
+  it('stops the started process and fails the spawn when an image cannot be downloaded', async () => {
+    const fake = createLiveProc();
+    fake.proc.kill = vi.fn(() => fake.exit(143));
+    nextFakeProc = fake.proc;
+
+    await expect(
+      spawnAgent({
+        agentType: 'claude-code',
+        detached: false,
+        inputOptions: {
+          fetcher: (async () =>
+            new Response(null, { status: 404, statusText: 'Not Found' })) as typeof fetch,
+        },
+        liveInput: true,
+        operationId: 'op-image-404',
+        prompt: [{ source: { type: 'url', url: 'https://files.example/gone.png' }, type: 'image' }],
+      }),
+    ).rejects.toThrow('Failed to fetch image at https://files.example/gone.png: 404 Not Found');
+
+    expect(fake.proc.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(fake.stdinLines).toEqual([]);
+  });
+
+  it('SIGKILLs a process that ignores SIGTERM after its image failed', async () => {
+    vi.useFakeTimers();
+    try {
+      const fake = createLiveProc();
+      fake.proc.kill = vi.fn((signal: NodeJS.Signals) => {
+        // Like Node: a delivered signal marks it killed before it exits.
+        fake.proc.killed = true;
+        if (signal === 'SIGKILL') fake.exit(137);
+      });
+      nextFakeProc = fake.proc;
+
+      const failed = expect(
+        spawnAgent({
+          agentType: 'claude-code',
+          detached: false,
+          inputOptions: {
+            fetcher: (async () =>
+              new Response(null, { status: 404, statusText: 'Not Found' })) as typeof fetch,
+          },
+          liveInput: true,
+          operationId: 'op-image-stuck',
+          prompt: [
+            { source: { type: 'url', url: 'https://files.example/gone.png' }, type: 'image' },
+          ],
+        }),
+      ).rejects.toThrow('404 Not Found');
+      await vi.advanceTimersByTimeAsync(5000);
+      await failed;
+
+      expect(fake.proc.kill).toHaveBeenNthCalledWith(1, 'SIGTERM');
+      expect(fake.proc.kill).toHaveBeenNthCalledWith(2, 'SIGKILL');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('returns at once when the process is cancelled while its image downloads', async () => {
+    // On a connected device the wrapper's process group delivers the cancel
+    // to Claude Code itself; the run must end now, not after the download.
+    const fake = createLiveProc();
+    nextFakeProc = fake.proc;
+    const fetcher = vi.fn(() => new Promise<Response>(() => {}));
+
+    const spawning = spawnAgent({
+      agentType: 'claude-code',
+      detached: false,
+      inputOptions: { fetcher: fetcher as unknown as typeof fetch },
+      liveInput: true,
+      operationId: 'op-image-cancel',
+      prompt: [{ source: { type: 'url', url: 'https://files.example/slow.png' }, type: 'image' }],
+    });
+    await tick();
+    fake.proc.stdout.end();
+    fake.proc.stderr.end();
+    fake.proc.emit('exit', null, 'SIGTERM');
+
+    const handle = await spawning;
+    await expect(handle.exit).resolves.toMatchObject({ signal: 'SIGTERM' });
+    expect(fake.stdinLines).toEqual([]);
+  });
+
   it('leaves non-live runs with one-shot stdin and no live controls', async () => {
     const fake = createLiveProc();
     nextFakeProc = fake.proc;

@@ -22,6 +22,7 @@
     "man"
   ],
   "scripts": {
+    "bench:cc-gateway": "bun scripts/bench/ccGatewayLatency/run.ts",
     "build": "bun scripts/ensureWorkspaceLinks.ts && tsdown && tsdown src/daemon/maintenanceWorker.ts --no-config --no-clean --format esm --target node22 && bun scripts/copyReportTemplate.ts",
     "cli:link": "bun link",
     "cli:unlink": "bun unlink",
